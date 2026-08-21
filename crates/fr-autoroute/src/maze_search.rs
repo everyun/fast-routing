@@ -3,9 +3,10 @@
 //! Supports:
 //! - 8 planar 45° directions on the active layer
 //! - 3D vertical layer-transition expansions (Via insertion) with configurable via costs
-//! - Layer-specific obstacle collision checks (traces, pads, vias)
-//! - Collinear segment reduction & path reconstruction
+//! - High-performance O(1) spatial grid collision checks (traces, pads, vias)
+//! - Heuristic tie-breaking & collinear segment reduction
 
+use crate::spatial_grid::LayerSpatialGrid;
 use fr_geometry::planar::{Direction, IntBox, IntPoint};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
@@ -50,10 +51,10 @@ pub struct MazeSearchSettings {
 impl Default for MazeSearchSettings {
     fn default() -> Self {
         MazeSearchSettings {
-            step_size: 250, // 250 um
-            bend_cost: 100.0,
-            layer_change_cost: 600.0, // Via insertion penalty
-            max_expansion_nodes: 60_000,
+            step_size: 200, // 200 um
+            bend_cost: 80.0,
+            layer_change_cost: 500.0, // Via insertion penalty
+            max_expansion_nodes: 80_000,
         }
     }
 }
@@ -99,15 +100,15 @@ impl MazeSearchAlgo {
         MazeSearchAlgo { settings }
     }
 
-    /// Finds a 3D multi-layer obstacle-avoiding path between `(start, start_layer)` and `(target, target_layer)`.
-    pub fn find_path_3d(
+    /// Finds a 3D multi-layer obstacle-avoiding path using O(1) spatial grid queries.
+    pub fn find_path_3d_grid(
         &self,
         start: IntPoint,
         start_layer: i32,
         target: IntPoint,
         target_layer: i32,
         layer_count: i32,
-        obstacles_per_layer: &[Vec<IntBox>],
+        spatial_grids: &[LayerSpatialGrid],
     ) -> Option<RoutePath3D> {
         let mut open_set = BinaryHeap::new();
         let mut cost_so_far: HashMap<(IntPoint, i32), f64> = HashMap::new();
@@ -167,10 +168,10 @@ impl MazeSearchAlgo {
                     current.point.y + step_vec.y * self.settings.step_size,
                 );
 
-                // Collision check on current layer
+                // O(1) Collision check on current layer via spatial grid
                 let layer_idx = current.layer as usize;
-                let collides = if layer_idx < obstacles_per_layer.len() {
-                    obstacles_per_layer[layer_idx].iter().any(|b| next_pt.is_contained_in(b))
+                let collides = if layer_idx < spatial_grids.len() {
+                    spatial_grids[layer_idx].collides_point(&next_pt)
                 } else {
                     false
                 };
@@ -193,7 +194,8 @@ impl MazeSearchAlgo {
                     cost_so_far.insert(next_key, new_cost);
                     came_from.insert(next_key, (current.point, current.layer));
                     let layer_dist = (current.layer - target_layer).abs() as f64 * self.settings.layer_change_cost;
-                    let priority = new_cost + next_pt.distance(&target) + layer_dist;
+                    // Tie-breaking heuristic (+0.1% bias towards target)
+                    let priority = new_cost + (next_pt.distance(&target) + layer_dist) * 1.001;
                     open_set.push(QueueElement {
                         point: next_pt,
                         layer: current.layer,
@@ -209,8 +211,8 @@ impl MazeSearchAlgo {
             for &next_l in &adjacent_layers {
                 if next_l >= 0 && next_l < layer_count {
                     let next_l_idx = next_l as usize;
-                    let collides = if next_l_idx < obstacles_per_layer.len() {
-                        obstacles_per_layer[next_l_idx].iter().any(|b| current.point.is_contained_in(b))
+                    let collides = if next_l_idx < spatial_grids.len() {
+                        spatial_grids[next_l_idx].collides_point(&current.point)
                     } else {
                         false
                     };
@@ -226,7 +228,7 @@ impl MazeSearchAlgo {
                         cost_so_far.insert(next_key, new_cost);
                         came_from.insert(next_key, (current.point, current.layer));
                         let layer_dist = (next_l - target_layer).abs() as f64 * self.settings.layer_change_cost;
-                        let priority = new_cost + current.point.distance(&target) + layer_dist;
+                        let priority = new_cost + (current.point.distance(&target) + layer_dist) * 1.001;
                         open_set.push(QueueElement {
                             point: current.point,
                             layer: next_l,
@@ -240,6 +242,47 @@ impl MazeSearchAlgo {
         }
 
         None
+    }
+
+    /// Finds a 3D multi-layer obstacle-avoiding path between `(start, start_layer)` and `(target, target_layer)` from box lists.
+    pub fn find_path_3d(
+        &self,
+        start: IntPoint,
+        start_layer: i32,
+        target: IntPoint,
+        target_layer: i32,
+        layer_count: i32,
+        obstacles_per_layer: &[Vec<IntBox>],
+    ) -> Option<RoutePath3D> {
+        let mut min_x = start.x.min(target.x) - 10_000;
+        let mut min_y = start.y.min(target.y) - 10_000;
+        let mut max_x = start.x.max(target.x) + 10_000;
+        let mut max_y = start.y.max(target.y) + 10_000;
+
+        for layer_obs in obstacles_per_layer {
+            for b in layer_obs {
+                min_x = min_x.min(b.ll.x);
+                min_y = min_y.min(b.ll.y);
+                max_x = max_x.max(b.ur.x);
+                max_y = max_y.max(b.ur.y);
+            }
+        }
+
+        let bounds = IntBox::new(min_x, min_y, max_x, max_y);
+        let cell_size = (self.settings.step_size * 5).max(1000);
+
+        let mut grids = Vec::with_capacity(layer_count as usize);
+        for l in 0..layer_count as usize {
+            let mut grid = LayerSpatialGrid::new(bounds, cell_size);
+            if l < obstacles_per_layer.len() {
+                for &b in &obstacles_per_layer[l] {
+                    grid.insert(b);
+                }
+            }
+            grids.push(grid);
+        }
+
+        self.find_path_3d_grid(start, start_layer, target, target_layer, layer_count, &grids)
     }
 
     /// Backward-compatible 2D planar single-layer wrapper.

@@ -1,8 +1,9 @@
 //! Batch autorouter engine with 3D multi-layer routing, via generation,
 //! Rayon multi-core parallelism, Delaunay Minimum Spanning Tree (MST) air-lines,
-//! and transactional spatial conflict resolution.
+//! and high-performance O(1) spatial grid transactional conflict resolution.
 
 use crate::maze_search::{MazeSearchAlgo, MazeSearchSettings, RoutePath3D};
+use crate::spatial_grid::LayerSpatialGrid;
 use fr_board::{BasicBoard, PolylineTrace, Via};
 use fr_datastructures::planar_delaunay_triangulation::{PlanarDelaunayTriangulation, Point2D};
 use fr_geometry::planar::IntBox;
@@ -31,7 +32,7 @@ impl Default for BatchRouterSettings {
             via_pad_radius: 300,   // 600um diameter -> 300um radius
             via_drill_radius: 150, // 300um drill
             maze_settings: MazeSearchSettings {
-                step_size: 150, // 150um step resolution for dense routing
+                step_size: 150, // 150um step resolution
                 bend_cost: 80.0,
                 layer_change_cost: 400.0,
                 max_expansion_nodes: 80_000,
@@ -72,15 +73,19 @@ impl BatchAutorouter {
         let mut already_routed_hashes = HashSet::new();
         let algo = MazeSearchAlgo::new(self.settings.maze_settings.clone());
         let layer_count = board.layer_count as i32;
+        let cell_size = (self.settings.maze_settings.step_size * 6).max(800);
 
         for pass in 1..=self.settings.max_passes {
             let mut pass_routed_any = false;
 
-            // 1. Build layer-specific obstacle spatial boxes from existing traces, vias, and foreign pins
-            let mut obstacles_per_layer: Vec<Vec<IntBox>> = vec![Vec::new(); board.layer_count];
+            // 1. Build layer-specific high-performance spatial grids from existing traces and vias
+            let mut spatial_grids: Vec<LayerSpatialGrid> = (0..board.layer_count)
+                .map(|_| LayerSpatialGrid::new(board.bounding_box, cell_size))
+                .collect();
+
             for trace in &board.traces {
-                if (trace.layer as usize) < obstacles_per_layer.len() {
-                    obstacles_per_layer[trace.layer as usize].push(trace.bounding_box());
+                if (trace.layer as usize) < spatial_grids.len() {
+                    spatial_grids[trace.layer as usize].insert(trace.bounding_box());
                 }
             }
             for via in &board.vias {
@@ -92,8 +97,8 @@ impl BatchAutorouter {
                     via.center.x + via.pad_radius,
                     via.center.y + via.pad_radius,
                 );
-                for l in min_l..=max_l.min(obstacles_per_layer.len() - 1) {
-                    obstacles_per_layer[l].push(pad_box);
+                for l in min_l..=max_l.min(spatial_grids.len() - 1) {
+                    spatial_grids[l].insert(pad_box);
                 }
             }
 
@@ -109,14 +114,14 @@ impl BatchAutorouter {
                         return None;
                     }
 
-                    // Clone layer obstacles and add foreign pin pads
-                    let mut net_obstacles = obstacles_per_layer.clone();
+                    // Clone layer spatial grids and add foreign pin pads
+                    let mut net_grids = spatial_grids.clone();
                     for other_pin in &board.pins {
                         if other_pin.header.net_no_arr.first() != Some(&net_id) {
                             let min_l = other_pin.first_layer.max(0) as usize;
                             let max_l = other_pin.last_layer.min(layer_count - 1) as usize;
-                            for l in min_l..=max_l.min(net_obstacles.len() - 1) {
-                                net_obstacles[l].push(other_pin.pad_bounding_box);
+                            for l in min_l..=max_l.min(net_grids.len() - 1) {
+                                net_grids[l].insert(other_pin.pad_bounding_box);
                             }
                         }
                     }
@@ -148,13 +153,13 @@ impl BatchAutorouter {
                         let target = pins[v].center;
                         let target_layer = pins[v].first_layer;
 
-                        if let Some(path_3d) = algo.find_path_3d(
+                        if let Some(path_3d) = algo.find_path_3d_grid(
                             start,
                             start_layer,
                             target,
                             target_layer,
                             layer_count,
-                            &net_obstacles,
+                            &net_grids,
                         ) {
                             net_paths.push(path_3d);
                         } else {
@@ -174,7 +179,7 @@ impl BatchAutorouter {
                 })
                 .collect();
 
-            // 3. Transactional Spatial Commit & Collision Check against previously committed routes
+            // 3. Transactional Spatial Commit & Collision Check using O(1) grid queries
             for candidate in candidates {
                 let mut has_conflict = false;
 
@@ -183,8 +188,8 @@ impl BatchAutorouter {
                     for seg in &path.segments {
                         let seg_boxes = self.segment_to_boxes(&seg.points, self.settings.trace_half_width);
                         for s_box in seg_boxes {
-                            if (seg.layer as usize) < obstacles_per_layer.len() {
-                                if obstacles_per_layer[seg.layer as usize].iter().any(|b| s_box.intersects(b)) {
+                            if (seg.layer as usize) < spatial_grids.len() {
+                                if spatial_grids[seg.layer as usize].collides_box(&s_box) {
                                     has_conflict = true;
                                     break;
                                 }
@@ -211,8 +216,8 @@ impl BatchAutorouter {
                                 self.settings.trace_half_width,
                                 seg.points,
                             );
-                            if (seg.layer as usize) < obstacles_per_layer.len() {
-                                obstacles_per_layer[seg.layer as usize].push(trace.bounding_box());
+                            if (seg.layer as usize) < spatial_grids.len() {
+                                spatial_grids[seg.layer as usize].insert(trace.bounding_box());
                             }
                             board.insert_trace(trace);
                         }
@@ -237,8 +242,8 @@ impl BatchAutorouter {
                             );
                             let min_l = via.from_layer.min(via.to_layer) as usize;
                             let max_l = via.from_layer.max(via.to_layer) as usize;
-                            for l in min_l..=max_l.min(obstacles_per_layer.len() - 1) {
-                                obstacles_per_layer[l].push(pad_box);
+                            for l in min_l..=max_l.min(spatial_grids.len() - 1) {
+                                spatial_grids[l].insert(pad_box);
                             }
                             board.insert_via(via_item);
                         }
