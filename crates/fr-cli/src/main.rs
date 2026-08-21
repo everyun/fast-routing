@@ -138,11 +138,19 @@ fn main() {
     match job.execute() {
         Ok(result) => {
             let duration = start_time.elapsed();
+            let total_nets = result.statistics.total_net_count;
+            let completed = result.statistics.completed_net_count;
+            let pct = if total_nets > 0 {
+                (completed as f64 / total_nets as f64) * 100.0
+            } else {
+                100.0
+            };
             println!(
-                "Routing complete in {:.2}s: {}/{} nets routed, {} vias, DRC violations: {}",
+                "Routing complete in {:.2}s: {}/{} nets routed ({:.1}%), {} vias, DRC violations: {}",
                 duration.as_secs_f64(),
-                result.statistics.unrouted_net_count == 0,
-                result.statistics.unrouted_net_count,
+                completed,
+                total_nets,
+                pct,
                 result.statistics.via_count,
                 result.statistics.clearance_violation_count
             );

@@ -5,6 +5,8 @@ use fr_board::BasicBoard;
 /// Comprehensive board metrics and objective score breakdown.
 #[derive(Debug, Clone, Default)]
 pub struct BoardStatistics {
+    pub total_net_count: usize,
+    pub completed_net_count: usize,
     pub unrouted_net_count: usize,
     pub via_count: usize,
     pub total_trace_length: f64,
@@ -12,8 +14,16 @@ pub struct BoardStatistics {
 }
 
 impl BoardStatistics {
-    pub fn compute(board: &BasicBoard, unrouted_nets: usize, clearance_violations: usize) -> Self {
+    pub fn compute(
+        board: &BasicBoard,
+        total_nets: usize,
+        completed_nets: usize,
+        unrouted_nets: usize,
+        clearance_violations: usize,
+    ) -> Self {
         BoardStatistics {
+            total_net_count: total_nets,
+            completed_net_count: completed_nets,
             unrouted_net_count: unrouted_nets,
             via_count: board.via_count(),
             total_trace_length: board.total_trace_length(),

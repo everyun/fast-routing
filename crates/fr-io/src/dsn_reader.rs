@@ -409,11 +409,69 @@ impl<'a> DsnReader<'a> {
                         Some(Token::Number(n)) => n.to_string(),
                         _ => "padstack".to_string(),
                     };
+                    let mut shapes = Vec::new();
+                    while let Some(tok) = self.peek() {
+                        if tok == &Token::CloseParen {
+                            self.advance();
+                            break;
+                        }
+                        if self.eat_open_paren() {
+                            if let Some(Token::Keyword(Keyword::Shape)) = self.peek() {
+                                self.advance();
+                                if self.eat_open_paren() {
+                                    let shape_type = match self.advance() {
+                                        Some(Token::Keyword(Keyword::Circle)) => "circle".to_string(),
+                                        Some(Token::Keyword(Keyword::Rectangle)) => "rect".to_string(),
+                                        Some(Token::Keyword(Keyword::Polygon)) => "polygon".to_string(),
+                                        Some(Token::String(s)) => s,
+                                        _ => "circle".to_string(),
+                                    };
+                                    let layer = match self.advance() {
+                                        Some(Token::String(s)) => s,
+                                        Some(Token::Number(n)) => n.to_string(),
+                                        _ => "F.Cu".to_string(),
+                                    };
+                                    let mut dims = Vec::new();
+                                    while let Some(tok) = self.peek() {
+                                        if tok == &Token::CloseParen {
+                                            self.advance();
+                                            break;
+                                        }
+                                        match self.advance() {
+                                            Some(Token::Number(n)) => dims.push(n),
+                                            _ => {}
+                                        }
+                                    }
+                                    shapes.push(DsnPadstackShape {
+                                        layer,
+                                        shape_type,
+                                        dimensions: dims,
+                                        points: Vec::new(),
+                                    });
+                                }
+                                while let Some(tok) = self.peek() {
+                                    if tok == &Token::CloseParen {
+                                        self.advance();
+                                        break;
+                                    }
+                                    if self.eat_open_paren() {
+                                        self.skip_scope();
+                                    } else {
+                                        self.advance();
+                                    }
+                                }
+                            } else {
+                                self.advance();
+                                self.skip_scope();
+                            }
+                        } else {
+                            self.advance();
+                        }
+                    }
                     doc.padstacks.push(DsnPadstack {
                         name: padstack_name,
-                        shapes: Vec::new(),
+                        shapes,
                     });
-                    self.skip_scope();
                 } else {
                     self.advance();
                     self.skip_scope();
@@ -521,8 +579,130 @@ impl<'a> DsnReader<'a> {
         }
     }
 
-    fn parse_wiring_scope(&mut self, _doc: &mut DsnDocument) {
-        self.skip_scope();
+    fn parse_wiring_scope(&mut self, doc: &mut DsnDocument) {
+        while let Some(tok) = self.peek() {
+            if tok == &Token::CloseParen {
+                self.advance();
+                break;
+            }
+            if self.eat_open_paren() {
+                match self.peek() {
+                    Some(Token::Keyword(Keyword::Wire)) => {
+                        self.advance();
+                        let mut layer = "F.Cu".to_string();
+                        let mut width = 250.0;
+                        let mut points = Vec::new();
+                        let mut net_name = "GND".to_string();
+                        while let Some(tok) = self.peek() {
+                            if tok == &Token::CloseParen {
+                                self.advance();
+                                break;
+                            }
+                            if self.eat_open_paren() {
+                                if let Some(Token::Keyword(Keyword::Path)) = self.peek() {
+                                    self.advance();
+                                    layer = match self.advance() {
+                                        Some(Token::String(s)) => s,
+                                        Some(Token::Number(n)) => n.to_string(),
+                                        _ => "F.Cu".to_string(),
+                                    };
+                                    width = match self.advance() {
+                                        Some(Token::Number(n)) => n,
+                                        _ => 250.0,
+                                    };
+                                    let mut coords = Vec::new();
+                                    while let Some(tok) = self.peek() {
+                                        if tok == &Token::CloseParen {
+                                            self.advance();
+                                            break;
+                                        }
+                                        match self.advance() {
+                                            Some(Token::Number(n)) => coords.push(n),
+                                            _ => {}
+                                        }
+                                    }
+                                    for chunk in coords.chunks(2) {
+                                        if chunk.len() == 2 {
+                                            points.push(DsnPoint { x: chunk[0], y: chunk[1] });
+                                        }
+                                    }
+                                } else if let Some(Token::Keyword(Keyword::Net)) = self.peek() {
+                                    self.advance();
+                                    net_name = match self.advance() {
+                                        Some(Token::String(s)) => s,
+                                        Some(Token::Number(n)) => n.to_string(),
+                                        _ => "GND".to_string(),
+                                    };
+                                    self.eat_close_paren();
+                                } else {
+                                    self.advance();
+                                    self.skip_scope();
+                                }
+                            } else {
+                                self.advance();
+                            }
+                        }
+                        doc.wires.push(DsnWire {
+                            net_name,
+                            layer,
+                            width,
+                            points,
+                        });
+                    }
+                    Some(Token::Keyword(Keyword::Via)) => {
+                        self.advance();
+                        let padstack_name = match self.advance() {
+                            Some(Token::String(s)) => s,
+                            Some(Token::Number(n)) => n.to_string(),
+                            _ => "via".to_string(),
+                        };
+                        let x = match self.advance() {
+                            Some(Token::Number(n)) => n,
+                            _ => 0.0,
+                        };
+                        let y = match self.advance() {
+                            Some(Token::Number(n)) => n,
+                            _ => 0.0,
+                        };
+                        let mut net_name = "GND".to_string();
+                        while let Some(tok) = self.peek() {
+                            if tok == &Token::CloseParen {
+                                self.advance();
+                                break;
+                            }
+                            if self.eat_open_paren() {
+                                if let Some(Token::Keyword(Keyword::Net)) = self.peek() {
+                                    self.advance();
+                                    net_name = match self.advance() {
+                                        Some(Token::String(s)) => s,
+                                        Some(Token::Number(n)) => n.to_string(),
+                                        _ => "GND".to_string(),
+                                    };
+                                    self.eat_close_paren();
+                                } else {
+                                    self.advance();
+                                    self.skip_scope();
+                                }
+                            } else {
+                                self.advance();
+                            }
+                        }
+                        doc.vias.push(DsnVia {
+                            net_name,
+                            padstack_name,
+                            x,
+                            y,
+                        });
+                    }
+                    _ => {
+                        self.advance();
+                        self.skip_scope();
+                    }
+                }
+            } else {
+                self.advance();
+            }
+        }
     }
 }
 
