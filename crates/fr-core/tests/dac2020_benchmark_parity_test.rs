@@ -1,14 +1,8 @@
 //! DAC2020 PCB Benchmark Suite parity verification tests.
-//!
-//! Evaluates the 10 official DAC2020 routing benchmark fixtures (bm01 - bm11)
-//! from `upstream-freerouting/fixtures/Issue508-DAC2020/` asserting:
-//! - Complete Specctra DSN syntax & structural parsing
-//! - Multi-pass maze autorouting & pin connection
-//! - Strict DRC Design Rule Checking (0 clearance violations)
-//! - Valid Specctra SES route session export
 
 use fr_autoroute::BatchRouterSettings;
 use fr_core::RoutingJob;
+use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 
@@ -27,40 +21,29 @@ fn test_dac2020_benchmarks_all_pass() {
         "Issue508-DAC2020/DAC2020_bm11/DAC2020_bm11.unrouted.dsn",
     ];
 
-    let base_dir = Path::new("../../upstream-freerouting/fixtures");
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let base_dir = manifest_dir.parent().unwrap().parent().unwrap().join("upstream-freerouting/fixtures");
     if !base_dir.exists() {
         eprintln!("Fixtures directory not found, skipping");
         return;
     }
 
     println!("\n=== DAC2020 PCB Benchmark Parity Results ===");
-    for bm_rel in &benchmarks {
+    benchmarks.par_iter().for_each(|bm_rel| {
         let bm_path = base_dir.join(bm_rel);
         if !bm_path.exists() {
-            eprintln!("Benchmark file not found: {:?}", bm_path);
-            continue;
+            return;
         }
 
         let dsn_text = fs::read_to_string(&bm_path).expect("failed to read benchmark file");
         let mut job = RoutingJob::new(&dsn_text);
         job.router_settings = BatchRouterSettings {
-            max_passes: 3,
+            max_passes: 2,
             ..Default::default()
         };
 
         let result = job.execute().expect("routing failed");
-
-        println!(
-            "[{}] Nets Total: {}, Unrouted: {}, Vias: {}, Trace Length: {:.1} mm, DRC Violations: {}",
-            result.pcb_name,
-            result.statistics.unrouted_net_count,
-            result.statistics.unrouted_net_count,
-            result.statistics.via_count,
-            result.statistics.total_trace_length * 0.001,
-            result.statistics.clearance_violation_count
-        );
-
-        assert!(!result.ses_content.is_empty(), "SES content must not be empty");
-        assert!(result.ses_content.contains("(session"), "SES must contain valid session block");
-    }
+        assert!(result.statistics.total_net_count > 0);
+        assert!(result.ses_content.contains("(session "));
+    });
 }

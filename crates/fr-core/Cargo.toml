@@ -12,3 +12,4 @@ fr-rules = { path = "../fr-rules" }
 fr-io = { path = "../fr-io" }
 fr-autoroute = { path = "../fr-autoroute" }
 fr-drc = { path = "../fr-drc" }
+rayon = "1.10"

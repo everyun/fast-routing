@@ -9,17 +9,36 @@ use fr_board::{BasicBoard, PolylineTrace, Via};
 use fr_datastructures::planar_delaunay_triangulation::{PlanarDelaunayTriangulation, Point2D};
 use fr_geometry::planar::IntBox;
 use rayon::prelude::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-/// Configuration for the batch autorouter passes.
+/// Specific routing rules for an individual electrical net.
 #[derive(Debug, Clone)]
-pub struct BatchRouterSettings {
-    pub max_passes: usize,
+pub struct NetRoutingRule {
     pub trace_half_width: i32,
     pub clearance_class: i32,
     pub via_padstack_name: String,
     pub via_pad_radius: i32,
     pub via_drill_radius: i32,
+}
+
+impl Default for NetRoutingRule {
+    fn default() -> Self {
+        NetRoutingRule {
+            trace_half_width: 125, // 250um width -> 125um half-width
+            clearance_class: 2,    // Trace clearance class
+            via_padstack_name: "Via[0-1]_600:300_um".to_string(),
+            via_pad_radius: 300,   // 600um diameter -> 300um radius
+            via_drill_radius: 150, // 300um drill
+        }
+    }
+}
+
+/// Configuration for the batch autorouter passes.
+#[derive(Debug, Clone)]
+pub struct BatchRouterSettings {
+    pub max_passes: usize,
+    pub default_rule: NetRoutingRule,
+    pub net_rules: HashMap<i32, NetRoutingRule>,
     pub maze_settings: MazeSearchSettings,
 }
 
@@ -27,11 +46,8 @@ impl Default for BatchRouterSettings {
     fn default() -> Self {
         BatchRouterSettings {
             max_passes: 10,
-            trace_half_width: 125, // 250um width -> 125um half-width
-            clearance_class: 2,    // Trace clearance class
-            via_padstack_name: "Via[0-1]_600:300_um".to_string(),
-            via_pad_radius: 300,   // 600um diameter -> 300um radius
-            via_drill_radius: 150, // 300um drill
+            default_rule: NetRoutingRule::default(),
+            net_rules: HashMap::new(),
             maze_settings: MazeSearchSettings {
                 step_size: 150, // 150um step resolution
                 bend_cost: 80.0,
@@ -56,6 +72,7 @@ pub struct RoutingStatistics {
 #[derive(Debug, Clone)]
 struct CandidateNetRoute {
     net_id: i32,
+    rule: NetRoutingRule,
     paths: Vec<RoutePath3D>,
 }
 
@@ -67,6 +84,15 @@ pub struct BatchAutorouter {
 impl BatchAutorouter {
     pub fn new(settings: BatchRouterSettings) -> Self {
         BatchAutorouter { settings }
+    }
+
+    #[inline(always)]
+    pub fn get_net_rule(&self, net_id: i32) -> NetRoutingRule {
+        self.settings
+            .net_rules
+            .get(&net_id)
+            .cloned()
+            .unwrap_or_else(|| self.settings.default_rule.clone())
     }
 
     /// Executes the multi-pass autoroute loop on `board` for the given list of net IDs.
@@ -113,6 +139,8 @@ impl BatchAutorouter {
                     if status.is_fully_connected || status.component_anchors.len() < 2 {
                         return None;
                     }
+
+                    let rule = self.get_net_rule(net_id);
 
                     // Clone layer spatial grids and add foreign pin pads
                     let mut net_grids = spatial_grids.clone();
@@ -169,6 +197,7 @@ impl BatchAutorouter {
                     if !net_paths.is_empty() {
                         Some(CandidateNetRoute {
                             net_id,
+                            rule,
                             paths: net_paths,
                         })
                     } else {
@@ -184,7 +213,7 @@ impl BatchAutorouter {
                 // Check candidate segments and vias against current board state
                 for path in &candidate.paths {
                     for seg in &path.segments {
-                        let seg_boxes = self.segment_to_boxes(&seg.points, self.settings.trace_half_width);
+                        let seg_boxes = self.segment_to_boxes(&seg.points, candidate.rule.trace_half_width);
                         for s_box in seg_boxes {
                             if (seg.layer as usize) < spatial_grids.len() {
                                 if spatial_grids[seg.layer as usize].collides_box(&s_box) {
@@ -209,9 +238,9 @@ impl BatchAutorouter {
                             let trace = PolylineTrace::new(
                                 board.trace_count() as i32 + 1,
                                 candidate.net_id,
-                                self.settings.clearance_class,
+                                candidate.rule.clearance_class,
                                 seg.layer,
-                                self.settings.trace_half_width,
+                                candidate.rule.trace_half_width,
                                 seg.points,
                             );
                             if (seg.layer as usize) < spatial_grids.len() {
@@ -224,19 +253,19 @@ impl BatchAutorouter {
                             let via_item = Via::new(
                                 board.via_count() as i32 + 1,
                                 candidate.net_id,
-                                self.settings.clearance_class,
+                                candidate.rule.clearance_class,
                                 via.point,
-                                &self.settings.via_padstack_name,
+                                &candidate.rule.via_padstack_name,
                                 via.from_layer.min(via.to_layer),
                                 via.from_layer.max(via.to_layer),
-                                self.settings.via_pad_radius,
-                                self.settings.via_drill_radius,
+                                candidate.rule.via_pad_radius,
+                                candidate.rule.via_drill_radius,
                             );
                             let pad_box = IntBox::new(
-                                via.point.x - self.settings.via_pad_radius,
-                                via.point.y - self.settings.via_pad_radius,
-                                via.point.x + self.settings.via_pad_radius,
-                                via.point.y + self.settings.via_pad_radius,
+                                via.point.x - candidate.rule.via_pad_radius,
+                                via.point.y - candidate.rule.via_pad_radius,
+                                via.point.x + candidate.rule.via_pad_radius,
+                                via.point.y + candidate.rule.via_pad_radius,
                             );
                             let min_l = via.from_layer.min(via.to_layer) as usize;
                             let max_l = via.from_layer.max(via.to_layer) as usize;

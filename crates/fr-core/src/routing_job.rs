@@ -1,11 +1,13 @@
 //! End-to-end routing job orchestrator and Specctra pipeline manager.
 
 use crate::board_statistics::BoardStatistics;
+use fr_autoroute::batch_autorouter::NetRoutingRule;
 use fr_autoroute::{BatchAutorouter, BatchRouterSettings};
 use fr_board::{BasicBoard, FixedState, Pin, PolylineTrace, Via};
 use fr_drc::DesignRulesChecker;
 use fr_geometry::planar::{IntBox, IntPoint};
 use fr_io::{parse_dsn, DsnDocument, DsnPadstack, DsnPadstackShape, DsnPoint, DsnVia, DsnWire, SesWriter};
+use std::collections::HashMap;
 
 /// Result of a complete routing pipeline execution.
 #[derive(Debug, Clone)]
@@ -52,9 +54,35 @@ impl RoutingJob {
             .unwrap_or_else(|| format!("Via[0-{}]_600:300_um", layer_count - 1));
 
         let mut router_settings = self.router_settings.clone();
-        if router_settings.via_padstack_name == "Via[0-1]_600:300_um" || router_settings.via_padstack_name.is_empty() {
-            router_settings.via_padstack_name = default_via_padstack.clone();
+        if router_settings.default_rule.via_padstack_name == "Via[0-1]_600:300_um" || router_settings.default_rule.via_padstack_name.is_empty() {
+            router_settings.default_rule.via_padstack_name = default_via_padstack.clone();
         }
+
+        // Build per-net NetClass routing rules
+        let mut net_rules = HashMap::new();
+        for (net_idx, net) in dsn.nets.iter().enumerate() {
+            let net_id = (net_idx + 1) as i32;
+            let matching_class = dsn.classes.iter().find(|c| c.net_names.iter().any(|name| name == &net.name));
+
+            let width = matching_class.and_then(|c| c.width).unwrap_or(250.0);
+            let half_w = (width * dsn.resolution / 2.0).round().max(50.0) as i32;
+
+            let via_name = matching_class
+                .and_then(|c| c.via_rule.clone())
+                .unwrap_or_else(|| default_via_padstack.clone());
+
+            net_rules.insert(
+                net_id,
+                NetRoutingRule {
+                    trace_half_width: half_w,
+                    clearance_class: 2,
+                    via_padstack_name: via_name,
+                    via_pad_radius: 300,
+                    via_drill_radius: 150,
+                },
+            );
+        }
+        router_settings.net_rules = net_rules;
 
         // 4. Collect net IDs
         let net_ids: Vec<i32> = (1..=dsn.nets.len() as i32).collect();
@@ -65,7 +93,7 @@ impl RoutingJob {
 
         // 6. Run DRC Checker
         let drc = DesignRulesChecker::new(&board);
-        let violations = drc.get_all_clearance_violations(250.0); // 250um default clearance
+        let violations = drc.get_all_clearance_violations(250.0);
 
         // 7. Compute objective score
         let board_stats = BoardStatistics::compute(
@@ -196,7 +224,7 @@ impl RoutingJob {
         );
 
         Ok(JobResult {
-            pcb_name: dsn.pcb_name,
+            pcb_name: dsn.pcb_name.clone(),
             statistics: board_stats,
             ses_content,
             is_clean,

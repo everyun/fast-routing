@@ -102,11 +102,15 @@ impl DsnReader {
             return Err("Empty DSN document".to_string());
         }
 
-        let pcb_name = items
+        let raw_name = items
             .get(1)
             .and_then(|e| e.atom())
-            .unwrap_or("unnamed_pcb")
-            .to_string();
+            .unwrap_or("unnamed_pcb");
+        let pcb_name = if raw_name.trim().is_empty() {
+            "unnamed_pcb".to_string()
+        } else {
+            raw_name.to_string()
+        };
 
         let mut doc = DsnDocument::new(&pcb_name);
 
