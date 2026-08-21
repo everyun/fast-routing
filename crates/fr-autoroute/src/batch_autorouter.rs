@@ -130,7 +130,7 @@ impl BatchAutorouter {
             }
 
             // 2. Parallel candidate route generation across unconnected component anchors via Rayon
-            let candidates: Vec<CandidateNetRoute> = net_ids
+            let mut candidates: Vec<CandidateNetRoute> = net_ids
                 .par_iter()
                 .filter_map(|&net_id| {
                     let status = analyze_net_connectivity(board, net_id);
@@ -205,6 +205,9 @@ impl BatchAutorouter {
                     }
                 })
                 .collect();
+
+            // Deterministic sort by net_id before commit
+            candidates.sort_by_key(|c| c.net_id);
 
             // 3. Transactional Spatial Commit & Collision Check using O(1) grid queries
             for candidate in candidates {

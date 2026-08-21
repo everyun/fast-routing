@@ -2,6 +2,7 @@
 
 use fr_board::BasicBoard;
 use fr_geometry::planar::IntPoint;
+use std::collections::BTreeMap;
 
 /// Disjoint-Set Union (DSU) data structure for tracking electrical connected components.
 pub struct DisjointSet {
@@ -64,7 +65,7 @@ pub struct NetConnectivityStatus {
     pub total_pins: usize,
     pub num_components: usize,
     pub is_fully_connected: bool,
-    /// Representatives (anchor point, layer) for each disjoint component
+    /// Deterministically sorted representatives (anchor point, layer) for each disjoint component
     pub component_anchors: Vec<(IntPoint, i32)>,
 }
 
@@ -171,8 +172,8 @@ pub fn analyze_net_connectivity(board: &BasicBoard, net_id: i32) -> NetConnectiv
         }
     }
 
-    // Find distinct component roots among pins
-    let mut root_to_anchor = std::collections::HashMap::new();
+    // Find distinct component roots among pins with 100% deterministic BTreeMap order
+    let mut root_to_anchor = BTreeMap::new();
     for (p_idx, pin) in pins.iter().enumerate() {
         let root = dsu.find(p_idx);
         root_to_anchor.entry(root).or_insert((pin.center, pin.first_layer));
@@ -180,7 +181,8 @@ pub fn analyze_net_connectivity(board: &BasicBoard, net_id: i32) -> NetConnectiv
 
     let num_components = root_to_anchor.len();
     let is_fully_connected = num_components <= 1;
-    let component_anchors: Vec<(IntPoint, i32)> = root_to_anchor.into_values().collect();
+    let mut component_anchors: Vec<(IntPoint, i32)> = root_to_anchor.into_values().collect();
+    component_anchors.sort_by_key(|&(p, l)| (l, p.x, p.y));
 
     NetConnectivityStatus {
         net_id,

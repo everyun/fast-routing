@@ -141,10 +141,22 @@ impl MazeSearchAlgo {
             let current_pt = IntPoint::new(x, y);
             let current_key = (x, y, layer);
 
-            // Target reached check
-            if layer == target_layer && self.distance(current_pt, target) <= (step as f64) * 0.95 {
-                best_target_key = Some(current_key);
-                break;
+            // Target reached check with direct line-of-sight capture
+            if layer == target_layer {
+                let dist_to_target = self.distance(current_pt, target);
+                if dist_to_target <= (step as f64) * 2.0 {
+                    let seg_box = IntBox::new(
+                        current_pt.x.min(target.x) - 50,
+                        current_pt.y.min(target.y) - 50,
+                        current_pt.x.max(target.x) + 50,
+                        current_pt.y.max(target.y) + 50,
+                    );
+                    let collision = (layer as usize) < spatial_grids.len() && spatial_grids[layer as usize].collides_box(&seg_box);
+                    if !collision {
+                        best_target_key = Some(current_key);
+                        break;
+                    }
+                }
             }
 
             // 1. Expand 8 planar 45-degree directions
