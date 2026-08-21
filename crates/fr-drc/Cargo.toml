@@ -1,0 +1,11 @@
+[package]
+name = "fr-drc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Design Rule Checker (DRC) for the freerouting Rust port."
+
+[dependencies]
+fr-geometry = { path = "../fr-geometry" }
+fr-board = { path = "../fr-board" }
+fr-rules = { path = "../fr-rules" }

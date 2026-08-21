@@ -1,0 +1,10 @@
+[package]
+name = "fr-board"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Board data model for the freerouting Rust port (items, traces, vias, pins, obstacle areas, conduction areas, shape search trees)."
+
+[dependencies]
+fr-datastructures = { path = "../fr-datastructures" }
+fr-geometry = { path = "../fr-geometry" }

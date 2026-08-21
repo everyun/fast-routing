@@ -1,0 +1,11 @@
+[package]
+name = "fr-datastructures"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Supporting data structures for the freerouting Rust port (Signum, BigInteger helpers, shape trees, undoable objects)."
+
+[dependencies]
+num-bigint.workspace = true
+num-integer.workspace = true
+num-traits.workspace = true

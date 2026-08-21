@@ -1,0 +1,13 @@
+[package]
+name = "fr-autoroute"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Core PCB autorouting engine (expansion, maze routing, rip-up and reroute) for the freerouting Rust port."
+
+[dependencies]
+fr-geometry = { path = "../fr-geometry" }
+fr-board = { path = "../fr-board" }
+fr-rules = { path = "../fr-rules" }
+fr-datastructures = { path = "../fr-datastructures" }
+rayon.workspace = true

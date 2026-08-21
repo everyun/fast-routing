@@ -1,0 +1,11 @@
+[package]
+name = "fr-io"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Specctra DSN/SES parser and serializer for the freerouting Rust port."
+
+[dependencies]
+fr-geometry = { path = "../fr-geometry" }
+fr-board = { path = "../fr-board" }
+fr-rules = { path = "../fr-rules" }

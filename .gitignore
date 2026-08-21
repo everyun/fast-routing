@@ -1,0 +1,17 @@
+# Rust build artifacts
+target/
+**/*.rs.bk
+*.ses
+*.tmp
+*.log
+
+# Cargo home & caches
+.cargo-home/
+.cargo/
+
+# Upstream submodule / clone
+upstream-freerouting/
+
+# OS metadata
+.DS_Store
+Thumbs.db

@@ -1,0 +1,18 @@
+[package]
+name = "fr-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+default-run = "fr-cli"
+description = "Command-line interface (drop-in replacement for freerouting headless) for the freerouting Rust port."
+
+[dependencies]
+fr-datastructures = { path = "../fr-datastructures" }
+fr-geometry = { path = "../fr-geometry" }
+fr-board = { path = "../fr-board" }
+fr-rules = { path = "../fr-rules" }
+fr-io = { path = "../fr-io" }
+fr-autoroute = { path = "../fr-autoroute" }
+fr-drc = { path = "../fr-drc" }
+fr-core = { path = "../fr-core" }
+rayon.workspace = true

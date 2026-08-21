@@ -1,0 +1,10 @@
+[package]
+name = "fr-rules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Design rules for the freerouting Rust port (clearance matrix, net classes, via rules, nets)."
+
+[dependencies]
+fr-geometry = { path = "../fr-geometry" }
+fr-datastructures = { path = "../fr-datastructures" }

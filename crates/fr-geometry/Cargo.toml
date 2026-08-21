@@ -1,0 +1,12 @@
+[package]
+name = "fr-geometry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Planar computational geometry for the freerouting Rust port (integer + rational points, 45-degree directions, octagons, shapes)."
+
+[dependencies]
+fr-datastructures = { path = "../fr-datastructures" }
+num-bigint.workspace = true
+num-integer.workspace = true
+num-traits.workspace = true
