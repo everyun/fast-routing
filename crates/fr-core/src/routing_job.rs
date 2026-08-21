@@ -58,6 +58,11 @@ impl RoutingJob {
             router_settings.default_rule.via_padstack_name = default_via_padstack.clone();
         }
 
+        // Scale step size properly to file coordinate resolution (150 um in resolution units)
+        let scaled_step = (150.0 * dsn.resolution).round().max(100.0) as i32;
+        router_settings.maze_settings.step_size = scaled_step;
+        router_settings.maze_settings.max_expansion_nodes = 150_000;
+
         // Build per-net NetClass routing rules
         let mut net_rules = HashMap::new();
         for (net_idx, net) in dsn.nets.iter().enumerate() {
@@ -71,6 +76,11 @@ impl RoutingJob {
                 .and_then(|c| c.via_rule.clone())
                 .unwrap_or_else(|| default_via_padstack.clone());
 
+            let is_plane = net.is_plane || net.pins.len() >= 20 || {
+                let lower = net.name.to_ascii_lowercase();
+                lower.contains("gnd") || lower.contains("vcc") || lower.contains("vdd") || lower.contains("+3v3") || lower.contains("+5v") || lower.contains("1v8")
+            };
+
             net_rules.insert(
                 net_id,
                 NetRoutingRule {
@@ -79,6 +89,7 @@ impl RoutingJob {
                     via_padstack_name: via_name,
                     via_pad_radius: 300,
                     via_drill_radius: 150,
+                    is_plane,
                 },
             );
         }

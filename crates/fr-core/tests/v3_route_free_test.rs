@@ -1,6 +1,6 @@
 //! Test parsing and routing on user file v3-route-free.dsn.
 
-use fr_autoroute::{BatchAutorouter, BatchRouterSettings};
+use fr_autoroute::{analyze_net_connectivity, BatchAutorouter, BatchRouterSettings};
 use fr_io::parse_dsn;
 use std::fs;
 use std::path::Path;
@@ -44,6 +44,24 @@ fn test_v3_route_free_stats() {
     assert_eq!(board.pins.len(), 2217);
     assert!(board.traces.len() >= 1669, "Board must retain pre-existing wires");
     assert!(board.vias.len() >= 47, "Board must retain pre-existing vias");
+
+    // Print initial connectivity breakdown across first 15 nets
+    for net_id in 1..=15 {
+        let net = &doc.nets[net_id - 1];
+        let pins = board.get_pins_for_net(net_id as i32);
+        let traces = board.get_traces_for_net(net_id as i32);
+        let vias = board.get_vias_for_net(net_id as i32);
+        let status = analyze_net_connectivity(&board, net_id as i32);
+        println!(
+            "Net #{:2} [{:20}]: Pins={}, Traces={}, Vias={}, DisjointComponents={}, FullyConnected={}",
+            net_id, net.name, pins.len(), traces.len(), vias.len(), status.num_components, status.is_fully_connected
+        );
+        if !status.is_fully_connected {
+            for (idx, (anchor, lyr)) in status.component_anchors.iter().enumerate() {
+                println!("    Anchor #{}: ({}, {}) on Layer {}", idx, anchor.x, anchor.y, lyr);
+            }
+        }
+    }
 
     let net_ids: Vec<i32> = (1..=20.min(doc.nets.len() as i32)).collect();
     let router = BatchAutorouter::new(BatchRouterSettings {

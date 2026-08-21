@@ -98,6 +98,7 @@ impl MazeSearchAlgo {
         target: IntPoint,
         target_layer: i32,
         layer_count: i32,
+        half_width: i32,
         spatial_grids: &[LayerSpatialGrid],
     ) -> Option<RoutePath3D> {
         let step = self.settings.step_size;
@@ -131,6 +132,7 @@ impl MazeSearchAlgo {
 
         let mut expansions = 0;
         let mut best_target_key = None;
+        let clear_margin = (half_width - 1).max(0);
 
         while let Some(State { cost, x, y, layer, .. }) = open_set.pop() {
             expansions += 1;
@@ -144,12 +146,12 @@ impl MazeSearchAlgo {
             // Target reached check with direct line-of-sight capture
             if layer == target_layer {
                 let dist_to_target = self.distance(current_pt, target);
-                if dist_to_target <= (step as f64) * 2.0 {
+                if dist_to_target <= (step as f64) * 2.5 {
                     let seg_box = IntBox::new(
-                        current_pt.x.min(target.x) - 50,
-                        current_pt.y.min(target.y) - 50,
-                        current_pt.x.max(target.x) + 50,
-                        current_pt.y.max(target.y) + 50,
+                        current_pt.x.min(target.x) - clear_margin,
+                        current_pt.y.min(target.y) - clear_margin,
+                        current_pt.x.max(target.x) + clear_margin,
+                        current_pt.y.max(target.y) + clear_margin,
                     );
                     let collision = (layer as usize) < spatial_grids.len() && spatial_grids[layer as usize].collides_box(&seg_box);
                     if !collision {
@@ -166,10 +168,16 @@ impl MazeSearchAlgo {
                 let next_pt = IntPoint::new(next_x, next_y);
                 let next_key = (next_x, next_y, layer);
 
-                // Collision check against spatial grid
+                // Collision check against spatial grid with exact half_width margin
                 if (layer as usize) < spatial_grids.len() {
                     let grid = &spatial_grids[layer as usize];
-                    if next_pt != target && next_pt != start && grid.collides_point(&next_pt) {
+                    let step_box = IntBox::new(
+                        x.min(next_x) - clear_margin,
+                        y.min(next_y) - clear_margin,
+                        x.max(next_x) + clear_margin,
+                        y.max(next_y) + clear_margin,
+                    );
+                    if next_pt != target && next_pt != start && grid.collides_box(&step_box) {
                         continue;
                     }
                 }
@@ -210,8 +218,10 @@ impl MazeSearchAlgo {
                     let mut blocked = false;
                     let l_min = layer.min(next_layer) as usize;
                     let l_max = layer.max(next_layer) as usize;
+                    let via_pad_r = (step / 2).max(clear_margin);
+                    let via_box = IntBox::new(x - via_pad_r, y - via_pad_r, x + via_pad_r, y + via_pad_r);
                     for l in l_min..=l_max.min(spatial_grids.len() - 1) {
-                        if current_pt != start && current_pt != target && spatial_grids[l].collides_point(&current_pt) {
+                        if current_pt != start && current_pt != target && spatial_grids[l].collides_box(&via_box) {
                             blocked = true;
                             break;
                         }
@@ -418,7 +428,7 @@ mod tests {
         let start = IntPoint::new(0, 0);
         let target = IntPoint::new(1000, 0);
         let grid = LayerSpatialGrid::new(IntBox::new(-2000, -2000, 2000, 2000), 500);
-        let route = algo.find_path_3d_grid(start, 0, target, 0, 1, &[grid]).unwrap();
+        let route = algo.find_path_3d_grid(start, 0, target, 0, 1, 100, &[grid]).unwrap();
         assert_eq!(route.segments.len(), 1);
         assert_eq!(route.segments[0].points.first(), Some(&start));
         assert_eq!(route.segments[0].points.last(), Some(&target));
@@ -437,7 +447,11 @@ mod tests {
         grid0.insert(IntBox::new(200, 0, 400, 600)); // Obstacle on layer 0 blocking direct path
         let grid1 = LayerSpatialGrid::new(IntBox::new(-2000, -2000, 2000, 2000), 500);
 
-        let route = algo.find_path_3d_grid(start, 0, target, 0, 2, &[grid0, grid1]).unwrap();
+        let res = algo.find_path_3d_grid(start, 0, target, 0, 2, 100, &[grid0, grid1]);
+        if res.is_none() {
+            eprintln!("find_path_3d_grid failed for test_maze_search_3d_layer_transition!");
+        }
+        let route = res.unwrap();
         assert!(!route.vias.is_empty(), "Must generate via to bypass obstacle on layer 0");
     }
 }

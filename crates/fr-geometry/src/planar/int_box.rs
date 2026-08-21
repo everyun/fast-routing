@@ -25,11 +25,11 @@ impl IntBox {
         IntBox { ll, ur }
     }
 
-    /// Creates an `IntBox` from four integer coordinates.
-    pub const fn new(ll_x: i32, ll_y: i32, ur_x: i32, ur_y: i32) -> Self {
+    /// Creates an `IntBox` from four integer coordinates, normalizing bounds.
+    pub fn new(ll_x: i32, ll_y: i32, ur_x: i32, ur_y: i32) -> Self {
         IntBox {
-            ll: IntPoint::new(ll_x, ll_y),
-            ur: IntPoint::new(ur_x, ur_y),
+            ll: IntPoint::new(ll_x.min(ur_x), ll_y.min(ur_y)),
+            ur: IntPoint::new(ll_x.max(ur_x), ll_y.max(ur_y)),
         }
     }
 

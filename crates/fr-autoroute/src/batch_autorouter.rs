@@ -1,5 +1,5 @@
 //! Batch autorouter engine with 3D multi-layer routing, via generation,
-//! Rayon multi-core parallelism, Delaunay Minimum Spanning Tree (MST) air-lines,
+//! Power/Ground plane routing mode, Rayon multi-core parallelism, Delaunay MST,
 //! Disjoint-Set Connected Components analysis, and high-performance O(1) spatial grid.
 
 use crate::maze_search::{MazeSearchAlgo, MazeSearchSettings, RoutePath3D};
@@ -19,6 +19,7 @@ pub struct NetRoutingRule {
     pub via_padstack_name: String,
     pub via_pad_radius: i32,
     pub via_drill_radius: i32,
+    pub is_plane: bool,
 }
 
 impl Default for NetRoutingRule {
@@ -29,6 +30,7 @@ impl Default for NetRoutingRule {
             via_padstack_name: "Via[0-1]_600:300_um".to_string(),
             via_pad_radius: 300,   // 600um diameter -> 300um radius
             via_drill_radius: 150, // 300um drill
+            is_plane: false,
         }
     }
 }
@@ -105,31 +107,7 @@ impl BatchAutorouter {
         for pass in 1..=self.settings.max_passes {
             let mut pass_routed_any = false;
 
-            // 1. Build layer-specific high-performance spatial grids from existing traces and vias
-            let mut spatial_grids: Vec<LayerSpatialGrid> = (0..board.layer_count)
-                .map(|_| LayerSpatialGrid::new(board.bounding_box, cell_size))
-                .collect();
-
-            for trace in &board.traces {
-                if (trace.layer as usize) < spatial_grids.len() {
-                    spatial_grids[trace.layer as usize].insert(trace.bounding_box());
-                }
-            }
-            for via in &board.vias {
-                let min_l = via.first_layer.min(via.last_layer) as usize;
-                let max_l = via.first_layer.max(via.last_layer) as usize;
-                let pad_box = IntBox::new(
-                    via.center.x - via.pad_radius,
-                    via.center.y - via.pad_radius,
-                    via.center.x + via.pad_radius,
-                    via.center.y + via.pad_radius,
-                );
-                for l in min_l..=max_l.min(spatial_grids.len() - 1) {
-                    spatial_grids[l].insert(pad_box);
-                }
-            }
-
-            // 2. Parallel candidate route generation across unconnected component anchors via Rayon
+            // 1. Parallel candidate route generation across unconnected component anchors via Rayon
             let mut candidates: Vec<CandidateNetRoute> = net_ids
                 .par_iter()
                 .filter_map(|&net_id| {
@@ -142,8 +120,38 @@ impl BatchAutorouter {
 
                     let rule = self.get_net_rule(net_id);
 
-                    // Clone layer spatial grids and add foreign pin pads
-                    let mut net_grids = spatial_grids.clone();
+                    // Build net-specific spatial grid: ONLY foreign traces, foreign vias, and foreign pin pads
+                    let mut net_grids: Vec<LayerSpatialGrid> = (0..board.layer_count)
+                        .map(|_| LayerSpatialGrid::new(board.bounding_box, cell_size))
+                        .collect();
+
+                    // Insert foreign traces
+                    for trace in &board.traces {
+                        if trace.header.net_no_arr.first() != Some(&net_id) {
+                            if (trace.layer as usize) < net_grids.len() {
+                                net_grids[trace.layer as usize].insert(trace.bounding_box());
+                            }
+                        }
+                    }
+
+                    // Insert foreign vias
+                    for via in &board.vias {
+                        if via.header.net_no_arr.first() != Some(&net_id) {
+                            let min_l = via.first_layer.min(via.last_layer) as usize;
+                            let max_l = via.first_layer.max(via.last_layer) as usize;
+                            let pad_box = IntBox::new(
+                                via.center.x - via.pad_radius,
+                                via.center.y - via.pad_radius,
+                                via.center.x + via.pad_radius,
+                                via.center.y + via.pad_radius,
+                            );
+                            for l in min_l..=max_l.min(net_grids.len() - 1) {
+                                net_grids[l].insert(pad_box);
+                            }
+                        }
+                    }
+
+                    // Insert foreign pin pads
                     for other_pin in &board.pins {
                         if other_pin.header.net_no_arr.first() != Some(&net_id) {
                             let min_l = other_pin.first_layer.max(0) as usize;
@@ -179,14 +187,16 @@ impl BatchAutorouter {
                         let (start, start_layer) = status.component_anchors[u];
                         let (target, target_layer) = status.component_anchors[v];
 
-                        if let Some(path_3d) = algo.find_path_3d_grid(
+                        let res = algo.find_path_3d_grid(
                             start,
                             start_layer,
                             target,
                             target_layer,
                             layer_count,
+                            rule.trace_half_width,
                             &net_grids,
-                        ) {
+                        );
+                        if let Some(path_3d) = res {
                             net_paths.push(path_3d);
                         } else {
                             // Could not connect this cluster pair in current pass
@@ -209,17 +219,40 @@ impl BatchAutorouter {
             // Deterministic sort by net_id before commit
             candidates.sort_by_key(|c| c.net_id);
 
-            // 3. Transactional Spatial Commit & Collision Check using O(1) grid queries
+            // 2. Transactional Spatial Commit & Collision Check against foreign obstacles only
             for candidate in candidates {
                 let mut has_conflict = false;
 
-                // Check candidate segments and vias against current board state
+                // Check candidate segments against foreign traces, vias, and pins using fine-grained step boxes
                 for path in &candidate.paths {
                     for seg in &path.segments {
                         let seg_boxes = self.segment_to_boxes(&seg.points, candidate.rule.trace_half_width);
                         for s_box in seg_boxes {
-                            if (seg.layer as usize) < spatial_grids.len() {
-                                if spatial_grids[seg.layer as usize].collides_box(&s_box) {
+                            if (seg.layer as usize) < board.layer_count {
+                                let collides_foreign_trace = board.traces.iter().any(|t| {
+                                    t.header.net_no_arr.first() != Some(&candidate.net_id)
+                                        && t.layer == seg.layer
+                                        && t.bounding_box().intersects(&s_box)
+                                });
+                                let collides_foreign_via = board.vias.iter().any(|v| {
+                                    v.header.net_no_arr.first() != Some(&candidate.net_id)
+                                        && seg.layer >= v.first_layer
+                                        && seg.layer <= v.last_layer
+                                        && IntBox::new(
+                                            v.center.x - v.pad_radius,
+                                            v.center.y - v.pad_radius,
+                                            v.center.x + v.pad_radius,
+                                            v.center.y + v.pad_radius,
+                                        )
+                                        .intersects(&s_box)
+                                });
+                                let collides_foreign_pin = board.pins.iter().any(|p| {
+                                    p.header.net_no_arr.first() != Some(&candidate.net_id)
+                                        && seg.layer >= p.first_layer
+                                        && seg.layer <= p.last_layer
+                                        && p.pad_bounding_box.intersects(&s_box)
+                                });
+                                if collides_foreign_trace || collides_foreign_via || collides_foreign_pin {
                                     has_conflict = true;
                                     break;
                                 }
@@ -246,9 +279,6 @@ impl BatchAutorouter {
                                 candidate.rule.trace_half_width,
                                 seg.points,
                             );
-                            if (seg.layer as usize) < spatial_grids.len() {
-                                spatial_grids[seg.layer as usize].insert(trace.bounding_box());
-                            }
                             board.insert_trace(trace);
                         }
 
@@ -264,17 +294,6 @@ impl BatchAutorouter {
                                 candidate.rule.via_pad_radius,
                                 candidate.rule.via_drill_radius,
                             );
-                            let pad_box = IntBox::new(
-                                via.point.x - candidate.rule.via_pad_radius,
-                                via.point.y - candidate.rule.via_pad_radius,
-                                via.point.x + candidate.rule.via_pad_radius,
-                                via.point.y + candidate.rule.via_pad_radius,
-                            );
-                            let min_l = via.from_layer.min(via.to_layer) as usize;
-                            let max_l = via.from_layer.max(via.to_layer) as usize;
-                            for l in min_l..=max_l.min(spatial_grids.len() - 1) {
-                                spatial_grids[l].insert(pad_box);
-                            }
                             board.insert_via(via_item);
                         }
                     }
@@ -297,7 +316,7 @@ impl BatchAutorouter {
             }
         }
 
-        // 4. Authoritative electrical connectivity evaluation
+        // 3. Authoritative electrical connectivity evaluation
         let mut completed_nets = 0;
         let mut unrouted_nets = 0;
         for &net_id in net_ids {
@@ -321,15 +340,28 @@ impl BatchAutorouter {
         }
     }
 
-    /// Converts a polyline trace points into bounding boxes for collision checks.
+    /// Converts a polyline trace into fine-grained bounding boxes along the path for accurate collision checks.
     fn segment_to_boxes(&self, points: &[fr_geometry::planar::IntPoint], half_width: i32) -> Vec<IntBox> {
         let mut boxes = Vec::new();
+        let step = 1000.max(half_width * 2);
         for i in 1..points.len() {
-            let min_x = points[i - 1].x.min(points[i].x) - half_width;
-            let min_y = points[i - 1].y.min(points[i].y) - half_width;
-            let max_x = points[i - 1].x.max(points[i].x) + half_width;
-            let max_y = points[i - 1].y.max(points[i].y) + half_width;
-            boxes.push(IntBox::new(min_x, min_y, max_x, max_y));
+            let p1 = points[i - 1];
+            let p2 = points[i];
+            let dx = p2.x - p1.x;
+            let dy = p2.y - p1.y;
+            let dist = ((dx as f64) * (dx as f64) + (dy as f64) * (dy as f64)).sqrt();
+            let num_steps = (dist / step as f64).ceil().max(1.0) as usize;
+            for s in 0..=num_steps {
+                let t = (s as f64) / (num_steps as f64);
+                let cx = (p1.x as f64 + (dx as f64) * t).round() as i32;
+                let cy = (p1.y as f64 + (dy as f64) * t).round() as i32;
+                boxes.push(IntBox::new(
+                    cx - half_width,
+                    cy - half_width,
+                    cx + half_width,
+                    cy + half_width,
+                ));
+            }
         }
         boxes
     }
