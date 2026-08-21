@@ -51,6 +51,7 @@ pub enum Keyword {
     HostVersion,
     SupplyPin,
     ConductionArea,
+    Circuit,
 }
 
 impl Keyword {
@@ -58,6 +59,7 @@ impl Keyword {
     pub fn parse(s: &str) -> Option<Keyword> {
         let lower = s.to_ascii_lowercase();
         match lower.as_str() {
+            "circuit" => Some(Keyword::Circuit),
             "(" => Some(Keyword::OpenParen),
             ")" => Some(Keyword::CloseParen),
             "pcb" => Some(Keyword::Pcb),

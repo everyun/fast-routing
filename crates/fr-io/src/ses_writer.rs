@@ -5,6 +5,7 @@
 //! LibrePCB, and other EDA tools (`pcbnew.ImportSpecctraSES`).
 
 use crate::parser::{DsnComponent, DsnPackage, DsnPadstack, DsnVia, DsnWire};
+use std::collections::HashSet;
 use std::fmt::Write;
 
 /// Generates a Specctra `.ses` session file string.
@@ -43,23 +44,22 @@ impl SesWriter {
     ) -> String {
         let mut out = String::new();
 
-        // Extract base filename without path
-        let base_raw = std::path::Path::new(&self.pcb_name)
+        // Extract clean base filename without path or duplicate extensions
+        let raw_filename = std::path::Path::new(&self.pcb_name)
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or(&self.pcb_name);
 
-        let session_name = if base_raw.ends_with(".dsn") {
-            base_raw.replace(".dsn", ".ses")
+        let clean_base = if let Some(stripped) = raw_filename.strip_suffix(".dsn") {
+            stripped
+        } else if let Some(stripped) = raw_filename.strip_suffix(".ses") {
+            stripped
         } else {
-            format!("{}.ses", base_raw)
+            raw_filename
         };
 
-        let base_design_name = if base_raw.ends_with(".dsn") {
-            base_raw.to_string()
-        } else {
-            format!("{}.dsn", base_raw)
-        };
+        let session_name = format!("{}.ses", clean_base);
+        let base_design_name = format!("{}.dsn", clean_base);
 
         writeln!(out, "(session \"{}\"", session_name).unwrap();
         writeln!(out, "  (base_design \"{}\")", base_design_name).unwrap();
@@ -111,15 +111,21 @@ impl SesWriter {
 
         // 4. Library out scope (via padstacks only)
         writeln!(out, "    (library_out").unwrap();
+        let mut written_padstacks = HashSet::new();
         for padstack in padstacks {
-            if padstack.name.to_ascii_lowercase().contains("via") {
+            if padstack.name.to_ascii_lowercase().contains("via") && written_padstacks.insert(padstack.name.clone()) {
                 writeln!(out, "      (padstack \"{}\"", padstack.name).unwrap();
                 for shape in &padstack.shapes {
                     write!(out, "        (shape ({} {}", shape.shape_type, shape.layer).unwrap();
                     for dim in &shape.dimensions {
-                        write!(out, " {}", (dim * self.resolution).round() as i64).unwrap();
+                        let dim_val = if dim.fract() == 0.0 {
+                            format!("{:.0}", dim)
+                        } else {
+                            format!("{:.4}", dim).trim_end_matches('0').trim_end_matches('.').to_string()
+                        };
+                        write!(out, " {}", dim_val).unwrap();
                     }
-                    writeln!(out, " 0 0))").unwrap();
+                    writeln!(out, "))").unwrap();
                 }
                 writeln!(out, "        (attach off)").unwrap();
                 writeln!(out, "      )").unwrap();
@@ -140,9 +146,16 @@ impl SesWriter {
             writeln!(out, "      (net \"{}\"", net_name).unwrap();
 
             for wire in net_wires {
-                write!(out, "        (wire (path {} {}", wire.layer, (wire.width * self.resolution).round() as i64).unwrap();
+                let w_val = (wire.width * self.resolution).round() as i64;
+                write!(out, "        (wire (path {} {}", wire.layer, w_val).unwrap();
                 for pt in &wire.points {
-                    write!(out, " {} {}", (pt.x * self.resolution).round() as i64, (pt.y * self.resolution).round() as i64).unwrap();
+                    write!(
+                        out,
+                        " {} {}",
+                        (pt.x * self.resolution).round() as i64,
+                        (pt.y * self.resolution).round() as i64
+                    )
+                    .unwrap();
                 }
                 writeln!(out, "))").unwrap();
             }

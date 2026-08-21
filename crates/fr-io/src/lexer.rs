@@ -99,6 +99,14 @@ impl<'a> DsnLexer<'a> {
             }
         }
     }
+    /// Tokenizes the entire remaining input stream into a vector of tokens.
+    pub fn tokenize_all(&mut self) -> Vec<Token> {
+        let mut tokens = Vec::new();
+        while let Some(tok) = self.next_token() {
+            tokens.push(tok);
+        }
+        tokens
+    }
 }
 
 #[cfg(test)]

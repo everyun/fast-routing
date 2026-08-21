@@ -5,7 +5,7 @@ use fr_autoroute::{BatchAutorouter, BatchRouterSettings};
 use fr_board::{BasicBoard, Pin, PolylineTrace, Via};
 use fr_drc::DesignRulesChecker;
 use fr_geometry::planar::{IntBox, IntPoint};
-use fr_io::{parse_dsn, DsnDocument, DsnPoint, DsnVia, DsnWire, SesWriter};
+use fr_io::{parse_dsn, DsnDocument, DsnPadstack, DsnPadstackShape, DsnPoint, DsnVia, DsnWire, SesWriter};
 
 /// Result of a complete routing pipeline execution.
 #[derive(Debug, Clone)]
@@ -38,18 +38,36 @@ impl RoutingJob {
         // 2. Build BasicBoard
         let mut board = self.build_board_from_dsn(&dsn);
 
-        // 3. Collect net IDs
+        // 3. Resolve best via padstack matching the board stackup
+        let layer_count = dsn.layers.len().max(2);
+        let default_via_padstack = dsn.classes
+            .iter()
+            .find_map(|c| c.via_rule.clone())
+            .or_else(|| {
+                dsn.padstacks
+                    .iter()
+                    .find(|p| p.name.to_ascii_lowercase().contains("via"))
+                    .map(|p| p.name.clone())
+            })
+            .unwrap_or_else(|| format!("Via[0-{}]_600:300_um", layer_count - 1));
+
+        let mut router_settings = self.router_settings.clone();
+        if router_settings.via_padstack_name == "Via[0-1]_600:300_um" || router_settings.via_padstack_name.is_empty() {
+            router_settings.via_padstack_name = default_via_padstack.clone();
+        }
+
+        // 4. Collect net IDs
         let net_ids: Vec<i32> = (1..=dsn.nets.len() as i32).collect();
 
-        // 4. Run Batch Autorouter (Multi-threaded with Rayon)
-        let router = BatchAutorouter::new(self.router_settings.clone());
+        // 5. Run Batch Autorouter (Multi-threaded with Rayon)
+        let router = BatchAutorouter::new(router_settings.clone());
         let stats = router.route_board(&mut board, &net_ids);
 
-        // 5. Run DRC Checker
+        // 6. Run DRC Checker
         let drc = DesignRulesChecker::new(&board);
         let violations = drc.get_all_clearance_violations(250.0); // 250um default clearance
 
-        // 6. Compute objective score
+        // 7. Compute objective score
         let board_stats = BoardStatistics::compute(
             &board,
             stats.total_nets,
@@ -59,7 +77,7 @@ impl RoutingJob {
         );
         let is_clean = board_stats.unrouted_net_count == 0 && board_stats.clearance_violation_count == 0;
 
-        // 7. Generate Specctra .ses session output
+        // 8. Generate Specctra .ses session output
         let writer = SesWriter::with_resolution(&dsn.pcb_name, &dsn.unit, dsn.resolution);
         let mut ses_wires = Vec::new();
         for trace in &board.traces {
@@ -103,11 +121,30 @@ impl RoutingJob {
             });
         }
 
+        // Ensure all referenced via padstacks exist in padstack definitions
+        let mut padstacks = dsn.padstacks.clone();
+        for via in &ses_vias {
+            if !padstacks.iter().any(|p| p.name == via.padstack_name) {
+                let shapes: Vec<DsnPadstackShape> = dsn.layers.iter().map(|lyr| {
+                    DsnPadstackShape {
+                        layer: lyr.name.clone(),
+                        shape_type: "circle".to_string(),
+                        dimensions: vec![600.0],
+                        points: Vec::new(),
+                    }
+                }).collect();
+                padstacks.push(DsnPadstack {
+                    name: via.padstack_name.clone(),
+                    shapes,
+                });
+            }
+        }
+
         let net_names: Vec<String> = dsn.nets.iter().map(|n| n.name.clone()).collect();
         let ses_content = writer.write_full_session(
             &dsn.components,
             &dsn.packages,
-            &dsn.padstacks,
+            &padstacks,
             &ses_wires,
             &ses_vias,
             &net_names,
