@@ -1,45 +1,12 @@
-//! 45-degree 3D Multi-Layer Maze Search and Path Expansion Algorithm (Modified A*).
-//!
-//! Supports:
-//! - 8 planar 45° directions on the active layer
-//! - 3D vertical layer-transition expansions (Via insertion) with configurable via costs
-//! - High-performance O(1) spatial grid collision checks (traces, pads, vias)
-//! - Heuristic tie-breaking & collinear segment reduction
+//! 3D multi-layer A* maze path search algorithm with 45-degree octilinear routing,
+//! via generation, vertical transitions, and pull-tight corner optimization.
 
 use crate::spatial_grid::LayerSpatialGrid;
 use fr_geometry::planar::{Direction, IntBox, IntPoint};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 
-/// A node in the 3D A* expansion priority queue.
-#[derive(Debug, Clone, Copy, PartialEq)]
-struct QueueElement {
-    point: IntPoint,
-    layer: i32,
-    direction: Direction,
-    cost_from_start: f64,
-    estimated_total_cost: f64,
-}
-
-impl Eq for QueueElement {}
-
-impl Ord for QueueElement {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Reverse ordering for min-heap
-        other
-            .estimated_total_cost
-            .partial_cmp(&self.estimated_total_cost)
-            .unwrap_or(Ordering::Equal)
-    }
-}
-
-impl PartialOrd for QueueElement {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-/// Settings and cost factors for the 3D maze search algorithm.
+/// Settings for the 3D maze search algorithm.
 #[derive(Debug, Clone)]
 pub struct MazeSearchSettings {
     pub step_size: i32,
@@ -51,46 +18,69 @@ pub struct MazeSearchSettings {
 impl Default for MazeSearchSettings {
     fn default() -> Self {
         MazeSearchSettings {
-            step_size: 200, // 200 um
+            step_size: 150, // 150um step resolution
             bend_cost: 80.0,
-            layer_change_cost: 500.0, // Via insertion penalty
+            layer_change_cost: 400.0,
             max_expansion_nodes: 80_000,
         }
     }
 }
 
-/// A trace segment on a single layer.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RouteSegment3D {
-    pub layer: i32,
-    pub points: Vec<IntPoint>,
-}
-
-/// A via connection between two layers.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RouteVia3D {
-    pub point: IntPoint,
-    pub from_layer: i32,
-    pub to_layer: i32,
-}
-
-/// Result of a 3D multi-layer maze search connection attempt.
-#[derive(Debug, Clone, PartialEq)]
-pub struct RoutePath3D {
-    pub segments: Vec<RouteSegment3D>,
-    pub vias: Vec<RouteVia3D>,
-    pub total_cost: f64,
-}
-
-/// Backward-compatible single-layer route path representation.
-#[derive(Debug, Clone, PartialEq)]
+/// A 2D planar route path.
+#[derive(Debug, Clone)]
 pub struct RoutePath {
     pub points: Vec<IntPoint>,
     pub layer: i32,
     pub total_cost: f64,
 }
 
-/// 45-degree 3D maze search pathfinder.
+/// A single-layer trace segment within a 3D multi-layer route.
+#[derive(Debug, Clone)]
+pub struct RouteSegment3D {
+    pub layer: i32,
+    pub points: Vec<IntPoint>,
+}
+
+/// A vertical via connection between layers within a 3D route.
+#[derive(Debug, Clone)]
+pub struct RouteVia3D {
+    pub point: IntPoint,
+    pub from_layer: i32,
+    pub to_layer: i32,
+}
+
+/// Complete 3D multi-layer route path with planar segments and vertical vias.
+#[derive(Debug, Clone)]
+pub struct RoutePath3D {
+    pub segments: Vec<RouteSegment3D>,
+    pub vias: Vec<RouteVia3D>,
+    pub total_cost: f64,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+struct State {
+    cost: f64,
+    priority: f64,
+    x: i32,
+    y: i32,
+    layer: i32,
+}
+
+impl Eq for State {}
+
+impl Ord for State {
+    fn cmp(&self, other: &Self) -> Ordering {
+        other.priority.partial_cmp(&self.priority).unwrap_or(Ordering::Equal)
+    }
+}
+
+impl PartialOrd for State {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+/// 3D multi-layer obstacle-avoiding maze path search engine.
 pub struct MazeSearchAlgo {
     pub settings: MazeSearchSettings,
 }
@@ -100,7 +90,7 @@ impl MazeSearchAlgo {
         MazeSearchAlgo { settings }
     }
 
-    /// Finds a 3D multi-layer obstacle-avoiding path using O(1) spatial grid queries.
+    /// Finds a 3D multi-layer route from `(start, start_layer)` to `(target, target_layer)`.
     pub fn find_path_3d_grid(
         &self,
         start: IntPoint,
@@ -110,207 +100,171 @@ impl MazeSearchAlgo {
         layer_count: i32,
         spatial_grids: &[LayerSpatialGrid],
     ) -> Option<RoutePath3D> {
+        let step = self.settings.step_size;
         let mut open_set = BinaryHeap::new();
-        let mut cost_so_far: HashMap<(IntPoint, i32), f64> = HashMap::new();
-        let mut came_from: HashMap<(IntPoint, i32), (IntPoint, i32)> = HashMap::new();
+        let mut came_from: HashMap<(i32, i32, i32), (i32, i32, i32)> = HashMap::new();
+        let mut cost_so_far: HashMap<(i32, i32, i32), f64> = HashMap::new();
 
-        let initial_dist = start.distance(&target);
-        let initial_layer_diff = (start_layer - target_layer).abs() as f64 * self.settings.layer_change_cost;
-        let initial_est = initial_dist + initial_layer_diff;
+        let start_key = (start.x, start.y, start_layer);
+        cost_so_far.insert(start_key, 0.0);
 
-        open_set.push(QueueElement {
-            point: start,
+        let initial_h = self.heuristic(start, start_layer, target, target_layer);
+        open_set.push(State {
+            cost: 0.0,
+            priority: initial_h,
+            x: start.x,
+            y: start.y,
             layer: start_layer,
-            direction: Direction::NULL,
-            cost_from_start: 0.0,
-            estimated_total_cost: initial_est,
         });
-        cost_so_far.insert((start, start_layer), 0.0);
 
-        let directions = [
-            Direction::RIGHT,
-            Direction::RIGHT45,
-            Direction::UP,
-            Direction::UP45,
-            Direction::LEFT,
-            Direction::LEFT45,
-            Direction::DOWN,
-            Direction::DOWN45,
+        // 8 Planar 45-degree neighbor offsets
+        let planar_offsets: [(i32, i32, f64); 8] = [
+            (step, 0, step as f64),
+            (-step, 0, step as f64),
+            (0, step, step as f64),
+            (0, -step, step as f64),
+            (step, step, (step as f64) * std::f64::consts::SQRT_2),
+            (step, -step, (step as f64) * std::f64::consts::SQRT_2),
+            (-step, step, (step as f64) * std::f64::consts::SQRT_2),
+            (-step, -step, (step as f64) * std::f64::consts::SQRT_2),
         ];
 
-        let mut nodes_visited = 0;
+        let mut expansions = 0;
+        let mut best_target_key = None;
 
-        while let Some(current) = open_set.pop() {
-            nodes_visited += 1;
-            if nodes_visited > self.settings.max_expansion_nodes {
+        while let Some(State { cost, x, y, layer, .. }) = open_set.pop() {
+            expansions += 1;
+            if expansions > self.settings.max_expansion_nodes {
                 break;
             }
 
-            // Target reached (within step size and matching target layer)
-            if current.layer == target_layer && current.point.distance(&target) <= self.settings.step_size as f64 {
-                // Reconstruct full 3D path
-                let mut raw_nodes = vec![(target, target_layer), (current.point, current.layer)];
-                let mut curr_key = (current.point, current.layer);
-                while let Some(&prev_key) = came_from.get(&curr_key) {
-                    raw_nodes.push(prev_key);
-                    curr_key = prev_key;
-                }
-                raw_nodes.reverse();
+            let current_pt = IntPoint::new(x, y);
+            let current_key = (x, y, layer);
 
-                return Some(self.split_into_segments_and_vias(raw_nodes, current.cost_from_start));
+            // Target reached check
+            if layer == target_layer && self.distance(current_pt, target) <= (step as f64) * 0.95 {
+                best_target_key = Some(current_key);
+                break;
             }
 
-            // 1. Planar 45° step expansions on the current layer
-            for dir in &directions {
-                let step_vec = dir.get_int_vector();
-                let next_pt = IntPoint::new(
-                    current.point.x + step_vec.x * self.settings.step_size,
-                    current.point.y + step_vec.y * self.settings.step_size,
-                );
+            // 1. Expand 8 planar 45-degree directions
+            for &(dx, dy, move_cost) in &planar_offsets {
+                let next_x = x + dx;
+                let next_y = y + dy;
+                let next_pt = IntPoint::new(next_x, next_y);
+                let next_key = (next_x, next_y, layer);
 
-                // O(1) Collision check on current layer via spatial grid
-                let layer_idx = current.layer as usize;
-                let collides = if layer_idx < spatial_grids.len() {
-                    spatial_grids[layer_idx].collides_point(&next_pt)
-                } else {
-                    false
-                };
-
-                if collides {
-                    continue;
+                // Collision check against spatial grid
+                if (layer as usize) < spatial_grids.len() {
+                    let grid = &spatial_grids[layer as usize];
+                    if next_pt != target && next_pt != start && grid.collides_point(&next_pt) {
+                        continue;
+                    }
                 }
 
-                let step_dist = current.point.distance(&next_pt);
-                let bend_penalty = if current.direction != Direction::NULL && current.direction != *dir {
-                    self.settings.bend_cost
-                } else {
-                    0.0
-                };
+                // Direction change penalty
+                let mut bend_penalty = 0.0;
+                if let Some(&(prev_x, prev_y, prev_l)) = came_from.get(&current_key) {
+                    if prev_l == layer {
+                        let prev_dx = x - prev_x;
+                        let prev_dy = y - prev_y;
+                        if prev_dx != dx || prev_dy != dy {
+                            bend_penalty = self.settings.bend_cost;
+                        }
+                    }
+                }
 
-                let new_cost = current.cost_from_start + step_dist + bend_penalty;
-                let next_key = (next_pt, current.layer);
-
+                let new_cost = cost + move_cost + bend_penalty;
                 if !cost_so_far.contains_key(&next_key) || new_cost < cost_so_far[&next_key] {
                     cost_so_far.insert(next_key, new_cost);
-                    came_from.insert(next_key, (current.point, current.layer));
-                    let layer_dist = (current.layer - target_layer).abs() as f64 * self.settings.layer_change_cost;
-                    // Tie-breaking heuristic (+0.1% bias towards target)
-                    let priority = new_cost + (next_pt.distance(&target) + layer_dist) * 1.001;
-                    open_set.push(QueueElement {
-                        point: next_pt,
-                        layer: current.layer,
-                        direction: *dir,
-                        cost_from_start: new_cost,
-                        estimated_total_cost: priority,
+                    let h = self.heuristic(next_pt, layer, target, target_layer);
+                    open_set.push(State {
+                        cost: new_cost,
+                        priority: new_cost + h * 1.001, // Manhattan tie-breaking
+                        x: next_x,
+                        y: next_y,
+                        layer,
                     });
+                    came_from.insert(next_key, current_key);
                 }
             }
 
-            // 2. Vertical layer-transition expansions (Via insertion)
-            let adjacent_layers = [current.layer - 1, current.layer + 1];
-            for &next_l in &adjacent_layers {
-                if next_l >= 0 && next_l < layer_count {
-                    let next_l_idx = next_l as usize;
-                    let collides = if next_l_idx < spatial_grids.len() {
-                        spatial_grids[next_l_idx].collides_point(&current.point)
-                    } else {
-                        false
-                    };
+            // 2. Expand vertical layer transitions (vias)
+            for &next_layer in &[layer - 1, layer + 1] {
+                if next_layer >= 0 && next_layer < layer_count {
+                    let next_key = (x, y, next_layer);
+                    let via_cost = self.settings.layer_change_cost;
 
-                    if collides {
+                    let mut blocked = false;
+                    let l_min = layer.min(next_layer) as usize;
+                    let l_max = layer.max(next_layer) as usize;
+                    for l in l_min..=l_max.min(spatial_grids.len() - 1) {
+                        if current_pt != start && current_pt != target && spatial_grids[l].collides_point(&current_pt) {
+                            blocked = true;
+                            break;
+                        }
+                    }
+                    if blocked {
                         continue;
                     }
 
-                    let new_cost = current.cost_from_start + self.settings.layer_change_cost;
-                    let next_key = (current.point, next_l);
-
+                    let new_cost = cost + via_cost;
                     if !cost_so_far.contains_key(&next_key) || new_cost < cost_so_far[&next_key] {
                         cost_so_far.insert(next_key, new_cost);
-                        came_from.insert(next_key, (current.point, current.layer));
-                        let layer_dist = (next_l - target_layer).abs() as f64 * self.settings.layer_change_cost;
-                        let priority = new_cost + (current.point.distance(&target) + layer_dist) * 1.001;
-                        open_set.push(QueueElement {
-                            point: current.point,
-                            layer: next_l,
-                            direction: Direction::NULL,
-                            cost_from_start: new_cost,
-                            estimated_total_cost: priority,
+                        let h = self.heuristic(current_pt, next_layer, target, target_layer);
+                        open_set.push(State {
+                            cost: new_cost,
+                            priority: new_cost + h * 1.001,
+                            x,
+                            y,
+                            layer: next_layer,
                         });
+                        came_from.insert(next_key, current_key);
                     }
                 }
             }
         }
 
-        None
-    }
+        let target_key = best_target_key?;
 
-    /// Finds a 3D multi-layer obstacle-avoiding path between `(start, start_layer)` and `(target, target_layer)` from box lists.
-    pub fn find_path_3d(
-        &self,
-        start: IntPoint,
-        start_layer: i32,
-        target: IntPoint,
-        target_layer: i32,
-        layer_count: i32,
-        obstacles_per_layer: &[Vec<IntBox>],
-    ) -> Option<RoutePath3D> {
-        let mut min_x = start.x.min(target.x) - 10_000;
-        let mut min_y = start.y.min(target.y) - 10_000;
-        let mut max_x = start.x.max(target.x) + 10_000;
-        let mut max_y = start.y.max(target.y) + 10_000;
+        // Reconstruct 3D path
+        let mut raw_nodes = Vec::new();
+        let mut curr = target_key;
+        while let Some(&prev) = came_from.get(&curr) {
+            raw_nodes.push((IntPoint::new(curr.0, curr.1), curr.2));
+            curr = prev;
+        }
+        raw_nodes.push((start, start_layer));
+        raw_nodes.reverse();
 
-        for layer_obs in obstacles_per_layer {
-            for b in layer_obs {
-                min_x = min_x.min(b.ll.x);
-                min_y = min_y.min(b.ll.y);
-                max_x = max_x.max(b.ur.x);
-                max_y = max_y.max(b.ur.y);
-            }
+        if let Some(last) = raw_nodes.last_mut() {
+            last.0 = target;
         }
 
-        let bounds = IntBox::new(min_x, min_y, max_x, max_y);
-        let cell_size = (self.settings.step_size * 5).max(1000);
-
-        let mut grids = Vec::with_capacity(layer_count as usize);
-        for l in 0..layer_count as usize {
-            let mut grid = LayerSpatialGrid::new(bounds, cell_size);
-            if l < obstacles_per_layer.len() {
-                for &b in &obstacles_per_layer[l] {
-                    grid.insert(b);
-                }
-            }
-            grids.push(grid);
-        }
-
-        self.find_path_3d_grid(start, start_layer, target, target_layer, layer_count, &grids)
+        let total_cost = *cost_so_far.get(&target_key).unwrap_or(&0.0);
+        Some(self.split_into_segments_and_vias(raw_nodes, total_cost, spatial_grids))
     }
 
-    /// Backward-compatible 2D planar single-layer wrapper.
-    pub fn find_path(
-        &self,
-        start: IntPoint,
-        target: IntPoint,
-        layer: i32,
-        obstacle_boxes: &[IntBox],
-    ) -> Option<RoutePath> {
-        let obs_vec = vec![obstacle_boxes.to_vec()];
-        let path_3d = self.find_path_3d(start, layer, target, layer, layer + 1, &obs_vec)?;
-        if let Some(first_seg) = path_3d.segments.first() {
-            Some(RoutePath {
-                points: first_seg.points.clone(),
-                layer: first_seg.layer,
-                total_cost: path_3d.total_cost,
-            })
-        } else {
-            None
-        }
+    #[inline(always)]
+    fn distance(&self, p1: IntPoint, p2: IntPoint) -> f64 {
+        let dx = (p1.x - p2.x) as f64;
+        let dy = (p1.y - p2.y) as f64;
+        (dx * dx + dy * dy).sqrt()
     }
 
-    /// Splits a 3D node sequence into layer trace segments and via transitions.
+    #[inline(always)]
+    fn heuristic(&self, current: IntPoint, current_layer: i32, target: IntPoint, target_layer: i32) -> f64 {
+        let dist = self.distance(current, target);
+        let layer_dist = ((current_layer - target_layer).abs() as f64) * self.settings.layer_change_cost;
+        dist + layer_dist
+    }
+
+    /// Splits a 3D node sequence into layer trace segments and via transitions with pull-tight smoothing.
     fn split_into_segments_and_vias(
         &self,
         raw_nodes: Vec<(IntPoint, i32)>,
         total_cost: f64,
+        spatial_grids: &[LayerSpatialGrid],
     ) -> RoutePath3D {
         let mut segments = Vec::new();
         let mut vias = Vec::new();
@@ -333,10 +287,11 @@ impl MazeSearchAlgo {
             } else {
                 // Layer transition -> finalize current segment & record via
                 if current_segment_pts.len() >= 2 {
-                    let simplified = self.simplify_path(current_segment_pts);
+                    let grid = spatial_grids.get(current_layer as usize);
+                    let smoothed = self.pull_tight_smooth(current_segment_pts, grid);
                     segments.push(RouteSegment3D {
                         layer: current_layer,
-                        points: simplified,
+                        points: smoothed,
                     });
                 }
                 vias.push(RouteVia3D {
@@ -350,10 +305,11 @@ impl MazeSearchAlgo {
         }
 
         if current_segment_pts.len() >= 2 {
-            let simplified = self.simplify_path(current_segment_pts);
+            let grid = spatial_grids.get(current_layer as usize);
+            let smoothed = self.pull_tight_smooth(current_segment_pts, grid);
             segments.push(RouteSegment3D {
                 layer: current_layer,
-                points: simplified,
+                points: smoothed,
             });
         }
 
@@ -362,6 +318,59 @@ impl MazeSearchAlgo {
             vias,
             total_cost,
         }
+    }
+
+    /// Pull-tight corner smoothing and collinear simplification on trace points.
+    pub fn pull_tight_smooth(&self, points: Vec<IntPoint>, grid: Option<&LayerSpatialGrid>) -> Vec<IntPoint> {
+        let mut pts = self.simplify_path(points);
+        if pts.len() <= 2 {
+            return pts;
+        }
+
+        let mut changed = true;
+        let mut iterations = 0;
+
+        while changed && iterations < 5 {
+            changed = false;
+            iterations += 1;
+
+            let mut new_pts = Vec::with_capacity(pts.len());
+            let mut i = 0;
+
+            while i < pts.len() {
+                if i + 2 < pts.len() {
+                    let p0 = pts[i];
+                    let p2 = pts[i + 2];
+                    let dir = Direction::from_int_points(&p0, &p2);
+
+                    // Check if direct connection p0 -> p2 is a valid 45-degree or orthogonal line
+                    if let Some(d) = dir {
+                        if d.is_orthogonal() || d.is_diagonal() {
+                            let seg_box = IntBox::new(
+                                p0.x.min(p2.x) - 50,
+                                p0.y.min(p2.y) - 50,
+                                p0.x.max(p2.x) + 50,
+                                p0.y.max(p2.y) + 50,
+                            );
+                            let collision = grid.map_or(false, |g| g.collides_box(&seg_box));
+                            if !collision {
+                                new_pts.push(p0);
+                                new_pts.push(p2);
+                                i += 3;
+                                changed = true;
+                                continue;
+                            }
+                        }
+                    }
+                }
+                new_pts.push(pts[i]);
+                i += 1;
+            }
+
+            pts = self.simplify_path(new_pts);
+        }
+
+        pts
     }
 
     /// Merges consecutive collinear segments into single long traces.
@@ -396,10 +405,11 @@ mod tests {
         });
         let start = IntPoint::new(0, 0);
         let target = IntPoint::new(1000, 0);
-        let route = algo.find_path(start, target, 0, &[]).unwrap();
-        assert!(route.points.len() >= 2);
-        assert_eq!(route.points[0], start);
-        assert_eq!(*route.points.last().unwrap(), target);
+        let grid = LayerSpatialGrid::new(IntBox::new(-2000, -2000, 2000, 2000), 500);
+        let route = algo.find_path_3d_grid(start, 0, target, 0, 1, &[grid]).unwrap();
+        assert_eq!(route.segments.len(), 1);
+        assert_eq!(route.segments[0].points.first(), Some(&start));
+        assert_eq!(route.segments[0].points.last(), Some(&target));
     }
 
     #[test]
@@ -411,11 +421,11 @@ mod tests {
         });
         let start = IntPoint::new(0, 0);
         let target = IntPoint::new(500, 500);
-        let obs_l0 = vec![IntBox::new(200, 0, 400, 600)]; // Obstacle on layer 0 blocking direct path
-        let obs_l1 = vec![];
+        let mut grid0 = LayerSpatialGrid::new(IntBox::new(-2000, -2000, 2000, 2000), 500);
+        grid0.insert(IntBox::new(200, 0, 400, 600)); // Obstacle on layer 0 blocking direct path
+        let grid1 = LayerSpatialGrid::new(IntBox::new(-2000, -2000, 2000, 2000), 500);
 
-        let obstacles = vec![obs_l0, obs_l1];
-        let path = algo.find_path_3d(start, 0, target, 0, 2, &obstacles).unwrap();
-        assert!(!path.vias.is_empty(), "Expected via to route around layer 0 obstacle");
+        let route = algo.find_path_3d_grid(start, 0, target, 0, 2, &[grid0, grid1]).unwrap();
+        assert!(!route.vias.is_empty(), "Must generate via to bypass obstacle on layer 0");
     }
 }
