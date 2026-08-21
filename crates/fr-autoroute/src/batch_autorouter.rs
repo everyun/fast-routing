@@ -1,8 +1,10 @@
 //! Batch autorouter engine with 3D multi-layer routing, via generation,
-//! Rayon multi-core parallelism, and transactional spatial conflict resolution.
+//! Rayon multi-core parallelism, Delaunay Minimum Spanning Tree (MST) air-lines,
+//! and transactional spatial conflict resolution.
 
 use crate::maze_search::{MazeSearchAlgo, MazeSearchSettings, RoutePath3D};
 use fr_board::{BasicBoard, PolylineTrace, Via};
+use fr_datastructures::planar_delaunay_triangulation::{PlanarDelaunayTriangulation, Point2D};
 use fr_geometry::planar::IntBox;
 use rayon::prelude::*;
 use std::collections::HashSet;
@@ -28,7 +30,12 @@ impl Default for BatchRouterSettings {
             via_padstack_name: "Via[0-1]_600:300_um".to_string(),
             via_pad_radius: 300,   // 600um diameter -> 300um radius
             via_drill_radius: 150, // 300um drill
-            maze_settings: MazeSearchSettings::default(),
+            maze_settings: MazeSearchSettings {
+                step_size: 150, // 150um step resolution for dense routing
+                bend_cost: 80.0,
+                layer_change_cost: 400.0,
+                max_expansion_nodes: 80_000,
+            },
         }
     }
 }
@@ -114,13 +121,32 @@ impl BatchAutorouter {
                         }
                     }
 
+                    // Compute connection airlines: 2-pin direct or Delaunay MST for multi-pin nets
+                    let pin_pairs: Vec<(usize, usize)> = if pins.len() == 2 {
+                        vec![(0, 1)]
+                    } else {
+                        let pts: Vec<(Point2D, usize)> = pins
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, p)| (Point2D::from_i32(p.center.x, p.center.y), idx))
+                            .collect();
+                        let tri = PlanarDelaunayTriangulation::new(pts);
+                        let mst = tri.minimum_spanning_tree();
+                        mst.into_iter()
+                            .filter_map(|e| match (e.start_data, e.end_data) {
+                                (Some(u), Some(v)) => Some((u, v)),
+                                _ => None,
+                            })
+                            .collect()
+                    };
+
                     let mut net_paths = Vec::new();
-                    // Connect pin chains (pin[i-1] -> pin[i]) in 3D multi-layer space
-                    for i in 1..pins.len() {
-                        let start = pins[i - 1].center;
-                        let start_layer = pins[i - 1].first_layer;
-                        let target = pins[i].center;
-                        let target_layer = pins[i].first_layer;
+                    // Connect each MST pair in 3D multi-layer space
+                    for (u, v) in pin_pairs {
+                        let start = pins[u].center;
+                        let start_layer = pins[u].first_layer;
+                        let target = pins[v].center;
+                        let target_layer = pins[v].first_layer;
 
                         if let Some(path_3d) = algo.find_path_3d(
                             start,
