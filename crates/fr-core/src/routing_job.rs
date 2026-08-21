@@ -2,7 +2,7 @@
 
 use crate::board_statistics::BoardStatistics;
 use fr_autoroute::{BatchAutorouter, BatchRouterSettings};
-use fr_board::{BasicBoard, Pin, PolylineTrace, Via};
+use fr_board::{BasicBoard, FixedState, Pin, PolylineTrace, Via};
 use fr_drc::DesignRulesChecker;
 use fr_geometry::planar::{IntBox, IntPoint};
 use fr_io::{parse_dsn, DsnDocument, DsnPadstack, DsnPadstackShape, DsnPoint, DsnVia, DsnWire, SesWriter};
@@ -77,7 +77,7 @@ impl RoutingJob {
         );
         let is_clean = board_stats.unrouted_net_count == 0 && board_stats.clearance_violation_count == 0;
 
-        // 8. Generate Specctra .ses session output
+        // 8. Generate Specctra .ses session output with contact endpoint snapping
         let writer = SesWriter::with_resolution(&dsn.pcb_name, &dsn.unit, dsn.resolution);
         let mut ses_wires = Vec::new();
         for trace in &board.traces {
@@ -89,8 +89,39 @@ impl RoutingJob {
                 .map(|l| l.name.clone())
                 .unwrap_or_else(|| "F.Cu".to_string());
 
-            let points: Vec<DsnPoint> = trace
-                .corner_points
+            let mut corner_points = trace.corner_points.clone();
+
+            // Snap start corner to contacted Pin center
+            if let Some(first) = corner_points.first_mut() {
+                for pin in &board.pins {
+                    if pin.header.net_no_arr.contains(&((net_idx + 1) as i32)) {
+                        if trace.layer >= pin.first_layer && trace.layer <= pin.last_layer {
+                            let threshold = pin.pad_bounding_box.width().max(pin.pad_bounding_box.height()) / 2 + trace.half_width + 50;
+                            if first.is_contained_in(&pin.pad_bounding_box) || (first.x - pin.center.x).abs().max((first.y - pin.center.y).abs()) <= threshold {
+                                *first = pin.center;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Snap end corner to contacted Pin center
+            if let Some(last) = corner_points.last_mut() {
+                for pin in &board.pins {
+                    if pin.header.net_no_arr.contains(&((net_idx + 1) as i32)) {
+                        if trace.layer >= pin.first_layer && trace.layer <= pin.last_layer {
+                            let threshold = pin.pad_bounding_box.width().max(pin.pad_bounding_box.height()) / 2 + trace.half_width + 50;
+                            if last.is_contained_in(&pin.pad_bounding_box) || (last.x - pin.center.x).abs().max((last.y - pin.center.y).abs()) <= threshold {
+                                *last = pin.center;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            let points: Vec<DsnPoint> = corner_points
                 .iter()
                 .map(|p| DsnPoint {
                     x: p.x as f64 / dsn.resolution,
@@ -98,11 +129,18 @@ impl RoutingJob {
                 })
                 .collect();
 
+            let fixed_type = match trace.header.fixed_state {
+                FixedState::UserFixed => Some("protect".to_string()),
+                FixedState::SystemFixed => Some("fix".to_string()),
+                _ => None,
+            };
+
             ses_wires.push(DsnWire {
                 net_name,
                 layer: layer_name,
                 width: (trace.half_width * 2) as f64 / dsn.resolution,
                 points,
+                fixed_type,
             });
         }
 
@@ -113,11 +151,18 @@ impl RoutingJob {
                 .map(|n| n.name.clone())
                 .unwrap_or_else(|| "GND".to_string());
 
+            let fixed_type = match via.header.fixed_state {
+                FixedState::UserFixed => Some("protect".to_string()),
+                FixedState::SystemFixed => Some("fix".to_string()),
+                _ => None,
+            };
+
             ses_vias.push(DsnVia {
                 net_name,
                 padstack_name: via.padstack_name.clone(),
                 x: via.center.x as f64 / dsn.resolution,
                 y: via.center.y as f64 / dsn.resolution,
+                fixed_type,
             });
         }
 
@@ -258,7 +303,7 @@ impl RoutingJob {
             }
         }
 
-        // 2. Import pre-existing wires and traces
+        // 2. Import pre-existing wires and traces with exact FixedState
         for wire in &dsn.wires {
             let net_idx = dsn.nets.iter().position(|n| n.name == wire.net_name).unwrap_or(0);
             let net_no = (net_idx + 1) as i32;
@@ -270,7 +315,7 @@ impl RoutingJob {
                 .collect();
 
             if points.len() >= 2 {
-                let trace = PolylineTrace::new(
+                let mut trace = PolylineTrace::new(
                     item_id,
                     net_no,
                     2,
@@ -278,17 +323,22 @@ impl RoutingJob {
                     (wire.width * dsn.resolution / 2.0) as i32,
                     points,
                 );
+                trace.header.fixed_state = match wire.fixed_type.as_deref() {
+                    Some("protect") => FixedState::UserFixed,
+                    Some("fix") => FixedState::SystemFixed,
+                    _ => FixedState::Unfixed,
+                };
                 board.insert_trace(trace);
                 item_id += 1;
             }
         }
 
-        // 3. Import pre-existing vias
+        // 3. Import pre-existing vias with exact FixedState
         for via in &dsn.vias {
             let net_idx = dsn.nets.iter().position(|n| n.name == via.net_name).unwrap_or(0);
             let net_no = (net_idx + 1) as i32;
             let center = IntPoint::new((via.x * dsn.resolution) as i32, (via.y * dsn.resolution) as i32);
-            let via_item = Via::new(
+            let mut via_item = Via::new(
                 item_id,
                 net_no,
                 2,
@@ -299,6 +349,11 @@ impl RoutingJob {
                 300,
                 150,
             );
+            via_item.header.fixed_state = match via.fixed_type.as_deref() {
+                Some("protect") => FixedState::UserFixed,
+                Some("fix") => FixedState::SystemFixed,
+                _ => FixedState::Unfixed,
+            };
             board.insert_via(via_item);
             item_id += 1;
         }

@@ -399,6 +399,7 @@ impl DsnReader {
                     let mut width = 250.0;
                     let mut points = Vec::new();
                     let mut net_name = "GND".to_string();
+                    let mut fixed_type = None;
 
                     for child in sub.iter().skip(1) {
                         if let Some(c_list) = child.list() {
@@ -425,6 +426,10 @@ impl DsnReader {
                                 if let Some(n) = c_list.get(1).and_then(|e| e.atom()) {
                                     net_name = n.to_string();
                                 }
+                            } else if c_tag.eq_ignore_ascii_case("type") {
+                                if let Some(t) = c_list.get(1).and_then(|e| e.atom()) {
+                                    fixed_type = Some(t.to_string());
+                                }
                             }
                         }
                     }
@@ -434,18 +439,25 @@ impl DsnReader {
                         layer,
                         width,
                         points,
+                        fixed_type,
                     });
                 } else if tag.eq_ignore_ascii_case("via") {
                     let padstack_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("via").to_string();
                     let x = sub.get(2).and_then(|e| e.number()).unwrap_or(0.0);
                     let y = sub.get(3).and_then(|e| e.number()).unwrap_or(0.0);
                     let mut net_name = "GND".to_string();
+                    let mut fixed_type = None;
 
-                    for child in sub.iter().skip(4) {
+                    for child in sub.iter().skip(3) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("net")).unwrap_or(false) {
+                            let c_tag = c_list.first().and_then(|e| e.atom()).unwrap_or("");
+                            if c_tag.eq_ignore_ascii_case("net") {
                                 if let Some(n) = c_list.get(1).and_then(|e| e.atom()) {
                                     net_name = n.to_string();
+                                }
+                            } else if c_tag.eq_ignore_ascii_case("type") {
+                                if let Some(t) = c_list.get(1).and_then(|e| e.atom()) {
+                                    fixed_type = Some(t.to_string());
                                 }
                             }
                         }
@@ -456,6 +468,7 @@ impl DsnReader {
                         padstack_name,
                         x,
                         y,
+                        fixed_type,
                     });
                 }
             }

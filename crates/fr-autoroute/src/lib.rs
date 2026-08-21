@@ -11,9 +11,11 @@
 pub mod batch_autorouter;
 pub mod cuda_accel;
 pub mod maze_search;
+pub mod net_connectivity;
 pub mod spatial_grid;
 
 pub use batch_autorouter::{BatchAutorouter, BatchRouterSettings, RoutingStatistics};
 pub use cuda_accel::{CudaClearanceChecker, CudaConfig};
 pub use maze_search::{MazeSearchAlgo, MazeSearchSettings, RoutePath, RoutePath3D, RouteSegment3D, RouteVia3D};
+pub use net_connectivity::{analyze_net_connectivity, NetConnectivityStatus};
 pub use spatial_grid::LayerSpatialGrid;

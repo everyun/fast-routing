@@ -1,8 +1,9 @@
 //! Batch autorouter engine with 3D multi-layer routing, via generation,
 //! Rayon multi-core parallelism, Delaunay Minimum Spanning Tree (MST) air-lines,
-//! and high-performance O(1) spatial grid transactional conflict resolution.
+//! Disjoint-Set Connected Components analysis, and high-performance O(1) spatial grid.
 
 use crate::maze_search::{MazeSearchAlgo, MazeSearchSettings, RoutePath3D};
+use crate::net_connectivity::analyze_net_connectivity;
 use crate::spatial_grid::LayerSpatialGrid;
 use fr_board::{BasicBoard, PolylineTrace, Via};
 use fr_datastructures::planar_delaunay_triangulation::{PlanarDelaunayTriangulation, Point2D};
@@ -102,15 +103,14 @@ impl BatchAutorouter {
                 }
             }
 
-            // 2. Parallel candidate route generation across unconnected nets via Rayon
+            // 2. Parallel candidate route generation across unconnected component anchors via Rayon
             let candidates: Vec<CandidateNetRoute> = net_ids
                 .par_iter()
                 .filter_map(|&net_id| {
-                    let pins = board.get_pins_for_net(net_id);
-                    let existing_traces = board.get_traces_for_net(net_id);
+                    let status = analyze_net_connectivity(board, net_id);
 
-                    // Skip already connected nets
-                    if pins.len() < 2 || !existing_traces.is_empty() {
+                    // Skip already fully connected nets
+                    if status.is_fully_connected || status.component_anchors.len() < 2 {
                         return None;
                     }
 
@@ -126,14 +126,15 @@ impl BatchAutorouter {
                         }
                     }
 
-                    // Compute connection airlines: 2-pin direct or Delaunay MST for multi-pin nets
-                    let pin_pairs: Vec<(usize, usize)> = if pins.len() == 2 {
+                    // Compute connection airlines between disconnected component clusters
+                    let pin_pairs: Vec<(usize, usize)> = if status.component_anchors.len() == 2 {
                         vec![(0, 1)]
                     } else {
-                        let pts: Vec<(Point2D, usize)> = pins
+                        let pts: Vec<(Point2D, usize)> = status
+                            .component_anchors
                             .iter()
                             .enumerate()
-                            .map(|(idx, p)| (Point2D::from_i32(p.center.x, p.center.y), idx))
+                            .map(|(idx, &(p, _))| (Point2D::from_i32(p.x, p.y), idx))
                             .collect();
                         let tri = PlanarDelaunayTriangulation::new(pts);
                         let mst = tri.minimum_spanning_tree();
@@ -146,12 +147,9 @@ impl BatchAutorouter {
                     };
 
                     let mut net_paths = Vec::new();
-                    // Connect each MST pair in 3D multi-layer space
                     for (u, v) in pin_pairs {
-                        let start = pins[u].center;
-                        let start_layer = pins[u].first_layer;
-                        let target = pins[v].center;
-                        let target_layer = pins[v].first_layer;
+                        let (start, start_layer) = status.component_anchors[u];
+                        let (target, target_layer) = status.component_anchors[v];
 
                         if let Some(path_3d) = algo.find_path_3d_grid(
                             start,
@@ -163,7 +161,7 @@ impl BatchAutorouter {
                         ) {
                             net_paths.push(path_3d);
                         } else {
-                            // Incomplete chain connection
+                            // Could not connect this cluster pair in current pass
                             return None;
                         }
                     }
@@ -267,16 +265,18 @@ impl BatchAutorouter {
             }
         }
 
-        // Calculate final routing statistics
+        // 4. Authoritative electrical connectivity evaluation
         let mut completed_nets = 0;
         let mut unrouted_nets = 0;
         for &net_id in net_ids {
             let pins = board.get_pins_for_net(net_id);
-            let traces = board.get_traces_for_net(net_id);
-            if pins.len() >= 2 && !traces.is_empty() {
-                completed_nets += 1;
-            } else if pins.len() >= 2 {
-                unrouted_nets += 1;
+            if pins.len() >= 2 {
+                let status = analyze_net_connectivity(board, net_id);
+                if status.is_fully_connected {
+                    completed_nets += 1;
+                } else {
+                    unrouted_nets += 1;
+                }
             }
         }
 

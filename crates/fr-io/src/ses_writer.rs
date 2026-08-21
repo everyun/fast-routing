@@ -157,18 +157,30 @@ impl SesWriter {
                     )
                     .unwrap();
                 }
-                writeln!(out, "))").unwrap();
+                write!(out, ")").unwrap();
+                if let Some(ref fix_type) = wire.fixed_type {
+                    if fix_type == "protect" || fix_type == "fix" {
+                        write!(out, " (type {})", fix_type).unwrap();
+                    }
+                }
+                writeln!(out, ")").unwrap();
             }
 
             for via in net_vias {
-                writeln!(
+                write!(
                     out,
-                    "        (via \"{}\" {} {})",
+                    "        (via \"{}\" {} {}",
                     via.padstack_name,
                     (via.x * self.resolution).round() as i64,
                     (via.y * self.resolution).round() as i64
                 )
                 .unwrap();
+                if let Some(ref fix_type) = via.fixed_type {
+                    if fix_type == "protect" || fix_type == "fix" {
+                        write!(out, " (type {})", fix_type).unwrap();
+                    }
+                }
+                writeln!(out, ")").unwrap();
             }
 
             writeln!(out, "      )").unwrap();

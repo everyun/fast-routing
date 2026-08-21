@@ -93,6 +93,7 @@ pub struct DsnWire {
     pub layer: String,
     pub width: f64,
     pub points: Vec<DsnPoint>,
+    pub fixed_type: Option<String>,
 }
 
 /// A via instance.
@@ -102,6 +103,7 @@ pub struct DsnVia {
     pub padstack_name: String,
     pub x: f64,
     pub y: f64,
+    pub fixed_type: Option<String>,
 }
 
 /// Complete parsed Specctra DSN document.
