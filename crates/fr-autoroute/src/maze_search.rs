@@ -118,6 +118,24 @@ impl MazeSearchAlgo {
             layer: start_layer,
         });
 
+        // Seed initial vertical escape vias to allow routing through open inner layers immediately
+        for l in 0..layer_count {
+            if l != start_layer {
+                let via_cost = self.settings.layer_change_cost * ((l - start_layer).abs() as f64);
+                let next_key = (start.x, start.y, l);
+                let h = self.heuristic(start, l, target, target_layer);
+                cost_so_far.insert(next_key, via_cost);
+                open_set.push(State {
+                    cost: via_cost,
+                    priority: via_cost + h * 1.001,
+                    x: start.x,
+                    y: start.y,
+                    layer: l,
+                });
+                came_from.insert(next_key, start_key);
+            }
+        }
+
         // 8 Planar 45-degree neighbor offsets
         let planar_offsets: [(i32, i32, f64); 8] = [
             (step, 0, step as f64),

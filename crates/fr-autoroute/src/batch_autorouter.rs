@@ -111,30 +111,19 @@ impl BatchAutorouter {
             if rule.is_plane || pins.len() >= 15 {
                 let status = analyze_net_connectivity(board, net_id);
                 if !status.is_fully_connected && status.component_anchors.len() > 1 {
-                    for &(anchor, layer) in &status.component_anchors {
-                        let from_l = layer;
-                        let to_l = if layer == 0 {
-                            1.min(layer_count - 1)
-                        } else if layer == layer_count - 1 {
-                            (layer_count - 2).max(0)
-                        } else {
-                            layer
-                        };
-
-                        if from_l != to_l {
-                            let via_item = Via::new(
-                                board.via_count() as i32 + 1,
-                                net_id,
-                                rule.clearance_class,
-                                anchor,
-                                &rule.via_padstack_name,
-                                from_l.min(to_l),
-                                from_l.max(to_l),
-                                rule.via_pad_radius,
-                                rule.via_drill_radius,
-                            );
-                            board.insert_via(via_item);
-                        }
+                    for &(anchor, _) in &status.component_anchors {
+                        let via_item = Via::new(
+                            board.via_count() as i32 + 1,
+                            net_id,
+                            rule.clearance_class,
+                            anchor,
+                            &rule.via_padstack_name,
+                            0,
+                            layer_count - 1,
+                            rule.via_pad_radius,
+                            rule.via_drill_radius,
+                        );
+                        board.insert_via(via_item);
                     }
                 }
             }
@@ -151,7 +140,7 @@ impl BatchAutorouter {
                     let pins = board.get_pins_for_net(net_id);
                     let rule = self.get_net_rule(net_id);
 
-                    // Plane nets are already handled by Phase 1 plane stubs
+                    // Plane nets are already connected in Phase 1
                     if rule.is_plane || pins.len() >= 15 {
                         return None;
                     }
