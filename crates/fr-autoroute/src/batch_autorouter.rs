@@ -7,7 +7,7 @@ use crate::net_connectivity::analyze_net_connectivity;
 use crate::spatial_grid::LayerSpatialGrid;
 use fr_board::{BasicBoard, FixedState, PolylineTrace, Via};
 use fr_datastructures::planar_delaunay_triangulation::{PlanarDelaunayTriangulation, Point2D};
-use fr_geometry::planar::IntBox;
+use fr_geometry::planar::{IntBox, IntPoint};
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 
@@ -107,24 +107,21 @@ impl BatchAutorouter {
         // Phase 1: Fast Plane Net Stub Connection (GND / VCC / Power Planes)
         for &net_id in net_ids {
             let rule = self.get_net_rule(net_id);
-            let pins = board.get_pins_for_net(net_id);
-            if rule.is_plane || pins.len() >= 15 {
-                let status = analyze_net_connectivity(board, net_id);
-                if !status.is_fully_connected && status.component_anchors.len() > 1 {
-                    for &(anchor, _) in &status.component_anchors {
-                        let via_item = Via::new(
-                            board.via_count() as i32 + 1,
-                            net_id,
-                            rule.clearance_class,
-                            anchor,
-                            &rule.via_padstack_name,
-                            0,
-                            layer_count - 1,
-                            rule.via_pad_radius,
-                            rule.via_drill_radius,
-                        );
-                        board.insert_via(via_item);
-                    }
+            let pin_centers: Vec<IntPoint> = board.get_pins_for_net(net_id).iter().map(|p| p.center).collect();
+            if rule.is_plane || pin_centers.len() >= 15 {
+                for center in pin_centers {
+                    let via_item = Via::new(
+                        board.via_count() as i32 + 1,
+                        net_id,
+                        rule.clearance_class,
+                        center,
+                        &rule.via_padstack_name,
+                        0,
+                        layer_count - 1,
+                        rule.via_pad_radius,
+                        rule.via_drill_radius,
+                    );
+                    board.insert_via(via_item);
                 }
             }
         }

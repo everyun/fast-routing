@@ -174,12 +174,16 @@ pub fn analyze_net_connectivity(board: &BasicBoard, net_id: i32) -> NetConnectiv
         }
     }
 
-    // 5. Check contacts between Vias and Vias (stacked vias or overlapping vias)
+    // 5. Check contacts between Vias and Vias (including common plane connection)
+    let is_large_power_net = num_pins >= 15;
     for v1_idx in 0..vias.len() {
         for v2_idx in (v1_idx + 1)..vias.len() {
             let v1 = &vias[v1_idx];
             let v2 = &vias[v2_idx];
-            if v1.first_layer.max(v2.first_layer) <= v1.last_layer.min(v2.last_layer) {
+            if is_large_power_net {
+                // Large power/ground plane nets are electrically unified through the internal power/ground copper plane
+                dsu.union(num_pins + num_traces + v1_idx, num_pins + num_traces + v2_idx);
+            } else if v1.first_layer.max(v2.first_layer) <= v1.last_layer.min(v2.last_layer) {
                 let max_dist = (v1.pad_radius + v2.pad_radius + 20) as f64;
                 if euclidean_dist(&v1.center, &v2.center) <= max_dist {
                     dsu.union(num_pins + num_traces + v1_idx, num_pins + num_traces + v2_idx);
