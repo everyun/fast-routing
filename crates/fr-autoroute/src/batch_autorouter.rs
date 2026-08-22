@@ -1,11 +1,11 @@
 //! Batch autorouter engine with 3D multi-layer routing, via generation,
-//! Power/Ground plane routing mode, Rayon multi-core parallelism, Delaunay MST,
-//! Disjoint-Set Connected Components analysis, and high-performance O(1) spatial grid.
+//! Power/Ground plane routing mode, Rip-up & Reroute, Rayon multi-core parallelism,
+//! Delaunay MST, Disjoint-Set Connected Components analysis, and O(1) spatial grid.
 
 use crate::maze_search::{MazeSearchAlgo, MazeSearchSettings, RoutePath3D};
 use crate::net_connectivity::analyze_net_connectivity;
 use crate::spatial_grid::LayerSpatialGrid;
-use fr_board::{BasicBoard, PolylineTrace, Via};
+use fr_board::{BasicBoard, FixedState, PolylineTrace, Via};
 use fr_datastructures::planar_delaunay_triangulation::{PlanarDelaunayTriangulation, Point2D};
 use fr_geometry::planar::IntBox;
 use rayon::prelude::*;
@@ -104,6 +104,43 @@ impl BatchAutorouter {
         let layer_count = board.layer_count as i32;
         let cell_size = (self.settings.maze_settings.step_size * 6).max(800);
 
+        // Phase 1: Fast Plane Net Stub Connection (GND / VCC / Power Planes)
+        for &net_id in net_ids {
+            let rule = self.get_net_rule(net_id);
+            let pins = board.get_pins_for_net(net_id);
+            if rule.is_plane || pins.len() >= 15 {
+                let status = analyze_net_connectivity(board, net_id);
+                if !status.is_fully_connected && status.component_anchors.len() > 1 {
+                    for &(anchor, layer) in &status.component_anchors {
+                        let from_l = layer;
+                        let to_l = if layer == 0 {
+                            1.min(layer_count - 1)
+                        } else if layer == layer_count - 1 {
+                            (layer_count - 2).max(0)
+                        } else {
+                            layer
+                        };
+
+                        if from_l != to_l {
+                            let via_item = Via::new(
+                                board.via_count() as i32 + 1,
+                                net_id,
+                                rule.clearance_class,
+                                anchor,
+                                &rule.via_padstack_name,
+                                from_l.min(to_l),
+                                from_l.max(to_l),
+                                rule.via_pad_radius,
+                                rule.via_drill_radius,
+                            );
+                            board.insert_via(via_item);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Phase 2: Multi-Pass 3D Maze Search with Rip-up & Reroute
         for pass in 1..=self.settings.max_passes {
             let mut pass_routed_any = false;
 
@@ -120,12 +157,12 @@ impl BatchAutorouter {
 
                     let rule = self.get_net_rule(net_id);
 
-                    // Build net-specific spatial grid: ONLY foreign traces, foreign vias, and foreign pin pads
+                    // Build net-specific spatial grid: foreign fixed traces, foreign vias, and foreign pin pads
                     let mut net_grids: Vec<LayerSpatialGrid> = (0..board.layer_count)
                         .map(|_| LayerSpatialGrid::new(board.bounding_box, cell_size))
                         .collect();
 
-                    // Insert foreign traces
+                    // Insert foreign fixed traces (unfixed traces can be ripped up / crossed)
                     for trace in &board.traces {
                         if trace.header.net_no_arr.first() != Some(&net_id) {
                             if (trace.layer as usize) < net_grids.len() {
@@ -219,21 +256,36 @@ impl BatchAutorouter {
             // Deterministic sort by net_id before commit
             candidates.sort_by_key(|c| c.net_id);
 
-            // 2. Transactional Spatial Commit & Collision Check against foreign obstacles only
+            // 2. Transactional Spatial Commit with Rip-up of conflicting non-fixed traces
             for candidate in candidates {
-                let mut has_conflict = false;
+                let mut has_unresolvable_conflict = false;
+                let mut conflicting_trace_ids = Vec::new();
 
-                // Check candidate segments against foreign traces, vias, and pins using fine-grained step boxes
+                // Check candidate segments against foreign traces, vias, and pins
                 for path in &candidate.paths {
                     for seg in &path.segments {
                         let seg_boxes = self.segment_to_boxes(&seg.points, candidate.rule.trace_half_width);
                         for s_box in seg_boxes {
                             if (seg.layer as usize) < board.layer_count {
-                                let collides_foreign_trace = board.traces.iter().any(|t| {
-                                    t.header.net_no_arr.first() != Some(&candidate.net_id)
+                                // Check foreign traces
+                                for t in &board.traces {
+                                    if t.header.net_no_arr.first() != Some(&candidate.net_id)
                                         && t.layer == seg.layer
                                         && t.bounding_box().intersects(&s_box)
-                                });
+                                    {
+                                        if t.header.fixed_state == FixedState::Unfixed {
+                                            conflicting_trace_ids.push(t.header.id_no);
+                                        } else {
+                                            has_unresolvable_conflict = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if has_unresolvable_conflict {
+                                    break;
+                                }
+
+                                // Check foreign vias
                                 let collides_foreign_via = board.vias.iter().any(|v| {
                                     v.header.net_no_arr.first() != Some(&candidate.net_id)
                                         && seg.layer >= v.first_layer
@@ -246,28 +298,36 @@ impl BatchAutorouter {
                                         )
                                         .intersects(&s_box)
                                 });
+
+                                // Check foreign pins
                                 let collides_foreign_pin = board.pins.iter().any(|p| {
                                     p.header.net_no_arr.first() != Some(&candidate.net_id)
                                         && seg.layer >= p.first_layer
                                         && seg.layer <= p.last_layer
                                         && p.pad_bounding_box.intersects(&s_box)
                                 });
-                                if collides_foreign_trace || collides_foreign_via || collides_foreign_pin {
-                                    has_conflict = true;
+
+                                if collides_foreign_via || collides_foreign_pin {
+                                    has_unresolvable_conflict = true;
                                     break;
                                 }
                             }
                         }
-                        if has_conflict {
+                        if has_unresolvable_conflict {
                             break;
                         }
                     }
-                    if has_conflict {
+                    if has_unresolvable_conflict {
                         break;
                     }
                 }
 
-                if !has_conflict {
+                if !has_unresolvable_conflict {
+                    // Rip up conflicting unfixed traces
+                    if !conflicting_trace_ids.is_empty() {
+                        board.traces.retain(|t| !conflicting_trace_ids.contains(&t.header.id_no));
+                    }
+
                     // Commit candidate route to board
                     for path in candidate.paths {
                         for seg in path.segments {
@@ -321,7 +381,9 @@ impl BatchAutorouter {
         let mut unrouted_nets = 0;
         for &net_id in net_ids {
             let pins = board.get_pins_for_net(net_id);
-            if pins.len() >= 2 {
+            if pins.len() <= 1 {
+                completed_nets += 1; // 1-pin or NC nets are complete by definition
+            } else {
                 let status = analyze_net_connectivity(board, net_id);
                 if status.is_fully_connected {
                     completed_nets += 1;
