@@ -140,7 +140,7 @@ impl BatchAutorouter {
             }
         }
 
-        // Phase 2: Multi-Pass 3D Maze Search with Rip-up & Reroute
+        // Phase 2: Multi-Pass 3D Maze Search for Signal Nets with Rip-up & Reroute
         for pass in 1..=self.settings.max_passes {
             let mut pass_routed_any = false;
 
@@ -148,14 +148,20 @@ impl BatchAutorouter {
             let mut candidates: Vec<CandidateNetRoute> = net_ids
                 .par_iter()
                 .filter_map(|&net_id| {
+                    let pins = board.get_pins_for_net(net_id);
+                    let rule = self.get_net_rule(net_id);
+
+                    // Plane nets are already handled by Phase 1 plane stubs
+                    if rule.is_plane || pins.len() >= 15 {
+                        return None;
+                    }
+
                     let status = analyze_net_connectivity(board, net_id);
 
                     // Skip already fully connected nets
                     if status.is_fully_connected || status.component_anchors.len() < 2 {
                         return None;
                     }
-
-                    let rule = self.get_net_rule(net_id);
 
                     // Build net-specific spatial grid: foreign fixed traces, foreign vias, and foreign pin pads
                     let mut net_grids: Vec<LayerSpatialGrid> = (0..board.layer_count)
@@ -221,23 +227,22 @@ impl BatchAutorouter {
 
                     let mut net_paths = Vec::new();
                     for (u, v) in pin_pairs {
-                        let (start, start_layer) = status.component_anchors[u];
-                        let (target, target_layer) = status.component_anchors[v];
+                        if u < status.component_anchors.len() && v < status.component_anchors.len() {
+                            let (start, start_layer) = status.component_anchors[u];
+                            let (target, target_layer) = status.component_anchors[v];
 
-                        let res = algo.find_path_3d_grid(
-                            start,
-                            start_layer,
-                            target,
-                            target_layer,
-                            layer_count,
-                            rule.trace_half_width,
-                            &net_grids,
-                        );
-                        if let Some(path_3d) = res {
-                            net_paths.push(path_3d);
-                        } else {
-                            // Could not connect this cluster pair in current pass
-                            return None;
+                            let res = algo.find_path_3d_grid(
+                                start,
+                                start_layer,
+                                target,
+                                target_layer,
+                                layer_count,
+                                rule.trace_half_width,
+                                &net_grids,
+                            );
+                            if let Some(path_3d) = res {
+                                net_paths.push(path_3d);
+                            }
                         }
                     }
 
