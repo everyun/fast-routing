@@ -1,0 +1,3 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue187-processor.Z80.dsn
+Starting multi-pass autorouter (max 20 passes)...

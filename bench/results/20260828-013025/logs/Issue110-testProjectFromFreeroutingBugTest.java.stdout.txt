@@ -1,0 +1,14 @@
+2026-08-28 02:22:13.499 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:22:14.886 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue110-testProjectFromFreeroutingBugTest.dsn'...
+2026-08-28 02:22:15.276 INFO   [8FF162\7B86C1] Loading board file 'Issue110-testProjectFromFreeroutingBugTest.dsn'...
+2026-08-28 02:22:21.443 INFO   [8FF162\7B86C1] Starting routing of 'Issue110-testProjectFromFreeroutingBugTest' on 1 thread...
+2026-08-28 02:22:21.472 INFO   [8FF162\7B86C1] Fanout stage started on board '86e7c4663586ddb5cf11b07f64569f50' with 4 of 16 SMD pins needing fanout (12 already connected, 0 netless).
+2026-08-28 02:22:21.591 INFO   [8FF162\7B86C1] Fanout pass #1 on board 'fddd95b7a4aac584b56971d6d5e12997' completed in 0.11 seconds with 4 SMD pins fanouted, 0 not routed, 0 insert errors, +4 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:22:21.596 INFO   [8FF162\7B86C1] Fanout pass #2 on board 'fddd95b7a4aac584b56971d6d5e12997' completed in 0.00 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:22:21.597 INFO   [8FF162\7B86C1] Fanout stage completed: started with 16 total SMD pins, completed in 0.12 seconds, escaped pins: 4/16 (25.0%), using 0.12 total CPU seconds, 0.13 GB total allocated, and 62.8 MB peak heap usage.
+2026-08-28 02:22:21.598 INFO   [8FF162\7B86C1] Auto-routing stage started on board 'fddd95b7a4aac584b56971d6d5e12997' for 4 unrouted items.
+2026-08-28 02:22:21.753 INFO   [8FF162\7B86C1] Auto-routing pass #1 on board 'fddd95b7a4aac584b56971d6d5e12997' was completed in 0.14 seconds with the score of 749.98 (1 unrouted and 0 violations).
+2026-08-28 02:22:21.793 INFO   [8FF162\7B86C1] Auto-routing pass #2 on board 'e8898f0141fb256981c7217d7e740a29' was completed in 0.03 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-08-28 02:22:21.803 INFO   [8FF162\7B86C1] Auto-routing pass #3 on board '5fb3e38df464e0943f5534015a5aff89' was completed in 0.00 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-08-28 02:22:21.807 INFO   [8FF162\7B86C1] Auto-routing stage completed: started with 4 unrouted nets, completed in 0.36 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-08-28 02:22:21.923 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue110-testProjectFromFreeroutingBugTest.java.ses'...

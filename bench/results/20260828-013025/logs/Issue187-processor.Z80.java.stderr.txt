@@ -1,0 +1,21 @@
+WARNING: Final field userProfileSettings in class app.freerouting.settings.GlobalSettings has been mutated reflectively by class com.google.gson.internal.bind.ReflectiveTypeAdapterFactory$2 in unnamed module @706a04ae (file:/private/tmp/frbase/freerouting-2.3.0.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+       11.83 real        15.21 user         2.41 sys
+         11492114432  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              705762  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 102  messages sent
+                 155  messages received
+                   9  signals received
+                  75  voluntary context switches
+               95081  involuntary context switches
+        153194779825  instructions retired
+         60161180985  cycles elapsed
+         11883080456  peak memory footprint

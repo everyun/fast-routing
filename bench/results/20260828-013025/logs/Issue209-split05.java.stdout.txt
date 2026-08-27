@@ -1,0 +1,62 @@
+2026-08-28 02:56:52.216 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:56:53.630 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue209-split05.dsn'...
+2026-08-28 02:56:54.043 INFO   [8F8613\BA1DAB] Loading board file 'Issue209-split05.dsn'...
+2026-08-28 02:57:00.618 INFO   [8F8613\BA1DAB] Starting routing of 'Issue209-split05' on 1 thread...
+2026-08-28 02:57:00.663 INFO   [8F8613\BA1DAB] Fanout stage started on board '460a0ea0745be000104a459c050f6482' with 176 of 176 SMD pins needing fanout (0 already connected, 0 netless).
+2026-08-28 02:57:01.370 INFO   [8F8613\BA1DAB] Fanout pass #1 on board '20e0be6386bf0b7d861d6eb0260074e0' completed in 0.68 seconds with 166 SMD pins fanouted, 10 not routed, 0 insert errors, +53 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:57:01.443 INFO   [8F8613\BA1DAB] Fanout pass #2 on board '20e0be6386bf0b7d861d6eb0260074e0' completed in 0.07 seconds with 0 SMD pins fanouted, 10 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:57:01.459 INFO   [8F8613\BA1DAB] Fanout stage completed: started with 176 total SMD pins, completed in 0.78 seconds, escaped pins: 165/176 (93.8%), using 0.77 total CPU seconds, 3.31 GB total allocated, and 614.6 MB peak heap usage.
+2026-08-28 02:57:01.474 INFO   [8F8613\BA1DAB] Auto-routing stage started on board '20e0be6386bf0b7d861d6eb0260074e0' for 159 unrouted items.
+2026-08-28 02:57:16.883 INFO   [8F8613\BA1DAB] Auto-routing pass #1 on board '20e0be6386bf0b7d861d6eb0260074e0' was completed in 15.14 seconds with the score of 770.97 (36 unrouted and 183 violations), using 15.98 CPU seconds and the job allocated 119.06 GB of memory so far.
+2026-08-28 02:57:32.949 INFO   [8F8613\BA1DAB] Auto-routing pass #2 on board 'df2cbd42a0541ed993ac6a511af7b9fa' was completed in 15.94 seconds with the score of 805.67 (25 unrouted and 183 violations), using 31.97 CPU seconds and the job allocated 231.74 GB of memory so far.
+2026-08-28 02:57:49.558 INFO   [8F8613\BA1DAB] Auto-routing pass #3 on board '416448b6db3e5f95488667f3e3a28905' was completed in 16.47 seconds with the score of 811.98 (23 unrouted and 183 violations), using 47.95 CPU seconds and the job allocated 339.68 GB of memory so far.
+2026-08-28 02:58:05.332 INFO   [8F8613\BA1DAB] Auto-routing pass #4 on board '180857f4700ffd27e75e862bdcdda9b0' was completed in 15.64 seconds with the score of 821.44 (20 unrouted and 183 violations), using 63.94 CPU seconds and the job allocated 446.71 GB of memory so far.
+2026-08-28 02:58:21.022 INFO   [8F8613\BA1DAB] Auto-routing pass #5 on board '865ae8d5fb331a78d3ae398016dedc06' was completed in 15.56 seconds with the score of 821.44 (20 unrouted and 183 violations), using 78.90 CPU seconds and the job allocated 544.84 GB of memory so far.
+2026-08-28 02:58:36.579 INFO   [8F8613\BA1DAB] Auto-routing pass #6 on board '147de0fba040c6df5c91ae0aa7b5abb3' was completed in 15.42 seconds with the score of 821.44 (20 unrouted and 183 violations), using 94.87 CPU seconds and the job allocated 650.00 GB of memory so far.
+2026-08-28 02:58:52.091 INFO   [8F8613\BA1DAB] Auto-routing pass #7 on board '49a1e91943f4df99d66ed0ce1019615d' was completed in 15.38 seconds with the score of 821.44 (20 unrouted and 183 violations), using 109.85 CPU seconds and the job allocated 749.06 GB of memory so far.
+2026-08-28 02:59:07.612 INFO   [8F8613\BA1DAB] Auto-routing pass #8 on board '17a37b862dd62829ea46c01327c1d86f' was completed in 15.39 seconds with the score of 821.44 (20 unrouted and 183 violations), using 124.84 CPU seconds and the job allocated 848.36 GB of memory so far.
+2026-08-28 02:59:23.163 INFO   [8F8613\BA1DAB] Auto-routing pass #9 on board '6c7a704fd029b029334d05842c650902' was completed in 15.42 seconds with the score of 821.44 (20 unrouted and 183 violations), using 140.82 CPU seconds and the job allocated 953.07 GB of memory so far.
+2026-08-28 02:59:38.680 INFO   [8F8613\BA1DAB] Auto-routing pass #10 on board 'd18032e68d18bfcb909b8a76145985b7' was completed in 15.39 seconds with the score of 821.44 (20 unrouted and 183 violations), using 155.79 CPU seconds and the job allocated 1052.25 GB of memory so far.
+2026-08-28 02:59:54.137 INFO   [8F8613\BA1DAB] Auto-routing pass #11 on board 'b6b708fa8c64acfeba917f700a349fda' was completed in 15.32 seconds with the score of 821.44 (20 unrouted and 183 violations), using 171.78 CPU seconds and the job allocated 1159.20 GB of memory so far.
+2026-08-28 03:00:09.470 INFO   [8F8613\BA1DAB] Auto-routing pass #12 on board '4a46359e42137e08456f68b1b262d595' was completed in 15.14 seconds with the score of 821.44 (20 unrouted and 183 violations), using 186.76 CPU seconds and the job allocated 1256.44 GB of memory so far.
+2026-08-28 03:00:24.675 INFO   [8F8613\BA1DAB] Auto-routing pass #13 on board 'a2dee71686626cec2b77de6c56b6e7fd' was completed in 15.07 seconds with the score of 821.44 (20 unrouted and 183 violations), using 201.73 CPU seconds and the job allocated 1355.19 GB of memory so far.
+2026-08-28 03:00:39.770 INFO   [8F8613\BA1DAB] Auto-routing pass #14 on board 'dd9a719e50ae6ff7e486f04f8e665d4e' was completed in 14.96 seconds with the score of 821.44 (20 unrouted and 183 violations), using 216.70 CPU seconds and the job allocated 1454.48 GB of memory so far.
+2026-08-28 03:00:54.911 INFO   [8F8613\BA1DAB] Auto-routing pass #15 on board '6b04fa9bd1e64038b5bb8dcac446d7b6' was completed in 15.01 seconds with the score of 821.44 (20 unrouted and 183 violations), using 231.67 CPU seconds and the job allocated 1553.52 GB of memory so far.
+2026-08-28 03:01:10.063 INFO   [8F8613\BA1DAB] Auto-routing pass #16 on board '02550bffdc9f9a2894702c55a2be0066' was completed in 15.02 seconds with the score of 821.44 (20 unrouted and 183 violations), using 246.65 CPU seconds and the job allocated 1652.52 GB of memory so far.
+2026-08-28 03:01:25.191 INFO   [8F8613\BA1DAB] Auto-routing pass #17 on board 'f5db240440504ca3a4e677cb9d118528' was completed in 15.00 seconds with the score of 821.44 (20 unrouted and 183 violations), using 261.64 CPU seconds and the job allocated 1751.79 GB of memory so far.
+2026-08-28 03:01:40.308 INFO   [8F8613\BA1DAB] Auto-routing pass #18 on board 'fdd527150cee674283e5899ec8254466' was completed in 14.99 seconds with the score of 821.44 (20 unrouted and 183 violations), using 276.63 CPU seconds and the job allocated 1851.05 GB of memory so far.
+2026-08-28 03:01:40.324 INFO   [8F8613\BA1DAB] The router's best score (821.44) has not improved by more than 0.5 points since pass #8. Stopping the auto-router after 18 passes (20 items still unconnected).
+The following connections could not be routed -- please review your design (e.g. check pad clearances, trace width rules, and available routing space):
+  Net 'GP11' (3 unrouted connections):
+    - via  ->  S39-1
+    - S23-1@1  ->  S1-1@1
+    - S4-1@1  ->  S26-1@1
+  Net 'GP13' (2 unrouted connections):
+    - S15-1@1  ->  S15-1
+    - S37-1  ->  S15-1
+  Net 'board_ring_bottom' (1 unrouted connection):
+    - S4-2@1  ->  S26-2
+  Net 'board_ring_top' (1 unrouted connection):
+    - S28-2  ->  S6-2@1
+  Net 'board_index_bottom' (1 unrouted connection):
+    - S10-2@1  ->  S32-2
+  Net 'board_index_far_top' (4 unrouted connections):
+    - D15-2  ->  D15-2@1
+    - D15-2@1  ->  D15-2@2
+    - D15-2@1  ->  via
+    - S15-2  ->  S37-2@1
+  Net 'index_extra_extraC_etop' (3 unrouted connections):
+    - D16-2@1  ->  D16-2
+    - D16-2@2  ->  D16-2
+    - S16-2@1  ->  D16-2
+  Net 'GND' (1 unrouted connection):
+    - TRRS1-2  ->  RP2040Zero1-20@1
+  Net 'P3V3' (1 unrouted connection):
+    - TRRS1-4  ->  RP2040Zero1-21
+  Net 'GP14' (3 unrouted connections):
+    - D16-1@2  ->  D16-1@1
+    - D16-1  ->  D16-1@2
+    - D16-1@1  ->  RP2040Zero1-15@1
+2026-08-28 03:01:40.440 INFO   [8F8613\BA1DAB] Auto-routing stage completed: started with 272 unrouted nets, completed in 279.82 seconds, final score: 821.44 (20 unrouted and 183 violations), using 276.63 total CPU seconds, 1851.05 GB total allocated, and 1876.5 MB peak heap usage.
+2026-08-28 03:01:40.586 WARN   [8F8613\BA1DAB] Invalid traces after autoroute: 177 traces not 45 degree
+2026-08-28 03:01:40.588 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue209-split05.java.ses'...

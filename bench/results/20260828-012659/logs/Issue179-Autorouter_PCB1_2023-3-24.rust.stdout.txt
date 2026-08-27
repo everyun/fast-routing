@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue179-Autorouter_PCB1_2023-3-24.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 0.00s: 5/24 nets routed (20.8%), 24 vias, DRC violations: 0
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-012659/ses/Issue179-Autorouter_PCB1_2023-3-24.rust.ses

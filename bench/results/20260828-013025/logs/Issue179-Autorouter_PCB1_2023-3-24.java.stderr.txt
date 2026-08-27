@@ -1,0 +1,37 @@
+WARNING: Final field userProfileSettings in class app.freerouting.settings.GlobalSettings has been mutated reflectively by class com.google.gson.internal.bind.ReflectiveTypeAdapterFactory$2 in unnamed module @706a04ae (file:/private/tmp/frbase/freerouting-2.3.0.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+2026-08-28 02:42:04.417 ERROR  [FFF78B\A8E83F] Cannot invoke "app.freerouting.geometry.planar.TileShape.is_IntBox()" because "curr_tile_shape" is null
+java.lang.NullPointerException: Cannot invoke "app.freerouting.geometry.planar.TileShape.is_IntBox()" because "curr_tile_shape" is null
+	at app.freerouting.board.ShapeSearchTree45Degree.calculate_tree_shapes(ShapeSearchTree45Degree.java:425)
+	at app.freerouting.board.DrillItem.calculate_tree_shapes(DrillItem.java:200)
+	at app.freerouting.board.Item.get_precalculated_tree_shapes(Item.java:209)
+	at app.freerouting.board.Item.tree_shape_count(Item.java:183)
+	at app.freerouting.datastructures.ShapeTree.insert(ShapeTree.java:40)
+	at app.freerouting.board.SearchTreeManager.get_autoroute_tree(SearchTreeManager.java:180)
+	at app.freerouting.autoroute.AutorouteEngine.<init>(AutorouteEngine.java:86)
+	at app.freerouting.board.RoutingBoard.init_autoroute(RoutingBoard.java:910)
+	at app.freerouting.board.RoutingBoard.fanout(RoutingBoard.java:1050)
+	at app.freerouting.autoroute.BatchFanout.fanout_pass(BatchFanout.java:217)
+	at app.freerouting.autoroute.BatchFanout.fanout_board(BatchFanout.java:109)
+	at app.freerouting.autoroute.BatchAutorouter.runBatchLoop(BatchAutorouter.java:824)
+	at app.freerouting.interactive.AutorouterAndRouteOptimizerThread.thread_action(AutorouterAndRouteOptimizerThread.java:514)
+	at app.freerouting.interactive.InteractiveActionThread.run(InteractiveActionThread.java:275)
+        8.84 real         4.68 user         1.06 sys
+           481329152  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               33552  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  77  messages sent
+                 129  messages received
+                   3  signals received
+                 389  voluntary context switches
+               50520  involuntary context switches
+         39668080726  instructions retired
+         19319498338  cycles elapsed
+          1209142128  peak memory footprint

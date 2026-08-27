@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue157-TeamAdapt-LinePCB.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 3.72s: 29/65 nets routed (44.6%), 207 vias, DRC violations: 0
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue157-TeamAdapt-LinePCB.rust.ses

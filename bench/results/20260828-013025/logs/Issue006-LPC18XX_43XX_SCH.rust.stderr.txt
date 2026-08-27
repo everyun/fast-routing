@@ -1,0 +1,19 @@
+Failed to read input file /tmp/freerouting-upstream/fixtures/Issue006-LPC18XX_43XX_SCH.dsn: stream did not contain valid UTF-8
+        0.00 real         0.00 user         0.00 sys
+             3178496  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                 382  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 143  involuntary context switches
+            23525639  instructions retired
+            16783434  cycles elapsed
+             2589056  peak memory footprint

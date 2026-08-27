@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue155-CH376_MCP795_Module.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 0.49s: 11/34 nets routed (32.4%), 18 vias, DRC violations: 0
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue155-CH376_MCP795_Module.rust.ses

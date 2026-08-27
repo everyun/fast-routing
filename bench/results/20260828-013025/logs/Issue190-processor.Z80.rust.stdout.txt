@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue190-processor.Z80.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 12.94s: 288/529 nets routed (54.4%), 516 vias, DRC violations: 0
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue190-processor.Z80.rust.ses

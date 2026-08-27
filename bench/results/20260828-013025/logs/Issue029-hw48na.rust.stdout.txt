@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue029-hw48na.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 8.05s: 59/163 nets routed (36.2%), 250 vias, DRC violations: 0
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue029-hw48na.rust.ses

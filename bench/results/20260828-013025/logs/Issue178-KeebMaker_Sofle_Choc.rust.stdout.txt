@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue178-KeebMaker_Sofle_Choc.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 5.43s: 61/176 nets routed (34.7%), 576 vias, DRC violations: 5
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue178-KeebMaker_Sofle_Choc.rust.ses

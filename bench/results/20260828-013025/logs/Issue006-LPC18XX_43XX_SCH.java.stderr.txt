@@ -1,0 +1,22 @@
+WARNING: Final field userProfileSettings in class app.freerouting.settings.GlobalSettings has been mutated reflectively by class com.google.gson.internal.bind.ReflectiveTypeAdapterFactory$2 in unnamed module @706a04ae (file:/private/tmp/frbase/freerouting-2.3.0.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+2026-08-28 01:30:28.278 ERROR  [C83125\916AA5] There was a parse error while reading board file at '(pcb': Not a Specctra DSN file: expected '(pcb <name>' header
+       13.91 real        20.08 user         2.68 sys
+          2140651520  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              135653  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                 107  messages sent
+                 162  messages received
+                  10  signals received
+                 139  voluntary context switches
+              146808  involuntary context switches
+        217007972510  instructions retired
+         79526582769  cycles elapsed
+          3018526896  peak memory footprint

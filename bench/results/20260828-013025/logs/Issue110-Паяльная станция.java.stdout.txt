@@ -1,0 +1,40 @@
+2026-08-28 02:22:32.399 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:22:33.794 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue110-Паяльная станция.dsn'...
+2026-08-28 02:22:33.817 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 02:22:34.194 INFO   [6FDA5D\1F69DF] Loading board file 'Issue110-Паяльная станция.dsn'...
+2026-08-28 02:22:34.196 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 02:22:40.431 INFO   [6FDA5D\1F69DF] Starting routing of 'Issue110-Паяльная станция' on 1 thread...
+2026-08-28 02:22:40.462 INFO   [6FDA5D\1F69DF] Fanout stage is enabled but skipped because the board has no SMD pins.
+2026-08-28 02:22:40.466 INFO   [6FDA5D\1F69DF] Auto-routing stage started on board '86584e4645eaf6f6542467b82ab1f9ff' for 109 unrouted items.
+2026-08-28 02:22:45.461 INFO   [6FDA5D\1F69DF] Auto-routing pass #1 on board '86584e4645eaf6f6542467b82ab1f9ff' was completed in 4.95 seconds with the score of 875.22 (10 unrouted and 18 violations), using 4.96 CPU seconds and the job allocated 35.94 GB of memory so far.
+2026-08-28 02:22:49.122 INFO   [6FDA5D\1F69DF] Auto-routing pass #2 on board '739108ef77a6c5c4b664dcee2bb33474' was completed in 3.63 seconds with the score of 902.74 (7 unrouted and 18 violations), using 7.94 CPU seconds and the job allocated 57.15 GB of memory so far.
+2026-08-28 02:22:52.656 INFO   [6FDA5D\1F69DF] Auto-routing pass #3 on board '16796d5eca6f5e6de8df845e44421e5f' was completed in 3.51 seconds with the score of 902.74 (7 unrouted and 18 violations), using 11.92 CPU seconds and the job allocated 84.50 GB of memory so far.
+2026-08-28 02:22:56.192 INFO   [6FDA5D\1F69DF] Auto-routing pass #4 on board 'b2b59360fce581c362bb7001bab43070' was completed in 3.51 seconds with the score of 911.92 (6 unrouted and 18 violations), using 14.90 CPU seconds and the job allocated 105.64 GB of memory so far.
+2026-08-28 02:22:59.566 INFO   [6FDA5D\1F69DF] Auto-routing pass #5 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.35 seconds with the score of 911.92 (6 unrouted and 18 violations), using 18.88 CPU seconds and the job allocated 133.85 GB of memory so far.
+2026-08-28 02:23:02.965 INFO   [6FDA5D\1F69DF] Auto-routing pass #6 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.38 seconds with the score of 911.92 (6 unrouted and 18 violations), using 21.86 CPU seconds and the job allocated 155.27 GB of memory so far.
+2026-08-28 02:23:06.345 INFO   [6FDA5D\1F69DF] Auto-routing pass #7 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.36 seconds with the score of 911.92 (6 unrouted and 18 violations), using 24.84 CPU seconds and the job allocated 176.38 GB of memory so far.
+2026-08-28 02:23:09.706 INFO   [6FDA5D\1F69DF] Auto-routing pass #8 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.34 seconds with the score of 911.92 (6 unrouted and 18 violations), using 28.82 CPU seconds and the job allocated 204.47 GB of memory so far.
+2026-08-28 02:23:13.069 INFO   [6FDA5D\1F69DF] Auto-routing pass #9 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.35 seconds with the score of 911.92 (6 unrouted and 18 violations), using 31.79 CPU seconds and the job allocated 226.00 GB of memory so far.
+2026-08-28 02:23:16.414 INFO   [6FDA5D\1F69DF] Auto-routing pass #10 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.33 seconds with the score of 911.92 (6 unrouted and 18 violations), using 34.78 CPU seconds and the job allocated 247.59 GB of memory so far.
+2026-08-28 02:23:19.758 INFO   [6FDA5D\1F69DF] Auto-routing pass #11 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.33 seconds with the score of 911.92 (6 unrouted and 18 violations), using 38.76 CPU seconds and the job allocated 275.74 GB of memory so far.
+2026-08-28 02:23:23.167 INFO   [6FDA5D\1F69DF] Auto-routing pass #12 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.38 seconds with the score of 911.92 (6 unrouted and 18 violations), using 41.74 CPU seconds and the job allocated 297.11 GB of memory so far.
+2026-08-28 02:23:26.492 INFO   [6FDA5D\1F69DF] Auto-routing pass #13 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.31 seconds with the score of 911.92 (6 unrouted and 18 violations), using 44.72 CPU seconds and the job allocated 318.75 GB of memory so far.
+2026-08-28 02:23:29.903 INFO   [6FDA5D\1F69DF] Auto-routing pass #14 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.39 seconds with the score of 911.92 (6 unrouted and 18 violations), using 48.69 CPU seconds and the job allocated 346.60 GB of memory so far.
+2026-08-28 02:23:33.249 INFO   [6FDA5D\1F69DF] Auto-routing pass #15 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.33 seconds with the score of 911.92 (6 unrouted and 18 violations), using 51.66 CPU seconds and the job allocated 368.02 GB of memory so far.
+2026-08-28 02:23:36.602 INFO   [6FDA5D\1F69DF] Auto-routing pass #16 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.34 seconds with the score of 911.92 (6 unrouted and 18 violations), using 54.64 CPU seconds and the job allocated 389.74 GB of memory so far.
+2026-08-28 02:23:39.958 INFO   [6FDA5D\1F69DF] Auto-routing pass #17 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.34 seconds with the score of 911.92 (6 unrouted and 18 violations), using 58.62 CPU seconds and the job allocated 417.85 GB of memory so far.
+2026-08-28 02:23:43.236 INFO   [6FDA5D\1F69DF] Auto-routing pass #18 on board 'c50fe829be09b18641a6d64541c4a37f' was completed in 3.26 seconds with the score of 911.92 (6 unrouted and 18 violations), using 61.60 CPU seconds and the job allocated 439.60 GB of memory so far.
+2026-08-28 02:23:43.241 INFO   [6FDA5D\1F69DF] The router's best score (911.92) has not improved by more than 0.5 points since pass #8. Stopping the auto-router after 18 passes (6 items still unconnected).
+The following connections could not be routed -- please review your design (e.g. check pad clearances, trace width rules, and available routing space):
+  Net 'GND' (2 unrouted connections):
+    - C9-2  ->  P3-2
+    - C1-2  ->  P3-2
+  Net '+24V' (2 unrouted connections):
+    - P3-1  ->  C9-1
+    - D4-1  ->  P3-1
+  Net 'Net-(IC1-Pad1)' (1 unrouted connection):
+    - R5-1  ->  IC1-1
+  Net 'Net-(R5-Pad2)' (1 unrouted connection):
+    - R5-2  ->  U1-6
+2026-08-28 02:23:43.260 INFO   [6FDA5D\1F69DF] Auto-routing stage completed: started with 109 unrouted nets, completed in 62.83 seconds, final score: 911.92 (6 unrouted and 18 violations), using 61.60 total CPU seconds, 439.60 GB total allocated, and 1801.0 MB peak heap usage.
+2026-08-28 02:23:43.380 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue110-Паяльная станция.java.ses'...

@@ -1,0 +1,19 @@
+Warning: Routing completed with remaining incompletes or violations.
+        0.43 real         7.05 user         0.17 sys
+           417382400  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               32633  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                7899  involuntary context switches
+         67874777676  instructions retired
+         24244230288  cycles elapsed
+           355812072  peak memory footprint

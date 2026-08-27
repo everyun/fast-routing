@@ -1,0 +1,21 @@
+2026-08-28 02:09:42.806 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:09:44.277 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue103-Board-Unrouted.dsn'...
+2026-08-28 02:09:44.299 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 02:09:44.686 INFO   [E9D71E\CD12BB] Loading board file 'Issue103-Board-Unrouted.dsn'...
+2026-08-28 02:09:44.689 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 02:09:51.295 INFO   [E9D71E\CD12BB] Starting routing of 'Issue103-Board-Unrouted' on 1 thread...
+2026-08-28 02:09:51.344 INFO   [E9D71E\CD12BB] Fanout stage started on board 'c275b991868547f84469170842bc54bd' with 60 of 60 SMD pins needing fanout (0 already connected, 0 netless).
+2026-08-28 02:09:52.028 INFO   [E9D71E\CD12BB] Fanout pass #1 on board '611fb7e39c40874f599a0fe7ef1e022f' completed in 0.66 seconds with 59 SMD pins fanouted, 1 not routed, 0 insert errors, +15 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:09:52.273 INFO   [E9D71E\CD12BB] Fanout pass #2 on board 'baf6ccdeb0d30142042e3eba7d304c6c' completed in 0.24 seconds with 28 SMD pins fanouted, 1 not routed, 0 insert errors, +6 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:09:52.584 INFO   [E9D71E\CD12BB] Fanout pass #3 on board 'c0f8e171607d045c86edb94972f0819f' completed in 0.30 seconds with 36 SMD pins fanouted, 0 not routed, 0 insert errors, +1 extra via (0 SMD pins still to check in pass, ripup costs=300).
+2026-08-28 02:09:52.929 INFO   [E9D71E\CD12BB] Fanout pass #4 on board '76140b9d796d4dc7b182142a705a3c0a' completed in 0.34 seconds with 32 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-08-28 02:09:53.156 INFO   [E9D71E\CD12BB] Fanout pass #5 on board '16fd5613cdb465e4508017a261806676' completed in 0.22 seconds with 31 SMD pins fanouted, 2 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=500).
+2026-08-28 02:09:53.380 INFO   [E9D71E\CD12BB] Fanout pass #6 on board '986587645e564354b04124f9a6ca0d21' completed in 0.22 seconds with 31 SMD pins fanouted, 2 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=600).
+2026-08-28 02:09:53.602 INFO   [E9D71E\CD12BB] Fanout pass #7 on board 'dec5e8ce7e01201f2960cc5575e76034' completed in 0.22 seconds with 31 SMD pins fanouted, 2 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=700).
+2026-08-28 02:09:53.823 INFO   [E9D71E\CD12BB] Fanout pass #8 on board '413fd7bf131cd90794b748105f4ba78e' completed in 0.21 seconds with 31 SMD pins fanouted, 2 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=800).
+2026-08-28 02:09:53.824 INFO   Fanout stopped after 8 passes: no progress for 3 consecutive passes.
+2026-08-28 02:09:53.829 INFO   [E9D71E\CD12BB] Fanout stage completed: started with 60 total SMD pins, completed in 2.48 seconds, escaped pins: 42/60 (70.0%), using 2.45 total CPU seconds, 14.98 GB total allocated, and 2126.9 MB peak heap usage.
+2026-08-28 02:09:53.834 INFO   [E9D71E\CD12BB] Auto-routing stage started on board '413fd7bf131cd90794b748105f4ba78e' for 682 unrouted items.
+2026-08-28 02:10:56.389 INFO   [E9D71E\CD12BB] Auto-routing pass #1 on board '413fd7bf131cd90794b748105f4ba78e' was completed in 62.52 seconds with the score of 606.83 (264 unrouted and 60 violations), using 63.39 CPU seconds and the job allocated 695.46 GB of memory so far.
+2026-08-28 02:12:17.090 INFO   [E9D71E\CD12BB] Auto-routing pass #2 on board 'dfd98a832687ff3ff8bfb1e216bead5a' was completed in 80.60 seconds with the score of 747.85 (165 unrouted and 60 violations), using 143.68 CPU seconds and the job allocated 1580.40 GB of memory so far.
+2026-08-28 02:13:36.849 INFO   [E9D71E\CD12BB] Auto-routing pass #3 on board '3dbd854814e59975e4470385a9d33539' was completed in 79.61 seconds with the score of 816.22 (117 unrouted and 60 violations), using 221.98 CPU seconds and the job allocated 2397.05 GB of memory so far.

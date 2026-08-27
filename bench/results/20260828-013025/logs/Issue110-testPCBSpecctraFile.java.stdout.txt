@@ -1,0 +1,64 @@
+2026-08-28 02:21:40.398 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:21:41.778 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue110-testPCBSpecctraFile.dsn'...
+2026-08-28 02:21:42.167 INFO   [C8A72C\A45E67] Loading board file 'Issue110-testPCBSpecctraFile.dsn'...
+2026-08-28 02:21:49.682 INFO   [C8A72C\A45E67] Starting routing of 'Issue110-testPCBSpecctraFile' on 1 thread...
+2026-08-28 02:21:49.742 INFO   [C8A72C\A45E67] Fanout stage started on board '3739341b935c23c1718ef03298c223a7' with 22 of 32 SMD pins needing fanout (10 already connected, 0 netless).
+2026-08-28 02:21:49.920 INFO   [C8A72C\A45E67] Fanout pass #1 on board '8e7a8dec0a9819bb1a84a7e0748a931c' completed in 0.16 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +1 extra via (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:21:57.016 WARN   BasicBoard.normalize_traces: reached 2000 iterations for net 'GND' — stopping to prevent hang. The board geometry for this net may be oscillating (split/combine cycle); traces are kept as-is and further normalization for this net is suppressed on this board candidate.
+2026-08-28 02:21:57.044 INFO   [C8A72C\A45E67] Fanout pass #2 on board '25eb4adfb8175f9da7ec3c1f1f17ef97' completed in 7.12 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:21:57.097 INFO   [C8A72C\A45E67] Fanout pass #3 on board '5e80d0a349a275d80fa32a877d7bef75' completed in 0.05 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=300).
+2026-08-28 02:21:57.143 INFO   [C8A72C\A45E67] Fanout pass #4 on board 'df692366759f16757ee5daa9249f4634' completed in 0.04 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-08-28 02:21:57.143 INFO   Fanout stopped after 4 passes: no progress for 3 consecutive passes.
+2026-08-28 02:21:57.149 INFO   [C8A72C\A45E67] Fanout stage completed: started with 32 total SMD pins, completed in 7.40 seconds, escaped pins: 29/32 (90.6%), using 7.28 total CPU seconds, 55.17 GB total allocated, and 2255.7 MB peak heap usage.
+2026-08-28 02:21:57.153 INFO   [C8A72C\A45E67] Auto-routing stage started on board 'df692366759f16757ee5daa9249f4634' for 26 unrouted items.
+2026-08-28 02:22:01.942 WARN   BasicBoard.normalize_traces: reached 2000 iterations for net 'Net-(C12-Pad1)' — stopping to prevent hang. The board geometry for this net may be oscillating (split/combine cycle); traces are kept as-is and further normalization for this net is suppressed on this board candidate.
+2026-08-28 02:22:02.260 INFO   [C8A72C\A45E67] Auto-routing pass #1 on board 'df692366759f16757ee5daa9249f4634' was completed in 5.05 seconds with the score of 613.69 (20 unrouted and 41 violations), using 11.84 CPU seconds and the job allocated 96.41 GB of memory so far.
+2026-08-28 02:22:02.855 INFO   [C8A72C\A45E67] Auto-routing pass #2 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.55 seconds with the score of 613.69 (20 unrouted and 41 violations), using 12.84 CPU seconds and the job allocated 105.11 GB of memory so far.
+2026-08-28 02:22:03.433 INFO   [C8A72C\A45E67] Auto-routing pass #3 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.55 seconds with the score of 613.69 (20 unrouted and 41 violations), using 12.84 CPU seconds and the job allocated 105.11 GB of memory so far.
+2026-08-28 02:22:03.991 INFO   [C8A72C\A45E67] Auto-routing pass #4 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.54 seconds with the score of 613.69 (20 unrouted and 41 violations), using 13.83 CPU seconds and the job allocated 114.96 GB of memory so far.
+2026-08-28 02:22:04.555 INFO   [C8A72C\A45E67] Auto-routing pass #5 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.54 seconds with the score of 613.69 (20 unrouted and 41 violations), using 13.83 CPU seconds and the job allocated 114.96 GB of memory so far.
+2026-08-28 02:22:05.116 INFO   [C8A72C\A45E67] Auto-routing pass #6 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.54 seconds with the score of 613.69 (20 unrouted and 41 violations), using 14.82 CPU seconds and the job allocated 124.87 GB of memory so far.
+2026-08-28 02:22:05.670 INFO   [C8A72C\A45E67] Auto-routing pass #7 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 14.82 CPU seconds and the job allocated 124.87 GB of memory so far.
+2026-08-28 02:22:06.231 INFO   [C8A72C\A45E67] Auto-routing pass #8 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.54 seconds with the score of 613.69 (20 unrouted and 41 violations), using 15.82 CPU seconds and the job allocated 134.45 GB of memory so far.
+2026-08-28 02:22:06.789 INFO   [C8A72C\A45E67] Auto-routing pass #9 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 16.81 CPU seconds and the job allocated 143.83 GB of memory so far.
+2026-08-28 02:22:07.339 INFO   [C8A72C\A45E67] Auto-routing pass #10 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 16.81 CPU seconds and the job allocated 143.83 GB of memory so far.
+2026-08-28 02:22:07.891 INFO   [C8A72C\A45E67] Auto-routing pass #11 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 17.80 CPU seconds and the job allocated 154.00 GB of memory so far.
+2026-08-28 02:22:08.453 INFO   [C8A72C\A45E67] Auto-routing pass #12 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.52 seconds with the score of 613.69 (20 unrouted and 41 violations), using 17.80 CPU seconds and the job allocated 154.00 GB of memory so far.
+2026-08-28 02:22:09.002 INFO   [C8A72C\A45E67] Auto-routing pass #13 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 18.80 CPU seconds and the job allocated 164.23 GB of memory so far.
+2026-08-28 02:22:09.572 INFO   [C8A72C\A45E67] Auto-routing pass #14 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.55 seconds with the score of 613.69 (20 unrouted and 41 violations), using 18.80 CPU seconds and the job allocated 164.23 GB of memory so far.
+2026-08-28 02:22:10.126 INFO   [C8A72C\A45E67] Auto-routing pass #15 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 19.78 CPU seconds and the job allocated 174.12 GB of memory so far.
+2026-08-28 02:22:10.683 INFO   [C8A72C\A45E67] Auto-routing pass #16 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.53 seconds with the score of 613.69 (20 unrouted and 41 violations), using 19.78 CPU seconds and the job allocated 174.12 GB of memory so far.
+2026-08-28 02:22:11.253 INFO   [C8A72C\A45E67] Auto-routing pass #17 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.54 seconds with the score of 613.69 (20 unrouted and 41 violations), using 20.77 CPU seconds and the job allocated 183.70 GB of memory so far.
+2026-08-28 02:22:11.817 INFO   [C8A72C\A45E67] Auto-routing pass #18 on board '51e61b27a4c435f488c44840a6d70f63' was completed in 0.54 seconds with the score of 613.69 (20 unrouted and 41 violations), using 21.76 CPU seconds and the job allocated 193.00 GB of memory so far.
+2026-08-28 02:22:11.822 INFO   [C8A72C\A45E67] The router's best score (613.69) has not improved by more than 0.5 points since pass #8. Stopping the auto-router after 18 passes (20 items still unconnected).
+The following connections could not be routed -- please review your design (e.g. check pad clearances, trace width rules, and available routing space):
+  Net 'Net-(C6-Pad1)' (1 unrouted connection):
+    - C7-2  ->  via
+  Net 'Net-(C11-Pad2)' (2 unrouted connections):
+    - R17-1  ->  C11-2
+    - XP4-1  ->  R17-1
+  Net 'Net-(C12-Pad1)' (1 unrouted connection):
+    - C12-1  ->  D3-4
+  Net 'Net-(D2-Pad2)' (1 unrouted connection):
+    - R16-1  ->  D2-2
+  Net 'Net-(D2-Pad1)' (1 unrouted connection):
+    - via  ->  D2-1
+  Net 'GND' (10 unrouted connections):
+    - R17-2  ->  C10-2
+    - R17-2  ->  XP4-2
+    - R18-2  ->  C10-2
+    - C1-2  ->  XP2-2
+    - XP2-2  ->  R4-2
+    - R18-2  ->  XP5-2
+    - D1-4  ->  R1-1
+    - C10-2  ->  D2-3
+    - XP1-2  ->  C2-2
+    - R15-1  ->  C2-2
+  Net 'VCC' (4 unrouted connections):
+    - via  ->  R14-2
+    - D1-8  ->  R3-1
+    - Q1-2  ->  D1-8
+    - R2-2  ->  R3-1
+2026-08-28 02:22:11.852 INFO   [C8A72C\A45E67] Auto-routing stage completed: started with 26 unrouted nets, completed in 22.17 seconds, final score: 613.69 (20 unrouted and 41 violations), using 21.76 total CPU seconds, 193.00 GB total allocated, and 2080.4 MB peak heap usage.
+2026-08-28 02:22:11.970 WARN   [C8A72C\A45E67] Invalid traces after autoroute: 48 traces not 45 degree
+2026-08-28 02:22:11.972 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue110-testPCBSpecctraFile.java.ses'...

@@ -1,0 +1,5 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue159-setonix_2hp-pcb.dsn
+Starting multi-pass autorouter (max 20 passes)...
+Routing complete in 0.25s: 4/9 nets routed (44.4%), 6 vias, DRC violations: 0
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue159-setonix_2hp-pcb.rust.ses

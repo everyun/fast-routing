@@ -1,0 +1,18 @@
+2026-08-28 02:29:05.400 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:29:06.801 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue145-smoothieboard.dsn'...
+2026-08-28 02:29:06.823 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 02:29:07.222 INFO   [CD1CEC\FFA43C] Loading board file 'Issue145-smoothieboard.dsn'...
+2026-08-28 02:29:07.224 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 02:29:10.532 INFO   [CD1CEC\FFA43C] Starting routing of 'Issue145-smoothieboard' on 1 thread...
+2026-08-28 02:29:10.613 INFO   [CD1CEC\FFA43C] Fanout stage started on board '440a610c7da2bbc4c8e0b1605a6f0c4c' with 787 of 818 SMD pins needing fanout (17 already connected, 14 netless).
+2026-08-28 02:29:25.184 INFO   [CD1CEC\FFA43C] Fanout pass #1 on board 'e605ca2bad7dd2d9cef195e3a4ffc8b5' completed in 14.46 seconds with 438 SMD pins fanouted, 315 not routed, 0 insert errors, +54 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:29:32.757 INFO   [CD1CEC\FFA43C] Fanout pass #2 on board '7338ce781584a741f25ac90051adaaf8' completed in 7.55 seconds with 48 SMD pins fanouted, 414 not routed, 0 insert errors, +14 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:29:36.559 INFO   [CD1CEC\FFA43C] Fanout pass #3 on board '374e1bcf9dc0e0172108a616ed9d28a8' completed in 3.78 seconds with 11 SMD pins fanouted, 405 not routed, 0 insert errors, +2 extra vias (0 SMD pins still to check in pass, ripup costs=300).
+2026-08-28 02:29:41.034 INFO   [CD1CEC\FFA43C] Fanout pass #4 on board 'fffb6258433a7edbd96a167d70ceb7b5' completed in 4.45 seconds with 6 SMD pins fanouted, 401 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-08-28 02:29:44.408 INFO   [CD1CEC\FFA43C] Fanout pass #5 on board '81b5c62149626376973b617a40a3101c' completed in 3.35 seconds with 4 SMD pins fanouted, 395 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=500).
+2026-08-28 02:29:47.755 INFO   [CD1CEC\FFA43C] Fanout pass #6 on board '12bcd61afb08ddc7dae8db8ac06ffd37' completed in 3.32 seconds with 4 SMD pins fanouted, 395 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=600).
+2026-08-28 02:29:51.076 INFO   [CD1CEC\FFA43C] Fanout pass #7 on board '7582ca96db88acb8ae6b724723aa0095' completed in 3.30 seconds with 4 SMD pins fanouted, 395 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=700).
+2026-08-28 02:29:54.441 INFO   [CD1CEC\FFA43C] Fanout pass #8 on board '4884c99c8271ef37a61c16eacf8a9842' completed in 3.34 seconds with 4 SMD pins fanouted, 395 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=800).
+2026-08-28 02:29:54.442 INFO   Fanout stopped after 8 passes: no progress for 3 consecutive passes.
+2026-08-28 02:29:54.756 INFO   [CD1CEC\FFA43C] Fanout stage completed: started with 804 total SMD pins, completed in 44.05 seconds, escaped pins: 563/804 (70.0%), using 43.68 total CPU seconds, 344.85 GB total allocated, and 1635.6 MB peak heap usage.
+2026-08-28 02:29:54.779 INFO   [CD1CEC\FFA43C] Auto-routing stage started on board '4884c99c8271ef37a61c16eacf8a9842' for 357 unrouted items.

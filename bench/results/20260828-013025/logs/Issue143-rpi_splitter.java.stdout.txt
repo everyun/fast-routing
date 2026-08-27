@@ -1,0 +1,24 @@
+2026-08-28 02:28:51.138 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:28:52.578 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue143-rpi_splitter.dsn'...
+2026-08-28 02:28:52.989 INFO   [43DE5B\B1A5BE] Loading board file 'Issue143-rpi_splitter.dsn'...
+2026-08-28 02:28:57.826 INFO   [43DE5B\B1A5BE] Starting routing of 'Issue143-rpi_splitter' on 1 thread...
+2026-08-28 02:28:57.846 INFO   [43DE5B\B1A5BE] Fanout stage started on board '4594a6e6f699e12987909862a0e4b53e' with 9 of 22 SMD pins needing fanout (1 already connected, 12 netless).
+2026-08-28 02:28:58.023 INFO   [43DE5B\B1A5BE] Fanout pass #1 on board 'bceebd668af613903877ef7de7aedbfc' completed in 0.17 seconds with 9 SMD pins fanouted, 0 not routed, 0 insert errors, +9 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:28:58.030 INFO   [43DE5B\B1A5BE] Fanout pass #2 on board 'bceebd668af613903877ef7de7aedbfc' completed in 0.00 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:28:58.031 INFO   [43DE5B\B1A5BE] Fanout stage completed: started with 10 total SMD pins, completed in 0.18 seconds, escaped pins: 9/10 (90.0%), using 0.18 total CPU seconds, 0.33 GB total allocated, and 78.9 MB peak heap usage.
+2026-08-28 02:28:58.033 INFO   [43DE5B\B1A5BE] Auto-routing stage started on board 'bceebd668af613903877ef7de7aedbfc' for 5 unrouted items.
+2026-08-28 02:28:58.223 INFO   [43DE5B\B1A5BE] Auto-routing pass #1 on board 'bceebd668af613903877ef7de7aedbfc' was completed in 0.17 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.291 INFO   [43DE5B\B1A5BE] Auto-routing pass #2 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.06 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.380 INFO   [43DE5B\B1A5BE] Auto-routing pass #3 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.08 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.451 INFO   [43DE5B\B1A5BE] Auto-routing pass #4 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.06 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.498 INFO   [43DE5B\B1A5BE] Auto-routing pass #5 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.04 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.547 INFO   [43DE5B\B1A5BE] Auto-routing pass #6 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.04 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.595 INFO   [43DE5B\B1A5BE] Auto-routing pass #7 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.04 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.638 INFO   [43DE5B\B1A5BE] Auto-routing pass #8 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.04 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.679 INFO   [43DE5B\B1A5BE] Auto-routing pass #9 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.03 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.721 INFO   [43DE5B\B1A5BE] Auto-routing pass #10 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.03 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.760 INFO   [43DE5B\B1A5BE] Auto-routing pass #11 on board 'ec373cdcd73bb08ce6d7444d758c143d' was completed in 0.03 seconds with the score of 799.98 (1 unrouted and 0 violations).
+2026-08-28 02:28:58.794 INFO   [43DE5B\B1A5BE] Auto-routing pass #12 on board 'ea0509f505b1b7e7932e128c0148417b' was completed in 0.02 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-08-28 02:28:58.802 INFO   [43DE5B\B1A5BE] Auto-routing pass #13 on board 'edb858f830b58b18fce07b1d179a7865' was completed in 0.00 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-08-28 02:28:58.806 INFO   [43DE5B\B1A5BE] Auto-routing stage completed: started with 5 unrouted nets, completed in 0.98 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-08-28 02:28:58.924 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue143-rpi_splitter.java.ses'...

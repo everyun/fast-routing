@@ -1,0 +1,2 @@
+Running with Rayon multi-core parallelism (28 logical CPU cores available).
+Loading DSN: /tmp/freerouting-upstream/fixtures/Issue006-LPC18XX_43XX_SCH.dsn

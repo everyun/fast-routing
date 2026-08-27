@@ -1,0 +1,142 @@
+2026-08-28 02:21:17.405 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-08-28 02:21:18.785 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue110-RelayModule.dsn'...
+2026-08-28 02:21:19.182 INFO   [6C29D6\8A50CD] Loading board file 'Issue110-RelayModule.dsn'...
+2026-08-28 02:21:19.187 WARN   Non-ansi character 'П' found at position 4114 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'р' found at position 4115 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'е' found at position 4116 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'д' found at position 4117 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'о' found at position 4118 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'х' found at position 4119 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'р' found at position 4120 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'а' found at position 4121 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'н' found at position 4122 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'и' found at position 4123 just after ''.
+2026-08-28 02:21:19.188 WARN   Non-ansi character 'т' found at position 4124 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'е' found at position 4125 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'л' found at position 4126 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'и' found at position 4127 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'Ц' found at position 4129 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'и' found at position 4130 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'л' found at position 4131 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'и' found at position 4132 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'н' found at position 4133 just after ''.
+2026-08-28 02:21:19.189 WARN   Non-ansi character 'д' found at position 4134 just after ''.
+2026-08-28 02:21:19.190 WARN   Non-ansi character 'р' found at position 4135 just after ''.
+2026-08-28 02:21:19.190 WARN   Non-ansi character 'х' found at position 4138 just after ''.
+2026-08-28 02:21:19.190 WARN   Non-ansi character 'П' found at position 4244 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.190 WARN   Non-ansi character 'р' found at position 4245 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.190 WARN   Non-ansi character 'е' found at position 4246 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.190 WARN   Non-ansi character 'д' found at position 4247 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'о' found at position 4248 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'х' found at position 4249 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'р' found at position 4250 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'а' found at position 4251 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'н' found at position 4252 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'и' found at position 4253 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'т' found at position 4254 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'е' found at position 4255 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'л' found at position 4256 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'и' found at position 4257 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'Ц' found at position 4259 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.191 WARN   Non-ansi character 'и' found at position 4260 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.192 WARN   Non-ansi character 'л' found at position 4261 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.192 WARN   Non-ansi character 'и' found at position 4262 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.192 WARN   Non-ansi character 'н' found at position 4263 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.192 WARN   Non-ansi character 'д' found at position 4264 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.192 WARN   Non-ansi character 'р' found at position 4265 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.192 WARN   Non-ansi character 'х' found at position 4268 just after 'Пред._5х20мм'.
+2026-08-28 02:21:19.193 WARN   Non-ansi character 'С' found at position 5887 just after '1 мкФ el'.
+2026-08-28 02:21:19.193 WARN   Non-ansi character 'о' found at position 5888 just after '1 мкФ el'.
+2026-08-28 02:21:19.193 WARN   Non-ansi character 'е' found at position 5889 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'д' found at position 5890 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'и' found at position 5891 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'н' found at position 5892 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'и' found at position 5893 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'т' found at position 5894 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'е' found at position 5895 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'л' found at position 5896 just after '1 мкФ el'.
+2026-08-28 02:21:19.194 WARN   Non-ansi character 'и' found at position 5897 just after '1 мкФ el'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'П' found at position 8703 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'р' found at position 8704 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'е' found at position 8705 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'д' found at position 8706 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'о' found at position 8707 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'х' found at position 8708 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.195 WARN   Non-ansi character 'р' found at position 8709 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'а' found at position 8710 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'н' found at position 8711 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'и' found at position 8712 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'т' found at position 8713 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'е' found at position 8714 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'л' found at position 8715 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'и' found at position 8716 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'Ц' found at position 8718 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.196 WARN   Non-ansi character 'и' found at position 8719 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'л' found at position 8720 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'и' found at position 8721 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'н' found at position 8722 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'д' found at position 8723 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'р' found at position 8724 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'х' found at position 8727 just after '22пФ SMD:1206'.
+2026-08-28 02:21:19.197 WARN   Non-ansi character 'П' found at position 9163 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'р' found at position 9164 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'е' found at position 9165 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'д' found at position 9166 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'о' found at position 9167 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'х' found at position 9168 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'р' found at position 9169 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'а' found at position 9170 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'н' found at position 9171 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'и' found at position 9172 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'т' found at position 9173 just after 'signal'.
+2026-08-28 02:21:19.198 WARN   Non-ansi character 'е' found at position 9174 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'л' found at position 9175 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'и' found at position 9176 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'Ц' found at position 9178 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'и' found at position 9179 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'л' found at position 9180 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'и' found at position 9181 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'н' found at position 9182 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'д' found at position 9183 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'р' found at position 9184 just after 'signal'.
+2026-08-28 02:21:19.199 WARN   Non-ansi character 'х' found at position 9187 just after 'signal'.
+2026-08-28 02:21:19.203 WARN   Non-ansi character 'С' found at position 39831 just after 'signal'.
+2026-08-28 02:21:19.203 WARN   Non-ansi character 'о' found at position 39832 just after 'signal'.
+2026-08-28 02:21:19.203 WARN   Non-ansi character 'е' found at position 39833 just after 'signal'.
+2026-08-28 02:21:19.203 WARN   Non-ansi character 'д' found at position 39834 just after 'signal'.
+2026-08-28 02:21:19.203 WARN   Non-ansi character 'и' found at position 39835 just after 'signal'.
+2026-08-28 02:21:19.203 WARN   Non-ansi character 'н' found at position 39836 just after 'signal'.
+2026-08-28 02:21:19.204 WARN   Non-ansi character 'и' found at position 39837 just after 'signal'.
+2026-08-28 02:21:19.204 WARN   Non-ansi character 'т' found at position 39838 just after 'signal'.
+2026-08-28 02:21:19.204 WARN   Non-ansi character 'е' found at position 39839 just after 'signal'.
+2026-08-28 02:21:19.204 WARN   Non-ansi character 'л' found at position 39840 just after 'signal'.
+2026-08-28 02:21:19.204 WARN   Non-ansi character 'и' found at position 39841 just after 'signal'.
+2026-08-28 02:21:25.658 INFO   [6C29D6\8A50CD] Starting routing of 'Issue110-RelayModule' on 1 thread...
+2026-08-28 02:21:25.702 INFO   [6C29D6\8A50CD] Fanout stage started on board '585503e076a93b1e8e57fc668beea954' with 56 of 72 SMD pins needing fanout (16 already connected, 0 netless).
+2026-08-28 02:21:26.262 INFO   [6C29D6\8A50CD] Fanout pass #1 on board '362bb51e25b3e757fee4de53878bd39d' completed in 0.55 seconds with 56 SMD pins fanouted, 0 not routed, 0 insert errors, +15 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-08-28 02:21:26.472 INFO   [6C29D6\8A50CD] Fanout pass #2 on board 'cc5aba4a6c62af349b7c18b98e4ef0c9' completed in 0.20 seconds with 12 SMD pins fanouted, 1 not routed, 0 insert errors, +10 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-08-28 02:21:26.546 INFO   [6C29D6\8A50CD] Fanout pass #3 on board 'a157605e3975fd1aee3c61d8ea076f57' completed in 0.07 seconds with 5 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=300).
+2026-08-28 02:21:26.609 INFO   [6C29D6\8A50CD] Fanout pass #4 on board '25a4beed212c1a6523e2fb3be6581470' completed in 0.06 seconds with 5 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-08-28 02:21:26.702 INFO   [6C29D6\8A50CD] Fanout pass #5 on board '706dc7508b6c55dc6093d8eca3dc1457' completed in 0.09 seconds with 5 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=500).
+2026-08-28 02:21:26.795 INFO   [6C29D6\8A50CD] Fanout pass #6 on board 'ad3a1b266dacddfca5b5f1f78431bf31' completed in 0.09 seconds with 5 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=600).
+2026-08-28 02:21:26.795 INFO   Fanout stopped after 6 passes: no progress for 3 consecutive passes.
+2026-08-28 02:21:26.803 INFO   [6C29D6\8A50CD] Fanout stage completed: started with 72 total SMD pins, completed in 1.10 seconds, escaped pins: 53/72 (73.6%), using 1.07 total CPU seconds, 5.14 GB total allocated, and 1024.6 MB peak heap usage.
+2026-08-28 02:21:26.808 INFO   [6C29D6\8A50CD] Auto-routing stage started on board 'ad3a1b266dacddfca5b5f1f78431bf31' for 72 unrouted items.
+2026-08-28 02:21:28.443 WARN   offset_shapes: shape is empty
+2026-08-28 02:21:28.444 WARN   offset_shapes: shape is empty
+2026-08-28 02:21:28.444 WARN   offset_shapes: shape is empty
+2026-08-28 02:21:28.924 INFO   [6C29D6\8A50CD] Auto-routing pass #1 on board 'ad3a1b266dacddfca5b5f1f78431bf31' was completed in 2.07 seconds with the score of 856.81 (12 unrouted and 3 violations), using 2.94 CPU seconds and the job allocated 20.46 GB of memory so far.
+2026-08-28 02:21:30.321 INFO   [6C29D6\8A50CD] Auto-routing pass #2 on board '900b3c74b160ac497fe4b7665188afb3' was completed in 1.35 seconds with the score of 902.26 (8 unrouted and 3 violations), using 3.93 CPU seconds and the job allocated 30.79 GB of memory so far.
+2026-08-28 02:21:31.193 INFO   [6C29D6\8A50CD] Auto-routing pass #3 on board '99db298bf9231990092196f478b93420' was completed in 0.82 seconds with the score of 913.62 (7 unrouted and 3 violations), using 4.93 CPU seconds and the job allocated 39.17 GB of memory so far.
+2026-08-28 02:21:32.350 INFO   [6C29D6\8A50CD] Auto-routing pass #4 on board '8ea4c1a36be64dba53067963c61a0887' was completed in 1.11 seconds with the score of 947.71 (4 unrouted and 3 violations), using 5.92 CPU seconds and the job allocated 48.13 GB of memory so far.
+2026-08-28 02:21:33.069 INFO   [6C29D6\8A50CD] Auto-routing pass #5 on board '43f7fa03adb93d9f713f183bc42588e2' was completed in 0.67 seconds with the score of 970.44 (2 unrouted and 3 violations), using 6.92 CPU seconds and the job allocated 56.13 GB of memory so far.
+2026-08-28 02:21:33.787 INFO   [6C29D6\8A50CD] Auto-routing pass #6 on board '4597c15cc819eca5f7057f881b226ab4' was completed in 0.67 seconds with the score of 959.08 (3 unrouted and 3 violations), using 7.91 CPU seconds and the job allocated 63.45 GB of memory so far.
+2026-08-28 02:21:34.132 INFO   [6C29D6\8A50CD] Auto-routing pass #7 on board 'da5e02668bfdfbe80cd406a6b664673f' was completed in 0.30 seconds with the score of 981.80 (1 unrouted and 3 violations), using 7.91 CPU seconds and the job allocated 63.45 GB of memory so far.
+2026-08-28 02:21:34.878 INFO   [6C29D6\8A50CD] Auto-routing pass #8 on board '42c79db9c8229bae1006c53921ca93ff' was completed in 0.70 seconds with the score of 981.80 (1 unrouted and 3 violations), using 8.91 CPU seconds and the job allocated 71.70 GB of memory so far.
+2026-08-28 02:21:35.503 INFO   [6C29D6\8A50CD] Auto-routing pass #9 on board '42c79db9c8229bae1006c53921ca93ff' was completed in 0.60 seconds with the score of 981.80 (1 unrouted and 3 violations), using 8.91 CPU seconds and the job allocated 71.70 GB of memory so far.
+2026-08-28 02:21:35.693 INFO   [6C29D6\8A50CD] Auto-routing pass #10 on board 'dafe37670b25a3971af2418997de0ebc' was completed in 0.14 seconds with the score of 981.80 (1 unrouted and 3 violations), using 9.90 CPU seconds and the job allocated 80.08 GB of memory so far.
+2026-08-28 02:21:36.409 INFO   [6C29D6\8A50CD] Auto-routing pass #11 on board '4a9e7634b472af99347bac2d779f2c73' was completed in 0.63 seconds with the score of 981.80 (1 unrouted and 3 violations), using 9.90 CPU seconds and the job allocated 80.08 GB of memory so far.
+2026-08-28 02:21:36.620 INFO   [6C29D6\8A50CD] Auto-routing pass #12 on board '982189898c1ce1705242082597217624' was completed in 0.16 seconds with the score of 993.17 (0 unrouted and 3 violations), using 9.90 CPU seconds and the job allocated 80.08 GB of memory so far.
+2026-08-28 02:21:36.686 INFO   [6C29D6\8A50CD] Auto-routing pass #13 on board '2776785fe0e98875200f1c92b2240ef5' was completed in 0.02 seconds with the score of 993.17 (0 unrouted and 3 violations), using 10.89 CPU seconds and the job allocated 88.78 GB of memory so far.
+2026-08-28 02:21:36.726 INFO   [6C29D6\8A50CD] Auto-routing stage completed: started with 88 unrouted nets, completed in 11.07 seconds, final score: 993.17 (0 unrouted and 3 violations), using 10.89 total CPU seconds, 88.78 GB total allocated, and 2113.7 MB peak heap usage.
+2026-08-28 02:21:36.845 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-013025/ses/Issue110-RelayModule.java.ses'...
