@@ -107,27 +107,33 @@ impl IntOctagon {
     }
 
     /// X-coordinate of corner `no`.
+    ///
+    /// Uses saturating arithmetic so degenerate or unbounded octagons
+    /// (e.g. `EMPTY` or bounds near the integer limits) stay finite.
     pub fn corner_x(&self, no: usize) -> i32 {
         match no {
-            0 => self.lower_left_diagonal_x - self.bottom_y,
-            1 => self.lower_right_diagonal_x + self.bottom_y,
+            0 => self.lower_left_diagonal_x.saturating_sub(self.bottom_y),
+            1 => self.lower_right_diagonal_x.saturating_add(self.bottom_y),
             2 | 3 => self.right_x,
-            4 => self.upper_right_diagonal_x - self.top_y,
-            5 => self.upper_left_diagonal_x + self.top_y,
+            4 => self.upper_right_diagonal_x.saturating_sub(self.top_y),
+            5 => self.upper_left_diagonal_x.saturating_add(self.top_y),
             6 | 7 => self.left_x,
             _ => panic!("IntOctagon.corner: out of range"),
         }
     }
 
     /// Y-coordinate of corner `no`.
+    ///
+    /// Uses saturating arithmetic so degenerate or unbounded octagons
+    /// (e.g. `EMPTY` or bounds near the integer limits) stay finite.
     pub fn corner_y(&self, no: usize) -> i32 {
         match no {
             0 | 1 => self.bottom_y,
-            2 => self.right_x - self.lower_right_diagonal_x,
-            3 => self.upper_right_diagonal_x - self.right_x,
+            2 => self.right_x.saturating_sub(self.lower_right_diagonal_x),
+            3 => self.upper_right_diagonal_x.saturating_sub(self.right_x),
             4 | 5 => self.top_y,
-            6 => self.left_x - self.upper_left_diagonal_x,
-            7 => self.lower_left_diagonal_x - self.left_x,
+            6 => self.left_x.saturating_sub(self.upper_left_diagonal_x),
+            7 => self.lower_left_diagonal_x.saturating_sub(self.left_x),
             _ => panic!("IntOctagon.corner: out of range"),
         }
     }
@@ -244,19 +250,79 @@ impl IntOctagon {
         )
     }
 
-    /// Normalizes the octagon bounds.
+    /// Normalizes the octagon bounds so that each of the 8 border lines
+    /// touches the octagon, like the upstream `IntOctagon.normalize`.
+    ///
+    /// Each bound is mutually clamped against the others (orthogonal bounds
+    /// against diagonal bounds and vice versa, plus the intersections of
+    /// adjacent diagonal border lines) until a fixed point is reached.
+    /// Returns `EMPTY` if the bounds cross, so `is_empty()` is reliable on
+    /// the canonical form.
     pub fn normalize(self) -> Self {
-        self
+        // floor and ceiling of `v / 2` for the diagonal line intersections
+        fn div2_floor(v: i64) -> i64 {
+            v.div_euclid(2)
+        }
+        fn div2_ceil(v: i64) -> i64 {
+            (v + 1).div_euclid(2)
+        }
+
+        // Work in i64 so intermediate sums/differences of i32 bounds cannot
+        // overflow; non-empty fixed-point values always fit back into i32.
+        let mut lx = self.left_x as i64;
+        let mut ly = self.bottom_y as i64;
+        let mut rx = self.right_x as i64;
+        let mut uy = self.top_y as i64;
+        let mut ulx = self.upper_left_diagonal_x as i64;
+        let mut lrx = self.lower_right_diagonal_x as i64;
+        let mut llx = self.lower_left_diagonal_x as i64;
+        let mut urx = self.upper_right_diagonal_x as i64;
+
+        loop {
+            if lx > rx || ly > uy || llx > urx || ulx > lrx {
+                return IntOctagon::EMPTY;
+            }
+            let prev = (lx, ly, rx, uy, ulx, lrx, llx, urx);
+
+            // Clamp the orthogonal bounds against the diagonal bounds:
+            // llx <= x + y <= urx and ulx <= x - y <= lrx restrict x and y.
+            lx = lx.max(llx - uy).max(ulx + ly);
+            rx = rx.min(urx - ly).min(lrx + uy);
+            ly = ly.max(lx - lrx).max(llx - rx);
+            uy = uy.min(urx - lx).min(rx - ulx);
+
+            // Clamp the diagonal bounds against the corner points of the box.
+            llx = llx.max(lx + ly);
+            lrx = lrx.min(rx - ly);
+            urx = urx.min(rx + uy);
+            ulx = ulx.max(lx - uy);
+
+            // Clamp the orthogonal bounds against the intersections of
+            // adjacent diagonal border lines, e.g. the upper left line
+            // x - y = ulx and the upper right line x + y = urx intersect
+            // at y = (urx - ulx) / 2.
+            uy = uy.min(div2_ceil(urx - ulx));
+            ly = ly.max(div2_floor(llx - lrx));
+            rx = rx.min(div2_ceil(urx + lrx));
+            lx = lx.max(div2_floor(llx + ulx));
+
+            if (lx, ly, rx, uy, ulx, lrx, llx, urx) == prev {
+                break;
+            }
+        }
+        IntOctagon::new(
+            lx as i32, ly as i32, rx as i32, uy as i32, ulx as i32, lrx as i32, llx as i32,
+            urx as i32,
+        )
     }
 
-    /// Converts this octagon into a convex Simplex defined by its bounding lines.
+    /// Converts this octagon into a convex Simplex defined by its 8 border lines.
     pub fn to_simplex(&self) -> crate::planar::simplex::Simplex {
-        let mut lines = Vec::with_capacity(8);
-        lines.push(Line::new_from_coords(self.left_x, self.bottom_y, self.left_x, self.top_y));
-        lines.push(Line::new_from_coords(self.left_x, self.top_y, self.right_x, self.top_y));
-        lines.push(Line::new_from_coords(self.right_x, self.top_y, self.right_x, self.bottom_y));
-        lines.push(Line::new_from_coords(self.right_x, self.bottom_y, self.left_x, self.bottom_y));
-        crate::planar::simplex::Simplex::new(lines)
+        if self.is_empty() {
+            return crate::planar::simplex::Simplex::EMPTY;
+        }
+        let lines: Vec<Line> = (0..8).map(|no| self.border_line(no)).collect();
+        crate::planar::simplex::Simplex::new(lines).remove_redundant_lines()
     }
 }
 
@@ -389,5 +455,95 @@ impl crate::planar::convex_shape::ConvexShape for IntOctagon {
     fn min_width(&self) -> f64 {
         let b = self.bounding_box();
         b.width().min(b.height()) as f64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Octagon inscribed in the box `(0, 0, 100, 100)` with all 4 corners
+    /// clipped by diagonal border lines; already in canonical form.
+    fn proper_octagon() -> IntOctagon {
+        IntOctagon::new(0, 0, 100, 100, -80, 80, 20, 180)
+    }
+
+    #[test]
+    fn normalize_is_identity_on_canonical_octagon() {
+        let oct = proper_octagon();
+        assert_eq!(oct.normalize(), oct);
+        assert_eq!(IntOctagon::EMPTY.normalize(), IntOctagon::EMPTY);
+    }
+
+    #[test]
+    fn normalize_tightens_all_bounds_to_touching_border_lines() {
+        // Wide-open orthogonal bounds around the wedge x >= |y| clipped at
+        // x <= 1000. The left bound can only be tightened via the
+        // intersection of the two left diagonal border lines.
+        let oct = IntOctagon::new(-1000, -1000, 1000, 1000, 0, 2000, 0, 2000).normalize();
+        assert_eq!(oct, IntOctagon::new(0, -1000, 1000, 1000, 0, 2000, 0, 2000));
+        // The degenerate left edge collapses to the single point (0, 0).
+        assert_eq!(oct.corner(6), IntPoint::new(0, 0));
+        assert_eq!(oct.corner(7), IntPoint::new(0, 0));
+        // Normalization is idempotent.
+        assert_eq!(oct.normalize(), oct);
+    }
+
+    #[test]
+    fn normalize_reports_geometrically_empty_octagon() {
+        // No bound pair crosses directly, but x + y >= 100 excludes the
+        // whole box [0, 10] x [0, 10].
+        let oct = IntOctagon::new(0, 0, 10, 10, -50, 50, 100, 200);
+        assert_eq!(oct.normalize(), IntOctagon::EMPTY);
+        assert!(oct.normalize().is_empty());
+    }
+
+    #[test]
+    fn degenerate_octagon_corners_stay_finite() {
+        // Saturating corner arithmetic must not overflow when the diagonal
+        // bounds are unbounded (like a simplex whose diagonal constraints
+        // are missing): e.g. corner 0 is llx - ly = i32::MIN - 1.
+        let unbounded_diagonals =
+            IntOctagon::new(0, 1, 100, 100, i32::MIN, i32::MAX, i32::MIN, i32::MAX);
+        for no in 0..8 {
+            let _ = IntOctagon::EMPTY.corner(no);
+            let _ = unbounded_diagonals.corner(no);
+        }
+    }
+
+    #[test]
+    fn to_simplex_keeps_all_8_border_lines() {
+        let oct = proper_octagon();
+        let simplex = oct.to_simplex();
+        assert_eq!(simplex.border_line_count(), 8);
+        // The diagonal constraints must survive: (5, 5) satisfies the box
+        // bounds but violates x + y >= 20.
+        let inside = Point::Int(IntPoint::new(50, 50));
+        let clipped = Point::Int(IntPoint::new(5, 5));
+        assert!(oct.contains_point(&inside));
+        assert!(simplex.contains(&inside));
+        assert!(!oct.contains_point(&clipped));
+        assert!(!simplex.contains(&clipped));
+    }
+
+    #[test]
+    fn to_simplex_contains_matches_octagon_contains() {
+        let oct = proper_octagon();
+        let simplex = oct.to_simplex();
+        for x in (-20..=120).step_by(10) {
+            for y in (-20..=120).step_by(10) {
+                let p = Point::Int(IntPoint::new(x, y));
+                assert_eq!(
+                    simplex.contains(&p),
+                    oct.contains_point(&p),
+                    "containment mismatch at ({x}, {y})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn to_simplex_of_empty_octagon_is_empty() {
+        assert!(IntOctagon::EMPTY.to_simplex().is_empty());
     }
 }

@@ -1,5 +1,7 @@
 //! Abstract point enum, ported from `app.freerouting.geometry.planar.Point`.
 
+use std::hash::{Hash, Hasher};
+
 use num_bigint::{BigInt, Sign};
 use num_traits::{Signed, Zero};
 
@@ -11,10 +13,41 @@ use crate::planar::{
 
 /// An abstract point in the plane, either an integer point (fast path) or an
 /// exact rational point.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub enum Point {
     Int(IntPoint),
     Rational(RationalPoint),
+}
+
+impl PartialEq for Point {
+    /// Exact geometric equality across representations: an `Int` point
+    /// `(a, b)` equals a `Rational` point `(x, y, z)` iff `x == a * z` and
+    /// `y == b * z`, and rational points compare by cross-multiplication.
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Point::Int(a), Point::Int(b)) => a == b,
+            (Point::Rational(a), Point::Rational(b)) => a == b,
+            (Point::Int(a), Point::Rational(b)) | (Point::Rational(b), Point::Int(a)) => {
+                b.eq_int_point(a)
+            }
+        }
+    }
+}
+
+impl Hash for Point {
+    /// Hashes the canonical reduced projective triple of the point, so that
+    /// points comparing equal across variants hash identically.
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        match self {
+            Point::Int(ip) => {
+                // Same stream as the reduced triple of the rational embedding.
+                BigInt::from(ip.x).hash(state);
+                BigInt::from(ip.y).hash(state);
+                BigInt::from(1).hash(state);
+            }
+            Point::Rational(rp) => rp.hash(state),
+        }
+    }
 }
 
 impl Point {
@@ -211,5 +244,65 @@ impl Point {
         let v = self.difference_by(pole);
         let mirrored = v.mirror_at_x_axis();
         pole.translate_by(&mirrored)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hash_of(point: &Point) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        point.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn int_point_equals_its_rational_embedding() {
+        let ip = Point::Int(IntPoint::new(3, -7));
+        let embedded = Point::Rational(RationalPoint::from_int_point(&IntPoint::new(3, -7)));
+        let scaled = Point::Rational(RationalPoint::new(
+            BigInt::from(6),
+            BigInt::from(-14),
+            BigInt::from(2),
+        ));
+        assert_eq!(ip, embedded);
+        assert_eq!(embedded, ip);
+        assert_eq!(ip, scaled);
+        assert_eq!(scaled, ip);
+
+        let other = Point::Rational(RationalPoint::new(
+            BigInt::from(6),
+            BigInt::from(-13),
+            BigInt::from(2),
+        ));
+        assert_ne!(ip, other);
+        assert_ne!(other, ip);
+    }
+
+    #[test]
+    fn intersections_from_different_line_pairs_compare_equal() {
+        // Three lines through (1/2, 1/2): y = x, x + y = 1 (twice, with
+        // different endpoints so the raw homogeneous triples differ).
+        let l1 = Line::new_from_coords(0, 0, 3, 3);
+        let l2 = Line::new_from_coords(0, 1, 1, 0);
+        let l3 = Line::new_from_coords(0, 1, 2, -1);
+        let p1 = l1.intersection(&l2);
+        let p2 = l1.intersection(&l3);
+        assert!(matches!(p1, Point::Rational(_)));
+        assert!(matches!(p2, Point::Rational(_)));
+        assert_eq!(p1, p2);
+        assert_eq!(hash_of(&p1), hash_of(&p2));
+    }
+
+    #[test]
+    fn hash_consistent_across_variants() {
+        let ip = Point::Int(IntPoint::new(3, -7));
+        let scaled = Point::Rational(RationalPoint::new(
+            BigInt::from(6),
+            BigInt::from(-14),
+            BigInt::from(2),
+        ));
+        assert_eq!(hash_of(&ip), hash_of(&scaled));
     }
 }

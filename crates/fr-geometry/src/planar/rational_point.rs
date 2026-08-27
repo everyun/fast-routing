@@ -3,6 +3,8 @@
 //! Represents points in the projective plane via 3 coordinates `(x, y, z)` where
 //! `z >= 0`. The affine point with rational coordinates is `(x / z, y / z)`.
 
+use std::hash::{Hash, Hasher};
+
 use num_bigint::{BigInt, Sign};
 use num_traits::{Signed, ToPrimitive, Zero};
 
@@ -14,11 +16,45 @@ use crate::planar::{
 use fr_datastructures::BigIntAux;
 
 /// A point in the projective plane with integer coordinates `(x, y, z)` and `z >= 0`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq)]
 pub struct RationalPoint {
     pub x: BigInt,
     pub y: BigInt,
     pub z: BigInt,
+}
+
+impl PartialEq for RationalPoint {
+    /// Exact projective equality by cross-multiplication, ported from Java's
+    /// `RationalPoint.equals`: `(x1, y1, z1)` and `(x2, y2, z2)` represent the
+    /// same point iff `x1 * z2 == x2 * z1` and `y1 * z2 == y2 * z1`, so
+    /// unreduced triples of the same geometric point compare equal. The
+    /// comparison is invariant under negating a whole triple, so it stays
+    /// correct even for a (non-invariant) triple with `z < 0`.
+    ///
+    /// The all-zero triple `(0, 0, 0)` is not a projective point but *is*
+    /// producible (`Line::intersection` of a line with itself returns it).
+    /// Bare cross-multiplication would make it equal to every other point,
+    /// which breaks transitivity and the `Eq`/`Hash` contract, so it is
+    /// treated as equal only to itself.
+    fn eq(&self, other: &Self) -> bool {
+        let self_degenerate = self.x.is_zero() && self.y.is_zero() && self.z.is_zero();
+        let other_degenerate = other.x.is_zero() && other.y.is_zero() && other.z.is_zero();
+        if self_degenerate || other_degenerate {
+            return self_degenerate && other_degenerate;
+        }
+        &self.x * &other.z == &other.x * &self.z && &self.y * &other.z == &other.y * &self.z
+    }
+}
+
+impl Hash for RationalPoint {
+    /// Hashes the canonical (gcd-reduced, sign-normalized) triple so that
+    /// points comparing equal via cross-multiplication hash identically.
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let (x, y, z) = self.reduced_coordinates();
+        x.hash(state);
+        y.hash(state);
+        z.hash(state);
+    }
 }
 
 impl RationalPoint {
@@ -37,6 +73,42 @@ impl RationalPoint {
         }
     }
 
+    /// Canonical representative of the projective triple: divided by
+    /// `gcd(x, y, z)` and sign-normalized so that `z >= 0`.
+    ///
+    /// All points at infinity (`z == 0`) compare equal under
+    /// cross-multiplication, so they share the single canonical form
+    /// `(0, 0, 0)`. The degenerate all-zero triple (equal only to itself)
+    /// shares that form too, which is a permitted hash collision.
+    pub(crate) fn reduced_coordinates(&self) -> (BigInt, BigInt, BigInt) {
+        use num_integer::Integer;
+        if self.z.is_zero() {
+            return (BigInt::from(0), BigInt::from(0), BigInt::from(0));
+        }
+        let gcd = self.x.gcd(&self.y).gcd(&self.z);
+        let mut x = &self.x / &gcd;
+        let mut y = &self.y / &gcd;
+        let mut z = &self.z / &gcd;
+        if z.sign() == Sign::Minus {
+            x = -x;
+            y = -y;
+            z = -z;
+        }
+        (x, y, z)
+    }
+
+    /// Exact equality with an `IntPoint`: `(x, y, z)` equals `(a, b)` iff
+    /// `x == a * z` and `y == b * z` (invariant under negating the triple).
+    ///
+    /// A triple with `z == 0` is a point at infinity (or the degenerate
+    /// all-zero triple) and never equals a finite integer point.
+    pub fn eq_int_point(&self, other: &IntPoint) -> bool {
+        if self.z.is_zero() {
+            return false;
+        }
+        self.x == BigInt::from(other.x) * &self.z && self.y == BigInt::from(other.y) * &self.z
+    }
+
     /// Approximates coordinates by float coordinates.
     pub fn to_float(&self) -> FloatPoint {
         let zd = self.z.to_f64().unwrap_or(f64::MAX);
@@ -51,7 +123,6 @@ impl RationalPoint {
 
     /// Stable identifier for deterministic tie-breaking.
     pub fn get_id_no(&self) -> i32 {
-        use std::hash::{Hash, Hasher};
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         self.hash(&mut hasher);
         hasher.finish() as i32
@@ -211,5 +282,46 @@ impl RationalPoint {
     pub fn compare_y_int(&self, other: &IntPoint) -> i32 {
         let tmp1 = &self.z * other.y;
         self.y.cmp(&tmp1) as i32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rp(x: i64, y: i64, z: i64) -> RationalPoint {
+        RationalPoint::new(BigInt::from(x), BigInt::from(y), BigInt::from(z))
+    }
+
+    fn hash_of(point: &RationalPoint) -> u64 {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        point.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn unreduced_triples_of_same_point_compare_equal() {
+        // (1/3, 2/3) represented two different ways.
+        assert_eq!(rp(1, 2, 3), rp(2, 4, 6));
+        assert_eq!(rp(2, 4, 6), rp(1, 2, 3));
+        // Same numerators, different denominator: different points.
+        assert_ne!(rp(1, 2, 3), rp(1, 2, 4));
+        assert_ne!(rp(1, 2, 3), rp(2, 2, 3));
+    }
+
+    #[test]
+    fn hash_matches_for_unreduced_equal_points() {
+        assert_eq!(hash_of(&rp(1, 2, 3)), hash_of(&rp(2, 4, 6)));
+        assert_eq!(hash_of(&rp(-5, 7, 2)), hash_of(&rp(-15, 21, 6)));
+        assert_eq!(rp(1, 2, 3).get_id_no(), rp(2, 4, 6).get_id_no());
+    }
+
+    #[test]
+    fn eq_int_point_cross_multiplies() {
+        let ip = IntPoint::new(3, -7);
+        assert!(rp(3, -7, 1).eq_int_point(&ip));
+        assert!(rp(6, -14, 2).eq_int_point(&ip));
+        assert!(!rp(6, -13, 2).eq_int_point(&ip));
+        assert!(!rp(6, -14, 3).eq_int_point(&ip));
     }
 }

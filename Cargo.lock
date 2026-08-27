@@ -83,6 +83,7 @@ dependencies = [
  "fr-geometry",
  "fr-io",
  "fr-rules",
+ "rayon",
 ]
 
 [[package]]

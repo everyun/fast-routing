@@ -4,7 +4,7 @@
 
 use crate::planar::{
     area::Area, convex_shape::ConvexShape, direction::Direction, float_point::FloatPoint,
-    int_box::IntBox, int_octagon::IntOctagon, int_point::IntPoint, line::Line,
+    int_box::IntBox, int_octagon::IntOctagon, int_point::IntPoint, limits::Limits, line::Line,
     line_segment::LineSegment, point::Point, polyline::Polyline, shape::Shape, side::Side,
     vector::Vector,
 };
@@ -190,14 +190,17 @@ impl Simplex {
             return Some(IntOctagon::EMPTY);
         }
 
-        let mut rx = i32::MAX;
-        let mut uy = i32::MAX;
-        let mut lrx = i32::MAX;
-        let mut urx = i32::MAX;
-        let mut lx = i32::MIN;
-        let mut ly = i32::MIN;
-        let mut llx = i32::MIN;
-        let mut ulx = i32::MIN;
+        // Initialise missing bounds to the biggest octagon values (like the
+        // upstream Java code) instead of i32::MIN / i32::MAX, so that
+        // normalize() and the corner computations stay finite.
+        let mut rx = Limits::CRIT_INT;
+        let mut uy = Limits::CRIT_INT;
+        let mut lrx = Limits::CRIT_INT;
+        let mut urx = Limits::CRIT_INT;
+        let mut lx = -Limits::CRIT_INT;
+        let mut ly = -Limits::CRIT_INT;
+        let mut llx = -Limits::CRIT_INT;
+        let mut ulx = -Limits::CRIT_INT;
 
         for line in &self.arr {
             let a = line.a;
@@ -1199,5 +1202,41 @@ impl ConvexShape for Simplex {
             }
         }
         min_dist + min_dist2
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn box_simplex_octagon_round_trip_gives_box_corners() {
+        let box_ = IntBox::new(0, 0, 100, 100);
+        let oct = box_
+            .to_simplex()
+            .to_int_octagon()
+            .expect("box simplex converts to an octagon");
+        assert!(!oct.is_empty());
+        assert_eq!(oct.bounding_box(), box_);
+        // The 4 missing diagonal bounds must be normalized so that the
+        // corners degenerate to the box corners without overflowing.
+        assert_eq!(oct.corner(0), IntPoint::new(0, 0));
+        assert_eq!(oct.corner(1), IntPoint::new(100, 0));
+        assert_eq!(oct.corner(2), IntPoint::new(100, 0));
+        assert_eq!(oct.corner(3), IntPoint::new(100, 100));
+        assert_eq!(oct.corner(4), IntPoint::new(100, 100));
+        assert_eq!(oct.corner(5), IntPoint::new(0, 100));
+        assert_eq!(oct.corner(6), IntPoint::new(0, 100));
+        assert_eq!(oct.corner(7), IntPoint::new(0, 0));
+    }
+
+    #[test]
+    fn octagon_simplex_octagon_round_trip_is_identity() {
+        let oct = IntOctagon::new(0, 0, 100, 100, -80, 80, 20, 180);
+        let round_tripped = oct
+            .to_simplex()
+            .to_int_octagon()
+            .expect("octagon simplex converts back to an octagon");
+        assert_eq!(round_tripped, oct);
     }
 }

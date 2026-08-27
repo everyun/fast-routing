@@ -257,12 +257,24 @@ impl DsnReader {
                         if let Some(c_list) = child.list() {
                             if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("pin")).unwrap_or(false) {
                                 let padstack_name = c_list.get(1).and_then(|e| e.atom()).unwrap_or("default").to_string();
-                                // Find pin ID and (x, y) coordinates skipping any nested scopes like (rotate ...)
-                                let mut pin_id = "1".to_string();
+                                // Positional grammar: (pin <padstack> [(rotate <deg>)] <pin_id> <x> <y>).
+                                // Pin ids may be numeric ("1") or alphanumeric ("A7"), so the first
+                                // non-list element is the pin id and the next two numbers are x / y.
+                                let mut rotation = 0.0;
+                                let mut pin_id: Option<String> = None;
                                 let mut coords = Vec::new();
                                 for elem in c_list.iter().skip(2) {
-                                    if let Some(id_str) = elem.atom() {
-                                        pin_id = id_str.to_string();
+                                    if let Some(e_list) = elem.list() {
+                                        if e_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("rotate")).unwrap_or(false) {
+                                            if let Some(deg) = e_list.get(1).and_then(|e| e.number()) {
+                                                rotation = deg;
+                                            }
+                                        }
+                                    } else if pin_id.is_none() {
+                                        pin_id = Some(match elem {
+                                            SExpr::Number(n) => Self::format_pin_id_number(*n),
+                                            _ => elem.atom().unwrap_or("1").to_string(),
+                                        });
                                     } else if let Some(n) = elem.number() {
                                         coords.push(n);
                                     }
@@ -270,11 +282,11 @@ impl DsnReader {
                                 let x = coords.first().copied().unwrap_or(0.0);
                                 let y = coords.get(1).copied().unwrap_or(0.0);
                                 pins.push(DsnPin {
-                                    pin_id,
+                                    pin_id: pin_id.unwrap_or_else(|| "1".to_string()),
                                     padstack_name,
                                     x,
                                     y,
-                                    rotation: 0.0,
+                                    rotation,
                                 });
                             }
                         }
@@ -315,6 +327,16 @@ impl DsnReader {
                     });
                 }
             }
+        }
+    }
+
+    /// Renders a numeric pin id losslessly: the lexer folds numeric-looking
+    /// identifiers into `Token::Number`, so "1" must come back as "1", not "1.0".
+    fn format_pin_id_number(n: f64) -> String {
+        if n.fract() == 0.0 && n.abs() < 1e15 {
+            format!("{}", n as i64)
+        } else {
+            format!("{}", n)
         }
     }
 
@@ -483,4 +505,85 @@ impl DsnReader {
 /// Helper function to parse a DSN string into a `DsnDocument`.
 pub fn parse_dsn(input: &str) -> Result<DsnDocument, String> {
     DsnReader::parse(input)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_single_package(dsn: &str) -> DsnPackage {
+        let doc = parse_dsn(dsn).expect("DSN should parse");
+        assert_eq!(doc.packages.len(), 1, "expected exactly one package");
+        doc.packages.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn test_image_pin_numeric_ids() {
+        let dsn = r#"
+        (pcb test_board
+            (library
+                (image "Package_TO_SOT_SMD:SOT-23"
+                    (pin Rect[T]Pad_610x2000_um 1 -7000 3000)
+                    (pin Rect[T]Pad_610x2000_um 13 950 -1200.5)
+                )
+            )
+        )
+        "#;
+        let pkg = parse_single_package(dsn);
+        assert_eq!(pkg.pins.len(), 2);
+        assert_eq!(pkg.pins[0].pin_id, "1");
+        assert_eq!(pkg.pins[0].padstack_name, "Rect[T]Pad_610x2000_um");
+        assert_eq!(pkg.pins[0].x, -7000.0);
+        assert_eq!(pkg.pins[0].y, 3000.0);
+        assert_eq!(pkg.pins[0].rotation, 0.0);
+        assert_eq!(pkg.pins[1].pin_id, "13");
+        assert_eq!(pkg.pins[1].x, 950.0);
+        assert_eq!(pkg.pins[1].y, -1200.5);
+    }
+
+    #[test]
+    fn test_image_pin_alphanumeric_ids() {
+        let dsn = r#"
+        (pcb test_board
+            (library
+                (image conn_pkg
+                    (pin Round[A]Pad_1000_um A7 1500 -2500)
+                    (pin Round[A]Pad_1000_um S1 0 400)
+                )
+            )
+        )
+        "#;
+        let pkg = parse_single_package(dsn);
+        assert_eq!(pkg.pins.len(), 2);
+        assert_eq!(pkg.pins[0].pin_id, "A7");
+        assert_eq!(pkg.pins[0].x, 1500.0);
+        assert_eq!(pkg.pins[0].y, -2500.0);
+        assert_eq!(pkg.pins[1].pin_id, "S1");
+        assert_eq!(pkg.pins[1].x, 0.0);
+        assert_eq!(pkg.pins[1].y, 400.0);
+    }
+
+    #[test]
+    fn test_image_pin_rotate_before_id() {
+        let dsn = r#"
+        (pcb test_board
+            (library
+                (image rot_pkg
+                    (pin Oval[A]Pad_1700x950_um (rotate 90) 2 -3810 0)
+                    (pin Oval[A]Pad_1700x950_um (rotate 270) B3 100 200)
+                )
+            )
+        )
+        "#;
+        let pkg = parse_single_package(dsn);
+        assert_eq!(pkg.pins.len(), 2);
+        assert_eq!(pkg.pins[0].pin_id, "2");
+        assert_eq!(pkg.pins[0].rotation, 90.0);
+        assert_eq!(pkg.pins[0].x, -3810.0);
+        assert_eq!(pkg.pins[0].y, 0.0);
+        assert_eq!(pkg.pins[1].pin_id, "B3");
+        assert_eq!(pkg.pins[1].rotation, 270.0);
+        assert_eq!(pkg.pins[1].x, 100.0);
+        assert_eq!(pkg.pins[1].y, 200.0);
+    }
 }

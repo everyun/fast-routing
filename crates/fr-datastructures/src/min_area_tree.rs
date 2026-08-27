@@ -221,19 +221,23 @@ impl<S: BoundingShape, T> MinAreaTree<S, T> {
             return None;
         }
 
-        let (object, parent_opt) = match self.nodes[idx] {
-            Node::Leaf {
-                parent,
-                ref object,
-                ..
-            } => {
-                let obj = unsafe { std::ptr::read(object as *const T) };
-                (obj, parent)
-            }
-            _ => return None,
+        if !matches!(self.nodes[idx], Node::Leaf { .. }) {
+            return None;
+        }
+
+        // Take ownership of the leaf by swapping in the freed slot directly.
+        let old_node = std::mem::replace(
+            &mut self.nodes[idx],
+            Node::Free {
+                next_free: self.free_head,
+            },
+        );
+        self.free_head = Some(idx);
+        let (object, parent_opt) = match old_node {
+            Node::Leaf { parent, object, .. } => (object, parent),
+            _ => unreachable!(),
         };
 
-        self.free_node(idx);
         self.leaf_count -= 1;
 
         let parent_idx = match parent_opt {
@@ -421,6 +425,25 @@ mod tests {
         // Remove remaining
         tree.remove(id2);
         tree.remove(id3);
+        assert!(tree.is_empty());
+    }
+
+    #[test]
+    fn test_remove_returns_owned_heap_objects() {
+        let mut tree = MinAreaTree::new();
+        let mut entries = Vec::new();
+        for i in 0..100i32 {
+            let bounds = BoundingBox2D::new(i, i, i + 10, i + 10);
+            let payload = format!("payload-{i}");
+            let id = tree.insert(bounds, payload.clone(), i as usize);
+            entries.push((id, payload));
+        }
+        assert_eq!(tree.len(), 100);
+
+        for (id, expected) in entries {
+            let removed = tree.remove(id).expect("leaf should exist");
+            assert_eq!(removed, expected);
+        }
         assert!(tree.is_empty());
     }
 }

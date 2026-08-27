@@ -103,8 +103,16 @@ impl<K: Clone + Ord, V: Clone> UndoableObjects<K, V> {
     }
 
     /// Inserts a new object into the database at the current stack level.
+    ///
+    /// The key must not already be present: overwriting a live node would
+    /// silently destroy its undo history. Callers must `delete` first if
+    /// they intend to replace an existing object.
     pub fn insert(&mut self, key: K, value: V) {
         self.disable_redo();
+        debug_assert!(
+            !self.objects.contains_key(&key),
+            "UndoableObjects::insert on an existing key would destroy its undo history; delete it first"
+        );
         let node = UndoableNode::new(value, self.stack_level);
         self.objects.insert(key, node);
     }
@@ -251,22 +259,31 @@ impl<K: Clone + Ord, V: Clone> UndoableObjects<K, V> {
             }
         }
 
-        // 2. Re-insert objects created on target level
-        if self.created_objects_redo_stack.len() >= target_level {
-            let created = self.created_objects_redo_stack[target_level - 1].clone();
-            for (k, node) in created {
-                restored_objects.push(node.current.clone());
-                self.objects.insert(k, node);
-            }
-        }
+        // Invariant: re-deletions must replay BEFORE re-creations. Within one
+        // level, the deleted list records the pre-level node of a key's first
+        // deletion (which undo restored into `objects`), while the created list
+        // records the key's final created-at-level node. A key sits in both
+        // lists only when it was deleted and then re-inserted within the level;
+        // the correct redo result is the re-created node, so the restored
+        // pre-level node must be removed first. Every other interleaving puts a
+        // key in at most one of the two lists, so this order is safe for all.
 
-        // 3. Re-delete objects that were deleted on target level
+        // 2. Re-delete objects that were deleted on target level
         if self.deleted_objects_stack.len() >= target_level {
             let delete_list = self.deleted_objects_stack[target_level - 1].clone();
             for entry in delete_list {
                 if let Some(removed_node) = self.objects.remove(&entry.key) {
                     cancelled_objects.push(removed_node.current);
                 }
+            }
+        }
+
+        // 3. Re-insert objects created on target level
+        if self.created_objects_redo_stack.len() >= target_level {
+            let created = self.created_objects_redo_stack[target_level - 1].clone();
+            for (k, node) in created {
+                restored_objects.push(node.current.clone());
+                self.objects.insert(k, node);
             }
         }
 
@@ -412,6 +429,71 @@ mod tests {
 
         assert!(db.redo(&mut cancelled, &mut restored));
         assert_eq!(db.get(&1), None);
+    }
+
+    #[test]
+    fn test_undo_redo_delete_then_reinsert_same_key() {
+        let mut db = UndoableObjects::new();
+        db.insert(1, MockItem { id: 1, name: "Old".into() });
+
+        db.generate_snapshot();
+        assert!(db.delete(&1));
+        db.insert(1, MockItem { id: 1, name: "New".into() });
+        assert_eq!(db.get(&1).unwrap().name, "New");
+
+        let mut cancelled = Vec::new();
+        let mut restored = Vec::new();
+        assert!(db.undo(&mut cancelled, &mut restored));
+        assert_eq!(db.get(&1).unwrap().name, "Old");
+
+        cancelled.clear();
+        restored.clear();
+        assert!(db.redo(&mut cancelled, &mut restored));
+        assert_eq!(
+            db.get(&1),
+            Some(&MockItem { id: 1, name: "New".into() }),
+            "redo must re-apply the deletion before the re-creation"
+        );
+        assert!(cancelled.iter().any(|item| item.name == "Old"));
+        assert!(restored.iter().any(|item| item.name == "New"));
+    }
+
+    #[test]
+    fn test_plain_insert_undo_redo_round_trip() {
+        let mut db = UndoableObjects::new();
+        db.generate_snapshot();
+        db.insert(7, MockItem { id: 7, name: "Fresh".into() });
+
+        let mut cancelled = Vec::new();
+        let mut restored = Vec::new();
+        assert!(db.undo(&mut cancelled, &mut restored));
+        assert_eq!(db.get(&7), None);
+
+        assert!(db.redo(&mut cancelled, &mut restored));
+        assert_eq!(db.get(&7), Some(&MockItem { id: 7, name: "Fresh".into() }));
+        assert_eq!(db.stack_level(), 1);
+    }
+
+    #[test]
+    fn test_mutation_after_undo_cancels_redo() {
+        let mut db = UndoableObjects::new();
+        db.insert(1, MockItem { id: 1, name: "Old".into() });
+
+        db.generate_snapshot();
+        assert!(db.delete(&1));
+        db.insert(1, MockItem { id: 1, name: "New".into() });
+
+        let mut cancelled = Vec::new();
+        let mut restored = Vec::new();
+        assert!(db.undo(&mut cancelled, &mut restored));
+        assert!(db.is_redo_possible());
+
+        // A fresh mutation after undo must cancel the pending redo.
+        db.insert(2, MockItem { id: 2, name: "Other".into() });
+        assert!(!db.is_redo_possible());
+        assert!(!db.redo(&mut cancelled, &mut restored));
+        assert_eq!(db.get(&1).unwrap().name, "Old");
+        assert_eq!(db.get(&2).unwrap().name, "Other");
     }
 
     #[test]
