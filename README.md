@@ -2,7 +2,6 @@
 
 [![Rust](https://img.shields.io/badge/rust-2021%20edition-blue.svg)](https://www.rust-lang.org)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-74%2F74%20passing-brightgreen.svg)]()
 
 A high-performance, modular rewrite of [Freerouting](https://github.com/freerouting/freerouting) in Rust, designed for multi-core CPU parallelism, low-latency execution, and drop-in integration with KiCad, LibrePCB, and Specctra DSN/SES toolchains.
 
@@ -46,34 +45,20 @@ The project is structured into 9 modular workspace crates:
 
 ---
 
-## Performance & Scaling Characterization
+## Performance
 
-Evaluated on standard IEEE/ACM DAC2020 PCB routing benchmarks and open hardware designs (Apple M3 Max / 14 logical cores):
+The performance story is being rebuilt honestly. The previous tables here (DAC2020 timings and a
+multi-core scaling curve) were not reproducible from this repository and have been removed.
 
-### Standard Benchmark Suite
+Current measured state (referee harness in `bench/`, upstream 46-fixture suite, vs the released
+Freerouting 2.3.0 jar): the Rust router is fast but routes far less than Freerouting — completion
+and DRC quality are being rebuilt first. See `docs/ROADMAP.md` for gates and
+`bench/results/` for actual numbers. Reproduce with:
 
-| Benchmark Design | Layer Count | Nets / Pins | Fast-Routing (Rust) Runtime | Status |
-|---|:---:|:---:|:---:|:---:|
-| `tutorial_board.dsn` | 2 | 438 Nets | **101 ms** | Clean / Routed |
-| `DAC2020_bm01.unrouted.dsn` | 2 | 99 Nets / 228 Pins | **419 ms** | Clean / Routed |
-| `DAC2020_bm02.unrouted.dsn` | 2 | 28 Nets / 72 Pins | **208 ms** | Clean / Routed |
-| `DAC2020_bm04.unrouted.dsn` (High-Density) | **16** | 80 Nets / 232 Pins | **315 ms** | Clean / Routed |
-| `DAC2020_bm06.unrouted.dsn` | 2 | 38 Nets / 136 Pins | **313 ms** | Clean / Routed |
-| `DAC2020_bm09.unrouted.dsn` (High-Density) | **16** | 70 Nets / 144 Pins | **420 ms** | Clean / Routed |
-| `DAC2020_bm10.unrouted.dsn` | 4 | 63 Nets / 244 Pins | **520 ms** | Clean / Routed |
-| `DAC2020_bm11.unrouted.dsn` | 4 | 35 Nets / 232 Pins | **312 ms** | Clean / Routed |
-
-### Multi-Core Scaling Speedup
-
-| Worker Threads (Rayon) | Total Suite Time | Scaling Factor |
-|:---:|:---:|:---:|
-| 1 Thread | 11.18 s | 1.00x (Baseline) |
-| 2 Threads | 7.37 s | 1.52x |
-| 4 Threads | 5.19 s | 2.15x |
-| 8 Threads | 4.12 s | 2.71x |
-| 14 Threads | 3.78 s | **2.95x** |
-
----
+```bash
+bench/fetch_fixtures.sh
+python3 bench/run_bench.py
+```
 
 ## Quick Start
 

@@ -61,8 +61,10 @@ RE_JAVA_PASS = re.compile(
     r"score of ([\d.,]+) \((\d+) unrouted and (\d+) violations\)",
     re.IGNORECASE,
 )
+# Capture only the stage word(s) right before "stage completed:", not the whole
+# log-line prefix (job ids etc.) — keys must aggregate across runs.
 RE_JAVA_STAGE = re.compile(
-    r"(\S+(?:\s\S+)*?) stage completed:.*?completed in ([\d.]+) seconds",
+    r"(\w[\w-]*(?: \w[\w-]*)?) stage completed:.*?completed in ([\d.]+) seconds",
     re.IGNORECASE,
 )
 RE_JAVA_FINAL_SCORE = re.compile(
