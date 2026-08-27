@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:37:35.269999+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue143-rpi_splitter_mod.dsn",
+  "unconnected_items": [
+    {
+      "description": "Unconnected items: Pin [VCC] and Pin [VCC] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 7.278999999999999,
+            "y": 18.847
+          },
+          "uuid": "16"
+        },
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 6.66,
+            "y": 8.021999999999998
+          },
+          "uuid": "7"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [],
+  "schematic_parity": [],
+  "quality_score": 0.0
+}

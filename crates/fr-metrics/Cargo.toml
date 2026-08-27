@@ -1,0 +1,17 @@
+[package]
+name = "fr-metrics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Near-zero-cost counters, stage timers and allocation statistics for the freerouting Rust port."
+
+[dependencies]
+
+[features]
+default = ["metrics"]
+# Counters, stage timers and the settle trace. Default ON; with the feature off
+# every public entry point is an empty `const fn` and compiles away entirely.
+metrics = []
+# Counting global allocator (`alloc_stats::CountingAllocator`). Default OFF —
+# it adds two atomic RMWs to every allocation.
+alloc-stats = []

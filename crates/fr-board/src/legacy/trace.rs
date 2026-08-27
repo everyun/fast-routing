@@ -1,6 +1,6 @@
 //! Trace / PolylineTrace item representing a routed wire on a copper layer.
 
-use crate::item::ItemHeader;
+use crate::legacy::ItemHeader;
 use fr_geometry::planar::{IntBox, IntPoint};
 
 /// A routed trace on a specific board layer.

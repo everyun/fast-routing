@@ -1,0 +1,1142 @@
+(pcb "Issue179-Autorouter_PCB1_2023-3-24.import"
+  (parser
+    (string_quote ")
+    (space_in_quoted_tokens on)
+    (generated_by_freerouting)
+  )
+  (resolution mil 1000)
+  (unit mil)
+  (structure
+    (layer "1"
+      (type signal)
+    )
+    (layer "2"
+      (type signal)
+    )
+    (boundary
+      (rect pcb -1.0 -1.0 224.5 136.5)
+    )
+    (boundary
+      (polygon signal 0
+        0.0 0.0
+        223.5 0.0
+        223.5 135.5
+        0.0 135.5
+      )
+    )
+    (via via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0 via0)
+    (rule
+      (width 1.01)
+      (clearance 0.41)
+      (clearance 0.505 (type smd_to_turn_gap))
+      (clearance 0.41 (type smd))
+      (clearance 0.4 (type ))
+      (clearance 0.4 (type $1N822))
+      (clearance 0.4 (type GND))
+      (clearance 0.4 (type $1N515))
+      (clearance 0.4 (type $1N518))
+      (clearance 0.4 (type +12V))
+      (clearance 0.4 (type $1N771))
+      (clearance 0.4 (type $1N3035))
+      (clearance 0.4 (type $1N3047))
+      (clearance 0.4 (type $1N1496))
+      (clearance 0.4 (type $1N1215))
+      (clearance 0.4 (type $1N1925))
+      (clearance 0.4 (type $1N1933))
+      (clearance 0.4 (type $1N11447))
+      (clearance 0.4 (type $1N10884))
+      (clearance 0.4 (type $1N12681))
+      (clearance 0.4 (type $1N12619))
+      (clearance 0.4 (type $1N13741))
+      (clearance 0.4 (type $1N13493))
+      (clearance 0.4 (type $1N13824))
+      (clearance 0.4 (type $1N13979))
+      (clearance 0.4 (type $1N14056))
+      (clearance 0.4 (type $1N14077))
+      (clearance 0.4 (type $1N14372))
+      (clearance 0.4 (type $1N14595))
+      (clearance 19.686 (type "board_edge"))
+    )
+    (snap_angle 
+      fortyfive_degree
+    )
+    (control
+      (via_at_smd off)
+    )
+  )
+  (placement
+    (component u1
+      (place 
+        u1 0.0 0.0 front 0
+        (pin "38e5" (clearance_class smd))
+        (pin "38e6" (clearance_class smd))
+        (pin "38e7" (clearance_class smd))
+        (pin "38e8" (clearance_class smd))
+        (pin "38e9" (clearance_class smd))
+        (pin "38e10" (clearance_class smd))
+        (pin "38e11" (clearance_class $1N13824))
+        (pin "38e12" (clearance_class GND))
+        (pin "38e13" (clearance_class $1N13979))
+        (pin "38e14" (clearance_class smd))
+        (pin "38e15" (clearance_class smd))
+        (pin "38e16" (clearance_class $1N14056))
+        (pin "38e17" (clearance_class $1N1496))
+        (pin "38e18" (clearance_class $1N1215))
+        (pin "55e5" (clearance_class $1N14056))
+        (pin "55e6" (clearance_class $1N1925))
+        (pin "55e7" (clearance_class $1N1925))
+        (pin "55e8" (clearance_class $1N14056))
+        (pin "55e9" (clearance_class $1N1933))
+        (pin "55e10" (clearance_class $1N1933))
+        (pin "55e11" (clearance_class GND))
+        (pin "55e12" (clearance_class $1N13824))
+        (pin "55e13" (clearance_class smd))
+        (pin "55e14" (clearance_class smd))
+        (pin "55e15" (clearance_class smd))
+        (pin "55e16" (clearance_class smd))
+        (pin "55e17" (clearance_class smd))
+        (pin "55e18" (clearance_class smd))
+        (pin "61e5" (clearance_class GND))
+        (pin "61e6" (clearance_class $1N14595))
+        (pin "61e7" (clearance_class $1N11447))
+        (pin "61e8" (clearance_class smd))
+        (pin "61e9" (clearance_class $1N13824))
+        (pin "61e10" (clearance_class smd))
+        (pin "61e11" (clearance_class smd))
+        (pin "61e12" (clearance_class $1N10884))
+        (pin "63e5" (clearance_class $1N14077))
+        (pin "63e6" (clearance_class GND))
+        (pin "63e7" (clearance_class $1N14595))
+        (pin "63e8" (clearance_class GND))
+        (pin "71e17" (clearance_class $1N12681))
+        (pin "71e18" (clearance_class default))
+        (pin "71e19" (clearance_class GND))
+        (pin "71e20" (clearance_class $1N13824))
+        (pin "71e21" (clearance_class $1N13493))
+        (pin "73e6" (clearance_class $1N11447))
+        (pin "73e7" (clearance_class $1N12619))
+        (pin "73e8" (clearance_class $1N13824))
+        (pin "77e5" (clearance_class $1N1215))
+        (pin "77e6" (clearance_class $1N771))
+        (pin "77e7" (clearance_class $1N822))
+        (pin "77e8" (clearance_class GND))
+        (pin "77e9" (clearance_class $1N13824))
+        (pin "77e10" (clearance_class $1N1496))
+        (pin "77e11" (clearance_class $1N3035))
+        (pin "77e12" (clearance_class $1N3047))
+        (pin "1e6" (clearance_class $1N14056))
+        (pin "1e7" (clearance_class $1N14372))
+        (pin "1e8" (clearance_class $1N13824))
+        (pin "47e7" (clearance_class $1N822))
+        (pin "47e8" (clearance_class GND))
+        (pin "49e7" (clearance_class $1N13824))
+        (pin "49e8" (clearance_class GND))
+        (pin "51e7" (clearance_class $1N13824))
+        (pin "51e8" (clearance_class GND))
+        (pin "53e7" (clearance_class $1N515))
+        (pin "53e8" (clearance_class $1N13824))
+        (pin "56e7" (clearance_class $1N518))
+        (pin "56e8" (clearance_class $1N515))
+        (pin "60e7" (clearance_class +12V))
+        (pin "60e8" (clearance_class $1N518))
+        (pin "64e7" (clearance_class $1N13824))
+        (pin "64e8" (clearance_class $1N771))
+        (pin "68e7" (clearance_class $1N771))
+        (pin "68e8" (clearance_class GND))
+        (pin "72e7" (clearance_class $1N13824))
+        (pin "72e8" (clearance_class $1N3035))
+        (pin "76e7" (clearance_class $1N3035))
+        (pin "76e8" (clearance_class GND))
+        (pin "80e7" (clearance_class GND))
+        (pin "80e8" (clearance_class $1N3047))
+        (pin "83e7" (clearance_class $1N14372))
+        (pin "83e8" (clearance_class $1N13741))
+        (pin "85e7" (clearance_class $1N14595))
+        (pin "85e8" (clearance_class $1N13824))
+        (pin "87e7" (clearance_class GND))
+        (pin "87e8" (clearance_class $1N14595))
+        (pin "89e7" (clearance_class GND))
+        (pin "89e8" (clearance_class $1N10884))
+        (pin "91e7" (clearance_class $1N13824))
+        (pin "91e8" (clearance_class $1N12619))
+        (pin "93e7" (clearance_class $1N13741))
+        (pin "93e8" (clearance_class $1N14077))
+        (pin "95e7" (clearance_class $1N14372))
+        (pin "95e8" (clearance_class GND))
+        (pin "97e7" (clearance_class GND))
+        (pin "97e8" (clearance_class $1N14595))
+        (pin "99e7" (clearance_class GND))
+        (pin "99e8" (clearance_class $1N14595))
+        (pin "101e7" (clearance_class $1N14077))
+        (pin "101e8" (clearance_class GND))
+        (pin "103e7" (clearance_class $1N14077))
+        (pin "103e8" (clearance_class GND))
+        (pin "105e7" (clearance_class $1N14077))
+        (pin "105e8" (clearance_class GND))
+        (pin "107e7" (clearance_class $1N14077))
+        (pin "107e8" (clearance_class GND))
+        (pin "109e7" (clearance_class $1N14077))
+        (pin "109e8" (clearance_class GND))
+        (pin "7" (clearance_class GND))
+      )
+    )
+  )
+  (library
+    (image u1
+      (side front)
+      (pin p38e5 "38e5" 102.73 24.12)
+      (pin p38e5 "38e6" 102.73 29.12)
+      (pin p38e5 "38e7" 102.73 34.12)
+      (pin p38e5 "38e8" 102.73 39.12)
+      (pin p38e5 "38e9" 102.73 44.12)
+      (pin p38e5 "38e10" 102.73 49.12)
+      (pin p38e5 "38e11" 102.73 54.12)
+      (pin p38e5 "38e12" 81.2 24.12)
+      (pin p38e5 "38e13" 81.2 29.12)
+      (pin p38e5 "38e14" 81.2 34.12)
+      (pin p38e5 "38e15" 81.2 39.12)
+      (pin p38e5 "38e16" 81.2 44.12)
+      (pin p38e5 "38e17" 81.2 49.12)
+      (pin p38e5 "38e18" 81.2 54.12)
+      (pin p55e5 "55e5" 164.1 36.91)
+      (pin p55e5 "55e6" 164.1 31.91)
+      (pin p55e5 "55e7" 164.1 26.91)
+      (pin p55e5 "55e8" 164.1 21.91)
+      (pin p55e5 "55e9" 164.1 16.91)
+      (pin p55e5 "55e10" 164.1 11.91)
+      (pin p55e5 "55e11" 164.1 6.91)
+      (pin p55e5 "55e12" 185.91 36.91)
+      (pin p55e5 "55e13" 185.91 31.91)
+      (pin p55e5 "55e14" 185.91 26.91)
+      (pin p55e5 "55e15" 185.91 21.91)
+      (pin p55e5 "55e16" 185.91 16.91)
+      (pin p55e5 "55e17" 185.91 11.91)
+      (pin p55e5 "55e18" 185.91 6.91)
+      (pin p61e5 "61e5" 122.43 39.24)
+      (pin p61e5 "61e6" 122.43 34.24)
+      (pin p61e5 "61e7" 122.43 29.24)
+      (pin p61e5 "61e8" 122.43 24.24)
+      (pin p61e5 "61e9" 144.26 39.24)
+      (pin p61e5 "61e10" 144.26 34.24)
+      (pin p61e5 "61e11" 144.26 29.24)
+      (pin p61e5 "61e12" 144.26 24.24)
+      (pin p63e5 "63e5" 42.54 104.13)
+      (pin p63e5 "63e6" 42.54 114.13)
+      (pin p63e5 "63e7" 7.5 114.13)
+      (pin p63e5 "63e8" 7.5 104.13)
+      (pin p71e17 "71e17" 9.38 81.98)
+      (pin p71e17 "71e18" 9.38 42.61)
+      (pin p71e17 "71e19" 49.54 42.61)
+      (pin p71e17 "71e20" 49.54 81.98)
+      (pin p71e17 "71e21" 59.38 62.3)
+      (pin p73e6 "73e6" 136.78 57.02)
+      (pin p73e6 "73e7" 144.26 57.02)
+      (pin p73e6 "73e8" 140.52 64.9)
+      (pin p77e5 "77e5" 102.12 73.06)
+      (pin p77e5 "77e6" 102.12 78.06)
+      (pin p77e5 "77e7" 102.12 83.06)
+      (pin p77e5 "77e8" 102.12 88.06)
+      (pin p77e5 "77e9" 81.0 73.06)
+      (pin p77e5 "77e10" 81.0 78.06)
+      (pin p77e5 "77e11" 81.0 83.06)
+      (pin p77e5 "77e12" 81.0 88.06)
+      (pin p1e6 "1e6" 186.83 54.17)
+      (pin p1e6 "1e7" 186.83 61.65)
+      (pin p1e6 "1e8" 178.95 57.91)
+      (pin p47e7 "47e7" 120.7 56.75)
+      (pin p47e7 "47e8" 120.7 62.68)
+      (pin p49e7 "49e7" 142.42 87.35)
+      (pin p49e7 "49e8" 142.42 81.84)
+      (pin p51e7 "51e7" 162.96 114.27)
+      (pin p51e7 "51e8" 157.03 114.27)
+      (pin p53e7 "53e7" 159.1 81.46)
+      (pin p53e7 "53e8" 165.03 81.46)
+      (pin p51e7 "56e7" 165.03 97.86)
+      (pin p51e7 "56e8" 159.1 97.86)
+      (pin p51e7 "60e7" 187.14 94.12)
+      (pin p51e7 "60e8" 181.21 94.12)
+      (pin p64e7 "64e7" 79.63 110.32)
+      (pin p64e7 "64e8" 79.63 104.39)
+      (pin p64e7 "68e7" 96.03 110.32)
+      (pin p64e7 "68e8" 96.03 104.39)
+      (pin p51e7 "72e7" 41.11 25.58)
+      (pin p51e7 "72e8" 35.17 25.58)
+      (pin p51e7 "76e7" 13.61 8.68)
+      (pin p51e7 "76e8" 7.67 8.68)
+      (pin p64e7 "80e7" 58.76 106.36)
+      (pin p64e7 "80e8" 58.76 100.43)
+      (pin p53e7 "83e7" 119.78 81.46)
+      (pin p53e7 "83e8" 125.72 81.46)
+      (pin p53e7 "85e7" 134.93 114.27)
+      (pin p53e7 "85e8" 140.86 114.27)
+      (pin p87e7 "87e7" 72.0 12.08)
+      (pin p87e7 "87e8" 66.48 12.08)
+      (pin p87e7 "89e7" 137.76 12.0)
+      (pin p87e7 "89e8" 132.24 12.0)
+      (pin p64e7 "91e7" 162.39 60.32)
+      (pin p64e7 "91e8" 162.39 54.39)
+      (pin p53e7 "93e7" 119.78 97.86)
+      (pin p53e7 "93e8" 125.72 97.86)
+      (pin p51e7 "95e7" 187.14 77.72)
+      (pin p51e7 "95e8" 181.21 77.72)
+      (pin p97e7 "97e7" 86.03 11.6)
+      (pin p97e7 "97e8" 91.54 11.6)
+      (pin p87e7 "99e7" 118.32 114.66)
+      (pin p87e7 "99e8" 112.81 114.66)
+      (pin p101e7 "101e7" 49.79 7.5)
+      (pin p101e7 "101e8" 49.79 13.01)
+      (pin p49e7 "103e7" 204.42 14.01)
+      (pin p49e7 "103e8" 204.42 8.5)
+      (pin p97e7 "105e7" 132.24 5.0)
+      (pin p97e7 "105e8" 137.76 5.0)
+      (pin p49e7 "107e7" 203.85 60.39)
+      (pin p49e7 "107e8" 203.85 54.88)
+      (pin p87e7 "109e7" 13.57 15.08)
+      (pin p87e7 "109e8" 8.06 15.08)
+      (pin p7 "7" 137.76 8.5)
+    )
+    (padstack via0
+      (shape
+        (circle "1" 2.4 0.0 0.0)
+      )
+      (shape
+        (circle "2" 2.4 0.0 0.0)
+      )
+    )
+    (padstack p38e5
+      (shape
+        (polygon "1" 0
+          -2.7 -1.17
+          2.7 -1.17
+          2.98 -1.14
+          3.25 -1.04
+          3.48 -0.88
+          3.67 -0.67
+          3.8 -0.42
+          3.86 -0.14
+          3.86 0.14
+          3.8 0.42
+          3.67 0.67
+          3.48 0.88
+          3.25 1.04
+          2.98 1.14
+          2.7 1.17
+          -2.7 1.17
+          -2.98 1.14
+          -3.25 1.04
+          -3.48 0.88
+          -3.67 0.67
+          -3.8 0.42
+          -3.86 0.14
+          -3.86 -0.14
+          -3.8 -0.42
+          -3.67 -0.67
+          -3.48 -0.88
+          -3.25 -1.04
+          -2.98 -1.14
+        )
+      )
+    )
+    (padstack p55e5
+      (shape
+        (polygon "1" 0
+          -2.88 -1.13
+          2.88 -1.13
+          3.17 -1.09
+          3.45 -0.98
+          3.68 -0.8
+          3.86 -0.56
+          3.97 -0.29
+          4.01 0.0
+          3.97 0.29
+          3.86 0.56
+          3.68 0.8
+          3.45 0.98
+          3.17 1.09
+          2.88 1.13
+          -2.88 1.13
+          -3.17 1.09
+          -3.45 0.98
+          -3.68 0.8
+          -3.86 0.56
+          -3.97 0.29
+          -4.01 0.0
+          -3.97 -0.29
+          -3.86 -0.56
+          -3.68 -0.8
+          -3.45 -0.98
+          -3.17 -1.09
+        )
+      )
+    )
+    (padstack p61e5
+      (shape
+        (polygon "1" 0
+          -2.87 -1.16
+          2.87 -1.16
+          3.17 -1.12
+          3.45 -1.0
+          3.69 -0.82
+          3.87 -0.58
+          3.99 -0.3
+          4.03 0.0
+          3.99 0.3
+          3.87 0.58
+          3.69 0.82
+          3.45 1.0
+          3.17 1.12
+          2.87 1.16
+          -2.87 1.16
+          -3.17 1.12
+          -3.45 1.0
+          -3.69 0.82
+          -3.87 0.58
+          -3.99 0.3
+          -4.03 0.0
+          -3.99 -0.3
+          -3.87 -0.58
+          -3.69 -0.82
+          -3.45 -1.0
+          -3.17 -1.12
+        )
+      )
+    )
+    (padstack p63e5
+      (shape
+        (rect "1" -5.12 -2.8 5.12 2.8)
+      )
+    )
+    (padstack p71e17
+      (shape
+        (circle "1" 9.84 0.0 0.0)
+      )
+      (shape
+        (circle "2" 9.84 0.0 0.0)
+      )
+    )
+    (padstack p73e6
+      (shape
+        (rect "1" -1.38 -2.46 1.38 2.46)
+      )
+    )
+    (padstack p77e5
+      (shape
+        (polygon "1" 0
+          -2.43 -1.24
+          2.43 -1.24
+          2.73 -1.2
+          3.01 -1.1
+          3.25 -0.93
+          3.45 -0.7
+          3.59 -0.44
+          3.66 -0.15
+          3.66 0.15
+          3.59 0.44
+          3.45 0.7
+          3.25 0.93
+          3.01 1.1
+          2.73 1.2
+          2.43 1.24
+          -2.43 1.24
+          -2.73 1.2
+          -3.01 1.1
+          -3.25 0.93
+          -3.45 0.7
+          -3.59 0.44
+          -3.66 0.15
+          -3.66 -0.15
+          -3.59 -0.44
+          -3.45 -0.7
+          -3.25 -0.93
+          -3.01 -1.1
+          -2.73 -1.2
+        )
+      )
+    )
+    (padstack p1e6
+      (shape
+        (rect "1" -2.46 -1.38 2.46 1.38)
+      )
+    )
+    (padstack p47e7
+      (shape
+        (rect "1" -1.7 -1.59 1.7 1.59)
+      )
+    )
+    (padstack p49e7
+      (shape
+        (rect "1" -1.77 -1.57 1.77 1.57)
+      )
+    )
+    (padstack p51e7
+      (shape
+        (rect "1" -1.59 -1.7 1.59 1.7)
+      )
+    )
+    (padstack p53e7
+      (shape
+        (rect "1" -1.59 -1.7 1.59 1.7)
+      )
+    )
+    (padstack p64e7
+      (shape
+        (rect "1" -1.7 -1.59 1.7 1.59)
+      )
+    )
+    (padstack p87e7
+      (shape
+        (rect "1" -1.57 -1.77 1.57 1.77)
+      )
+    )
+    (padstack p97e7
+      (shape
+        (rect "1" -1.57 -1.77 1.57 1.77)
+      )
+    )
+    (padstack p101e7
+      (shape
+        (rect "1" -1.77 -1.57 1.77 1.57)
+      )
+    )
+    (padstack p7
+      (shape
+        (polygon "1" 0
+          2147483.647 2147483.647
+          2147483.647 2147483.647
+        )
+      )
+    )
+  )
+  (network
+    (net GND 1
+      (pins
+        u1-"7"
+        u1-"109e8"
+        u1-"107e8"
+        u1-"105e8"
+        u1-"103e8"
+        u1-"101e8"
+        u1-"99e7"
+        u1-"97e7"
+        u1-"95e8"
+        u1-"89e7"
+        u1-"87e7"
+        u1-"80e7"
+        u1-"76e8"
+        u1-"68e8"
+        u1-"51e8"
+        u1-"49e8"
+        u1-"47e8"
+        u1-"77e8"
+        u1-"71e19"
+        u1-"63e8"
+        u1-"63e6"
+        u1-"61e5"
+        u1-"55e11"
+        u1-"38e12"
+      )
+    )
+    (net $1N14077 1
+      (pins
+        u1-"109e7"
+        u1-"107e7"
+        u1-"105e7"
+        u1-"103e7"
+        u1-"101e7"
+        u1-"93e8"
+        u1-"63e5"
+      )
+    )
+    (net $1N3035 1
+      (pins
+        u1-"76e7"
+        u1-"72e8"
+        u1-"77e11"
+      )
+    )
+    (net $1N1215 1
+      (pins
+        u1-"77e5"
+        u1-"38e18"
+      )
+    )
+    (net $1N1496 1
+      (pins
+        u1-"77e10"
+        u1-"38e17"
+      )
+    )
+    (net $1N14056 1
+      (pins
+        u1-"1e6"
+        u1-"55e8"
+        u1-"55e5"
+        u1-"38e16"
+      )
+    )
+    (net $1N13979 1
+      (pins
+        u1-"38e13"
+      )
+    )
+    (net $1N13824 1
+      (pins
+        u1-"91e7"
+        u1-"85e8"
+        u1-"72e7"
+        u1-"64e7"
+        u1-"53e8"
+        u1-"51e7"
+        u1-"49e7"
+        u1-"1e8"
+        u1-"77e9"
+        u1-"73e8"
+        u1-"71e20"
+        u1-"61e9"
+        u1-"55e12"
+        u1-"38e11"
+      )
+    )
+    (net $1N1925 1
+      (pins
+        u1-"55e7"
+        u1-"55e6"
+      )
+    )
+    (net $1N1933 1
+      (pins
+        u1-"55e10"
+        u1-"55e9"
+      )
+    )
+    (net $1N14595 1
+      (pins
+        u1-"99e8"
+        u1-"97e8"
+        u1-"87e8"
+        u1-"85e7"
+        u1-"63e7"
+        u1-"61e6"
+      )
+    )
+    (net $1N11447 1
+      (pins
+        u1-"73e6"
+        u1-"61e7"
+      )
+    )
+    (net $1N10884 1
+      (pins
+        u1-"89e8"
+        u1-"61e12"
+      )
+    )
+    (net $1N13493 1
+      (pins
+        u1-"71e21"
+      )
+    )
+    (net $1N12681 1
+      (pins
+        u1-"71e17"
+      )
+    )
+    (net $1N12619 1
+      (pins
+        u1-"91e8"
+        u1-"73e7"
+      )
+    )
+    (net $1N771 1
+      (pins
+        u1-"68e7"
+        u1-"64e8"
+        u1-"77e6"
+      )
+    )
+    (net $1N822 1
+      (pins
+        u1-"47e7"
+        u1-"77e7"
+      )
+    )
+    (net $1N3047 1
+      (pins
+        u1-"80e8"
+        u1-"77e12"
+      )
+    )
+    (net $1N14372 1
+      (pins
+        u1-"95e7"
+        u1-"83e7"
+        u1-"1e7"
+      )
+    )
+    (net $1N515 1
+      (pins
+        u1-"56e8"
+        u1-"53e7"
+      )
+    )
+    (net $1N518 1
+      (pins
+        u1-"60e8"
+        u1-"56e7"
+      )
+    )
+    (net +12V 1
+      (pins
+        u1-"60e7"
+      )
+    )
+    (net $1N13741 1
+      (pins
+        u1-"93e7"
+        u1-"83e8"
+      )
+    )
+    (via 
+      via0 via0 default
+    )
+    (via 
+      "via0-" via0 
+    )
+    (via 
+      "via0-$1N822" via0 $1N822
+    )
+    (via 
+      "via0-GND" via0 GND
+    )
+    (via 
+      "via0-$1N515" via0 $1N515
+    )
+    (via 
+      "via0-$1N518" via0 $1N518
+    )
+    (via 
+      "via0-+12V" via0 +12V
+    )
+    (via 
+      "via0-$1N771" via0 $1N771
+    )
+    (via 
+      "via0-$1N3035" via0 $1N3035
+    )
+    (via 
+      "via0-$1N3047" via0 $1N3047
+    )
+    (via 
+      "via0-$1N1496" via0 $1N1496
+    )
+    (via 
+      "via0-$1N1215" via0 $1N1215
+    )
+    (via 
+      "via0-$1N1925" via0 $1N1925
+    )
+    (via 
+      "via0-$1N1933" via0 $1N1933
+    )
+    (via 
+      "via0-$1N11447" via0 $1N11447
+    )
+    (via 
+      "via0-$1N10884" via0 $1N10884
+    )
+    (via 
+      "via0-$1N12681" via0 $1N12681
+    )
+    (via 
+      "via0-$1N12619" via0 $1N12619
+    )
+    (via 
+      "via0-$1N13741" via0 $1N13741
+    )
+    (via 
+      "via0-$1N13493" via0 $1N13493
+    )
+    (via 
+      "via0-$1N13824" via0 $1N13824
+    )
+    (via 
+      "via0-$1N13979" via0 $1N13979
+    )
+    (via 
+      "via0-$1N14056" via0 $1N14056
+    )
+    (via 
+      "via0-$1N14077" via0 $1N14077
+    )
+    (via 
+      "via0-$1N14372" via0 $1N14372
+    )
+    (via 
+      "via0-$1N14595" via0 $1N14595
+    )
+    (via_rule
+      default via0
+    )
+    (via_rule
+       "via0-"
+    )
+    (via_rule
+      $1N822 "via0-$1N822"
+    )
+    (via_rule
+      GND "via0-GND"
+    )
+    (via_rule
+      $1N515 "via0-$1N515"
+    )
+    (via_rule
+      $1N518 "via0-$1N518"
+    )
+    (via_rule
+      +12V "via0-+12V"
+    )
+    (via_rule
+      $1N771 "via0-$1N771"
+    )
+    (via_rule
+      $1N3035 "via0-$1N3035"
+    )
+    (via_rule
+      $1N3047 "via0-$1N3047"
+    )
+    (via_rule
+      $1N1496 "via0-$1N1496"
+    )
+    (via_rule
+      $1N1215 "via0-$1N1215"
+    )
+    (via_rule
+      $1N1925 "via0-$1N1925"
+    )
+    (via_rule
+      $1N1933 "via0-$1N1933"
+    )
+    (via_rule
+      $1N11447 "via0-$1N11447"
+    )
+    (via_rule
+      $1N10884 "via0-$1N10884"
+    )
+    (via_rule
+      $1N12681 "via0-$1N12681"
+    )
+    (via_rule
+      $1N12619 "via0-$1N12619"
+    )
+    (via_rule
+      $1N13741 "via0-$1N13741"
+    )
+    (via_rule
+      $1N13493 "via0-$1N13493"
+    )
+    (via_rule
+      $1N13824 "via0-$1N13824"
+    )
+    (via_rule
+      $1N13979 "via0-$1N13979"
+    )
+    (via_rule
+      $1N14056 "via0-$1N14056"
+    )
+    (via_rule
+      $1N14077 "via0-$1N14077"
+    )
+    (via_rule
+      $1N14372 "via0-$1N14372"
+    )
+    (via_rule
+      $1N14595 "via0-$1N14595"
+    )
+    (class default
+      (clearance_class default)
+      (via_rule default)
+      (rule
+        (width 1.01)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class 
+      (clearance_class )
+      (via_rule )
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N822
+      $1N822
+      (clearance_class $1N822)
+      (via_rule $1N822)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class GND
+      GND
+      (clearance_class GND)
+      (via_rule GND)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N515
+      $1N515
+      (clearance_class $1N515)
+      (via_rule $1N515)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N518
+      $1N518
+      (clearance_class $1N518)
+      (via_rule $1N518)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class +12V
+      +12V
+      (clearance_class +12V)
+      (via_rule +12V)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N771
+      $1N771
+      (clearance_class $1N771)
+      (via_rule $1N771)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N3035
+      $1N3035
+      (clearance_class $1N3035)
+      (via_rule $1N3035)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N3047
+      $1N3047
+      (clearance_class $1N3047)
+      (via_rule $1N3047)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N1496
+      $1N1496
+      (clearance_class $1N1496)
+      (via_rule $1N1496)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N1215
+      $1N1215
+      (clearance_class $1N1215)
+      (via_rule $1N1215)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N1925
+      $1N1925
+      (clearance_class $1N1925)
+      (via_rule $1N1925)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N1933
+      $1N1933
+      (clearance_class $1N1933)
+      (via_rule $1N1933)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N11447
+      $1N11447
+      (clearance_class $1N11447)
+      (via_rule $1N11447)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N10884
+      $1N10884
+      (clearance_class $1N10884)
+      (via_rule $1N10884)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N12681
+      $1N12681
+      (clearance_class $1N12681)
+      (via_rule $1N12681)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N12619
+      $1N12619
+      (clearance_class $1N12619)
+      (via_rule $1N12619)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N13741
+      $1N13741
+      (clearance_class $1N13741)
+      (via_rule $1N13741)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N13493
+      $1N13493
+      (clearance_class $1N13493)
+      (via_rule $1N13493)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N13824
+      $1N13824
+      (clearance_class $1N13824)
+      (via_rule $1N13824)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N13979
+      $1N13979
+      (clearance_class $1N13979)
+      (via_rule $1N13979)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N14056
+      $1N14056
+      (clearance_class $1N14056)
+      (via_rule $1N14056)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N14077
+      $1N14077
+      (clearance_class $1N14077)
+      (via_rule $1N14077)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N14372
+      $1N14372
+      (clearance_class $1N14372)
+      (via_rule $1N14372)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+    (class $1N14595
+      $1N14595
+      (clearance_class $1N14595)
+      (via_rule $1N14595)
+      (rule
+        (width 1.0)
+      )
+      (circuit 
+        (use_layer 1 2)
+      )
+    )
+  )
+  (wiring
+  )
+)

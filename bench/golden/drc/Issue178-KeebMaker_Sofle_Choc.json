@@ -1,0 +1,4354 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:39:12.190758+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue178-KeebMaker_Sofle_Choc.dsn",
+  "unconnected_items": [
+    {
+      "description": "Unconnected items: Pin [Net-(D1-Pad2)] and Pin [Net-(D1-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D1-Pad2)]",
+          "pos": {
+            "x": 362.124,
+            "y": -117.42360000000001
+          },
+          "uuid": "4271"
+        },
+        {
+          "description": "Pin [Net-(D1-Pad2)]",
+          "pos": {
+            "x": 345.694,
+            "y": -123.2466
+          },
+          "uuid": "157"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row4] and Pin [row4] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row4]",
+          "pos": {
+            "x": 235.7784,
+            "y": -187.976
+          },
+          "uuid": "5333"
+        },
+        {
+          "description": "Pin [row4]",
+          "pos": {
+            "x": 292.7434,
+            "y": -139.626
+          },
+          "uuid": "4983"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D2-Pad2)] and Pin [Net-(D2-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D2-Pad2)]",
+          "pos": {
+            "x": 364.664,
+            "y": -117.42660000000001
+          },
+          "uuid": "4280"
+        },
+        {
+          "description": "Pin [Net-(D2-Pad2)]",
+          "pos": {
+            "x": 364.744,
+            "y": -120.7466
+          },
+          "uuid": "1958"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D3-Pad2)] and Pin [Net-(D3-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D3-Pad2)]",
+          "pos": {
+            "x": 383.764,
+            "y": -114.92660000000001
+          },
+          "uuid": "4289"
+        },
+        {
+          "description": "Pin [Net-(D3-Pad2)]",
+          "pos": {
+            "x": 383.794,
+            "y": -118.2466
+          },
+          "uuid": "224"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row0] and Pin [row0] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row0]",
+          "pos": {
+            "x": 178.5784,
+            "y": -119.086
+          },
+          "uuid": "5679"
+        },
+        {
+          "description": "Pin [row0]",
+          "pos": {
+            "x": 197.67839999999998,
+            "y": -118.956
+          },
+          "uuid": "5513"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D4-Pad2)] and Pin [Net-(D4-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D4-Pad2)]",
+          "pos": {
+            "x": 402.764,
+            "y": -117.42660000000001
+          },
+          "uuid": "4298"
+        },
+        {
+          "description": "Pin [Net-(D4-Pad2)]",
+          "pos": {
+            "x": 402.844,
+            "y": -120.7466
+          },
+          "uuid": "1044"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row1] and Pin [row1] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row1]",
+          "pos": {
+            "x": 254.8784,
+            "y": -133.286
+          },
+          "uuid": "5688"
+        },
+        {
+          "description": "Pin [row1]",
+          "pos": {
+            "x": 216.7784,
+            "y": -133.186
+          },
+          "uuid": "5605"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D5-Pad2)] and Pin [Net-(D5-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D5-Pad2)]",
+          "pos": {
+            "x": 421.864,
+            "y": -122.1966
+          },
+          "uuid": "4307"
+        },
+        {
+          "description": "Pin [Net-(D5-Pad2)]",
+          "pos": {
+            "x": 421.894,
+            "y": -125.6466
+          },
+          "uuid": "1113"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row2] and Pin [row2] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row2]",
+          "pos": {
+            "x": 257.4184,
+            "y": -152.286
+          },
+          "uuid": "5584"
+        },
+        {
+          "description": "Pin [row2]",
+          "pos": {
+            "x": 254.8784,
+            "y": -152.286
+          },
+          "uuid": "5451"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D6-Pad2)] and Pin [Net-(D6-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D6-Pad2)]",
+          "pos": {
+            "x": 440.964,
+            "y": -122.3266
+          },
+          "uuid": "4316"
+        },
+        {
+          "description": "Pin [Net-(D6-Pad2)]",
+          "pos": {
+            "x": 440.944,
+            "y": -125.6466
+          },
+          "uuid": "1448"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row3] and Pin [row3] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row3]",
+          "pos": {
+            "x": 216.7784,
+            "y": -171.386
+          },
+          "uuid": "5697"
+        },
+        {
+          "description": "Pin [row3]",
+          "pos": {
+            "x": 254.8784,
+            "y": -171.386
+          },
+          "uuid": "5551"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D7-Pad2)] and Pin [Net-(D7-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D7-Pad2)]",
+          "pos": {
+            "x": 362.124,
+            "y": -136.5266
+          },
+          "uuid": "4361"
+        },
+        {
+          "description": "Pin [Net-(D7-Pad2)]",
+          "pos": {
+            "x": 345.694,
+            "y": -142.3466
+          },
+          "uuid": "1515"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D8-Pad2)] and Pin [Net-(D8-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D8-Pad2)]",
+          "pos": {
+            "x": 364.664,
+            "y": -136.5266
+          },
+          "uuid": "4370"
+        },
+        {
+          "description": "Pin [Net-(D8-Pad2)]",
+          "pos": {
+            "x": 364.744,
+            "y": -139.7966
+          },
+          "uuid": "1180"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D9-Pad2)] and Pin [Net-(D9-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D9-Pad2)]",
+          "pos": {
+            "x": 383.764,
+            "y": -134.0166
+          },
+          "uuid": "4379"
+        },
+        {
+          "description": "Pin [Net-(D9-Pad2)]",
+          "pos": {
+            "x": 383.794,
+            "y": -137.2966
+          },
+          "uuid": "1314"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D10-Pad2)] and Pin [Net-(D10-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D10-Pad2)]",
+          "pos": {
+            "x": 402.764,
+            "y": -136.4266
+          },
+          "uuid": "4388"
+        },
+        {
+          "description": "Pin [Net-(D10-Pad2)]",
+          "pos": {
+            "x": 402.844,
+            "y": -139.7966
+          },
+          "uuid": "1247"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D11-Pad2)] and Pin [Net-(D11-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D11-Pad2)]",
+          "pos": {
+            "x": 421.864,
+            "y": -141.22660000000002
+          },
+          "uuid": "4397"
+        },
+        {
+          "description": "Pin [Net-(D11-Pad2)]",
+          "pos": {
+            "x": 421.894,
+            "y": -144.69660000000002
+          },
+          "uuid": "1623"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D12-Pad2)] and Pin [Net-(D12-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D12-Pad2)]",
+          "pos": {
+            "x": 440.864,
+            "y": -141.22660000000002
+          },
+          "uuid": "4406"
+        },
+        {
+          "description": "Pin [Net-(D12-Pad2)]",
+          "pos": {
+            "x": 440.944,
+            "y": -144.69660000000002
+          },
+          "uuid": "843"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D13-Pad2)] and Pin [Net-(D13-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D13-Pad2)]",
+          "pos": {
+            "x": 362.124,
+            "y": -155.5266
+          },
+          "uuid": "4325"
+        },
+        {
+          "description": "Pin [Net-(D13-Pad2)]",
+          "pos": {
+            "x": 345.694,
+            "y": -161.3466
+          },
+          "uuid": "291"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D14-Pad2)] and Pin [Net-(D14-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D14-Pad2)]",
+          "pos": {
+            "x": 364.664,
+            "y": -155.5266
+          },
+          "uuid": "4523"
+        },
+        {
+          "description": "Pin [Net-(D14-Pad2)]",
+          "pos": {
+            "x": 364.744,
+            "y": -158.8466
+          },
+          "uuid": "358"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D15-Pad2)] and Pin [Net-(D15-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D15-Pad2)]",
+          "pos": {
+            "x": 383.764,
+            "y": -153.1166
+          },
+          "uuid": "4424"
+        },
+        {
+          "description": "Pin [Net-(D15-Pad2)]",
+          "pos": {
+            "x": 383.794,
+            "y": -156.3466
+          },
+          "uuid": "1891"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D16-Pad2)] and Pin [Net-(D16-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D16-Pad2)]",
+          "pos": {
+            "x": 402.764,
+            "y": -155.5266
+          },
+          "uuid": "4433"
+        },
+        {
+          "description": "Pin [Net-(D16-Pad2)]",
+          "pos": {
+            "x": 402.844,
+            "y": -158.8466
+          },
+          "uuid": "1381"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D17-Pad2)] and Pin [Net-(D17-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D17-Pad2)]",
+          "pos": {
+            "x": 421.864,
+            "y": -160.4266
+          },
+          "uuid": "4442"
+        },
+        {
+          "description": "Pin [Net-(D17-Pad2)]",
+          "pos": {
+            "x": 421.894,
+            "y": -163.7466
+          },
+          "uuid": "1757"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D18-Pad2)] and Pin [Net-(D18-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D18-Pad2)]",
+          "pos": {
+            "x": 440.864,
+            "y": -160.4266
+          },
+          "uuid": "4451"
+        },
+        {
+          "description": "Pin [Net-(D18-Pad2)]",
+          "pos": {
+            "x": 440.944,
+            "y": -163.7466
+          },
+          "uuid": "910"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D19-Pad2)] and Pin [Net-(D19-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D19-Pad2)]",
+          "pos": {
+            "x": 362.124,
+            "y": -174.6266
+          },
+          "uuid": "4334"
+        },
+        {
+          "description": "Pin [Net-(D19-Pad2)]",
+          "pos": {
+            "x": 345.694,
+            "y": -180.3966
+          },
+          "uuid": "425"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D20-Pad2)] and Pin [Net-(D20-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D20-Pad2)]",
+          "pos": {
+            "x": 364.664,
+            "y": -174.6266
+          },
+          "uuid": "4487"
+        },
+        {
+          "description": "Pin [Net-(D20-Pad2)]",
+          "pos": {
+            "x": 364.744,
+            "y": -177.8966
+          },
+          "uuid": "2025"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D21-Pad2)] and Pin [Net-(D21-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D21-Pad2)]",
+          "pos": {
+            "x": 383.764,
+            "y": -172.1166
+          },
+          "uuid": "4496"
+        },
+        {
+          "description": "Pin [Net-(D21-Pad2)]",
+          "pos": {
+            "x": 383.794,
+            "y": -175.3966
+          },
+          "uuid": "492"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D22-Pad2)] and Pin [Net-(D22-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D22-Pad2)]",
+          "pos": {
+            "x": 402.764,
+            "y": -174.6266
+          },
+          "uuid": "4505"
+        },
+        {
+          "description": "Pin [Net-(D22-Pad2)]",
+          "pos": {
+            "x": 402.844,
+            "y": -177.8966
+          },
+          "uuid": "1690"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D23-Pad2)] and Pin [Net-(D23-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D23-Pad2)]",
+          "pos": {
+            "x": 421.864,
+            "y": -179.4266
+          },
+          "uuid": "4514"
+        },
+        {
+          "description": "Pin [Net-(D23-Pad2)]",
+          "pos": {
+            "x": 421.894,
+            "y": -182.7966
+          },
+          "uuid": "559"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D24-Pad2)] and Pin [Net-(D24-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D24-Pad2)]",
+          "pos": {
+            "x": 440.914,
+            "y": -179.4266
+          },
+          "uuid": "4478"
+        },
+        {
+          "description": "Pin [Net-(D24-Pad2)]",
+          "pos": {
+            "x": 440.944,
+            "y": -182.7966
+          },
+          "uuid": "977"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D26-Pad2)] and Pin [Net-(D26-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D26-Pad2)]",
+          "pos": {
+            "x": 325.26984999999996,
+            "y": -195.4566
+          },
+          "uuid": "4352"
+        },
+        {
+          "description": "Pin [Net-(D26-Pad2)]",
+          "pos": {
+            "x": 322.7439,
+            "y": -197.60525
+          },
+          "uuid": "776"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D27-Pad2)] and Pin [Net-(D27-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D27-Pad2)]",
+          "pos": {
+            "x": 342.4739,
+            "y": -200.29964999999999
+          },
+          "uuid": "4415"
+        },
+        {
+          "description": "Pin [Net-(D27-Pad2)]",
+          "pos": {
+            "x": 343.99655,
+            "y": -203.66055
+          },
+          "uuid": "2094"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D28-Pad2)] and Pin [Net-(D28-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D28-Pad2)]",
+          "pos": {
+            "x": 364.664,
+            "y": -193.6266
+          },
+          "uuid": "4460"
+        },
+        {
+          "description": "Pin [Net-(D28-Pad2)]",
+          "pos": {
+            "x": 364.744,
+            "y": -196.94660000000002
+          },
+          "uuid": "1824"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [VCC] and Pin [VCC] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 389.59709999999995,
+            "y": -109.0116
+          },
+          "uuid": "5744"
+        },
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 427.6971,
+            "y": -173.6636
+          },
+          "uuid": "5732"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [GND] and Pin [GND] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 394.6971,
+            "y": -110.5116
+          },
+          "uuid": "5742"
+        },
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 432.7971,
+            "y": -175.1636
+          },
+          "uuid": "5730"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col0] and Pin [col0] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col0]",
+          "pos": {
+            "x": 277.5034,
+            "y": -126.926
+          },
+          "uuid": "4989"
+        },
+        {
+          "description": "Pin [col0]",
+          "pos": {
+            "x": 211.6984,
+            "y": -199.306
+          },
+          "uuid": "3787"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col1] and Pin [col1] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col1]",
+          "pos": {
+            "x": 277.5034,
+            "y": -129.466
+          },
+          "uuid": "4988"
+        },
+        {
+          "description": "Pin [col1]",
+          "pos": {
+            "x": 230.7484,
+            "y": -196.806
+          },
+          "uuid": "3653"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col2] and Pin [col2] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col2]",
+          "pos": {
+            "x": 277.5034,
+            "y": -132.006
+          },
+          "uuid": "4987"
+        },
+        {
+          "description": "Pin [col2]",
+          "pos": {
+            "x": 211.6984,
+            "y": -161.206
+          },
+          "uuid": "3988"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col3] and Pin [col3] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col3]",
+          "pos": {
+            "x": 277.5034,
+            "y": -134.546
+          },
+          "uuid": "4986"
+        },
+        {
+          "description": "Pin [col3]",
+          "pos": {
+            "x": 230.7484,
+            "y": -120.606
+          },
+          "uuid": "3921"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col4] and Pin [col4] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col4]",
+          "pos": {
+            "x": 277.5034,
+            "y": -137.086
+          },
+          "uuid": "4985"
+        },
+        {
+          "description": "Pin [col4]",
+          "pos": {
+            "x": 249.7984,
+            "y": -142.156
+          },
+          "uuid": "4066"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [SDA] and Pin [SDA] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [SDA]",
+          "pos": {
+            "x": 289.4234,
+            "y": -144.256
+          },
+          "uuid": "5460"
+        },
+        {
+          "description": "Pin [SDA]",
+          "pos": {
+            "x": 292.7434,
+            "y": -121.846
+          },
+          "uuid": "4976"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [LED] and Pin [LED] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [LED]",
+          "pos": {
+            "x": 195.6807,
+            "y": -132.31179999999998
+          },
+          "uuid": "5146"
+        },
+        {
+          "description": "Pin [LED]",
+          "pos": {
+            "x": 292.7434,
+            "y": -111.686
+          },
+          "uuid": "4972"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [SCL] and Pin [SCL] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [SCL]",
+          "pos": {
+            "x": 286.88340000000005,
+            "y": -144.256
+          },
+          "uuid": "5461"
+        },
+        {
+          "description": "Pin [SCL]",
+          "pos": {
+            "x": 292.7434,
+            "y": -124.386
+          },
+          "uuid": "4977"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [RESET] and Pin [RESET] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [RESET]",
+          "pos": {
+            "x": 277.5034,
+            "y": -116.766
+          },
+          "uuid": "4993"
+        },
+        {
+          "description": "Pin [RESET]",
+          "pos": {
+            "x": 296.1234,
+            "y": -150.406
+          },
+          "uuid": "4212"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D29-Pad2)] and Pin [Net-(D29-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D29-Pad2)]",
+          "pos": {
+            "x": 383.764,
+            "y": -191.2166
+          },
+          "uuid": "4469"
+        },
+        {
+          "description": "Pin [Net-(D29-Pad2)]",
+          "pos": {
+            "x": 383.794,
+            "y": -194.44660000000002
+          },
+          "uuid": "709"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [DATA] and Pin [DATA] (3 total items in net)",
+      "items": [
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 292.7434,
+            "y": -114.226
+          },
+          "uuid": "4973"
+        },
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 291.9234,
+            "y": -157.606
+          },
+          "uuid": "3051"
+        },
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 291.9234,
+            "y": -157.606
+          },
+          "uuid": "3050"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D30-Pad2)] and Pin [Net-(D30-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D30-Pad2)]",
+          "pos": {
+            "x": 402.764,
+            "y": -193.72660000000002
+          },
+          "uuid": "4532"
+        },
+        {
+          "description": "Pin [Net-(D30-Pad2)]",
+          "pos": {
+            "x": 402.844,
+            "y": -196.94660000000002
+          },
+          "uuid": "626"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCB] and Pin [ENCB] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCB]",
+          "pos": {
+            "x": 277.5034,
+            "y": -124.386
+          },
+          "uuid": "4990"
+        },
+        {
+          "description": "Pin [ENCB]",
+          "pos": {
+            "x": 293.6923,
+            "y": -171.692
+          },
+          "uuid": "3479"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCA] and Pin [ENCA] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCA]",
+          "pos": {
+            "x": 277.5034,
+            "y": -121.846
+          },
+          "uuid": "4991"
+        },
+        {
+          "description": "Pin [ENCA]",
+          "pos": {
+            "x": 293.6923,
+            "y": -176.692
+          },
+          "uuid": "3478"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D31-Pad2)] and Pin [Net-(D31-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D31-Pad2)]",
+          "pos": {
+            "x": 257.4184,
+            "y": -117.583
+          },
+          "uuid": "4805"
+        },
+        {
+          "description": "Pin [Net-(D31-Pad2)]",
+          "pos": {
+            "x": 257.2984,
+            "y": -123.406
+          },
+          "uuid": "4145"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D32-Pad2)] and Pin [Net-(D32-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D32-Pad2)]",
+          "pos": {
+            "x": 254.8784,
+            "y": -117.586
+          },
+          "uuid": "4616"
+        },
+        {
+          "description": "Pin [Net-(D32-Pad2)]",
+          "pos": {
+            "x": 238.2484,
+            "y": -120.906
+          },
+          "uuid": "3855"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D33-Pad2)] and Pin [Net-(D33-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D33-Pad2)]",
+          "pos": {
+            "x": 235.7784,
+            "y": -115.086
+          },
+          "uuid": "4823"
+        },
+        {
+          "description": "Pin [Net-(D33-Pad2)]",
+          "pos": {
+            "x": 219.1984,
+            "y": -118.406
+          },
+          "uuid": "3922"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D34-Pad2)] and Pin [Net-(D34-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D34-Pad2)]",
+          "pos": {
+            "x": 216.7784,
+            "y": -117.586
+          },
+          "uuid": "4541"
+        },
+        {
+          "description": "Pin [Net-(D34-Pad2)]",
+          "pos": {
+            "x": 200.14839999999998,
+            "y": -120.906
+          },
+          "uuid": "2299"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D35-Pad2)] and Pin [Net-(D35-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D35-Pad2)]",
+          "pos": {
+            "x": 197.67839999999998,
+            "y": -122.356
+          },
+          "uuid": "5514"
+        },
+        {
+          "description": "Pin [Net-(D35-Pad2)]",
+          "pos": {
+            "x": 181.0984,
+            "y": -125.806
+          },
+          "uuid": "3133"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D36-Pad2)] and Pin [Net-(D36-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D36-Pad2)]",
+          "pos": {
+            "x": 178.5784,
+            "y": -122.486
+          },
+          "uuid": "5680"
+        },
+        {
+          "description": "Pin [Net-(D36-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -125.806
+          },
+          "uuid": "2846"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D37-Pad2)] and Pin [Net-(D37-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D37-Pad2)]",
+          "pos": {
+            "x": 257.4184,
+            "y": -136.686
+          },
+          "uuid": "5017"
+        },
+        {
+          "description": "Pin [Net-(D37-Pad2)]",
+          "pos": {
+            "x": 257.2984,
+            "y": -142.506
+          },
+          "uuid": "3587"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D38-Pad2)] and Pin [Net-(D38-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D38-Pad2)]",
+          "pos": {
+            "x": 254.8784,
+            "y": -136.686
+          },
+          "uuid": "5689"
+        },
+        {
+          "description": "Pin [Net-(D38-Pad2)]",
+          "pos": {
+            "x": 238.2484,
+            "y": -139.956
+          },
+          "uuid": "4067"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D39-Pad2)] and Pin [Net-(D39-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D39-Pad2)]",
+          "pos": {
+            "x": 235.7784,
+            "y": -134.176
+          },
+          "uuid": "4550"
+        },
+        {
+          "description": "Pin [Net-(D39-Pad2)]",
+          "pos": {
+            "x": 219.1984,
+            "y": -137.456
+          },
+          "uuid": "3200"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D40-Pad2)] and Pin [Net-(D40-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D40-Pad2)]",
+          "pos": {
+            "x": 216.7784,
+            "y": -136.586
+          },
+          "uuid": "5606"
+        },
+        {
+          "description": "Pin [Net-(D40-Pad2)]",
+          "pos": {
+            "x": 200.14839999999998,
+            "y": -139.956
+          },
+          "uuid": "3066"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D41-Pad2)] and Pin [Net-(D41-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D41-Pad2)]",
+          "pos": {
+            "x": 197.67839999999998,
+            "y": -141.386
+          },
+          "uuid": "5301"
+        },
+        {
+          "description": "Pin [Net-(D41-Pad2)]",
+          "pos": {
+            "x": 181.0984,
+            "y": -144.856
+          },
+          "uuid": "3412"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D42-Pad2)] and Pin [Net-(D42-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D42-Pad2)]",
+          "pos": {
+            "x": 178.67839999999998,
+            "y": -141.386
+          },
+          "uuid": "5431"
+        },
+        {
+          "description": "Pin [Net-(D42-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -144.856
+          },
+          "uuid": "2232"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D43-Pad2)] and Pin [Net-(D43-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D43-Pad2)]",
+          "pos": {
+            "x": 257.4184,
+            "y": -155.686
+          },
+          "uuid": "5585"
+        },
+        {
+          "description": "Pin [Net-(D43-Pad2)]",
+          "pos": {
+            "x": 257.2984,
+            "y": -161.506
+          },
+          "uuid": "3334"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D44-Pad2)] and Pin [Net-(D44-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D44-Pad2)]",
+          "pos": {
+            "x": 254.8784,
+            "y": -155.686
+          },
+          "uuid": "5452"
+        },
+        {
+          "description": "Pin [Net-(D44-Pad2)]",
+          "pos": {
+            "x": 238.2484,
+            "y": -159.006
+          },
+          "uuid": "2578"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D45-Pad2)] and Pin [Net-(D45-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D45-Pad2)]",
+          "pos": {
+            "x": 235.7784,
+            "y": -153.276
+          },
+          "uuid": "5062"
+        },
+        {
+          "description": "Pin [Net-(D45-Pad2)]",
+          "pos": {
+            "x": 219.1984,
+            "y": -156.506
+          },
+          "uuid": "2444"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D46-Pad2)] and Pin [Net-(D46-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D46-Pad2)]",
+          "pos": {
+            "x": 216.7784,
+            "y": -155.686
+          },
+          "uuid": "5119"
+        },
+        {
+          "description": "Pin [Net-(D46-Pad2)]",
+          "pos": {
+            "x": 200.14839999999998,
+            "y": -159.006
+          },
+          "uuid": "3989"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D47-Pad2)] and Pin [Net-(D47-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D47-Pad2)]",
+          "pos": {
+            "x": 197.67839999999998,
+            "y": -160.586
+          },
+          "uuid": "4832"
+        },
+        {
+          "description": "Pin [Net-(D47-Pad2)]",
+          "pos": {
+            "x": 181.0984,
+            "y": -163.906
+          },
+          "uuid": "3520"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D48-Pad2)] and Pin [Net-(D48-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D48-Pad2)]",
+          "pos": {
+            "x": 178.67839999999998,
+            "y": -160.586
+          },
+          "uuid": "5162"
+        },
+        {
+          "description": "Pin [Net-(D48-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -163.906
+          },
+          "uuid": "3721"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D49-Pad2)] and Pin [Net-(D49-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D49-Pad2)]",
+          "pos": {
+            "x": 257.4184,
+            "y": -174.786
+          },
+          "uuid": "5343"
+        },
+        {
+          "description": "Pin [Net-(D49-Pad2)]",
+          "pos": {
+            "x": 257.2984,
+            "y": -180.556
+          },
+          "uuid": "2645"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D50-Pad2)] and Pin [Net-(D50-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D50-Pad2)]",
+          "pos": {
+            "x": 254.8784,
+            "y": -174.786
+          },
+          "uuid": "5552"
+        },
+        {
+          "description": "Pin [Net-(D50-Pad2)]",
+          "pos": {
+            "x": 238.2484,
+            "y": -178.056
+          },
+          "uuid": "2712"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D51-Pad2)] and Pin [Net-(D51-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D51-Pad2)]",
+          "pos": {
+            "x": 235.7784,
+            "y": -172.276
+          },
+          "uuid": "4853"
+        },
+        {
+          "description": "Pin [Net-(D51-Pad2)]",
+          "pos": {
+            "x": 219.1984,
+            "y": -175.556
+          },
+          "uuid": "3267"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D52-Pad2)] and Pin [Net-(D52-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D52-Pad2)]",
+          "pos": {
+            "x": 216.7784,
+            "y": -174.786
+          },
+          "uuid": "5698"
+        },
+        {
+          "description": "Pin [Net-(D52-Pad2)]",
+          "pos": {
+            "x": 200.14839999999998,
+            "y": -178.056
+          },
+          "uuid": "2913"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D53-Pad2)] and Pin [Net-(D53-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D53-Pad2)]",
+          "pos": {
+            "x": 197.67839999999998,
+            "y": -179.586
+          },
+          "uuid": "4886"
+        },
+        {
+          "description": "Pin [Net-(D53-Pad2)]",
+          "pos": {
+            "x": 181.0984,
+            "y": -182.956
+          },
+          "uuid": "2366"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D54-Pad2)] and Pin [Net-(D54-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D54-Pad2)]",
+          "pos": {
+            "x": 178.6284,
+            "y": -179.586
+          },
+          "uuid": "5388"
+        },
+        {
+          "description": "Pin [Net-(D54-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -182.956
+          },
+          "uuid": "2511"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D56-Pad2)] and Pin [Net-(D56-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D56-Pad2)]",
+          "pos": {
+            "x": 294.27254999999997,
+            "y": -195.616
+          },
+          "uuid": "4919"
+        },
+        {
+          "description": "Pin [Net-(D56-Pad2)]",
+          "pos": {
+            "x": 288.5235,
+            "y": -212.09735
+          },
+          "uuid": "2779"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D57-Pad2)] and Pin [Net-(D57-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D57-Pad2)]",
+          "pos": {
+            "x": 277.0685,
+            "y": -200.45905
+          },
+          "uuid": "4666"
+        },
+        {
+          "description": "Pin [Net-(D57-Pad2)]",
+          "pos": {
+            "x": 259.5598,
+            "y": -199.5365
+          },
+          "uuid": "2980"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D58-Pad2)] and Pin [Net-(D58-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D58-Pad2)]",
+          "pos": {
+            "x": 254.8784,
+            "y": -193.786
+          },
+          "uuid": "4940"
+        },
+        {
+          "description": "Pin [Net-(D58-Pad2)]",
+          "pos": {
+            "x": 238.2484,
+            "y": -197.106
+          },
+          "uuid": "2165"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D59-Pad2)] and Pin [Net-(D59-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D59-Pad2)]",
+          "pos": {
+            "x": 235.7784,
+            "y": -191.376
+          },
+          "uuid": "5334"
+        },
+        {
+          "description": "Pin [Net-(D59-Pad2)]",
+          "pos": {
+            "x": 219.1984,
+            "y": -194.606
+          },
+          "uuid": "3654"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D60-Pad2)] and Pin [Net-(D60-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D60-Pad2)]",
+          "pos": {
+            "x": 216.7784,
+            "y": -193.886
+          },
+          "uuid": "4814"
+        },
+        {
+          "description": "Pin [Net-(D60-Pad2)]",
+          "pos": {
+            "x": 200.14839999999998,
+            "y": -197.106
+          },
+          "uuid": "3788"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row0r] and Pin [row0r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row0r]",
+          "pos": {
+            "x": 440.964,
+            "y": -118.92660000000001
+          },
+          "uuid": "4315"
+        },
+        {
+          "description": "Pin [row0r]",
+          "pos": {
+            "x": 421.864,
+            "y": -118.79660000000001
+          },
+          "uuid": "4306"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row1r] and Pin [row1r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row1r]",
+          "pos": {
+            "x": 440.864,
+            "y": -137.8266
+          },
+          "uuid": "4405"
+        },
+        {
+          "description": "Pin [row1r]",
+          "pos": {
+            "x": 421.864,
+            "y": -137.8266
+          },
+          "uuid": "4396"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row2r] and Pin [row2r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row2r]",
+          "pos": {
+            "x": 364.664,
+            "y": -152.1266
+          },
+          "uuid": "4522"
+        },
+        {
+          "description": "Pin [row2r]",
+          "pos": {
+            "x": 440.864,
+            "y": -157.0266
+          },
+          "uuid": "4450"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row3r] and Pin [row3r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row3r]",
+          "pos": {
+            "x": 421.864,
+            "y": -176.0266
+          },
+          "uuid": "4513"
+        },
+        {
+          "description": "Pin [row3r]",
+          "pos": {
+            "x": 402.764,
+            "y": -171.22660000000002
+          },
+          "uuid": "4504"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCSW1B] and Pin [ENCSW1B] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCSW1B]",
+          "pos": {
+            "x": 338.7359,
+            "y": -166.7682
+          },
+          "uuid": "4343"
+        },
+        {
+          "description": "Pin [ENCSW1B]",
+          "pos": {
+            "x": 340.3501,
+            "y": -171.5326
+          },
+          "uuid": "1587"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [row4r] and Pin [row4r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [row4r]",
+          "pos": {
+            "x": 402.764,
+            "y": -190.3266
+          },
+          "uuid": "4531"
+        },
+        {
+          "description": "Pin [row4r]",
+          "pos": {
+            "x": 383.764,
+            "y": -187.8166
+          },
+          "uuid": "4468"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCSW2B] and Pin [ENCSW2B] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCSW2B]",
+          "pos": {
+            "x": 280.7917,
+            "y": -166.9206
+          },
+          "uuid": "4583"
+        },
+        {
+          "description": "Pin [ENCSW2B]",
+          "pos": {
+            "x": 279.1923,
+            "y": -176.692
+          },
+          "uuid": "3484"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D61-Pad1)] and Pin [Net-(D61-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D61-Pad1)]",
+          "pos": {
+            "x": 425.2661,
+            "y": -130.4856
+          },
+          "uuid": "5396"
+        },
+        {
+          "description": "Pin [Net-(D61-Pad1)]",
+          "pos": {
+            "x": 382.87870000000004,
+            "y": -125.3522
+          },
+          "uuid": "4724"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [LEDr] and Pin [LEDr] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [LEDr]",
+          "pos": {
+            "x": 421.7661,
+            "y": -132.2356
+          },
+          "uuid": "5398"
+        },
+        {
+          "description": "Pin [LEDr]",
+          "pos": {
+            "x": 342.039,
+            "y": -111.5266
+          },
+          "uuid": "4226"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D62-Pad1)] and Pin [Net-(D62-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D62-Pad1)]",
+          "pos": {
+            "x": 386.37870000000004,
+            "y": -123.6022
+          },
+          "uuid": "4722"
+        },
+        {
+          "description": "Pin [Net-(D62-Pad1)]",
+          "pos": {
+            "x": 346.3027,
+            "y": -129.848
+          },
+          "uuid": "4638"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D63-Pad1)] and Pin [Net-(D63-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D63-Pad1)]",
+          "pos": {
+            "x": 343.4579,
+            "y": -189.08079999999998
+          },
+          "uuid": "5524"
+        },
+        {
+          "description": "Pin [Net-(D63-Pad1)]",
+          "pos": {
+            "x": 349.8027,
+            "y": -128.098
+          },
+          "uuid": "4636"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D64-Pad1)] and Pin [Net-(D64-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D64-Pad1)]",
+          "pos": {
+            "x": 346.9579,
+            "y": -187.33079999999998
+          },
+          "uuid": "5522"
+        },
+        {
+          "description": "Pin [Net-(D64-Pad1)]",
+          "pos": {
+            "x": 382.65009999999995,
+            "y": -182.934
+          },
+          "uuid": "5415"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D65-Pad1)] and Pin [Net-(D65-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D65-Pad1)]",
+          "pos": {
+            "x": 386.15009999999995,
+            "y": -181.184
+          },
+          "uuid": "5413"
+        },
+        {
+          "description": "Pin [Net-(D65-Pad1)]",
+          "pos": {
+            "x": 420.2167,
+            "y": -189.6396
+          },
+          "uuid": "5184"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D66-Pad1)] and Pin [Net-(D66-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D66-Pad1)]",
+          "pos": {
+            "x": 408.64709999999997,
+            "y": -189.2516
+          },
+          "uuid": "5291"
+        },
+        {
+          "description": "Pin [Net-(D66-Pad1)]",
+          "pos": {
+            "x": 423.7167,
+            "y": -187.8896
+          },
+          "uuid": "5182"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D67-Pad2)] and Pin [Net-(D67-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D67-Pad2)]",
+          "pos": {
+            "x": 446.6201,
+            "y": -175.15460000000002
+          },
+          "uuid": "5542"
+        },
+        {
+          "description": "Pin [Net-(D67-Pad2)]",
+          "pos": {
+            "x": 413.7471,
+            "y": -187.7516
+          },
+          "uuid": "5289"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D68-Pad2)] and Pin [Net-(D68-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D68-Pad2)]",
+          "pos": {
+            "x": 451.7201,
+            "y": -173.65460000000002
+          },
+          "uuid": "5540"
+        },
+        {
+          "description": "Pin [Net-(D68-Pad2)]",
+          "pos": {
+            "x": 446.7471,
+            "y": -156.1046
+          },
+          "uuid": "4594"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D69-Pad2)] and Pin [Net-(D69-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D69-Pad2)]",
+          "pos": {
+            "x": 446.6709,
+            "y": -137.00379999999998
+          },
+          "uuid": "5097"
+        },
+        {
+          "description": "Pin [Net-(D69-Pad2)]",
+          "pos": {
+            "x": 451.84709999999995,
+            "y": -154.6046
+          },
+          "uuid": "4592"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D70-Pad2)] and Pin [Net-(D70-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D70-Pad2)]",
+          "pos": {
+            "x": 446.7725,
+            "y": -117.97919999999999
+          },
+          "uuid": "5267"
+        },
+        {
+          "description": "Pin [Net-(D70-Pad2)]",
+          "pos": {
+            "x": 451.77090000000004,
+            "y": -135.50379999999998
+          },
+          "uuid": "5095"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D71-Pad2)] and Pin [Net-(D71-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D71-Pad2)]",
+          "pos": {
+            "x": 451.8725,
+            "y": -116.47919999999999
+          },
+          "uuid": "5265"
+        },
+        {
+          "description": "Pin [Net-(D71-Pad2)]",
+          "pos": {
+            "x": 427.6971,
+            "y": -118.00460000000001
+          },
+          "uuid": "4843"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D72-Pad2)] and Pin [Net-(D72-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D72-Pad2)]",
+          "pos": {
+            "x": 432.7971,
+            "y": -116.50460000000001
+          },
+          "uuid": "4841"
+        },
+        {
+          "description": "Pin [Net-(D72-Pad2)]",
+          "pos": {
+            "x": 408.65709999999996,
+            "y": -170.1986
+          },
+          "uuid": "4606"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D73-Pad2)] and Pin [Net-(D73-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D73-Pad2)]",
+          "pos": {
+            "x": 432.6701,
+            "y": -135.4276
+          },
+          "uuid": "5561"
+        },
+        {
+          "description": "Pin [Net-(D73-Pad2)]",
+          "pos": {
+            "x": 408.64709999999997,
+            "y": -151.1516
+          },
+          "uuid": "5040"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D73-Pad4)] and Pin [Net-(D73-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D73-Pad4)]",
+          "pos": {
+            "x": 427.57009999999997,
+            "y": -136.9276
+          },
+          "uuid": "5563"
+        },
+        {
+          "description": "Pin [Net-(D73-Pad4)]",
+          "pos": {
+            "x": 432.7971,
+            "y": -154.6046
+          },
+          "uuid": "5485"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D74-Pad4)] and Pin [Net-(D74-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D74-Pad4)]",
+          "pos": {
+            "x": 432.7971,
+            "y": -173.6636
+          },
+          "uuid": "5731"
+        },
+        {
+          "description": "Pin [Net-(D74-Pad4)]",
+          "pos": {
+            "x": 427.6971,
+            "y": -156.1046
+          },
+          "uuid": "5487"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D75-Pad4)] and Pin [Net-(D75-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D75-Pad4)]",
+          "pos": {
+            "x": 427.6971,
+            "y": -175.1636
+          },
+          "uuid": "5733"
+        },
+        {
+          "description": "Pin [Net-(D75-Pad4)]",
+          "pos": {
+            "x": 394.57009999999997,
+            "y": -185.2116
+          },
+          "uuid": "5668"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D76-Pad4)] and Pin [Net-(D76-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D76-Pad4)]",
+          "pos": {
+            "x": 389.4701,
+            "y": -186.7116
+          },
+          "uuid": "5670"
+        },
+        {
+          "description": "Pin [Net-(D76-Pad4)]",
+          "pos": {
+            "x": 375.52009999999996,
+            "y": -187.7606
+          },
+          "uuid": "5376"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D77-Pad4)] and Pin [Net-(D77-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D77-Pad4)]",
+          "pos": {
+            "x": 370.4201,
+            "y": -189.2606
+          },
+          "uuid": "5378"
+        },
+        {
+          "description": "Pin [Net-(D77-Pad4)]",
+          "pos": {
+            "x": 413.7571,
+            "y": -168.6986
+          },
+          "uuid": "4604"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D79-Pad2)] and Pin [Net-(D79-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D79-Pad2)]",
+          "pos": {
+            "x": 408.52009999999996,
+            "y": -132.10160000000002
+          },
+          "uuid": "5202"
+        },
+        {
+          "description": "Pin [Net-(D79-Pad2)]",
+          "pos": {
+            "x": 413.7471,
+            "y": -149.6516
+          },
+          "uuid": "5038"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D80-Pad2)] and Pin [Net-(D80-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D80-Pad2)]",
+          "pos": {
+            "x": 413.6201,
+            "y": -130.60160000000002
+          },
+          "uuid": "5200"
+        },
+        {
+          "description": "Pin [Net-(D80-Pad2)]",
+          "pos": {
+            "x": 408.52009999999996,
+            "y": -113.05160000000001
+          },
+          "uuid": "4864"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D81-Pad2)] and Pin [Net-(D81-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D81-Pad2)]",
+          "pos": {
+            "x": 389.59709999999995,
+            "y": -110.5116
+          },
+          "uuid": "5745"
+        },
+        {
+          "description": "Pin [Net-(D81-Pad2)]",
+          "pos": {
+            "x": 413.6201,
+            "y": -111.55160000000001
+          },
+          "uuid": "4862"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D82-Pad2)] and Pin [Net-(D82-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D82-Pad2)]",
+          "pos": {
+            "x": 394.6971,
+            "y": -109.0116
+          },
+          "uuid": "5743"
+        },
+        {
+          "description": "Pin [Net-(D82-Pad2)]",
+          "pos": {
+            "x": 389.6071,
+            "y": -129.6856
+          },
+          "uuid": "5354"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D83-Pad2)] and Pin [Net-(D83-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D83-Pad2)]",
+          "pos": {
+            "x": 394.70709999999997,
+            "y": -128.1856
+          },
+          "uuid": "5352"
+        },
+        {
+          "description": "Pin [Net-(D83-Pad2)]",
+          "pos": {
+            "x": 389.4701,
+            "y": -148.7476
+          },
+          "uuid": "4713"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D84-Pad2)] and Pin [Net-(D84-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D84-Pad2)]",
+          "pos": {
+            "x": 370.5471,
+            "y": -132.10160000000002
+          },
+          "uuid": "5575"
+        },
+        {
+          "description": "Pin [Net-(D84-Pad2)]",
+          "pos": {
+            "x": 394.57009999999997,
+            "y": -147.2476
+          },
+          "uuid": "4711"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D85-Pad2)] and Pin [Net-(D85-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D85-Pad2)]",
+          "pos": {
+            "x": 394.6971,
+            "y": -166.1616
+          },
+          "uuid": "5627"
+        },
+        {
+          "description": "Pin [Net-(D85-Pad2)]",
+          "pos": {
+            "x": 370.4201,
+            "y": -113.06060000000001
+          },
+          "uuid": "5109"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D85-Pad4)] and Pin [Net-(D85-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D85-Pad4)]",
+          "pos": {
+            "x": 351.87104999999997,
+            "y": -192.07014999999998
+          },
+          "uuid": "5639"
+        },
+        {
+          "description": "Pin [Net-(D85-Pad4)]",
+          "pos": {
+            "x": 389.59709999999995,
+            "y": -167.6616
+          },
+          "uuid": "5629"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D86-Pad4)] and Pin [Net-(D86-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D86-Pad4)]",
+          "pos": {
+            "x": 347.33315000000005,
+            "y": -194.83905
+          },
+          "uuid": "5641"
+        },
+        {
+          "description": "Pin [Net-(D86-Pad4)]",
+          "pos": {
+            "x": 336.15959999999995,
+            "y": -202.40895
+          },
+          "uuid": "5615"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D87-Pad4)] and Pin [Net-(D87-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D87-Pad4)]",
+          "pos": {
+            "x": 332.31059999999997,
+            "y": -198.74225
+          },
+          "uuid": "5617"
+        },
+        {
+          "description": "Pin [Net-(D87-Pad4)]",
+          "pos": {
+            "x": 375.64709999999997,
+            "y": -168.7016
+          },
+          "uuid": "4895"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D88-Pad4)] and Pin [Net-(D88-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D88-Pad4)]",
+          "pos": {
+            "x": 370.5471,
+            "y": -170.2016
+          },
+          "uuid": "4897"
+        },
+        {
+          "description": "Pin [Net-(D88-Pad4)]",
+          "pos": {
+            "x": 375.52009999999996,
+            "y": -149.66060000000002
+          },
+          "uuid": "4757"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [VDD] and Pin [VDD] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [VDD]",
+          "pos": {
+            "x": 249.0789,
+            "y": -113.2294
+          },
+          "uuid": "5754"
+        },
+        {
+          "description": "Pin [VDD]",
+          "pos": {
+            "x": 172.8789,
+            "y": -156.2152
+          },
+          "uuid": "5718"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D89-Pad4)] and Pin [Net-(D89-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D89-Pad4)]",
+          "pos": {
+            "x": 375.64709999999997,
+            "y": -130.60160000000002
+          },
+          "uuid": "5573"
+        },
+        {
+          "description": "Pin [Net-(D89-Pad4)]",
+          "pos": {
+            "x": 370.4201,
+            "y": -151.16060000000002
+          },
+          "uuid": "4759"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [VSS] and Pin [VSS] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [VSS]",
+          "pos": {
+            "x": 243.97889999999998,
+            "y": -111.7294
+          },
+          "uuid": "5756"
+        },
+        {
+          "description": "Pin [VSS]",
+          "pos": {
+            "x": 167.7789,
+            "y": -154.7152
+          },
+          "uuid": "5720"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D91-Pad2)] and Pin [Net-(D91-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D91-Pad2)]",
+          "pos": {
+            "x": 375.52009999999996,
+            "y": -111.56060000000001
+          },
+          "uuid": "5107"
+        },
+        {
+          "description": "Pin [Net-(D91-Pad2)]",
+          "pos": {
+            "x": 351.4971,
+            "y": -115.5916
+          },
+          "uuid": "5073"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D92-Pad2)] and Pin [Net-(D92-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D92-Pad2)]",
+          "pos": {
+            "x": 351.3701,
+            "y": -134.6506
+          },
+          "uuid": "5238"
+        },
+        {
+          "description": "Pin [Net-(D92-Pad2)]",
+          "pos": {
+            "x": 356.59709999999995,
+            "y": -114.0916
+          },
+          "uuid": "5071"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D93-Pad2)] and Pin [Net-(D93-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D93-Pad2)]",
+          "pos": {
+            "x": 356.4701,
+            "y": -133.1506
+          },
+          "uuid": "5236"
+        },
+        {
+          "description": "Pin [Net-(D93-Pad2)]",
+          "pos": {
+            "x": 351.4971,
+            "y": -153.6916
+          },
+          "uuid": "4701"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D94-Pad2)] and Pin [Net-(D94-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D94-Pad2)]",
+          "pos": {
+            "x": 351.3701,
+            "y": -172.75060000000002
+          },
+          "uuid": "5279"
+        },
+        {
+          "description": "Pin [Net-(D94-Pad2)]",
+          "pos": {
+            "x": 356.59709999999995,
+            "y": -152.1916
+          },
+          "uuid": "4699"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D96-Pad1)] and Pin [Net-(D96-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D96-Pad1)]",
+          "pos": {
+            "x": 199.1807,
+            "y": -130.5618
+          },
+          "uuid": "5144"
+        },
+        {
+          "description": "Pin [Net-(D96-Pad1)]",
+          "pos": {
+            "x": 233.2981,
+            "y": -125.7586
+          },
+          "uuid": "4741"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D97-Pad1)] and Pin [Net-(D97-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D97-Pad1)]",
+          "pos": {
+            "x": 270.2043,
+            "y": -130.9402
+          },
+          "uuid": "5249"
+        },
+        {
+          "description": "Pin [Net-(D97-Pad1)]",
+          "pos": {
+            "x": 236.7981,
+            "y": -124.0086
+          },
+          "uuid": "4739"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D98-Pad1)] and Pin [Net-(D98-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D98-Pad1)]",
+          "pos": {
+            "x": 273.7043,
+            "y": -129.1902
+          },
+          "uuid": "5247"
+        },
+        {
+          "description": "Pin [Net-(D98-Pad1)]",
+          "pos": {
+            "x": 272.3125,
+            "y": -189.157
+          },
+          "uuid": "5129"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D100-Pad3)] and Pin [Net-(D100-Pad3)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D100-Pad3)]",
+          "pos": {
+            "x": 233.4759,
+            "y": -183.5182
+          },
+          "uuid": "5652"
+        },
+        {
+          "description": "Pin [Net-(D100-Pad3)]",
+          "pos": {
+            "x": 275.8125,
+            "y": -187.407
+          },
+          "uuid": "5127"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D100-Pad1)] and Pin [Net-(D100-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D100-Pad1)]",
+          "pos": {
+            "x": 236.9759,
+            "y": -181.7682
+          },
+          "uuid": "5650"
+        },
+        {
+          "description": "Pin [Net-(D100-Pad1)]",
+          "pos": {
+            "x": 197.0523,
+            "y": -189.411
+          },
+          "uuid": "5498"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D102-Pad2)] and Pin [Net-(D102-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D102-Pad2)]",
+          "pos": {
+            "x": 211.0043,
+            "y": -187.904
+          },
+          "uuid": "5364"
+        },
+        {
+          "description": "Pin [Net-(D102-Pad2)]",
+          "pos": {
+            "x": 167.80429999999998,
+            "y": -175.2562
+          },
+          "uuid": "4783"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D103-Pad2)] and Pin [Net-(D103-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D103-Pad2)]",
+          "pos": {
+            "x": 167.7789,
+            "y": -156.2152
+          },
+          "uuid": "5721"
+        },
+        {
+          "description": "Pin [Net-(D103-Pad2)]",
+          "pos": {
+            "x": 172.90429999999998,
+            "y": -173.7562
+          },
+          "uuid": "4781"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D104-Pad2)] and Pin [Net-(D104-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D104-Pad2)]",
+          "pos": {
+            "x": 172.8789,
+            "y": -154.7152
+          },
+          "uuid": "5719"
+        },
+        {
+          "description": "Pin [Net-(D104-Pad2)]",
+          "pos": {
+            "x": 167.7789,
+            "y": -137.1816
+          },
+          "uuid": "5442"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D105-Pad2)] and Pin [Net-(D105-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D105-Pad2)]",
+          "pos": {
+            "x": 172.8789,
+            "y": -135.6816
+          },
+          "uuid": "5440"
+        },
+        {
+          "description": "Pin [Net-(D105-Pad2)]",
+          "pos": {
+            "x": 167.8551,
+            "y": -118.1316
+          },
+          "uuid": "4573"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D106-Pad2)] and Pin [Net-(D106-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D106-Pad2)]",
+          "pos": {
+            "x": 187.0321,
+            "y": -118.1316
+          },
+          "uuid": "4677"
+        },
+        {
+          "description": "Pin [Net-(D106-Pad2)]",
+          "pos": {
+            "x": 172.95510000000002,
+            "y": -116.6316
+          },
+          "uuid": "4571"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D107-Pad2)] and Pin [Net-(D107-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D107-Pad2)]",
+          "pos": {
+            "x": 205.90429999999998,
+            "y": -170.3286
+          },
+          "uuid": "5596"
+        },
+        {
+          "description": "Pin [Net-(D107-Pad2)]",
+          "pos": {
+            "x": 192.1321,
+            "y": -116.6316
+          },
+          "uuid": "4675"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D108-Pad2)] and Pin [Net-(D108-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D108-Pad2)]",
+          "pos": {
+            "x": 191.9543,
+            "y": -135.6562
+          },
+          "uuid": "5083"
+        },
+        {
+          "description": "Pin [Net-(D108-Pad2)]",
+          "pos": {
+            "x": 205.8789,
+            "y": -151.2622
+          },
+          "uuid": "4876"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D108-Pad4)] and Pin [Net-(D108-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D108-Pad4)]",
+          "pos": {
+            "x": 186.8543,
+            "y": -137.1562
+          },
+          "uuid": "5085"
+        },
+        {
+          "description": "Pin [Net-(D108-Pad4)]",
+          "pos": {
+            "x": 191.9543,
+            "y": -154.757
+          },
+          "uuid": "4907"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D109-Pad4)] and Pin [Net-(D109-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D109-Pad4)]",
+          "pos": {
+            "x": 192.0051,
+            "y": -173.76520000000002
+          },
+          "uuid": "5473"
+        },
+        {
+          "description": "Pin [Net-(D109-Pad4)]",
+          "pos": {
+            "x": 186.8543,
+            "y": -156.257
+          },
+          "uuid": "4909"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D110-Pad4)] and Pin [Net-(D110-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D110-Pad4)]",
+          "pos": {
+            "x": 186.9051,
+            "y": -175.26520000000002
+          },
+          "uuid": "5475"
+        },
+        {
+          "description": "Pin [Net-(D110-Pad4)]",
+          "pos": {
+            "x": 229.9781,
+            "y": -185.373
+          },
+          "uuid": "4625"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D111-Pad4)] and Pin [Net-(D111-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D111-Pad4)]",
+          "pos": {
+            "x": 249.1551,
+            "y": -187.913
+          },
+          "uuid": "4949"
+        },
+        {
+          "description": "Pin [Net-(D111-Pad4)]",
+          "pos": {
+            "x": 224.87810000000002,
+            "y": -186.873
+          },
+          "uuid": "4627"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D112-Pad4)] and Pin [Net-(D112-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D112-Pad4)]",
+          "pos": {
+            "x": 211.0043,
+            "y": -168.8286
+          },
+          "uuid": "5594"
+        },
+        {
+          "description": "Pin [Net-(D112-Pad4)]",
+          "pos": {
+            "x": 244.0551,
+            "y": -189.413
+          },
+          "uuid": "4951"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D114-Pad2)] and Pin [Net-(D114-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D114-Pad2)]",
+          "pos": {
+            "x": 210.97889999999998,
+            "y": -149.7622
+          },
+          "uuid": "4874"
+        },
+        {
+          "description": "Pin [Net-(D114-Pad2)]",
+          "pos": {
+            "x": 205.92970000000003,
+            "y": -132.3048
+          },
+          "uuid": "4561"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D115-Pad2)] and Pin [Net-(D115-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D115-Pad2)]",
+          "pos": {
+            "x": 205.8789,
+            "y": -113.204
+          },
+          "uuid": "5324"
+        },
+        {
+          "description": "Pin [Net-(D115-Pad2)]",
+          "pos": {
+            "x": 211.02970000000002,
+            "y": -130.8048
+          },
+          "uuid": "4559"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D116-Pad2)] and Pin [Net-(D116-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D116-Pad2)]",
+          "pos": {
+            "x": 210.97889999999998,
+            "y": -111.704
+          },
+          "uuid": "5322"
+        },
+        {
+          "description": "Pin [Net-(D116-Pad2)]",
+          "pos": {
+            "x": 224.9289,
+            "y": -110.7148
+          },
+          "uuid": "5173"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D117-Pad2)] and Pin [Net-(D117-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D117-Pad2)]",
+          "pos": {
+            "x": 230.0289,
+            "y": -109.2148
+          },
+          "uuid": "5171"
+        },
+        {
+          "description": "Pin [Net-(D117-Pad2)]",
+          "pos": {
+            "x": 225.0559,
+            "y": -129.7738
+          },
+          "uuid": "4689"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D101-Pad1)] and Pin [Net-(D101-Pad1)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D101-Pad1)]",
+          "pos": {
+            "x": 200.5523,
+            "y": -187.661
+          },
+          "uuid": "5496"
+        },
+        {
+          "description": "Pin [Net-(D101-Pad1)]",
+          "pos": {
+            "x": 205.90429999999998,
+            "y": -189.404
+          },
+          "uuid": "5366"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [DATAr] and Pin [DATAr] (3 total items in net)",
+      "items": [
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 342.039,
+            "y": -114.06660000000001
+          },
+          "uuid": "4227"
+        },
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 327.619,
+            "y": -152.8466
+          },
+          "uuid": "125"
+        },
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 327.619,
+            "y": -152.8466
+          },
+          "uuid": "124"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [SDAr] and Pin [SDAr] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [SDAr]",
+          "pos": {
+            "x": 342.039,
+            "y": -121.68660000000001
+          },
+          "uuid": "4230"
+        },
+        {
+          "description": "Pin [SDAr]",
+          "pos": {
+            "x": 330.119,
+            "y": -144.0966
+          },
+          "uuid": "696"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [SCLr] and Pin [SCLr] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [SCLr]",
+          "pos": {
+            "x": 342.039,
+            "y": -124.2266
+          },
+          "uuid": "4231"
+        },
+        {
+          "description": "Pin [SCLr]",
+          "pos": {
+            "x": 332.659,
+            "y": -144.0966
+          },
+          "uuid": "697"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [RESETr] and Pin [RESETr] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [RESETr]",
+          "pos": {
+            "x": 326.799,
+            "y": -116.6066
+          },
+          "uuid": "4247"
+        },
+        {
+          "description": "Pin [RESETr]",
+          "pos": {
+            "x": 323.419,
+            "y": -150.2466
+          },
+          "uuid": "142"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCSW1A] and Pin [ENCSW1A] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCSW1A]",
+          "pos": {
+            "x": 326.799,
+            "y": -139.4666
+          },
+          "uuid": "4238"
+        },
+        {
+          "description": "Pin [ENCSW1A]",
+          "pos": {
+            "x": 340.3501,
+            "y": -176.5326
+          },
+          "uuid": "1586"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col4r] and Pin [col4r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col4r]",
+          "pos": {
+            "x": 326.799,
+            "y": -136.9266
+          },
+          "uuid": "4239"
+        },
+        {
+          "description": "Pin [col4r]",
+          "pos": {
+            "x": 376.294,
+            "y": -180.0966
+          },
+          "uuid": "2024"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col3r] and Pin [col3r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col3r]",
+          "pos": {
+            "x": 326.799,
+            "y": -134.38660000000002
+          },
+          "uuid": "4240"
+        },
+        {
+          "description": "Pin [col3r]",
+          "pos": {
+            "x": 355.72234999999995,
+            "y": -202.79625
+          },
+          "uuid": "2093"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col2r] and Pin [col2r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col2r]",
+          "pos": {
+            "x": 326.799,
+            "y": -131.8466
+          },
+          "uuid": "4241"
+        },
+        {
+          "description": "Pin [col2r]",
+          "pos": {
+            "x": 376.294,
+            "y": -199.1466
+          },
+          "uuid": "1823"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col1r] and Pin [col1r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col1r]",
+          "pos": {
+            "x": 326.799,
+            "y": -129.3066
+          },
+          "uuid": "4242"
+        },
+        {
+          "description": "Pin [col1r]",
+          "pos": {
+            "x": 433.444,
+            "y": -165.94660000000002
+          },
+          "uuid": "1756"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [col0r] and Pin [col0r] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [col0r]",
+          "pos": {
+            "x": 326.799,
+            "y": -126.76660000000001
+          },
+          "uuid": "4243"
+        },
+        {
+          "description": "Pin [col0r]",
+          "pos": {
+            "x": 452.494,
+            "y": -127.84660000000001
+          },
+          "uuid": "1447"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCSW2A] and Pin [ENCSW2A] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCSW2A]",
+          "pos": {
+            "x": 277.5034,
+            "y": -139.626
+          },
+          "uuid": "4984"
+        },
+        {
+          "description": "Pin [ENCSW2A]",
+          "pos": {
+            "x": 268.8484,
+            "y": -125.606
+          },
+          "uuid": "4144"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCBr] and Pin [ENCBr] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCBr]",
+          "pos": {
+            "x": 326.799,
+            "y": -124.2266
+          },
+          "uuid": "4244"
+        },
+        {
+          "description": "Pin [ENCBr]",
+          "pos": {
+            "x": 325.8501,
+            "y": -176.5326
+          },
+          "uuid": "1582"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [ENCAr] and Pin [ENCAr] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [ENCAr]",
+          "pos": {
+            "x": 326.799,
+            "y": -121.68660000000001
+          },
+          "uuid": "4245"
+        },
+        {
+          "description": "Pin [ENCAr]",
+          "pos": {
+            "x": 325.8501,
+            "y": -171.5326
+          },
+          "uuid": "1581"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D118-Pad2)] and Pin [Net-(D118-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D118-Pad2)]",
+          "pos": {
+            "x": 225.0559,
+            "y": -148.8148
+          },
+          "uuid": "4795"
+        },
+        {
+          "description": "Pin [Net-(D118-Pad2)]",
+          "pos": {
+            "x": 230.1559,
+            "y": -128.2738
+          },
+          "uuid": "4687"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D119-Pad2)] and Pin [Net-(D119-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D119-Pad2)]",
+          "pos": {
+            "x": 230.1559,
+            "y": -147.3148
+          },
+          "uuid": "4793"
+        },
+        {
+          "description": "Pin [Net-(D119-Pad2)]",
+          "pos": {
+            "x": 243.97889999999998,
+            "y": -132.27939999999998
+          },
+          "uuid": "4656"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D120-Pad2)] and Pin [Net-(D120-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D120-Pad2)]",
+          "pos": {
+            "x": 243.97889999999998,
+            "y": -113.2294
+          },
+          "uuid": "5757"
+        },
+        {
+          "description": "Pin [Net-(D120-Pad2)]",
+          "pos": {
+            "x": 230.1559,
+            "y": -166.33939999999998
+          },
+          "uuid": "4928"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D120-Pad4)] and Pin [Net-(D120-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D120-Pad4)]",
+          "pos": {
+            "x": 272.35095,
+            "y": -193.44995
+          },
+          "uuid": "4961"
+        },
+        {
+          "description": "Pin [Net-(D120-Pad4)]",
+          "pos": {
+            "x": 225.0559,
+            "y": -167.83939999999998
+          },
+          "uuid": "4930"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D121-Pad4)] and Pin [Net-(D121-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D121-Pad4)]",
+          "pos": {
+            "x": 285.8894,
+            "y": -198.27165
+          },
+          "uuid": "5310"
+        },
+        {
+          "description": "Pin [Net-(D121-Pad4)]",
+          "pos": {
+            "x": 267.03645,
+            "y": -193.57885000000002
+          },
+          "uuid": "4963"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D122-Pad4)] and Pin [Net-(D122-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D122-Pad4)]",
+          "pos": {
+            "x": 284.63840000000005,
+            "y": -203.43835
+          },
+          "uuid": "5312"
+        },
+        {
+          "description": "Pin [Net-(D122-Pad4)]",
+          "pos": {
+            "x": 249.0789,
+            "y": -168.8794
+          },
+          "uuid": "5026"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D123-Pad4)] and Pin [Net-(D123-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D123-Pad4)]",
+          "pos": {
+            "x": 249.0281,
+            "y": -149.8294
+          },
+          "uuid": "5050"
+        },
+        {
+          "description": "Pin [Net-(D123-Pad4)]",
+          "pos": {
+            "x": 243.97889999999998,
+            "y": -170.3794
+          },
+          "uuid": "5028"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D124-Pad4)] and Pin [Net-(D124-Pad4)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D124-Pad4)]",
+          "pos": {
+            "x": 243.9281,
+            "y": -151.3294
+          },
+          "uuid": "5052"
+        },
+        {
+          "description": "Pin [Net-(D124-Pad4)]",
+          "pos": {
+            "x": 249.0789,
+            "y": -130.77939999999998
+          },
+          "uuid": "4654"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D126-Pad2)] and Pin [Net-(D126-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D126-Pad2)]",
+          "pos": {
+            "x": 249.0789,
+            "y": -111.7294
+          },
+          "uuid": "5755"
+        },
+        {
+          "description": "Pin [Net-(D126-Pad2)]",
+          "pos": {
+            "x": 262.9781,
+            "y": -115.71860000000001
+          },
+          "uuid": "5226"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D127-Pad2)] and Pin [Net-(D127-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D127-Pad2)]",
+          "pos": {
+            "x": 268.07809999999995,
+            "y": -114.21860000000001
+          },
+          "uuid": "5224"
+        },
+        {
+          "description": "Pin [Net-(D127-Pad2)]",
+          "pos": {
+            "x": 263.0543,
+            "y": -134.8194
+          },
+          "uuid": "5214"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D128-Pad2)] and Pin [Net-(D128-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D128-Pad2)]",
+          "pos": {
+            "x": 263.0797,
+            "y": -153.8022
+          },
+          "uuid": "5709"
+        },
+        {
+          "description": "Pin [Net-(D128-Pad2)]",
+          "pos": {
+            "x": 268.1543,
+            "y": -133.3194
+          },
+          "uuid": "5212"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D129-Pad2)] and Pin [Net-(D129-Pad2)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D129-Pad2)]",
+          "pos": {
+            "x": 268.1797,
+            "y": -152.3022
+          },
+          "uuid": "5707"
+        },
+        {
+          "description": "Pin [Net-(D129-Pad2)]",
+          "pos": {
+            "x": 263.1051,
+            "y": -172.86860000000001
+          },
+          "uuid": "4771"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [
+    {
+      "description": "Hole clearance violation between Pin [Net-(D48-Pad2)] and BoardOutline (expected: 0.2002 mm, actual: 0.0758 mm)",
+      "items": [
+        {
+          "description": "Pin [Net-(D48-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -163.906
+          },
+          "uuid": "3721"
+        },
+        {
+          "description": "BoardOutline",
+          "pos": {
+            "x": 309.8255,
+            "y": -162.6916
+          },
+          "uuid": "1"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [unconnected-(J3-Pad4)] and Pin [unconnected-(J3-Pad4)] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [unconnected-(J3-Pad4)]",
+          "pos": {
+            "x": 294.9234,
+            "y": -157.606
+          },
+          "uuid": "3053"
+        },
+        {
+          "description": "Pin [unconnected-(J3-Pad4)]",
+          "pos": {
+            "x": 294.9234,
+            "y": -157.606
+          },
+          "uuid": "3052"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [unconnected-(J3-Pad4)] and Pin [unconnected-(J3-Pad4)] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [unconnected-(J3-Pad4)]",
+          "pos": {
+            "x": 294.9234,
+            "y": -157.606
+          },
+          "uuid": "3053"
+        },
+        {
+          "description": "Pin [unconnected-(J3-Pad4)]",
+          "pos": {
+            "x": 294.9234,
+            "y": -157.606
+          },
+          "uuid": "3052"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [DATA] and Pin [DATA] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 291.9234,
+            "y": -157.606
+          },
+          "uuid": "3051"
+        },
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 291.9234,
+            "y": -157.606
+          },
+          "uuid": "3050"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [DATA] and Pin [DATA] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 291.9234,
+            "y": -157.606
+          },
+          "uuid": "3051"
+        },
+        {
+          "description": "Pin [DATA]",
+          "pos": {
+            "x": 291.9234,
+            "y": -157.606
+          },
+          "uuid": "3050"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [VDD] and Pin [VDD] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [VDD]",
+          "pos": {
+            "x": 287.9234,
+            "y": -157.606
+          },
+          "uuid": "3049"
+        },
+        {
+          "description": "Pin [VDD]",
+          "pos": {
+            "x": 287.9234,
+            "y": -157.606
+          },
+          "uuid": "3048"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [VDD] and Pin [VDD] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [VDD]",
+          "pos": {
+            "x": 287.9234,
+            "y": -157.606
+          },
+          "uuid": "3049"
+        },
+        {
+          "description": "Pin [VDD]",
+          "pos": {
+            "x": 287.9234,
+            "y": -157.606
+          },
+          "uuid": "3048"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [VSS] and Pin [VSS] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [VSS]",
+          "pos": {
+            "x": 286.82340000000005,
+            "y": -153.006
+          },
+          "uuid": "3047"
+        },
+        {
+          "description": "Pin [VSS]",
+          "pos": {
+            "x": 286.82340000000005,
+            "y": -153.006
+          },
+          "uuid": "3046"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [VSS] and Pin [VSS] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [VSS]",
+          "pos": {
+            "x": 286.82340000000005,
+            "y": -153.006
+          },
+          "uuid": "3047"
+        },
+        {
+          "description": "Pin [VSS]",
+          "pos": {
+            "x": 286.82340000000005,
+            "y": -153.006
+          },
+          "uuid": "3046"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [Net-(D36-Pad2)] and BoardOutline (expected: 0.2002 mm, actual: 0.0620 mm)",
+      "items": [
+        {
+          "description": "Pin [Net-(D36-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -125.806
+          },
+          "uuid": "2846"
+        },
+        {
+          "description": "BoardOutline",
+          "pos": {
+            "x": 309.8255,
+            "y": -162.6916
+          },
+          "uuid": "1"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [Net-(D54-Pad2)] and BoardOutline (expected: 0.2002 mm, actual: 0.0826 mm)",
+      "items": [
+        {
+          "description": "Pin [Net-(D54-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -182.956
+          },
+          "uuid": "2511"
+        },
+        {
+          "description": "BoardOutline",
+          "pos": {
+            "x": 309.8255,
+            "y": -162.6916
+          },
+          "uuid": "1"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [Net-(D42-Pad2)] and BoardOutline (expected: 0.2002 mm, actual: 0.0688 mm)",
+      "items": [
+        {
+          "description": "Pin [Net-(D42-Pad2)]",
+          "pos": {
+            "x": 162.0484,
+            "y": -144.856
+          },
+          "uuid": "2232"
+        },
+        {
+          "description": "BoardOutline",
+          "pos": {
+            "x": 309.8255,
+            "y": -162.6916
+          },
+          "uuid": "1"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [unconnected-(J1-Pad4)] and Pin [unconnected-(J1-Pad4)] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [unconnected-(J1-Pad4)]",
+          "pos": {
+            "x": 324.619,
+            "y": -152.8466
+          },
+          "uuid": "127"
+        },
+        {
+          "description": "Pin [unconnected-(J1-Pad4)]",
+          "pos": {
+            "x": 324.619,
+            "y": -152.8466
+          },
+          "uuid": "126"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [unconnected-(J1-Pad4)] and Pin [unconnected-(J1-Pad4)] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [unconnected-(J1-Pad4)]",
+          "pos": {
+            "x": 324.619,
+            "y": -152.8466
+          },
+          "uuid": "127"
+        },
+        {
+          "description": "Pin [unconnected-(J1-Pad4)]",
+          "pos": {
+            "x": 324.619,
+            "y": -152.8466
+          },
+          "uuid": "126"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [DATAr] and Pin [DATAr] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 327.619,
+            "y": -152.8466
+          },
+          "uuid": "125"
+        },
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 327.619,
+            "y": -152.8466
+          },
+          "uuid": "124"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [DATAr] and Pin [DATAr] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 327.619,
+            "y": -152.8466
+          },
+          "uuid": "125"
+        },
+        {
+          "description": "Pin [DATAr]",
+          "pos": {
+            "x": 327.619,
+            "y": -152.8466
+          },
+          "uuid": "124"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [GND] and Pin [GND] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 331.619,
+            "y": -152.8466
+          },
+          "uuid": "123"
+        },
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 331.619,
+            "y": -152.8466
+          },
+          "uuid": "122"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [GND] and Pin [GND] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 331.619,
+            "y": -152.8466
+          },
+          "uuid": "123"
+        },
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 331.619,
+            "y": -152.8466
+          },
+          "uuid": "122"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [VCC] and Pin [VCC] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 332.719,
+            "y": -157.44660000000002
+          },
+          "uuid": "121"
+        },
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 332.719,
+            "y": -157.44660000000002
+          },
+          "uuid": "120"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    },
+    {
+      "description": "Hole clearance violation between Pin [VCC] and Pin [VCC] (expected: 0.2002 mm, actual: 0.0000 mm)",
+      "items": [
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 332.719,
+            "y": -157.44660000000002
+          },
+          "uuid": "121"
+        },
+        {
+          "description": "Pin [VCC]",
+          "pos": {
+            "x": 332.719,
+            "y": -157.44660000000002
+          },
+          "uuid": "120"
+        }
+      ],
+      "severity": "error",
+      "type": "hole_clearance"
+    }
+  ],
+  "schematic_parity": [],
+  "quality_score": 9.389671325683594
+}

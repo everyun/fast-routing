@@ -1,9 +1,9 @@
 //! BasicBoard master PCB data model.
 
-use crate::area::{ConductionArea, ObstacleArea};
-use crate::pin::Pin;
-use crate::trace::PolylineTrace;
-use crate::via::Via;
+use crate::legacy::area::{ConductionArea, ObstacleArea};
+use crate::legacy::pin::Pin;
+use crate::legacy::trace::PolylineTrace;
+use crate::legacy::via::Via;
 use fr_geometry::planar::{IntBox, IntPoint};
 
 /// Master board representation containing all components, nets, and placed geometry.
@@ -57,17 +57,26 @@ impl BasicBoard {
 
     /// Finds all pins belonging to a net.
     pub fn get_pins_for_net(&self, net_no: i32) -> Vec<&Pin> {
-        self.pins.iter().filter(|p| p.header.contains_net(net_no)).collect()
+        self.pins
+            .iter()
+            .filter(|p| p.header.contains_net(net_no))
+            .collect()
     }
 
     /// Finds all traces belonging to a net.
     pub fn get_traces_for_net(&self, net_no: i32) -> Vec<&PolylineTrace> {
-        self.traces.iter().filter(|t| t.header.contains_net(net_no)).collect()
+        self.traces
+            .iter()
+            .filter(|t| t.header.contains_net(net_no))
+            .collect()
     }
 
     /// Finds all vias belonging to a net.
     pub fn get_vias_for_net(&self, net_no: i32) -> Vec<&Via> {
-        self.vias.iter().filter(|v| v.header.contains_net(net_no)).collect()
+        self.vias
+            .iter()
+            .filter(|v| v.header.contains_net(net_no))
+            .collect()
     }
 
     /// Adds a trace to the board.
@@ -82,7 +91,9 @@ impl BasicBoard {
 
     /// Removes all un-fixed traces and vias for a given net (rip-up).
     pub fn ripup_net(&mut self, net_no: i32) {
-        self.traces.retain(|t| !t.header.contains_net(net_no) || t.header.is_fixed());
-        self.vias.retain(|v| !v.header.contains_net(net_no) || v.header.is_fixed());
+        self.traces
+            .retain(|t| !t.header.contains_net(net_no) || t.header.is_fixed());
+        self.vias
+            .retain(|v| !v.header.contains_net(net_no) || v.header.is_fixed());
     }
 }

@@ -1,6 +1,6 @@
 //! Keepout obstacle and copper pour conduction area models.
 
-use crate::item::ItemHeader;
+use crate::legacy::ItemHeader;
 use fr_geometry::planar::{IntBox, IntPoint};
 
 /// A keepout obstacle area on one or more layers.

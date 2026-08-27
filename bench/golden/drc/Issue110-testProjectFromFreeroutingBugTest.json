@@ -1,0 +1,105 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:36:56.961322+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue110-testProjectFromFreeroutingBugTest.dsn",
+  "unconnected_items": [
+    {
+      "description": "Unconnected items: Pin [/цепь] and Pin [/цепь] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [/цепь]",
+          "pos": {
+            "x": 130.8,
+            "y": -91.3
+          },
+          "uuid": "41"
+        },
+        {
+          "description": "Pin [/цепь]",
+          "pos": {
+            "x": 159.91,
+            "y": -106.95
+          },
+          "uuid": "11"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [/цель] and Pin [/цель] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [/цель]",
+          "pos": {
+            "x": 130.8,
+            "y": -93.84
+          },
+          "uuid": "42"
+        },
+        {
+          "description": "Pin [/цель]",
+          "pos": {
+            "x": 159.91,
+            "y": -104.41
+          },
+          "uuid": "12"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [/цепь1] and Pin [/цепь1] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [/цепь1]",
+          "pos": {
+            "x": 138.42,
+            "y": -93.84
+          },
+          "uuid": "47"
+        },
+        {
+          "description": "Pin [/цепь1]",
+          "pos": {
+            "x": 159.91,
+            "y": -91.71
+          },
+          "uuid": "17"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [/цепь2] and Pin [/цепь2] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [/цепь2]",
+          "pos": {
+            "x": 138.42,
+            "y": -91.3
+          },
+          "uuid": "48"
+        },
+        {
+          "description": "Pin [/цепь2]",
+          "pos": {
+            "x": 159.91,
+            "y": -109.49
+          },
+          "uuid": "10"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [],
+  "schematic_parity": [],
+  "quality_score": 0.0
+}

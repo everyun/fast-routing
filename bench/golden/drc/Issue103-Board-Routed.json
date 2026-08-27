@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:25:36.726165+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue103-Board-Routed.dsn",
+  "unconnected_items": [],
+  "violations": [
+    {
+      "description": "Track has unconnected end",
+      "items": [
+        {
+          "description": "Track [/adrEx14] on B.Cu, length 1.1253 mm",
+          "pos": {
+            "x": 111.481,
+            "y": -85.29705
+          },
+          "uuid": "3217"
+        }
+      ],
+      "severity": "warning",
+      "type": "track_dangling"
+    }
+  ],
+  "schematic_parity": [],
+  "quality_score": 999.9706420898438
+}

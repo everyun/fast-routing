@@ -1,0 +1,2426 @@
+{
+  "manifest_version": 1,
+  "generated_utc": "2026-08-27T23:06:25Z",
+  "generator": "bench/manifest.py",
+  "fixtures_dir": "/tmp/freerouting-upstream/fixtures",
+  "java_source": {
+    "results": "bench/results/20260828-013025/results.json",
+    "config": {
+      "label": null,
+      "jar": "/tmp/frbase/freerouting-2.3.0.jar",
+      "passes": 20,
+      "timeout_s": 300.0
+    }
+  },
+  "notes": [
+    "dedup.group is exact-md5; variant_family is a curated table of same-design variants (VARIANT_FAMILIES in bench/manifest.py).",
+    "java.class comes from java_source.results — regenerate after the -mp 9999 re-baseline (ROADMAP M0.5) or the classes go stale.",
+    "stability is null everywhere until the 3-run Java sweep lands; ROADMAP G2.1 treats unstable boards like timeout/crash boards.",
+    "snap_angle_effective falls back to the reader default (fortyfive_degree) when the board declares none."
+  ],
+  "coverage": {
+    "fixtures": 46,
+    "distinct_md5": 45,
+    "variant_families": 39,
+    "duplicate_groups": {
+      "md5:2ad56c8febd5": [
+        "Issue110-Pajalnaja_stancija.dsn",
+        "Issue110-Паяльная станция.dsn"
+      ]
+    },
+    "by_java_class": {
+      "java_finished": 29,
+      "java_timeout": 14,
+      "java_crash": 1,
+      "java_degenerate": 2,
+      "java_unknown": 0
+    },
+    "signal_layers": {
+      "0": 1,
+      "1": 1,
+      "2": 40,
+      "3": 1,
+      "4": 3
+    },
+    "layers_total": {
+      "0": 1,
+      "2": 40,
+      "4": 5
+    },
+    "with_plane_layers": 3,
+    "snap_angle_declared": {
+      "fortyfive_degree": 2,
+      "null": 44
+    },
+    "host_cad": {
+      "CadSoft": 2,
+      "KiCad's Pcbnew": 41,
+      "null": 3
+    },
+    "with_autoroute_settings": 2,
+    "with_class_class": 0,
+    "with_preexisting_wiring": 23,
+    "with_preexisting_copper": 26,
+    "not_specctra_dsn": [
+      "Issue006-LPC18XX_43XX_SCH.dsn"
+    ],
+    "stability_measured": 0
+  },
+  "fixtures": [
+    {
+      "name": "Issue006-LPC18XX_43XX_SCH.dsn",
+      "md5": "2005a5041b7500d47a66bd4bdb8658a2",
+      "bytes": 267264,
+      "dedup": {
+        "group": "md5:2005a5041b75",
+        "size": 1,
+        "members": [
+          "Issue006-LPC18XX_43XX_SCH.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue006-LPC18XX_43XX_SCH.dsn",
+      "properties": {
+        "is_specctra_dsn": false,
+        "layers_total": 0,
+        "signal_layers": 0,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": null,
+        "host_version": null,
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 0,
+        "nets_multi_pin": 0,
+        "components_placed": 0,
+        "parse_note": "no (pcb ...)/(structure ...) scope — not a Specctra DSN (binary compound document renamed .dsn)"
+      },
+      "java": {
+        "class": "java_degenerate",
+        "reason": "finished with final score 0.00 (nothing to route)",
+        "wall_s": 13.922,
+        "tool_time_s": 3.78,
+        "score": 0.0,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 0,
+        "checker_nets_multi_pin": 0
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue015-StackOverflow.dsn",
+      "md5": "4970c7f9c1324fa3441ea6618241ddf0",
+      "bytes": 149669,
+      "dedup": {
+        "group": "md5:4970c7f9c132",
+        "size": 1,
+        "members": [
+          "Issue015-StackOverflow.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue015-StackOverflow.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 667,
+        "preexisting_vias": 12,
+        "nets_total": 186,
+        "nets_multi_pin": 186,
+        "components_placed": 135,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.052,
+        "tool_time_s": 5.98,
+        "score": 693.84,
+        "unrouted": 57,
+        "violations": 511,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue022-AutoRouter_interrupted.dsn",
+      "md5": "7353497cbc0131532ce625a1b88f62d6",
+      "bytes": 178467,
+      "dedup": {
+        "group": "md5:7353497cbc01",
+        "size": 1,
+        "members": [
+          "Issue022-AutoRouter_interrupted.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue022-AutoRouter_interrupted.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 737,
+        "preexisting_vias": 39,
+        "nets_total": 205,
+        "nets_multi_pin": 204,
+        "components_placed": 171,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.053,
+        "tool_time_s": 3.32,
+        "score": 726.08,
+        "unrouted": 45,
+        "violations": 531,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue026-J2_reference.dsn",
+      "md5": "a0117ec5424663070bcc7c151eb988eb",
+      "bytes": 7925,
+      "dedup": {
+        "group": "md5:a0117ec54246",
+        "size": 1,
+        "members": [
+          "Issue026-J2_reference.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue026-J2_reference.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "5.1.5-52549c5~86~ubuntu16.04.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 24,
+        "nets_multi_pin": 12,
+        "components_placed": 2,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 10.639,
+        "tool_time_s": 2.08,
+        "score": 999.99,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 12,
+        "checker_nets_multi_pin": 12
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue027-zMRETestFixture.dsn",
+      "md5": "f2d63fb6c435c9b54a31def2b745e345",
+      "bytes": 71309,
+      "dedup": {
+        "group": "md5:f2d63fb6c435",
+        "size": 1,
+        "members": [
+          "Issue027-zMRETestFixture.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue027-zMRETestFixture.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 42,
+        "preexisting_vias": 0,
+        "nets_total": 168,
+        "nets_multi_pin": 168,
+        "components_placed": 210,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.061,
+        "tool_time_s": 2.62,
+        "score": 773.1,
+        "unrouted": 17,
+        "violations": 1138,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue029-hw48na.dsn",
+      "md5": "a5e8d1111a19b01b2cccaa9b8c925678",
+      "bytes": 147099,
+      "dedup": {
+        "group": "md5:a5e8d1111a19",
+        "size": 1,
+        "members": [
+          "Issue029-hw48na.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue029-hw48na.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 598,
+        "preexisting_vias": 24,
+        "nets_total": 163,
+        "nets_multi_pin": 163,
+        "components_placed": 160,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.048,
+        "tool_time_s": null,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue034-Green14SegLED.dsn",
+      "md5": "c980c3ecf2b07a4b815a9dd4c59f3401",
+      "bytes": 33706,
+      "dedup": {
+        "group": "md5:c980c3ecf2b0",
+        "size": 1,
+        "members": [
+          "Issue034-Green14SegLED.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue034-Green14SegLED.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.6)-1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 101,
+        "nets_multi_pin": 101,
+        "components_placed": 37,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 29.172,
+        "tool_time_s": 21.59,
+        "score": 979.58,
+        "unrouted": 3,
+        "violations": 0,
+        "checker_nets_routed": 99,
+        "checker_nets_multi_pin": 101
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue035-ReadPlaceScope.dsn",
+      "md5": "10c7d63e1e58671a5c0d2d1d675300d6",
+      "bytes": 58509,
+      "dedup": {
+        "group": "md5:10c7d63e1e58",
+        "size": 1,
+        "members": [
+          "Issue035-ReadPlaceScope.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue035-ReadPlaceScope.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.2)-2",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 2,
+        "preexisting_vias": 124,
+        "nets_total": 101,
+        "nets_multi_pin": 93,
+        "components_placed": 141,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 25.827,
+        "tool_time_s": 17.38,
+        "score": 848.32,
+        "unrouted": 6,
+        "violations": 152,
+        "checker_nets_routed": 93,
+        "checker_nets_multi_pin": 93
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue039-bug-design.dsn",
+      "md5": "9cbaf397a08dec7d4c5b5e2dfa8f693f",
+      "bytes": 44328,
+      "dedup": {
+        "group": "md5:9cbaf397a08d",
+        "size": 1,
+        "members": [
+          "Issue039-bug-design.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue039-bug-design.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "5.1.8",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 74,
+        "nets_multi_pin": 74,
+        "components_placed": 49,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 166.379,
+        "tool_time_s": 160.86,
+        "score": 931.35,
+        "unrouted": 9,
+        "violations": 25,
+        "checker_nets_routed": 74,
+        "checker_nets_multi_pin": 74
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue054-tairakb.dsn",
+      "md5": "24aa59a5e283de90404a7d07db2da6c5",
+      "bytes": 43344,
+      "dedup": {
+        "group": "md5:24aa59a5e283",
+        "size": 1,
+        "members": [
+          "Issue054-tairakb.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue054-tairakb.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.9-0-10_14)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 5,
+        "preexisting_vias": 1,
+        "nets_total": 57,
+        "nets_multi_pin": 56,
+        "components_placed": 70,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 80.188,
+        "tool_time_s": 71.83,
+        "score": 992.41,
+        "unrouted": 1,
+        "violations": 5,
+        "checker_nets_routed": 55,
+        "checker_nets_multi_pin": 56
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue066-Project_GP8B.dsn",
+      "md5": "d6355b2ab0af08e35e48d09fe93c3535",
+      "bytes": 110326,
+      "dedup": {
+        "group": "md5:d6355b2ab0af",
+        "size": 1,
+        "members": [
+          "Issue066-Project_GP8B.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue066-Project_GP8B.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 4,
+        "signal_layers": 4,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "In1.Cu",
+          "In2.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.10)-1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 107,
+        "preexisting_vias": 0,
+        "nets_total": 266,
+        "nets_multi_pin": 229,
+        "components_placed": 110,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.069,
+        "tool_time_s": 13.78,
+        "score": 723.83,
+        "unrouted": 205,
+        "violations": 23,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue070-Autorouter_FQ101_PCB_2022-05-13.dsn",
+      "md5": "979ed06345e2b5d8aef250e2a61e8624",
+      "bytes": 121895,
+      "dedup": {
+        "group": "md5:979ed06345e2",
+        "size": 1,
+        "members": [
+          "Issue070-Autorouter_FQ101_PCB_2022-05-13.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue070-Autorouter_FQ101_PCB_2022-05-13.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "1",
+          "2"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": null,
+        "host_version": null,
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 613,
+        "preexisting_vias": 0,
+        "nets_total": 75,
+        "nets_multi_pin": 69,
+        "components_placed": 1,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.045,
+        "tool_time_s": 52.36,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue093-interf_u.dsn",
+      "md5": "66b8b439f62203d7ccfcd0395552c250",
+      "bytes": 148760,
+      "dedup": {
+        "group": "md5:66b8b439f622",
+        "size": 1,
+        "members": [
+          "Issue093-interf_u.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue093-interf_u.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "top_copper",
+          "bottom_copper"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.1)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 653,
+        "preexisting_vias": 84,
+        "nets_total": 173,
+        "nets_multi_pin": 110,
+        "components_placed": 25,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 23.094,
+        "tool_time_s": 13.63,
+        "score": 719.39,
+        "unrouted": 18,
+        "violations": 192,
+        "checker_nets_routed": 110,
+        "checker_nets_multi_pin": 110
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue102-Mars-64-revE-rot00.dsn",
+      "md5": "2b233f2053a534e22c06a002f9cf59fc",
+      "bytes": 49787,
+      "dedup": {
+        "group": "md5:2b233f2053a5",
+        "size": 1,
+        "members": [
+          "Issue102-Mars-64-revE-rot00.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue102-Mars-64-revE-rot00.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 0,
+        "preexisting_vias": 65,
+        "nets_total": 94,
+        "nets_multi_pin": 74,
+        "components_placed": 80,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 53.713,
+        "tool_time_s": 46.63,
+        "score": 869.78,
+        "unrouted": 1,
+        "violations": 64,
+        "checker_nets_routed": 74,
+        "checker_nets_multi_pin": 74
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue103-Board-Routed.dsn",
+      "md5": "5cb255778bd7c1c9ac4763e5721c7014",
+      "bytes": 1023701,
+      "dedup": {
+        "group": "md5:5cb255778bd7",
+        "size": 1,
+        "members": [
+          "Issue103-Board-Routed.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:103-board",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": "fortyfive_degree",
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "5.99.0+really5.1.12+dfsg1-1~bpo11+1",
+        "has_autoroute_settings": true,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 2326,
+        "preexisting_vias": 443,
+        "nets_total": 282,
+        "nets_multi_pin": 267,
+        "components_placed": 55,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 12.462,
+        "tool_time_s": 2.22,
+        "score": 982.02,
+        "unrouted": 0,
+        "violations": 63,
+        "checker_nets_routed": 267,
+        "checker_nets_multi_pin": 267
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue103-Board-Unrouted.dsn",
+      "md5": "6309aecd6bef9acd94b4e6fe3bda767e",
+      "bytes": 43651,
+      "dedup": {
+        "group": "md5:6309aecd6bef",
+        "size": 1,
+        "members": [
+          "Issue103-Board-Unrouted.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:103-board",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "5.99.0+really5.1.12+dfsg1-1~bpo11+1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 282,
+        "nets_multi_pin": 267,
+        "components_placed": 55,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.076,
+        "tool_time_s": 2.48,
+        "score": 816.22,
+        "unrouted": 117,
+        "violations": 60,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue107-freq_teiler_200kHz_kicad.dsn",
+      "md5": "d2d818eb96a6084b78b18df35708c78b",
+      "bytes": 69307,
+      "dedup": {
+        "group": "md5:d2d818eb96a6",
+        "size": 1,
+        "members": [
+          "Issue107-freq_teiler_200kHz_kicad.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:107-freq-teiler",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 9,
+        "preexisting_vias": 0,
+        "nets_total": 77,
+        "nets_multi_pin": 59,
+        "components_placed": 84,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 14.093,
+        "tool_time_s": 4.12,
+        "score": 988.16,
+        "unrouted": 2,
+        "violations": 0,
+        "checker_nets_routed": 59,
+        "checker_nets_multi_pin": 59
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue107-freq_teiler_200kHz_kicad_bad.dsn",
+      "md5": "4abc5d6e1e94ebfd63c8f919758f6737",
+      "bytes": 70139,
+      "dedup": {
+        "group": "md5:4abc5d6e1e94",
+        "size": 1,
+        "members": [
+          "Issue107-freq_teiler_200kHz_kicad_bad.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:107-freq-teiler",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.5)-3",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 9,
+        "preexisting_vias": 0,
+        "nets_total": 59,
+        "nets_multi_pin": 59,
+        "components_placed": 86,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.048,
+        "tool_time_s": null,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue110-Pajalnaja_stancija.dsn",
+      "md5": "2ad56c8febd528328ab9bf9e88876c3a",
+      "bytes": 27461,
+      "dedup": {
+        "group": "md5:2ad56c8febd5",
+        "size": 2,
+        "members": [
+          "Issue110-Pajalnaja_stancija.dsn",
+          "Issue110-Паяльная станция.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:110-solder-station",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "Верхний_сигнальный",
+          "Нижний_сигнальный"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "4.0.1-2.201512121406+6195~38~ubuntu14.04.1-stable",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 64,
+        "nets_multi_pin": 41,
+        "components_placed": 54,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 72.76,
+        "tool_time_s": 65.89,
+        "score": 911.92,
+        "unrouted": 6,
+        "violations": 18,
+        "checker_nets_routed": 39,
+        "checker_nets_multi_pin": 41
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue110-RelayModule.dsn",
+      "md5": "8842f62a8476382ab29a803245e7562d",
+      "bytes": 99405,
+      "dedup": {
+        "group": "md5:8842f62a8476",
+        "size": 1,
+        "members": [
+          "Issue110-RelayModule.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue110-RelayModule.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "6.0.4-6f826c9f35~116~ubuntu21.10.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 0,
+        "preexisting_vias": 22,
+        "nets_total": 64,
+        "nets_multi_pin": 44,
+        "components_placed": 33,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 20.331,
+        "tool_time_s": 12.17,
+        "score": 993.17,
+        "unrouted": 0,
+        "violations": 3,
+        "checker_nets_routed": 44,
+        "checker_nets_multi_pin": 44
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue110-testPCBSpecctraFile.dsn",
+      "md5": "c10e8cfe6438ea95d2b9fdd0c0fd3a37",
+      "bytes": 62940,
+      "dedup": {
+        "group": "md5:c10e8cfe6438",
+        "size": 1,
+        "members": [
+          "Issue110-testPCBSpecctraFile.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue110-testPCBSpecctraFile.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "6.0.0-rc1-unknown-e56e61ffb5~144~ubuntu21.10.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 175,
+        "preexisting_vias": 14,
+        "nets_total": 25,
+        "nets_multi_pin": 25,
+        "components_placed": 39,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 32.499,
+        "tool_time_s": 29.57,
+        "score": 613.69,
+        "unrouted": 20,
+        "violations": 41,
+        "checker_nets_routed": 24,
+        "checker_nets_multi_pin": 25
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue110-testProjectFromFreeroutingBugTest.dsn",
+      "md5": "58750b2da5dd970ea723f34c09039a61",
+      "bytes": 7912,
+      "dedup": {
+        "group": "md5:58750b2da5dd",
+        "size": 1,
+        "members": [
+          "Issue110-testProjectFromFreeroutingBugTest.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:110-fr-bugtest",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "6.0.4-6f826c9f35~116~ubuntu21.10.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 20,
+        "nets_multi_pin": 4,
+        "components_placed": 2,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 9.314,
+        "tool_time_s": 0.48,
+        "score": 999.98,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 4,
+        "checker_nets_multi_pin": 4
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue110-testProjectFromFreeroutingBugTest01.dsn",
+      "md5": "97b7edefc62b865a069d8f930f44a3b7",
+      "bytes": 8703,
+      "dedup": {
+        "group": "md5:97b7edefc62b",
+        "size": 1,
+        "members": [
+          "Issue110-testProjectFromFreeroutingBugTest01.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:110-fr-bugtest",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "6.0.4-6f826c9f35~116~ubuntu21.10.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 20,
+        "nets_multi_pin": 4,
+        "components_placed": 2,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 9.43,
+        "tool_time_s": 0.5,
+        "score": 999.98,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 4,
+        "checker_nets_multi_pin": 4
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue110-Паяльная станция.dsn",
+      "md5": "2ad56c8febd528328ab9bf9e88876c3a",
+      "bytes": 27461,
+      "dedup": {
+        "group": "md5:2ad56c8febd5",
+        "size": 2,
+        "members": [
+          "Issue110-Pajalnaja_stancija.dsn",
+          "Issue110-Паяльная станция.dsn"
+        ],
+        "primary": false
+      },
+      "variant_family": "family:110-solder-station",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "Верхний_сигнальный",
+          "Нижний_сигнальный"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "4.0.1-2.201512121406+6195~38~ubuntu14.04.1-stable",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 64,
+        "nets_multi_pin": 41,
+        "components_placed": 54,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 71.891,
+        "tool_time_s": 62.83,
+        "score": 911.92,
+        "unrouted": 6,
+        "violations": 18,
+        "checker_nets_routed": 39,
+        "checker_nets_multi_pin": 41
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue113-Protein.dsn",
+      "md5": "e1e4fb81bad00c2974bfe5e8900cf548",
+      "bytes": 136962,
+      "dedup": {
+        "group": "md5:e1e4fb81bad0",
+        "size": 1,
+        "members": [
+          "Issue113-Protein.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue113-Protein.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.5)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 167,
+        "preexisting_vias": 0,
+        "nets_total": 203,
+        "nets_multi_pin": 160,
+        "components_placed": 78,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.048,
+        "tool_time_s": 9.85,
+        "score": 626.12,
+        "unrouted": 157,
+        "violations": 45,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue143-rpi_splitter.dsn",
+      "md5": "fbb084bbf73831702e286c474b590318",
+      "bytes": 3891,
+      "dedup": {
+        "group": "md5:fbb084bbf738",
+        "size": 1,
+        "members": [
+          "Issue143-rpi_splitter.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:143-rpi-splitter",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "1#Top",
+          "16#Bottom"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "CadSoft",
+        "host_version": "Eagle V 9.5 - Using eagle2freerouting.ulp, version 2022-09-01, on 9/20/2022 9:56 PM",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 5,
+        "nets_multi_pin": 4,
+        "components_placed": 3,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 8.675,
+        "tool_time_s": 1.16,
+        "score": 999.98,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 4,
+        "checker_nets_multi_pin": 5
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue143-rpi_splitter_mod.dsn",
+      "md5": "7618f69274d0815f33e15474fb022075",
+      "bytes": 3907,
+      "dedup": {
+        "group": "md5:7618f69274d0",
+        "size": 1,
+        "members": [
+          "Issue143-rpi_splitter_mod.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:143-rpi-splitter",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "1#Top",
+          "16#Bottom"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "CadSoft",
+        "host_version": "Eagle V 9.5 - Using eagle2freerouting.ulp, version 2022-09-01, on 9/20/2022 9:56 PM",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 5,
+        "nets_multi_pin": 4,
+        "components_placed": 3,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 5.489,
+        "tool_time_s": 0.25,
+        "score": 1000.0,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 1,
+        "checker_nets_multi_pin": 5
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue145-smoothieboard.dsn",
+      "md5": "288d140089edad0561cebac2b3d077cb",
+      "bytes": 132032,
+      "dedup": {
+        "group": "md5:288d140089ed",
+        "size": 1,
+        "members": [
+          "Issue145-smoothieboard.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue145-smoothieboard.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 4,
+        "signal_layers": 3,
+        "plane_layers": 1,
+        "other_layers": 0,
+        "layer_names": [
+          "Top",
+          "Route2",
+          "Route15",
+          "Bottom"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.1.9)-1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 0,
+        "preexisting_vias": 42,
+        "nets_total": 245,
+        "nets_multi_pin": 225,
+        "components_placed": 322,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.06,
+        "tool_time_s": 44.05,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue153-wavefolder.dsn",
+      "md5": "3abcbe4ea31cf6d9dd52fff6812b094e",
+      "bytes": 123558,
+      "dedup": {
+        "group": "md5:3abcbe4ea31c",
+        "size": 1,
+        "members": [
+          "Issue153-wavefolder.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue153-wavefolder.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.7-1)-1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 81,
+        "preexisting_vias": 11,
+        "nets_total": 31,
+        "nets_multi_pin": 30,
+        "components_placed": 43,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 13.011,
+        "tool_time_s": 3.59,
+        "score": 940.73,
+        "unrouted": 3,
+        "violations": 9,
+        "checker_nets_routed": 28,
+        "checker_nets_multi_pin": 30
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue155-CH376_MCP795_Module.dsn",
+      "md5": "b98063c43133f252621394a97160ddd1",
+      "bytes": 50353,
+      "dedup": {
+        "group": "md5:b98063c43133",
+        "size": 1,
+        "members": [
+          "Issue155-CH376_MCP795_Module.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue155-CH376_MCP795_Module.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.4)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 34,
+        "nets_multi_pin": 25,
+        "components_placed": 15,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 14.776,
+        "tool_time_s": 3.76,
+        "score": 999.99,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 25,
+        "checker_nets_multi_pin": 25
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue157-TeamAdapt-LinePCB.dsn",
+      "md5": "cb9ce79562935c6b48000f6438347d9c",
+      "bytes": 201061,
+      "dedup": {
+        "group": "md5:cb9ce7956293",
+        "size": 1,
+        "members": [
+          "Issue157-TeamAdapt-LinePCB.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue157-TeamAdapt-LinePCB.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.9)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 47,
+        "preexisting_vias": 0,
+        "nets_total": 65,
+        "nets_multi_pin": 64,
+        "components_placed": 122,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 92.597,
+        "tool_time_s": 89.78,
+        "score": 917.69,
+        "unrouted": 15,
+        "violations": 18,
+        "checker_nets_routed": 64,
+        "checker_nets_multi_pin": 64
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue159-setonix_2hp-pcb.dsn",
+      "md5": "df11199a42e0eee38c379d31852e3e9e",
+      "bytes": 24238,
+      "dedup": {
+        "group": "md5:df11199a42e0",
+        "size": 1,
+        "members": [
+          "Issue159-setonix_2hp-pcb.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue159-setonix_2hp-pcb.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.99.0-5202-g5deee405da)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 9,
+        "nets_multi_pin": 6,
+        "components_placed": 15,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 9.926,
+        "tool_time_s": 0.78,
+        "score": 999.99,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 6,
+        "checker_nets_multi_pin": 6
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue163-pic_programmer.dsn",
+      "md5": "f20c5dd31933ba2d2795c7fe2db10aae",
+      "bytes": 86334,
+      "dedup": {
+        "group": "md5:f20c5dd31933",
+        "size": 1,
+        "members": [
+          "Issue163-pic_programmer.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue163-pic_programmer.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "top_layer",
+          "bottom_layer"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(5.0.0-3-g5ebb6b6)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 297,
+        "preexisting_vias": 6,
+        "nets_total": 111,
+        "nets_multi_pin": 34,
+        "components_placed": 63,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 14.642,
+        "tool_time_s": 5.13,
+        "score": 919.04,
+        "unrouted": 9,
+        "violations": 6,
+        "checker_nets_routed": 33,
+        "checker_nets_multi_pin": 34
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue178-KeebMaker_Sofle_Choc.dsn",
+      "md5": "819f44190ba7806407ca998089c863d1",
+      "bytes": 526135,
+      "dedup": {
+        "group": "md5:819f44190ba7",
+        "size": 1,
+        "members": [
+          "Issue178-KeebMaker_Sofle_Choc.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue178-KeebMaker_Sofle_Choc.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.7)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 176,
+        "nets_multi_pin": 170,
+        "components_placed": 216,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.053,
+        "tool_time_s": 2.69,
+        "score": 976.51,
+        "unrouted": 6,
+        "violations": 20,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue179-Autorouter_PCB1_2023-3-24.dsn",
+      "md5": "22663bf4e6be36b90ab612639dbae2a0",
+      "bytes": 12967,
+      "dedup": {
+        "group": "md5:22663bf4e6be",
+        "size": 1,
+        "members": [
+          "Issue179-Autorouter_PCB1_2023-3-24.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue179-Autorouter_PCB1_2023-3-24.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "1",
+          "2"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": null,
+        "host_version": null,
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 24,
+        "nets_multi_pin": 20,
+        "components_placed": 1,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_crash",
+        "reason": "exit_code=0, no parseable completion line",
+        "wall_s": 8.853,
+        "tool_time_s": null,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": 0,
+        "checker_nets_multi_pin": 20
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue187-processor.Z80.dsn",
+      "md5": "e68e56f14f4472d9715de98e974150e6",
+      "bytes": 1988334,
+      "dedup": {
+        "group": "md5:e68e56f14f44",
+        "size": 1,
+        "members": [
+          "Issue187-processor.Z80.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:z80-processor",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": "fortyfive_degree",
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.11)",
+        "has_autoroute_settings": true,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 2026,
+        "preexisting_vias": 324,
+        "nets_total": 529,
+        "nets_multi_pin": 245,
+        "components_placed": 143,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 11.835,
+        "tool_time_s": 1.0,
+        "score": 999.98,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 245,
+        "checker_nets_multi_pin": 245
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue190-processor.Z80.dsn",
+      "md5": "738c4424b1260d2a6b48218f59ee8147",
+      "bytes": 927624,
+      "dedup": {
+        "group": "md5:738c4424b126",
+        "size": 1,
+        "members": [
+          "Issue190-processor.Z80.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:z80-processor",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "(6.0.11)",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 5990,
+        "preexisting_vias": 223,
+        "nets_total": 529,
+        "nets_multi_pin": 244,
+        "components_placed": 138,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 260.777,
+        "tool_time_s": 250.38,
+        "score": 656.58,
+        "unrouted": 12,
+        "violations": 1372,
+        "checker_nets_routed": 244,
+        "checker_nets_multi_pin": 244
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue208-freerouting.dsn",
+      "md5": "964b037006fe72e7b356539babb2bacd",
+      "bytes": 41882,
+      "dedup": {
+        "group": "md5:964b037006fe",
+        "size": 1,
+        "members": [
+          "Issue208-freerouting.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue208-freerouting.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.2",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 415,
+        "nets_multi_pin": 299,
+        "components_placed": 13,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.044,
+        "tool_time_s": 18.86,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue209-split05.dsn",
+      "md5": "05f39c0bdfe52153cdfdca9c12c533b8",
+      "bytes": 36658,
+      "dedup": {
+        "group": "md5:05f39c0bdfe5",
+        "size": 1,
+        "members": [
+          "Issue209-split05.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:209-split",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.5-0",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 45,
+        "nets_multi_pin": 45,
+        "components_placed": 68,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 289.181,
+        "tool_time_s": 280.6,
+        "score": 821.44,
+        "unrouted": 20,
+        "violations": 183,
+        "checker_nets_routed": 40,
+        "checker_nets_multi_pin": 45
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue209-split10.dsn",
+      "md5": "cee6d2a8d0bde64a2be14a1b736d51d6",
+      "bytes": 36658,
+      "dedup": {
+        "group": "md5:cee6d2a8d0bd",
+        "size": 1,
+        "members": [
+          "Issue209-split10.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:209-split",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.5-0",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 45,
+        "nets_multi_pin": 45,
+        "components_placed": 68,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 29.099,
+        "tool_time_s": 20.8,
+        "score": 881.38,
+        "unrouted": 1,
+        "violations": 183,
+        "checker_nets_routed": 40,
+        "checker_nets_multi_pin": 45
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue214-freerouting.dsn",
+      "md5": "72e237a8dfbfc19007008423fdb8b9d3",
+      "bytes": 195335,
+      "dedup": {
+        "group": "md5:72e237a8dfbf",
+        "size": 1,
+        "members": [
+          "Issue214-freerouting.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue214-freerouting.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 4,
+        "signal_layers": 4,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "In1.Cu",
+          "In2.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.5-7.0.5~ubuntu22.04.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 963,
+        "preexisting_vias": 167,
+        "nets_total": 140,
+        "nets_multi_pin": 129,
+        "components_placed": 138,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.043,
+        "tool_time_s": 61.11,
+        "score": 766.58,
+        "unrouted": 58,
+        "violations": 192,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue217-8088sbc.dsn",
+      "md5": "4381e5785f2db9e8259c5ba3b47bd94d",
+      "bytes": 84808,
+      "dedup": {
+        "group": "md5:4381e5785f2d",
+        "size": 1,
+        "members": [
+          "Issue217-8088sbc.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue217-8088sbc.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.1",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 104,
+        "nets_multi_pin": 76,
+        "components_placed": 46,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 25.063,
+        "tool_time_s": 16.01,
+        "score": 991.48,
+        "unrouted": 2,
+        "violations": 0,
+        "checker_nets_routed": 74,
+        "checker_nets_multi_pin": 76
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue219-LogicBoard_smt.dsn",
+      "md5": "4caa63a60196c849abba12d0251fd374",
+      "bytes": 108029,
+      "dedup": {
+        "group": "md5:4caa63a60196",
+        "size": 1,
+        "members": [
+          "Issue219-LogicBoard_smt.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue219-LogicBoard_smt.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 4,
+        "signal_layers": 4,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "In1.Cu",
+          "In2.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.5",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": false,
+        "has_preexisting_copper": false,
+        "preexisting_wires": 0,
+        "preexisting_vias": 0,
+        "nets_total": 343,
+        "nets_multi_pin": 317,
+        "components_placed": 143,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_timeout",
+        "reason": "killed at the 300.0s timeout",
+        "wall_s": 300.043,
+        "tool_time_s": 245.9,
+        "score": null,
+        "unrouted": null,
+        "violations": null,
+        "checker_nets_routed": null,
+        "checker_nets_multi_pin": null
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue229-display-8-digit-hc595.dsn",
+      "md5": "ba2d87d63e5d4710a324a182f4e74a9c",
+      "bytes": 35940,
+      "dedup": {
+        "group": "md5:ba2d87d63e5d",
+        "size": 1,
+        "members": [
+          "Issue229-display-8-digit-hc595.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue229-display-8-digit-hc595.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 2,
+        "plane_layers": 0,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "4.0.7",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 218,
+        "preexisting_vias": 24,
+        "nets_total": 30,
+        "nets_multi_pin": 30,
+        "components_placed": 26,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_degenerate",
+        "reason": "finished with final score 0.00 (nothing to route)",
+        "wall_s": 8.941,
+        "tool_time_s": 0.03,
+        "score": 0.0,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 0,
+        "checker_nets_multi_pin": 30
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue230-CNH_Functional_Tester_1.dsn",
+      "md5": "8a9aadf62767b0d82f87de5b9b60aa3d",
+      "bytes": 163673,
+      "dedup": {
+        "group": "md5:8a9aadf62767",
+        "size": 1,
+        "members": [
+          "Issue230-CNH_Functional_Tester_1.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue230-CNH_Functional_Tester_1.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 4,
+        "signal_layers": 2,
+        "plane_layers": 2,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "In1.Cu",
+          "In2.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.4",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 8,
+        "preexisting_vias": 0,
+        "nets_total": 764,
+        "nets_multi_pin": 64,
+        "components_placed": 81,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 42.079,
+        "tool_time_s": 33.0,
+        "score": 974.37,
+        "unrouted": 2,
+        "violations": 16,
+        "checker_nets_routed": 61,
+        "checker_nets_multi_pin": 64
+      },
+      "stability": null
+    },
+    {
+      "name": "Issue269-caniot-tiny-arm.dsn",
+      "md5": "82d21e904869d469e95e9db0fd58c8eb",
+      "bytes": 109348,
+      "dedup": {
+        "group": "md5:82d21e904869",
+        "size": 1,
+        "members": [
+          "Issue269-caniot-tiny-arm.dsn"
+        ],
+        "primary": true
+      },
+      "variant_family": "family:Issue269-caniot-tiny-arm.dsn",
+      "properties": {
+        "is_specctra_dsn": true,
+        "layers_total": 2,
+        "signal_layers": 1,
+        "plane_layers": 1,
+        "other_layers": 0,
+        "layer_names": [
+          "F.Cu",
+          "B.Cu"
+        ],
+        "snap_angle_declared": null,
+        "snap_angle_effective": "fortyfive_degree",
+        "host_cad": "KiCad's Pcbnew",
+        "host_version": "7.0.10",
+        "has_autoroute_settings": false,
+        "has_class_class": false,
+        "has_preexisting_wiring": true,
+        "has_preexisting_copper": true,
+        "preexisting_wires": 335,
+        "preexisting_vias": 0,
+        "nets_total": 94,
+        "nets_multi_pin": 76,
+        "components_placed": 74,
+        "parse_note": null
+      },
+      "java": {
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 160.916,
+        "tool_time_s": 158.51,
+        "score": 516.67,
+        "unrouted": 92,
+        "violations": 4,
+        "checker_nets_routed": 38,
+        "checker_nets_multi_pin": 76
+      },
+      "stability": null
+    }
+  ]
+}

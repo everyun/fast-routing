@@ -1,0 +1,473 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:39:24.922404+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue179-Autorouter_PCB1_2023-3-24.dsn",
+  "unconnected_items": [
+    {
+      "description": "Unconnected items: Pin [GND] and Pin [GND] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 27699.183603299996,
+            "y": 27699.183603299996
+          },
+          "uuid": "111"
+        },
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 0.204724,
+            "y": 0.383032
+          },
+          "uuid": "110"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N14077] and Pin [$1N14077] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N14077]",
+          "pos": {
+            "x": 0.344678,
+            "y": 0.383032
+          },
+          "uuid": "109"
+        },
+        {
+          "description": "Pin [$1N14077]",
+          "pos": {
+            "x": 5.17779,
+            "y": 1.533906
+          },
+          "uuid": "107"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N3035] and Pin [$1N3035] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N3035]",
+          "pos": {
+            "x": 0.34569399999999995,
+            "y": 0.22047199999999997
+          },
+          "uuid": "79"
+        },
+        {
+          "description": "Pin [$1N3035]",
+          "pos": {
+            "x": 0.893318,
+            "y": 0.649732
+          },
+          "uuid": "78"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N1215] and Pin [$1N1215] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N1215]",
+          "pos": {
+            "x": 2.593848,
+            "y": 1.855724
+          },
+          "uuid": "50"
+        },
+        {
+          "description": "Pin [$1N1215]",
+          "pos": {
+            "x": 2.06248,
+            "y": 1.3746479999999999
+          },
+          "uuid": "15"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N1496] and Pin [$1N1496] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N1496]",
+          "pos": {
+            "x": 2.0574,
+            "y": 1.982724
+          },
+          "uuid": "55"
+        },
+        {
+          "description": "Pin [$1N1496]",
+          "pos": {
+            "x": 2.06248,
+            "y": 1.2476479999999999
+          },
+          "uuid": "14"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N14056] and Pin [$1N14056] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N14056]",
+          "pos": {
+            "x": 4.745482,
+            "y": 1.375918
+          },
+          "uuid": "58"
+        },
+        {
+          "description": "Pin [$1N14056]",
+          "pos": {
+            "x": 4.168139999999999,
+            "y": 0.5565140000000001
+          },
+          "uuid": "19"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N13824] and Pin [$1N13824] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N13824]",
+          "pos": {
+            "x": 4.124705999999999,
+            "y": 1.532128
+          },
+          "uuid": "91"
+        },
+        {
+          "description": "Pin [$1N13824]",
+          "pos": {
+            "x": 3.5778440000000002,
+            "y": 2.9024579999999998
+          },
+          "uuid": "86"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N1925] and Pin [$1N1925] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N1925]",
+          "pos": {
+            "x": 4.168139999999999,
+            "y": 0.683514
+          },
+          "uuid": "18"
+        },
+        {
+          "description": "Pin [$1N1925]",
+          "pos": {
+            "x": 4.168139999999999,
+            "y": 0.810514
+          },
+          "uuid": "17"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N1933] and Pin [$1N1933] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N1933]",
+          "pos": {
+            "x": 4.168139999999999,
+            "y": 0.302514
+          },
+          "uuid": "21"
+        },
+        {
+          "description": "Pin [$1N1933]",
+          "pos": {
+            "x": 4.168139999999999,
+            "y": 0.42951399999999995
+          },
+          "uuid": "20"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N14595] and Pin [$1N14595] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N14595]",
+          "pos": {
+            "x": 2.8653739999999996,
+            "y": 2.9123639999999997
+          },
+          "uuid": "100"
+        },
+        {
+          "description": "Pin [$1N14595]",
+          "pos": {
+            "x": 2.325116,
+            "y": 0.29464
+          },
+          "uuid": "98"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N11447] and Pin [$1N11447] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N11447]",
+          "pos": {
+            "x": 3.474212,
+            "y": 1.448308
+          },
+          "uuid": "47"
+        },
+        {
+          "description": "Pin [$1N11447]",
+          "pos": {
+            "x": 3.109722,
+            "y": 0.7426959999999999
+          },
+          "uuid": "32"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N10884] and Pin [$1N10884] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N10884]",
+          "pos": {
+            "x": 3.358896,
+            "y": 0.30479999999999996
+          },
+          "uuid": "90"
+        },
+        {
+          "description": "Pin [$1N10884]",
+          "pos": {
+            "x": 3.664204,
+            "y": 0.6156959999999999
+          },
+          "uuid": "37"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N12619] and Pin [$1N12619] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N12619]",
+          "pos": {
+            "x": 4.124705999999999,
+            "y": 1.381506
+          },
+          "uuid": "92"
+        },
+        {
+          "description": "Pin [$1N12619]",
+          "pos": {
+            "x": 3.664204,
+            "y": 1.448308
+          },
+          "uuid": "48"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N771] and Pin [$1N771] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N771]",
+          "pos": {
+            "x": 2.4391619999999996,
+            "y": 2.8021279999999997
+          },
+          "uuid": "75"
+        },
+        {
+          "description": "Pin [$1N771]",
+          "pos": {
+            "x": 2.022602,
+            "y": 2.651506
+          },
+          "uuid": "74"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N822] and Pin [$1N822] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N822]",
+          "pos": {
+            "x": 3.0657799999999997,
+            "y": 1.44145
+          },
+          "uuid": "61"
+        },
+        {
+          "description": "Pin [$1N822]",
+          "pos": {
+            "x": 2.593848,
+            "y": 2.1097240000000004
+          },
+          "uuid": "52"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N3047] and Pin [$1N3047] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N3047]",
+          "pos": {
+            "x": 1.4925039999999998,
+            "y": 2.550922
+          },
+          "uuid": "82"
+        },
+        {
+          "description": "Pin [$1N3047]",
+          "pos": {
+            "x": 2.0574,
+            "y": 2.2367239999999997
+          },
+          "uuid": "57"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N14372] and Pin [$1N14372] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N14372]",
+          "pos": {
+            "x": 4.753356,
+            "y": 1.974088
+          },
+          "uuid": "95"
+        },
+        {
+          "description": "Pin [$1N14372]",
+          "pos": {
+            "x": 3.0424119999999997,
+            "y": 2.0690839999999997
+          },
+          "uuid": "83"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N515] and Pin [$1N515] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N515]",
+          "pos": {
+            "x": 4.0411399999999995,
+            "y": 2.4856439999999997
+          },
+          "uuid": "70"
+        },
+        {
+          "description": "Pin [$1N515]",
+          "pos": {
+            "x": 4.0411399999999995,
+            "y": 2.0690839999999997
+          },
+          "uuid": "67"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N518] and Pin [$1N518] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N518]",
+          "pos": {
+            "x": 4.602734000000001,
+            "y": 2.390648
+          },
+          "uuid": "72"
+        },
+        {
+          "description": "Pin [$1N518]",
+          "pos": {
+            "x": 4.191762,
+            "y": 2.4856439999999997
+          },
+          "uuid": "69"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [$1N13741] and Pin [$1N13741] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [$1N13741]",
+          "pos": {
+            "x": 3.0424119999999997,
+            "y": 2.4856439999999997
+          },
+          "uuid": "93"
+        },
+        {
+          "description": "Pin [$1N13741]",
+          "pos": {
+            "x": 3.193288,
+            "y": 2.0690839999999997
+          },
+          "uuid": "84"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [],
+  "schematic_parity": [],
+  "quality_score": 0.0
+}

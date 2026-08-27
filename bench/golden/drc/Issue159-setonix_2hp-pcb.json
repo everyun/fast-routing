@@ -1,0 +1,151 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:38:47.116112+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue159-setonix_2hp-pcb.dsn",
+  "unconnected_items": [
+    {
+      "description": "Unconnected items: Pin [GND] and Pin [GND] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 213.95,
+            "y": -105.1
+          },
+          "uuid": "174"
+        },
+        {
+          "description": "Pin [GND]",
+          "pos": {
+            "x": 213.95,
+            "y": -54.1
+          },
+          "uuid": "158"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D1-A)] and Pin [Net-(D1-A)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D1-A)]",
+          "pos": {
+            "x": 216.965,
+            "y": -37.0
+          },
+          "uuid": "113"
+        },
+        {
+          "description": "Pin [Net-(D1-A)]",
+          "pos": {
+            "x": 216.965,
+            "y": -25.5
+          },
+          "uuid": "100"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D1-K)] and Pin [Net-(D1-K)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D1-K)]",
+          "pos": {
+            "x": 213.095,
+            "y": -98.0
+          },
+          "uuid": "190"
+        },
+        {
+          "description": "Pin [Net-(D1-K)]",
+          "pos": {
+            "x": 213.95,
+            "y": -65.4
+          },
+          "uuid": "159"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D5-A)] and Pin [Net-(D5-A)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D5-A)]",
+          "pos": {
+            "x": 213.465,
+            "y": -70.75
+          },
+          "uuid": "126"
+        },
+        {
+          "description": "Pin [Net-(D5-A)]",
+          "pos": {
+            "x": 213.465,
+            "y": -82.25
+          },
+          "uuid": "61"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(D5-K)] and Pin [Net-(D5-K)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(D5-K)]",
+          "pos": {
+            "x": 213.95,
+            "y": -116.4
+          },
+          "uuid": "175"
+        },
+        {
+          "description": "Pin [Net-(D5-K)]",
+          "pos": {
+            "x": 210.8,
+            "y": -87.705
+          },
+          "uuid": "148"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    },
+    {
+      "description": "Unconnected items: Pin [Net-(J3-PadTN)] and Pin [Net-(J3-PadTN)] (2 total items in net)",
+      "items": [
+        {
+          "description": "Pin [Net-(J3-PadTN)]",
+          "pos": {
+            "x": 214.9568,
+            "y": -98.0
+          },
+          "uuid": "191"
+        },
+        {
+          "description": "Pin [Net-(J3-PadTN)]",
+          "pos": {
+            "x": 213.95,
+            "y": -101.9
+          },
+          "uuid": "20"
+        }
+      ],
+      "severity": "warning",
+      "type": "unconnected_items"
+    }
+  ],
+  "violations": [],
+  "schematic_parity": [],
+  "quality_score": 0.0
+}

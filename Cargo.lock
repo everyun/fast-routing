@@ -124,6 +124,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "fr-metrics"
+version = "0.1.0"
+
+[[package]]
 name = "fr-rules"
 version = "0.1.0"
 dependencies = [

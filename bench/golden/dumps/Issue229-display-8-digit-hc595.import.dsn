@@ -1,0 +1,61 @@
+(pcb "Issue229-display-8-digit-hc595.import"
+  (parser
+    (string_quote ")
+    (space_in_quoted_tokens on)
+    (host_cad "KiCad's Pcbnew")
+    (host_version "4.0.7")
+    (generated_by_freerouting)
+  )
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu
+      (type signal)
+    )
+    (layer B.Cu
+      (type signal)
+    )
+    (boundary
+      (rect pcb 19120.0 -74405.0 99330.0 -19595.0)
+    )
+    (boundary
+      (polygon signal 0
+        19220.0 -74305.0
+        99230.0 -74305.0
+        99230.0 -19695.0
+        19220.0 -19695.0
+      )
+    )
+    (via)
+    (rule
+      (width 250.0)
+      (clearance 200.2)
+      (clearance 125.0 (type smd_to_turn_gap))
+      (clearance 50.0 (type smd))
+      (clearance 500.0 (type "board_edge"))
+    )
+    (snap_angle 
+      fortyfive_degree
+    )
+    (control
+      (via_at_smd off)
+    )
+  )
+  (placement
+  )
+  (library
+  )
+  (network
+    (class default
+      (clearance_class default)
+      (rule
+        (width 250.0)
+      )
+      (circuit 
+        (use_layer F.Cu B.Cu)
+      )
+    )
+  )
+  (wiring
+  )
+)

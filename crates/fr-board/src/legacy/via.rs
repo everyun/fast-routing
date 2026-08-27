@@ -1,40 +1,39 @@
-//! Pin item on a PCB component.
+//! Via item connecting multiple PCB layers.
 
-use crate::item::ItemHeader;
-use fr_geometry::planar::{IntBox, IntPoint};
+use crate::legacy::ItemHeader;
+use fr_geometry::planar::IntPoint;
 
-/// A component pin (pad) on the board.
+/// A via drilled through board layers.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Pin {
+pub struct Via {
     pub header: ItemHeader,
-    pub pin_no: i32,
     pub center: IntPoint,
-    pub pad_bounding_box: IntBox,
+    pub padstack_name: String,
     pub first_layer: i32,
     pub last_layer: i32,
+    pub pad_radius: i32,
     pub drill_radius: i32,
 }
 
-impl Pin {
+impl Via {
     pub fn new(
         id_no: i32,
         net_no: i32,
         clearance_class: i32,
-        component_no: i32,
-        pin_no: i32,
         center: IntPoint,
-        pad_box: IntBox,
+        padstack_name: &str,
         first_layer: i32,
         last_layer: i32,
+        pad_radius: i32,
         drill_radius: i32,
     ) -> Self {
-        Pin {
-            header: ItemHeader::new(id_no, vec![net_no], clearance_class, component_no),
-            pin_no,
+        Via {
+            header: ItemHeader::new(id_no, vec![net_no], clearance_class, 0),
             center,
-            pad_bounding_box: pad_box,
+            padstack_name: padstack_name.to_string(),
             first_layer,
             last_layer,
+            pad_radius,
             drill_radius,
         }
     }

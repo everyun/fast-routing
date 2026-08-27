@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "date": "2026-08-28T06:42:00.923766+08:00",
+  "kicad_version": "N/A",
+  "freerouting_version": "Freerouting 2.3.0",
+  "source": "Issue229-display-8-digit-hc595.dsn",
+  "unconnected_items": [],
+  "violations": [],
+  "schematic_parity": [],
+  "quality_score": 0.0
+}

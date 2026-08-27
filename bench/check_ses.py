@@ -10,7 +10,11 @@ parser and computes, without trusting either router's self-reported numbers:
     least one wire or via (coarse "has some routing" signal),
   * total wire length (sum of polyline segment lengths, converted to mm using
     the ``(resolution <unit> <value>)`` declared in the SES routes section),
-  * via count.
+  * via count,
+  * the same wire length + via count **per net**, plus that net's DSN pin
+    count — the per-net breakdown is what the later delta gates compare
+    against a reference SES (a suite total hides which net regressed, and
+    hides a net the reference routed and we did not).
 
 CAVEAT: this is a *coarse completion metric only*. It does NOT verify
 electrical connectivity (a net with one stray wire stub counts as "routed"),
@@ -24,7 +28,8 @@ Parser tolerances (learned from the upstream fixture suite):
   * Unterminated lists at EOF are closed silently; stray ``)`` are ignored.
   * Atoms may be bare or double-quoted; keyword matching is case-insensitive.
 
-Usage:  python3 check_ses.py <input.dsn> <output.ses>   (prints JSON)
+Usage:  python3 check_ses.py [--totals-only] <input.dsn> <output.ses>
+        (prints JSON; --totals-only drops the per-net map)
 """
 
 from __future__ import annotations
@@ -52,8 +57,19 @@ def tokenize(text: str):
             yield c
             i += 1
         elif c == '"':
+            # A quoted string ends at a '"' that is followed by whitespace, a
+            # paren or EOF. KiCad exports inch marks unescaped inside quoted
+            # strings — `(PN "DISPLAY 7-SEG 0.5"")` — and a naive "end at the
+            # next quote" scan desyncs there, silently swallowing the rest of
+            # the record and the one after it (Issue229 lost 4 of 26 `place`
+            # records that way). Requiring a delimiter after the closing quote
+            # resolves the ambiguity the way the exporter meant it.
             j = i + 1
-            while j < n and text[j] != '"':
+            while j < n:
+                if text[j] == '"' and (
+                    j + 1 >= n or text[j + 1].isspace() or text[j + 1] in "()"
+                ):
+                    break
                 j += 1
             yield text[i + 1 : j]
             i = j + 1  # skip closing quote (or EOF)
@@ -200,6 +216,8 @@ def analyze_ses(ses_path: str) -> dict:
         if not math.isnan(r):
             mm_per_unit = r
 
+    per_net: dict = {}
+
     for netout in iter_nodes(tree, "network_out"):
         for net in child_nodes(netout, "net"):
             name = first_atom(net)
@@ -211,9 +229,26 @@ def analyze_ses(ses_path: str) -> dict:
             if wires or vias:
                 routed_nets.add(name)
             via_count += len(vias)
+            net_len_raw = 0.0
             for wire in wires:
                 for path in iter_nodes(wire, "path"):
-                    total_wire_len_raw += _path_length(path)
+                    net_len_raw += _path_length(path)
+            total_wire_len_raw += net_len_raw
+            # A net may legitimately appear in more than one network_out
+            # scope (or be split across them) — accumulate, never overwrite.
+            entry = per_net.setdefault(
+                name, {"wire_count": 0, "via_count": 0, "wire_length_raw": 0.0}
+            )
+            entry["wire_count"] += len(wires)
+            entry["via_count"] += len(vias)
+            entry["wire_length_raw"] += net_len_raw
+
+    scale = None if math.isnan(mm_per_unit) else mm_per_unit
+    for entry in per_net.values():
+        entry["wire_length_mm"] = (
+            round(entry["wire_length_raw"] * scale, 4) if scale is not None else None
+        )
+        entry["wire_length_raw"] = round(entry["wire_length_raw"], 4)
 
     wire_len_mm = (
         total_wire_len_raw * mm_per_unit if not math.isnan(mm_per_unit) else None
@@ -225,17 +260,29 @@ def analyze_ses(ses_path: str) -> dict:
         "ses_via_count": via_count,
         "ses_wire_length_mm": wire_len_mm,
         "ses_wire_length_raw": total_wire_len_raw,
+        # name -> {wire_count, via_count, wire_length_raw, wire_length_mm};
+        # name-sorted so two runs diff line-by-line.
+        "ses_per_net": {k: per_net[k] for k in sorted(per_net)},
     }
 
 
-def check(dsn_path: str, ses_path: str) -> dict:
-    """Combined coarse check; safe to call from run_bench.py."""
+def check(dsn_path: str, ses_path: str, per_net: bool = True) -> dict:
+    """Combined coarse check; safe to call from run_bench.py.
+
+    With ``per_net`` (the default) the result carries a ``per_net`` map,
+    ``net name -> {pins, wire_count, via_count, wire_length_mm,
+    wire_length_raw}``, covering every net declared in the DSN *or* present
+    in the SES. Totals alone cannot express the delta gates that come later
+    (per-net length/via regression vs a reference SES): two runs can agree on
+    the suite total while disagreeing on every individual net, and a net the
+    reference routed but we did not is invisible in a sum.
+    """
     d = analyze_dsn(dsn_path)
     s = analyze_ses(ses_path)
     routed_declared = len(
         s["ses_routed_net_names"] & set(d["dsn_net_names"].keys())
     )
-    return {
+    out = {
         "dsn_nets_total": d["dsn_nets_total"],
         "dsn_nets_multi_pin": d["dsn_nets_multi_pin"],
         "ses_nets_present": s["ses_nets_present"],
@@ -248,13 +295,32 @@ def check(dsn_path: str, ses_path: str) -> dict:
             else None
         ),
     }
+    if per_net:
+        pins = d["dsn_net_names"]
+        ses_nets = s["ses_per_net"]
+        out["per_net"] = {
+            name: {
+                "pins": pins.get(name),  # None => net not declared in the DSN
+                "wire_count": ses_nets.get(name, {}).get("wire_count", 0),
+                "via_count": ses_nets.get(name, {}).get("via_count", 0),
+                "wire_length_mm": ses_nets.get(name, {}).get("wire_length_mm", 0.0),
+                "wire_length_raw": ses_nets.get(name, {}).get("wire_length_raw", 0.0),
+            }
+            for name in sorted(set(pins) | set(ses_nets))
+        }
+    return out
 
 
 def main(argv):
+    argv = list(argv)
+    totals_only = "--totals-only" in argv
+    if totals_only:
+        argv.remove("--totals-only")
     if len(argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
-    print(json.dumps(check(argv[1], argv[2]), indent=2))
+    print(json.dumps(check(argv[1], argv[2], per_net=not totals_only), indent=2,
+                     ensure_ascii=False))
     return 0
 
 

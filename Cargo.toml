@@ -8,6 +8,7 @@ members = [
     "crates/fr-io",
     "crates/fr-autoroute",
     "crates/fr-drc",
+    "crates/fr-metrics",
     "crates/fr-core",
     "crates/fr-cli",
 ]

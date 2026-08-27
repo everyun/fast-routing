@@ -59,7 +59,8 @@ import/checker gates are what measure the trap list):
    1.2x faster than MinAreaTree at 10k scale; adversarially verified incl. 4-thread
    shared-&self query proof) — SoA nodes, zero-alloc queries, STR bulk-load, epoch-scoped
    reader snapshots; microbench vs current MinAreaTree.
-3. **Board item model** — slotmap + semantic ItemId, trace split/merge/normalize (this path is
+3. **[first half DONE — wave 2]** Board item model — slotmap + semantic ItemId (restore-30-passes
+   microbench: 0.17 ms vs the 50 ms gate), trace split/merge/normalize (this path is
    what Issue187/Issue103 stress — the two boards where current Rust is *slower* than Java;
    they get their own gate), fixed states, the three state mechanisms (transaction /
    history / CoW clone) with the restore-≤50 ms microbench, SearchTreeManager with compensated
@@ -69,7 +70,8 @@ import/checker gates are what measure the trap list):
 6. **DSN/SES to spec** — raw-spelling lexer, the KiCad trap list, `calcFixed` route→USER_FIXED,
    board-derived cost prep (`applyBoardSpecificOptimizations`), board_edge class synthesis,
    keepouts/planes, wiring re-import; SES writer with snapping + reserved chars.
-7. **Profiling/counter infrastructure** (from perf-forensics §8: alloc-stats feature, expansion/
+7. **[DONE — wave 2]** Profiling/counter infrastructure (fr-metrics: compile-out proven at asm
+   level; FRLAB settle-diff parser validated on a real lab-jar trace) (from perf-forensics §8: alloc-stats feature, expansion/
    query/shove counters, stage timers) + the settle-order differential harness parser (consumes
    lab-jar `FRLAB settle` lines) — built NOW, used throughout M2.
 
