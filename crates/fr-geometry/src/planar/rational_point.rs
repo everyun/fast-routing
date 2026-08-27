@@ -3,6 +3,7 @@
 //! Represents points in the projective plane via 3 coordinates `(x, y, z)` where
 //! `z >= 0`. The affine point with rational coordinates is `(x / z, y / z)`.
 
+use std::cmp::Ordering;
 use std::hash::{Hash, Hasher};
 
 use num_bigint::{BigInt, Sign};
@@ -134,32 +135,74 @@ impl RationalPoint {
     }
 
     /// Smallest `IntBox` containing this point.
+    ///
+    /// The bounds are exact integer divisions of the projective triple, not
+    /// `floor`/`ceil` of an `f64` quotient: a point sitting within one ulp
+    /// below an integer converts to exactly that integer, and the "surrounding"
+    /// box computed from the float would then be the degenerate box `[n, n]`,
+    /// which does *not* contain the point. Containment is a topological
+    /// decision, so it may not be decided by a rounded quotient.
     pub fn surrounding_box(&self) -> IntBox {
-        let fp = self.to_float();
-        IntBox::new(
-            fp.x.floor() as i32,
-            fp.y.floor() as i32,
-            fp.x.ceil() as i32,
-            fp.y.ceil() as i32,
+        if self.z.is_zero() {
+            // Point at infinity: keep the upstream float behaviour.
+            let fp = self.to_float();
+            return IntBox::new(
+                fp.x.floor() as i32,
+                fp.y.floor() as i32,
+                fp.x.ceil() as i32,
+                fp.y.ceil() as i32,
+            );
+        }
+        let (lx, rx) = self.floor_ceil(&self.x);
+        let (ly, uy) = self.floor_ceil(&self.y);
+        IntBox::new(lx, ly, rx, uy)
+    }
+
+    /// Smallest `IntOctagon` containing this point, with exact bounds; see
+    /// [`RationalPoint::surrounding_box`].
+    pub fn surrounding_octagon(&self) -> IntOctagon {
+        if self.z.is_zero() {
+            let fp = self.to_float();
+            let lx = fp.x.floor() as i32;
+            let ly = fp.y.floor() as i32;
+            let rx = fp.x.ceil() as i32;
+            let uy = fp.y.ceil() as i32;
+
+            let tmp = fp.x - fp.y;
+            let ulx = tmp.floor() as i32;
+            let lrx = tmp.ceil() as i32;
+
+            let tmp = fp.x + fp.y;
+            let llx = tmp.floor() as i32;
+            let urx = tmp.ceil() as i32;
+            return IntOctagon::new(lx, ly, rx, uy, ulx, lrx, llx, urx);
+        }
+        let (lx, rx) = self.floor_ceil(&self.x);
+        let (ly, uy) = self.floor_ceil(&self.y);
+        let (ulx, lrx) = self.floor_ceil(&(&self.x - &self.y));
+        let (llx, urx) = self.floor_ceil(&(&self.x + &self.y));
+        IntOctagon::new(lx, ly, rx, uy, ulx, lrx, llx, urx)
+    }
+
+    /// `(floor(numerator / z), ceil(numerator / z))` narrowed to `i32`,
+    /// saturating like the `f64 as i32` cast it replaces. `z > 0` is required
+    /// (the caller handles points at infinity), so no sign correction is needed.
+    fn floor_ceil(&self, numerator: &BigInt) -> (i32, i32) {
+        use num_integer::Integer;
+        debug_assert!(!self.z.is_zero(), "floor_ceil needs a finite point");
+        (
+            Self::saturating_i32(&numerator.div_floor(&self.z)),
+            Self::saturating_i32(&numerator.div_ceil(&self.z)),
         )
     }
 
-    /// Smallest `IntOctagon` containing this point.
-    pub fn surrounding_octagon(&self) -> IntOctagon {
-        let fp = self.to_float();
-        let lx = fp.x.floor() as i32;
-        let ly = fp.y.floor() as i32;
-        let rx = fp.x.ceil() as i32;
-        let uy = fp.y.ceil() as i32;
-
-        let tmp = fp.x - fp.y;
-        let ulx = tmp.floor() as i32;
-        let lrx = tmp.ceil() as i32;
-
-        let tmp = fp.x + fp.y;
-        let llx = tmp.floor() as i32;
-        let urx = tmp.ceil() as i32;
-        IntOctagon::new(lx, ly, rx, uy, ulx, lrx, llx, urx)
+    /// Narrows an exact bound to `i32`, saturating instead of wrapping.
+    fn saturating_i32(value: &BigInt) -> i32 {
+        value.to_i32().unwrap_or(if value.sign() == Sign::Minus {
+            i32::MIN
+        } else {
+            i32::MAX
+        })
     }
 
     /// Returns true if this point is in the interior or on the border of `box_`.
@@ -259,29 +302,65 @@ impl RationalPoint {
     }
 
     /// Compares x coordinate with `other` rational point.
+    ///
+    /// Exact cross-multiplication `self.x * other.z` vs `other.x * self.z`;
+    /// both denominators are non-negative by construction, so the order is
+    /// preserved. See [`RationalPoint::cmp_products`] for the arithmetic tier.
     pub fn compare_x_rational(&self, other: &RationalPoint) -> i32 {
-        let tmp1 = &self.x * &other.z;
-        let tmp2 = &other.x * &self.z;
-        tmp1.cmp(&tmp2) as i32
+        match Self::cmp_products(&self.x, &other.z, &other.x, &self.z) {
+            Some(ordering) => ordering as i32,
+            None => (&self.x * &other.z).cmp(&(&other.x * &self.z)) as i32,
+        }
     }
 
     /// Compares x coordinate with `other` int point.
+    ///
+    /// Exact: `self.x` against `self.z * other.x`, never `f64`.
     pub fn compare_x_int(&self, other: &IntPoint) -> i32 {
-        let tmp1 = &self.z * other.x;
-        self.x.cmp(&tmp1) as i32
+        match Self::cmp_int_product(&self.x, &self.z, other.x) {
+            Some(ordering) => ordering as i32,
+            None => self.x.cmp(&(&self.z * other.x)) as i32,
+        }
     }
 
     /// Compares y coordinate with `other` rational point.
     pub fn compare_y_rational(&self, other: &RationalPoint) -> i32 {
-        let tmp1 = &self.y * &other.z;
-        let tmp2 = &other.y * &self.z;
-        tmp1.cmp(&tmp2) as i32
+        match Self::cmp_products(&self.y, &other.z, &other.y, &self.z) {
+            Some(ordering) => ordering as i32,
+            None => (&self.y * &other.z).cmp(&(&other.y * &self.z)) as i32,
+        }
     }
 
     /// Compares y coordinate with `other` int point.
     pub fn compare_y_int(&self, other: &IntPoint) -> i32 {
-        let tmp1 = &self.z * other.y;
-        self.y.cmp(&tmp1) as i32
+        match Self::cmp_int_product(&self.y, &self.z, other.y) {
+            Some(ordering) => ordering as i32,
+            None => self.y.cmp(&(&self.z * other.y)) as i32,
+        }
+    }
+
+    /// `a * b` against `c * d` on an `i128` fast path. Returns `None` when an
+    /// operand or a product leaves `i128`, so that the caller falls back to the
+    /// (exact, but allocating) `BigInt` path. Rational coordinates produced by
+    /// line intersections inside the envelope stay far below 2^127, so the
+    /// bignum path is cold.
+    #[inline]
+    fn cmp_products(a: &BigInt, b: &BigInt, c: &BigInt, d: &BigInt) -> Option<Ordering> {
+        let left = a.to_i128()?.checked_mul(b.to_i128()?)?;
+        let right = c.to_i128()?.checked_mul(d.to_i128()?)?;
+        Some(left.cmp(&right))
+    }
+
+    /// `numerator` against `denominator * coordinate` on an `i128` fast path;
+    /// `None` falls back to `BigInt` as in [`RationalPoint::cmp_products`].
+    #[inline]
+    fn cmp_int_product(
+        numerator: &BigInt,
+        denominator: &BigInt,
+        coordinate: i32,
+    ) -> Option<Ordering> {
+        let right = denominator.to_i128()?.checked_mul(coordinate as i128)?;
+        Some(numerator.to_i128()?.cmp(&right))
     }
 }
 

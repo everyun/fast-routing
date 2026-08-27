@@ -191,8 +191,13 @@ impl Polyline {
     }
 
     /// Last corner point.
+    ///
+    /// A degenerate polyline (`new_from_two_points` with two equal corners
+    /// keeps no line at all) has no corners; like [`Polyline::first_corner`]
+    /// and [`Polyline::corner`] it then reports the origin instead of
+    /// panicking on the `arr.len() - 2` underflow.
     pub fn last_corner(&self) -> Point {
-        self.corner(self.arr.len() - 2)
+        self.corner(self.corner_count().saturating_sub(1))
     }
 
     /// `no`-th corner of the polyline.
@@ -260,8 +265,11 @@ impl Polyline {
         requested_from_no: usize,
         requested_to_no: usize,
     ) -> Vec<Simplex> {
-        let from_no = requested_from_no.min(self.arr.len() - 1);
-        let to_no = requested_to_no.min(self.arr.len() - 1);
+        // A degenerate polyline has no lines at all, so `arr.len() - 1` would
+        // underflow before the `to_no <= from_no + 1` early-out below.
+        let last_line_no = self.arr.len().saturating_sub(1);
+        let from_no = requested_from_no.min(last_line_no);
+        let to_no = requested_to_no.min(last_line_no);
         if to_no <= from_no + 1 {
             return Vec::new();
         }
@@ -671,8 +679,10 @@ impl Polyline {
     }
 
     /// Returns true if `point` is on this polyline.
+    ///
+    /// A degenerate polyline carries no line segment, so it contains no point.
     pub fn contains(&self, point: &Point) -> bool {
-        for i in 1..self.arr.len() - 1 {
+        for i in 1..self.arr.len().saturating_sub(1) {
             if let Some(seg) = LineSegment::from_polyline(self, i) {
                 if seg.contains(point) {
                     return true;
@@ -683,13 +693,16 @@ impl Polyline {
     }
 
     /// Perpendicular line segment from `point` onto nearest segment.
+    ///
+    /// A degenerate polyline carries no line segment to project onto, so the
+    /// result is `None`.
     pub fn projection_line(&self, point: &Point) -> Option<LineSegment> {
         let from_point = point.to_float();
         let mut min_distance = f64::MAX;
         let mut result_line = None;
         let mut nearest_line = None;
 
-        for i in 1..self.arr.len() - 1 {
+        for i in 1..self.arr.len().saturating_sub(1) {
             let projection = from_point.projection_approx(&self.arr[i]);
             let curr_distance = projection.distance(&from_point);
             if curr_distance < min_distance {

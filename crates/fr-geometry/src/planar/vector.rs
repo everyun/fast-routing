@@ -27,12 +27,20 @@ impl Vector {
 
     /// Creates a vector `(x, y)` in the plane. If either coordinate exceeds
     /// `CRIT_INT`, a rational vector is constructed.
+    ///
+    /// The out-of-envelope branch builds the rational triple directly instead of
+    /// embedding an `IntVector` that violates the type's invariant, and it uses
+    /// the envelope predicate rather than `i32::abs`, which overflows on
+    /// `i32::MIN`.
     pub fn get_instance(x: i32, y: i32) -> Self {
-        let result = IntVector::new(x, y);
-        if x.abs() > Limits::CRIT_INT || y.abs() > Limits::CRIT_INT {
-            Vector::Rational(RationalVector::from_int_vector(&result))
+        if Limits::in_point_envelope(x) && Limits::in_point_envelope(y) {
+            Vector::Int(IntVector::new(x, y))
         } else {
-            Vector::Int(result)
+            Vector::Rational(RationalVector::new(
+                BigInt::from(x),
+                BigInt::from(y),
+                BigInt::from(1),
+            ))
         }
     }
 
@@ -118,13 +126,11 @@ impl Vector {
     /// this vector is on the right of L, and `Side::Collinear` if collinear.
     pub fn side_of(&self, other: &Vector) -> Side {
         match (self, other) {
-            (Vector::Int(a), Vector::Int(b)) => {
-                // Java IntVector.sideOf(Vector other) -> other.sideOf(this).negate()
-                // Java IntVector.sideOf(IntVector other) -> Side.of(other.x * y - other.y * x)
-                // where (x, y) = this. So a.side_of(b) = Side.of(b.x * a.y - b.y * a.x).
-                let det = (b.x as f64) * (a.y as f64) - (b.y as f64) * (a.x as f64);
-                Side::of(det)
-            }
+            // Java IntVector.sideOf(Vector other) -> other.sideOf(this).negate()
+            // Java IntVector.sideOf(IntVector other) -> Side.of(other.x * y - other.y * x)
+            // where (x, y) = this. So a.side_of(b) = Side.of(b.x * a.y - b.y * a.x),
+            // which `IntVector::side_of_int` evaluates exactly.
+            (Vector::Int(a), Vector::Int(b)) => a.side_of_int(b),
             (Vector::Int(a), Vector::Rational(b)) => {
                 let ra = RationalVector::from_int_vector(a);
                 b.side_of_rational(&ra).negate()

@@ -5,10 +5,25 @@ use num_traits::Zero;
 
 use crate::planar::{
     float_point::FloatPoint, int_box::IntBox, int_octagon::IntOctagon, int_vector::IntVector,
-    line::Line, point::Point, rational_point::RationalPoint, side::Side, vector::Vector,
+    limits::Limits, line::Line, point::Point, rational_point::RationalPoint, side::Side,
+    vector::Vector,
 };
 
 /// Implementation of a point as a tuple of integers.
+///
+/// # Invariant
+///
+/// Coordinates are contracted to the *coordinate envelope*
+/// `|coord| <= Limits::CRIT_INT` (2^25). Everything the exact kernel promises
+/// on its fixed-width fast paths rests on it: differences of two such points
+/// stay below 2^26, their products below 2^52 and 2x2 determinants below 2^53.
+///
+/// The envelope is enforced at the IO boundary ([`IntPoint::try_new`]), never
+/// by a check in the hot constructor, matching upstream's unchecked `IntPoint`.
+/// Predicates that can still be reached with out-of-envelope coordinates
+/// (`Point::compare_*`, `Point::eq`, `side_of`, `Line::cmp_line`) stay exact by
+/// promoting to `i128`/`BigInt` rather than by trusting the invariant, so a
+/// violation degrades into a slower answer, never into a wrong one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IntPoint {
     pub x: i32,
@@ -16,9 +31,27 @@ pub struct IntPoint {
 }
 
 impl IntPoint {
-    /// Creates an `IntPoint` from two integer coordinates.
+    /// Creates an `IntPoint` from two integer coordinates, unchecked, as
+    /// upstream does; use [`IntPoint::try_new`] at the IO boundary.
     pub const fn new(x: i32, y: i32) -> Self {
         IntPoint { x, y }
+    }
+
+    /// Checked constructor for the IO boundary: returns `None` if a coordinate
+    /// leaves the `CRIT_INT` envelope.
+    #[inline]
+    pub const fn try_new(x: i32, y: i32) -> Option<Self> {
+        if Limits::in_point_envelope(x) && Limits::in_point_envelope(y) {
+            Some(IntPoint { x, y })
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if both coordinates respect the `CRIT_INT` envelope.
+    #[inline]
+    pub const fn is_in_envelope(&self) -> bool {
+        Limits::in_point_envelope(self.x) && Limits::in_point_envelope(self.y)
     }
 
     /// Standard zero point.
@@ -71,6 +104,10 @@ impl IntPoint {
     }
 
     /// Determinant of the vectors `(x, y)` and `(other.x, other.y)`.
+    ///
+    /// Exact for every pair of `i32` coordinates (see
+    /// [`IntVector::determinant`] for the no-overflow argument); inside the
+    /// envelope the result is bounded by 2^51.
     pub fn determinant(&self, other: &IntPoint) -> i64 {
         (self.x as i64) * (other.y as i64) - (self.y as i64) * (other.x as i64)
     }
@@ -123,10 +160,22 @@ impl IntPoint {
     }
 
     /// Signed area of the parallelogram spanned by `p2 - p1` and `self - p1`.
+    ///
+    /// The `f64` result is the upstream signature and is only a *magnitude*:
+    /// inside the envelope the value stays below 2^53 and the cast is lossless,
+    /// but code that needs the orientation must use
+    /// [`IntPoint::signed_area_exact`] or `side_of`, never the sign of this.
     pub fn signed_area(&self, p1: &IntPoint, p2: &IntPoint) -> f64 {
+        self.signed_area_exact(p1, p2) as f64
+    }
+
+    /// Exact signed area of the parallelogram spanned by `p2 - p1` and
+    /// `self - p1`; its sign is the orientation predicate of the triangle
+    /// `(p1, p2, self)`.
+    pub fn signed_area_exact(&self, p1: &IntPoint, p2: &IntPoint) -> i64 {
         let d21 = p2.difference_by_int(p1);
         let d01 = self.difference_by_int(p1);
-        d21.determinant(&d01) as f64
+        d21.determinant(&d01)
     }
 
     /// Distance squared to `to_point`.

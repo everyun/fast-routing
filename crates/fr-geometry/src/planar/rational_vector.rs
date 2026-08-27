@@ -155,10 +155,18 @@ impl RationalVector {
 
     /// Returns the normalized direction of this vector.
     ///
+    /// The zero vector has no direction and yields [`Direction::NULL`], the
+    /// same answer `IntVector::to_normalized_direction` gives for it (its gcd
+    /// is 0, which leaves the coordinates untouched). Dividing by that zero
+    /// gcd here would panic inside `BigInt`, so it is handled up front.
+    ///
     /// `BigIntDirection` (directions whose coordinates exceed the `CRIT_INT`
     /// bound) is not yet ported; such directions are rejected explicitly.
     pub fn to_normalized_direction(&self) -> Direction {
         use num_integer::Integer;
+        if self.is_zero() {
+            return Direction::NULL;
+        }
         let gcd = self.x.gcd(&self.y);
         let dx = &self.x / &gcd;
         let dy = &self.y / &gcd;

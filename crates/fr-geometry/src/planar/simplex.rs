@@ -67,6 +67,71 @@ impl Simplex {
         prev_dir.determinant(&curr_dir) > 0
     }
 
+    /// Returns true if the border lines `corner_index - 1` and `corner_index`
+    /// meet in a single point, i.e. the corner actually exists.
+    ///
+    /// For parallel (or degenerate) adjacent lines `corner` returns the
+    /// meaningless projective triple `(0, 0, 0)` and `corner_approx` returns
+    /// `(i32::MAX, i32::MAX)`, so every corner-driven computation has to skip
+    /// those indices. This is weaker than [`Simplex::corner_is_bounded`],
+    /// which additionally requires the corner to be convex.
+    pub fn corner_is_defined(&self, corner_index: usize) -> bool {
+        if self.arr.len() < 2 {
+            return false;
+        }
+        let no = corner_index % self.arr.len();
+        let prev_no = if no == 0 { self.arr.len() - 1 } else { no - 1 };
+        let prev = self.arr[prev_no];
+        let curr = self.arr[no];
+        let prev_delta = prev.b.difference_by_int(&prev.a);
+        let curr_delta = curr.b.difference_by_int(&curr.a);
+        prev_delta.determinant(&curr_delta) != 0
+    }
+
+    /// Returns true if no two adjacent border lines meet, i.e. this simplex has
+    /// no corner at all. That can only happen when all border lines are
+    /// parallel, so the shape is a half-plane, a strip, a line or empty.
+    fn has_no_corner(&self) -> bool {
+        !(0..self.arr.len()).any(|i| self.corner_is_defined(i))
+    }
+
+    /// Dimension of an intersection of half-planes whose border lines are all
+    /// parallel: 2 for a half-plane or a proper strip, 1 when the two opposing
+    /// bounds fall onto the same line and -1 when they cross.
+    ///
+    /// The generic `dimension` code cannot be used for these: it derives the
+    /// answer from `arr[1].intersection(&arr[2])`, which is the degenerate
+    /// triple for parallel lines, and reported a *point* for a half-plane.
+    fn parallel_border_lines_dimension(&self) -> i32 {
+        let first_dir = self.arr[0].direction();
+        let mut innermost_forward: Option<Line> = None;
+        let mut innermost_backward: Option<Line> = None;
+        for line in &self.arr {
+            let innermost = if line.direction() == first_dir {
+                &mut innermost_forward
+            } else {
+                &mut innermost_backward
+            };
+            match innermost {
+                // Nested half-planes: keep the one whose border line lies
+                // strictly inside all the others seen so far.
+                Some(best) if best.side_of(&line.a) == Side::OnTheRight => *best = *line,
+                Some(_) => {}
+                None => *innermost = Some(*line),
+            }
+        }
+        match (innermost_forward, innermost_backward) {
+            (Some(forward), Some(backward)) => match backward.side_of(&forward.a) {
+                Side::OnTheLeft => -1,
+                Side::Collinear => 1,
+                Side::OnTheRight => 2,
+            },
+            // Only one of the two orientations occurs, so the intersection is
+            // the innermost (unbounded) half-plane.
+            _ => 2,
+        }
+    }
+
     /// Returns true if the shape of this simplex is bounded.
     pub fn is_bounded(&self) -> bool {
         if self.arr.is_empty() {
@@ -122,6 +187,15 @@ impl Simplex {
     pub fn dimension(&self) -> i32 {
         if self.arr.is_empty() {
             return -1;
+        }
+        // A simplex whose border lines are all parallel has no corner, so
+        // neither the `arr.len() > 4` shortcut nor the corner arithmetic of
+        // the 3- and 4-line branches below says anything about its dimension.
+        // Such simplices are not reachable from `remove_redundant_lines`, but
+        // `Simplex::new` (used by `offset`, `remove_border_line` and the
+        // `cutout_from` pieces) can build them.
+        if self.arr.len() >= 3 && self.has_no_corner() {
+            return self.parallel_border_lines_dimension();
         }
         if self.arr.len() > 4 || self.arr.len() == 1 {
             return 2;
@@ -793,17 +867,38 @@ impl Simplex {
     }
 
     /// Center of gravity (centroid) of the simplex corners.
+    ///
+    /// Corners between parallel border lines do not exist and are skipped;
+    /// averaging in the `(i32::MAX, i32::MAX)` that `corner_approx` reports for
+    /// them would drag the centroid off to the coordinate limit. For a bounded
+    /// simplex every corner is defined, so the result is unchanged.
     pub fn centre_of_gravity(&self) -> FloatPoint {
-        let corner_count = self.arr.len();
-        if corner_count == 0 {
+        if self.arr.is_empty() {
             return FloatPoint::ZERO;
         }
         let mut x = 0.0;
         let mut y = 0.0;
-        for i in 0..corner_count {
+        let mut corner_count = 0usize;
+        for i in 0..self.arr.len() {
+            if !self.corner_is_defined(i) {
+                continue;
+            }
             let p = self.corner_approx(i);
             x += p.x;
             y += p.y;
+            corner_count += 1;
+        }
+        if corner_count == 0 {
+            // All border lines are parallel, so the shape has no corner and no
+            // centroid. Fall back to the mean of the points defining the border
+            // lines, which is at least finite and on the boundary.
+            let (mut x, mut y) = (0.0, 0.0);
+            for line in &self.arr {
+                x += line.a.x as f64;
+                y += line.a.y as f64;
+            }
+            let line_count = self.arr.len() as f64;
+            return FloatPoint::new(x / line_count, y / line_count);
         }
         FloatPoint::new(x / corner_count as f64, y / corner_count as f64)
     }

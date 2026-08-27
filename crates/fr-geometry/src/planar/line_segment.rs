@@ -24,6 +24,12 @@ impl LineSegment {
     }
 
     /// Creates a line segment from 2 points.
+    ///
+    /// Rational end points are rounded to the lattice, because [`Line`] stores
+    /// `IntPoint`s: the resulting segment approximates a rational input by at
+    /// most half a unit per coordinate. This is a *constructor*, not a
+    /// predicate — no existing topology is decided by the rounding — but it is
+    /// a divergence from upstream, whose `Line` can hold rational points.
     pub fn from_points(start_point: &Point, end_point: &Point) -> Self {
         let dir = Direction::get_instance(start_point, end_point);
         let middle = Line::new_from_point_and_dir(
@@ -130,22 +136,44 @@ impl LineSegment {
     }
 
     /// Checks if `point` is contained in this line segment.
+    ///
+    /// Upstream builds a line perpendicular to `middle` *through the point* and
+    /// asks on which side the two end points lie. Our `Line` stores `IntPoint`s,
+    /// so a rational point would have to be rounded to the lattice first, and
+    /// the rounded perpendicular can separate the end points differently from
+    /// the true one — a float rounding deciding containment. The equivalent
+    /// exact statement is used instead: a point already known to be collinear
+    /// is inside iff it is beyond neither end, i.e. both
+    /// `(p - start) . (end - start)` and `(p - end) . (start - end)` are
+    /// non-negative. `Vector::projection` is the exact sign of that scalar
+    /// product for integer *and* rational vectors.
     pub fn contains(&self, point: &Point) -> bool {
         if self.middle.side_of_point(point) != Side::Collinear {
             return false;
         }
-        let dir = self.middle.direction().turn_45_degree(2);
-        let pt_int = match point {
-            Point::Int(ip) => *ip,
-            Point::Rational(_) => point.to_float().round(),
-        };
-        let perp_line = Line::new_from_point_and_dir(pt_int, &dir);
-        let start_side = self.start_point().side_of(&perp_line);
-        let end_side = self.end_point().side_of(&perp_line);
-        start_side != end_side || start_side == Side::Collinear
+        let start_point = self.start_point();
+        let end_point = self.end_point();
+        let along = end_point.difference_by(&start_point);
+        if along.is_zero() {
+            // Degenerate segment; the perpendicular-line formulation accepts
+            // only the end point itself there (`start_side == Collinear`).
+            return *point == start_point;
+        }
+        if point.difference_by(&start_point).projection(&along) == Signum::Negative {
+            return false;
+        }
+        let against = start_point.difference_by(&end_point);
+        point.difference_by(&end_point).projection(&against) != Signum::Negative
     }
 
     /// Calculates the smallest surrounding box of this line segment.
+    ///
+    /// Deliberately float, as upstream: the corners are approximated and then
+    /// rounded *outwards*. Inside the coordinate envelope the approximation
+    /// error of `intersection_approx` is far below 1, so the floor/ceil padding
+    /// keeps the box conservative and the callers that use it as a rejection
+    /// filter (`intersection`, `border_intersections_lines`) never discard a
+    /// real intersection.
     pub fn bounding_box(&self) -> IntBox {
         let start_corner = self.middle.intersection_approx(&self.start);
         let end_corner = self.middle.intersection_approx(&self.end);
@@ -199,6 +227,12 @@ impl LineSegment {
     }
 
     /// Intersections of this line segment with `other`.
+    ///
+    /// Every decision here is exact: the end points come from
+    /// `Line::intersection` (`IntPoint` when the crossing is integral, an exact
+    /// `RationalPoint` otherwise) and the overlap analysis uses `side_of` and
+    /// `compare_xy`, both of which cross-multiply instead of rounding. Only the
+    /// conservative `bounding_box` pre-filter is approximate.
     pub fn intersection(&self, other: &LineSegment) -> Vec<Line> {
         if !self.bounding_box().intersects(&other.bounding_box()) {
             return Vec::new();

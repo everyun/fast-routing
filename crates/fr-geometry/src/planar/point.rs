@@ -55,12 +55,20 @@ impl Point {
     pub const ZERO: Point = Point::Int(IntPoint::ZERO);
 
     /// Factory method: returns `Point::Int` if within `CRIT_INT`, else `Point::Rational`.
+    ///
+    /// The out-of-envelope branch builds the rational triple directly instead
+    /// of embedding an `IntPoint` that violates the type's invariant, and it
+    /// uses the envelope predicate rather than `i32::abs`, which overflows on
+    /// `i32::MIN`.
     pub fn get_instance(x: i32, y: i32) -> Self {
-        let ip = IntPoint::new(x, y);
-        if x.abs() > Limits::CRIT_INT || y.abs() > Limits::CRIT_INT {
-            Point::Rational(RationalPoint::from_int_point(&ip))
+        if Limits::in_point_envelope(x) && Limits::in_point_envelope(y) {
+            Point::Int(IntPoint::new(x, y))
         } else {
-            Point::Int(ip)
+            Point::Rational(RationalPoint::new(
+                BigInt::from(x),
+                BigInt::from(y),
+                BigInt::from(1),
+            ))
         }
     }
 

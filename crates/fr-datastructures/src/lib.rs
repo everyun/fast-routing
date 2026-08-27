@@ -16,7 +16,11 @@
 //! - [`BoundingShape`] / [`BoundingBox2D`] / [`LeafId`] — spatial bounding traits and handles.
 //! - [`MinAreaTree`] — minimum-area hierarchical spatial tree for 2D range search and overlap queries.
 //! - [`PlanarDelaunayTriangulation`] / [`Point2D`] / [`DelaunayEdge`] — 2D Delaunay triangulation and Minimum Spanning Tree (MST) computation.
+//! - [`ArenaShapeTree`] / [`OctBounds`] / [`ArenaLeafId`] / [`QueryStack`] — arena-backed shape tree
+//!   with 8-parameter octagon bounds, zero-allocation queries, STR bulk load and an epoch counter;
+//!   the replacement for [`MinAreaTree`] in the router's spatial index.
 
+pub mod arena_shape_tree;
 pub mod array_stack;
 pub mod big_int_aux;
 pub mod id_generator;
@@ -30,6 +34,7 @@ pub mod stoppable;
 pub mod time_limit;
 pub mod undoable_objects;
 
+pub use arena_shape_tree::{ArenaLeafId, ArenaShapeTree, DepthStats, OctBounds, QueryStack};
 pub use array_stack::ArrayStack;
 pub use big_int_aux::BigIntAux;
 pub use id_generator::{AtomicIdGenerator, IdGenerator, SequentialIdGenerator};

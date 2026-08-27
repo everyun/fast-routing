@@ -4,8 +4,14 @@ use num_bigint::{BigInt, Sign};
 use num_traits::{Signed, Zero};
 
 use crate::planar::{
-    direction::Direction, float_point::FloatPoint, int_point::IntPoint, limits::Limits,
-    point::Point, rational_point::RationalPoint, side::Side, vector::Vector,
+    direction::Direction,
+    float_point::FloatPoint,
+    int_point::IntPoint,
+    limits::{determinant_exact, side_of_exact, Limits},
+    point::Point,
+    rational_point::RationalPoint,
+    side::Side,
+    vector::Vector,
 };
 use fr_datastructures::Signum;
 
@@ -13,6 +19,12 @@ use fr_datastructures::Signum;
 ///
 /// In 99.9% of PCB routing applications, `a` and `b` are `IntPoint`s. The
 /// fields are stored directly as `IntPoint` for performance.
+///
+/// # Invariant
+///
+/// Both defining points obey the [`IntPoint`] coordinate envelope
+/// (`|coord| <= Limits::CRIT_INT`); [`Line::try_new`] is the checked
+/// constructor for the IO boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Line {
     pub a: IntPoint,
@@ -30,6 +42,26 @@ impl Line {
         Line {
             a: IntPoint::new(ax, ay),
             b: IntPoint::new(bx, by),
+        }
+    }
+
+    /// Checked constructor for the IO boundary: returns `None` unless both
+    /// points are inside the `CRIT_INT` envelope.
+    #[inline]
+    pub const fn try_new(a: IntPoint, b: IntPoint) -> Option<Self> {
+        if a.is_in_envelope() && b.is_in_envelope() {
+            Some(Line { a, b })
+        } else {
+            None
+        }
+    }
+
+    /// Checked constructor from four integer coordinates; see [`Line::try_new`].
+    #[inline]
+    pub const fn try_new_from_coords(ax: i32, ay: i32, bx: i32, by: i32) -> Option<Self> {
+        match (IntPoint::try_new(ax, ay), IntPoint::try_new(bx, by)) {
+            (Some(a), Some(b)) => Some(Line { a, b }),
+            _ => None,
         }
     }
 
@@ -267,11 +299,17 @@ impl Line {
     }
 
     /// Direction angular comparison (compareTo).
+    ///
+    /// This is an ordering predicate (`Ord for Line` is built on it), so the
+    /// tie-breaking determinant is evaluated exactly: the deltas are widened to
+    /// `i64` (their `i32` subtraction can overflow) and the determinant runs
+    /// the `i64`/`i128` tier instead of an `f64` product that loses its sign
+    /// above the double mantissa.
     pub fn cmp_line(&self, other: &Line) -> i32 {
-        let dx1 = self.b.x - self.a.x;
-        let dy1 = self.b.y - self.a.y;
-        let dx2 = other.b.x - other.a.x;
-        let dy2 = other.b.y - other.a.y;
+        let dx1 = self.b.x as i64 - self.a.x as i64;
+        let dy1 = self.b.y as i64 - self.a.y as i64;
+        let dx2 = other.b.x as i64 - other.a.x as i64;
+        let dy2 = other.b.y as i64 - other.a.y as i64;
 
         if dy1 > 0 {
             if dy2 < 0 {
@@ -305,8 +343,7 @@ impl Line {
             return 0;
         }
 
-        let determinant = (dx2 as f64) * (dy1 as f64) - (dy2 as f64) * (dx1 as f64);
-        Signum::as_int(determinant)
+        determinant_exact(dx2, dy2, dx1, dy1).signum() as i32
     }
 
     /// Euclidean length of the segment `[a, b]`.
@@ -349,7 +386,20 @@ impl Line {
 
     /// Returns `Side::OnTheLeft` if this line is on the left of the intersection of `p1` and `p2`,
     /// `Side::OnTheRight` if on the right, and `Side::Collinear` if all 3 lines intersect in 1 point.
+    ///
+    /// Upstream answers this with a float pre-filter (tolerance 1.0) and only
+    /// falls back to the exact `BigInteger` intersection when the filter says
+    /// `Collinear`; the filter's error is *not* provably below its own
+    /// tolerance, so the float can decide the side outright. Here the whole
+    /// predicate is evaluated exactly in `i128` — no allocation, no float — and
+    /// the upstream path is kept only for the two cases the exact formula
+    /// cannot express: parallel `p1`/`p2` (upstream substitutes the pseudo
+    /// point `(i32::MAX, i32::MAX)`) and coordinates so far outside the
+    /// envelope that even `i128` overflows.
     pub fn side_of_intersection(&self, p1: &Line, p2: &Line) -> Side {
+        if let Some(side) = self.side_of_intersection_exact(p1, p2) {
+            return side;
+        }
         let intersection_approx = p1.intersection_approx(p2);
         let result = self.side_of_float_tol(&intersection_approx, 1.0);
         if result == Side::Collinear {
@@ -358,6 +408,43 @@ impl Line {
         } else {
             result
         }
+    }
+
+    /// Exact `i128` evaluation of [`Line::side_of_intersection`].
+    ///
+    /// Writes the intersection of `p1` and `p2` as the homogeneous triple
+    /// `(is_x, is_y, det)` with `det > 0` and evaluates this line's side of it
+    /// as the sign of `vx * (is_y - a.y * det) - vy * (is_x - a.x * det)`,
+    /// negated to match `Line::side_of`. Inside the envelope every intermediate
+    /// stays below 2^105. Returns `None` when `p1` and `p2` are parallel or an
+    /// intermediate leaves `i128`.
+    fn side_of_intersection_exact(&self, p1: &Line, p2: &Line) -> Option<Side> {
+        let d1x = i128::from(p1.b.x) - i128::from(p1.a.x);
+        let d1y = i128::from(p1.b.y) - i128::from(p1.a.y);
+        let d2x = i128::from(p2.b.x) - i128::from(p2.a.x);
+        let d2y = i128::from(p2.b.y) - i128::from(p2.a.y);
+
+        // Denominator of the intersection; zero means the lines are parallel.
+        let mut det = d2x * d1y - d2y * d1x;
+        if det == 0 {
+            return None;
+        }
+        let det1 = i128::from(p1.a.determinant(&p1.b));
+        let det2 = i128::from(p2.a.determinant(&p2.b));
+        let mut is_x = det1.checked_mul(d2x)?.checked_sub(det2.checked_mul(d1x)?)?;
+        let mut is_y = det1.checked_mul(d2y)?.checked_sub(det2.checked_mul(d1y)?)?;
+        if det < 0 {
+            det = -det;
+            is_x = -is_x;
+            is_y = -is_y;
+        }
+
+        let vx = i128::from(self.b.x) - i128::from(self.a.x);
+        let vy = i128::from(self.b.y) - i128::from(self.a.y);
+        let rel_x = is_x.checked_sub(i128::from(self.a.x).checked_mul(det)?)?;
+        let rel_y = is_y.checked_sub(i128::from(self.a.y).checked_mul(det)?)?;
+        let determinant = vx.checked_mul(rel_y)?.checked_sub(vy.checked_mul(rel_x)?)?;
+        Some(side_of_exact(determinant).negate())
     }
 
     /// Side of arbitrary Point.

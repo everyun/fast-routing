@@ -1,6 +1,9 @@
 //! Integer octagon with 45-degree angle constraints, ported from
 //! `app.freerouting.geometry.planar.IntOctagon`.
 
+use num_bigint::BigInt;
+use num_traits::Zero;
+
 use crate::planar::{
     area::Area, float_point::FloatPoint, int_box::IntBox, int_point::IntPoint, limits::Limits,
     line::Line, point::Point, vector::Vector,
@@ -355,34 +358,66 @@ impl crate::planar::area::Area for IntOctagon {
         *self
     }
 
+    /// Exact containment test against all 8 half-planes of the octagon.
+    ///
+    /// An octagon is bounded by 4 box constraints *and* 4 diagonal ones
+    /// (`ulx <= x - y <= lrx` and `llx <= x + y <= urx`); checking only the box
+    /// would report every point of a clipped corner as contained.
+    ///
+    /// Integer points are compared in `i64` so that `x - y` / `x + y` cannot
+    /// overflow, rational points `(x / z, y / z)` by cross-multiplying with the
+    /// (non-negative) denominator `z` so that no `f64` rounding is involved.
     fn contains_point(&self, point: &Point) -> bool {
         match point {
             Point::Int(ip) => {
-                ip.x >= self.left_x
-                    && ip.x <= self.right_x
-                    && ip.y >= self.bottom_y
-                    && ip.y <= self.top_y
-                    && (ip.x - ip.y) >= self.upper_left_diagonal_x
-                    && (ip.x - ip.y) <= self.lower_right_diagonal_x
-                    && (ip.x + ip.y) >= self.lower_left_diagonal_x
-                    && (ip.x + ip.y) <= self.upper_right_diagonal_x
+                let x = ip.x as i64;
+                let y = ip.y as i64;
+                x >= self.left_x as i64
+                    && x <= self.right_x as i64
+                    && y >= self.bottom_y as i64
+                    && y <= self.top_y as i64
+                    && (x - y) >= self.upper_left_diagonal_x as i64
+                    && (x - y) <= self.lower_right_diagonal_x as i64
+                    && (x + y) >= self.lower_left_diagonal_x as i64
+                    && (x + y) <= self.upper_right_diagonal_x as i64
             }
             Point::Rational(rp) => {
-                let fp = rp.to_float();
-                fp.x >= self.left_x as f64
-                    && fp.x <= self.right_x as f64
-                    && fp.y >= self.bottom_y as f64
-                    && fp.y <= self.top_y as f64
+                // `z == 0` is not an affine point (it is the degenerate triple
+                // `Line::intersection` yields for parallel lines), so it lies
+                // in no octagon.
+                if rp.z.is_zero() {
+                    return false;
+                }
+                let bound = |c: i32| BigInt::from(c) * &rp.z;
+                let diff = &rp.x - &rp.y;
+                let sum = &rp.x + &rp.y;
+                rp.x >= bound(self.left_x)
+                    && rp.x <= bound(self.right_x)
+                    && rp.y >= bound(self.bottom_y)
+                    && rp.y <= bound(self.top_y)
+                    && diff >= bound(self.upper_left_diagonal_x)
+                    && diff <= bound(self.lower_right_diagonal_x)
+                    && sum >= bound(self.lower_left_diagonal_x)
+                    && sum <= bound(self.upper_right_diagonal_x)
             }
         }
     }
 
+    /// Approximate containment test; honours the 4 diagonal constraints as
+    /// well as the box, but decides ties in `f64` as this API is approximate
+    /// by contract.
     fn contains_float_point(&self, point: &FloatPoint) -> bool {
         let fp = *point;
+        let diff = fp.x - fp.y;
+        let sum = fp.x + fp.y;
         fp.x >= self.left_x as f64
             && fp.x <= self.right_x as f64
             && fp.y >= self.bottom_y as f64
             && fp.y <= self.top_y as f64
+            && diff >= self.upper_left_diagonal_x as f64
+            && diff <= self.lower_right_diagonal_x as f64
+            && sum >= self.lower_left_diagonal_x as f64
+            && sum <= self.upper_right_diagonal_x as f64
     }
 
     fn nearest_point_approx(&self, from_point: &FloatPoint) -> FloatPoint {
