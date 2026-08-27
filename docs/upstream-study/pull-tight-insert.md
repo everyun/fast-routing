@@ -872,3 +872,245 @@ Used by MazeSearchAlgo to price ripping an existing connection (MazeSearchAlgo.j
   normalization-depth Exception (PolylineTrace.java:730-732) — both should be ordinary control flow.
 - Identity comparison (`!=`) as change signal (`new_lines != lines`, PolylineTrace.java:819;
   `new_result != prev_result` loops) — in Rust use explicit change flags, not pointer identity.
+
+---
+
+## Release-jar conformance (2.3.0 @2d4de019)
+
+Audited against `/tmp/fr-java-release/src/main/java/app/freerouting` (the true source of the released
+`freerouting-2.3.0.jar`, Build-Revision 2d4de019) and cross-checked against the shipped bytecode via
+`javap -p -constants` on `/tmp/frbase/freerouting-2.3.0.jar`. All paths below are relative to
+`/tmp/fr-java-release/src/main/java/app/freerouting`.
+
+### 1. Which tree the release actually executes
+
+**Headline: the release executes the v19-named classes in the FLAT packages. The entire `v2` package
+refactor this spec's header table is written against (`autoroute/path/*`, `board/optimize/*`,
+`board/trace/*`, `board/facade/*`, `autoroute/maze/*`) does not exist in the release at all.**
+
+Jar contents (`unzip -l freerouting-2.3.0.jar`), the authoritative check:
+
+- present: `app/freerouting/autoroute/{LocateFoundConnectionAlgo, LocateFoundConnectionAlgo$ResultItem,
+  LocateFoundConnectionAlgo$BacktrackElement, LocateFoundConnectionAlgo45Degree,
+  LocateFoundConnectionAlgoAnyAngle, InsertFoundConnectionAlgo, Connection, AutorouteEngine,
+  BatchAutorouter, BatchAutorouterV19, BatchAutorouterThread, BatchFanout, BatchOptimizer,
+  BatchOptimizerMultiThreaded}.class`,
+  `app/freerouting/board/{PullTightAlgo, PullTightAlgo45, PullTightAlgo90, PullTightAlgoAnyAngle,
+  PolylineTrace, RoutingBoard, BasicBoard, ChangedArea, ShoveTraceAlgo, OptViaAlgo,
+  ForcedViaAlgo}.class`.
+- absent: any `FoundConnectionLocator*`, `FoundConnectionInserter`, `TraceTightener*`,
+  `PolylineTraceNormalization`, `RoutingBoardOperations`, `TraceShover`, `ViaOptimizer`,
+  `ForcedViaInserter`; no `autoroute/path/`, `autoroute/maze/`, `autoroute/pipeline/`, `board/optimize/`,
+  `board/trace/`, `board/facade/`, `board/state/` directories.
+
+So spec lines 8–27 (the two-column source table and the "Which one does the 2.3.0 release use? The v2
+classes" paragraph, incl. the cited `autoroute/maze/AutorouteEngine.java:183,265` and
+`board/facade/RoutingBoardOperations.java:65`) describe **git master, not the release**. Everything
+else in the body — which was written from v19 — is what the release runs, modulo the deltas in §2.
+
+#### Entry-point call chain — which `Batch*` runs
+
+*GUI / interactive* (`interactive/AutorouterAndRouteOptimizerThread.java`):
+
+```
+ctor :199-218
+    String algorithm = routingJob.routerSettings.algorithm;
+    if (RouterSettings.ALGORITHM_V19.equals(algorithm))       // "freerouting-router-v19"
+        batchAutorouter = new BatchAutorouterV19(routingJob);          :209
+    else                                                       // ALGORITHM_CURRENT = "freerouting-router"
+        (unknown value -> warn + coerce to ALGORITHM_CURRENT)          :211-215
+        batchAutorouter = new BatchAutorouter(routingJob);             :217
+thread_action() :451
+ └─ :513-527  instanceof-dispatch -> ((BatchAutorouter|BatchAutorouterV19) batchAutorouter).runBatchLoop()
+ └─ :275 / :314  BatchOptimizer  |  BatchOptimizerMultiThreaded (multi-thread setting)
+```
+
+*Headless (CLI / REST API — the mode M2 cares about)*
+(`management/RoutingJobSchedulerActionThread.java:99-113`):
+
+```
+NamedAlgorithm router;
+if (!RouterSettings.ALGORITHM_CURRENT.equals(algorithm))
+    job.logInfo("Unknown router algorithm ... using default (freerouting-router)");
+// comment in source: "Always use standard BatchAutorouter"
+router = new BatchAutorouter(job);            :107
+((BatchAutorouter) router).runBatchLoop();    :117
+...
+if (job.routerSettings.getRunOptimizer())  new BatchOptimizer(job).runBatchLoop();   :181-190
+```
+
+**`BatchAutorouterV19` is live but reachable only from the GUI**, and only when the user sets
+`algorithm = "freerouting-router-v19"` (`settings/RouterSettings.java:15`). Headless silently ignores
+the setting and always runs `BatchAutorouter`. Port target = `BatchAutorouter`.
+
+Both classes funnel into the *same* connection core, so this spec's subject matter is
+algorithm-selection-independent:
+
+```
+BatchAutorouter.autoroute_item                (autoroute/BatchAutorouter.java:1256)
+BatchAutorouterV19.autoroute_item             (autoroute/BatchAutorouterV19.java:~430)
+ └─ RoutingBoard.init_autoroute -> AutorouteEngine.autoroute_connection   (autoroute/AutorouteEngine.java:127)
+      ├─ MazeSearchAlgo.get_instance / find_connection                    (:140, :150)
+      ├─ LocateFoundConnectionAlgo.get_instance                           (:175)
+      │     dispatch NINETY|FORTYFIVE -> LocateFoundConnectionAlgo45Degree, else …AnyAngle
+      │                                                     (LocateFoundConnectionAlgo.java:168-180)
+      ├─ this.clear() / this.reset_all_doors()                            (:186, :188)
+      ├─ board.remove_trace_tails(net, stop_connection_option)            (:239)
+      └─ InsertFoundConnectionAlgo.get_instance                           (:241)
+            ├─ insert_via / insert_trace                     (InsertFoundConnectionAlgo.java:60-67)
+            │    └─ RoutingBoard.insert_forced_trace_polyline   (board/RoutingBoard.java:591)
+            │         ├─ PullTightAlgo.get_instance(keep_point=new_corner) (:833)   <- pull-tight #1
+            │         └─ new_trace.pull_tight(pull_tight_algo)            (:887)
+            ├─ board.connect_to_trace                        (board/RoutingBoard.java:1089)
+            └─ board.normalize_traces(net)                   (board/BasicBoard.java:876)
+ └─ on ROUTED: board.opt_changed_area(new int[0], null, trace_pull_tight_accuracy, trace_costs,
+                thread, TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP=1000)              <- pull-tight #2
+        BatchAutorouter.java:1331 · BatchAutorouterV19.java:452 · remove_tails path :1250
+    RoutingBoard.opt_changed_area (:209-219) -> PullTightAlgo.get_instance(:216).opt_changed_area(:218)
+      -> PullTightAlgo.opt_changed_area (board/PullTightAlgo.java:88-133)
+           -> PolylineTrace.pull_tight (board/PolylineTrace.java:827)
+           -> PullTightAlgo{90,45,AnyAngle}.pull_tight(Polyline)  (:20 / :27 / :28)
+           -> BasicBoard.check_trace_shape (board/BasicBoard.java:1166)
+```
+
+Subsystem → tree the release executes:
+
+| Subsystem | Release tree | Not used |
+|---|---|---|
+| headless batch driver | `autoroute/BatchAutorouter.java` | `BatchAutorouterV19` (GUI-only opt-in) |
+| batch optimizer | `autoroute/BatchOptimizer.java` (+ `BatchOptimizerMultiThreaded`) | spec's `BatchOptRoute`/`BatchOptRouteMT` names |
+| maze → engine | `autoroute/AutorouteEngine.java` (flat) | `autoroute/maze/`, `autoroute/pipeline/` |
+| locate | `autoroute/LocateFoundConnectionAlgo{,45Degree,AnyAngle}.java` | `autoroute/path/FoundConnectionLocator*` |
+| insert | `autoroute/InsertFoundConnectionAlgo.java` | `autoroute/path/FoundConnectionInserter` |
+| connection metric | `autoroute/Connection.java` | `autoroute/path/Connection` |
+| pull tight | `board/PullTightAlgo{,90,45,AnyAngle}.java` | `board/optimize/TraceTightener*` |
+| trace normalize/split/combine | `board/PolylineTrace.java` (inline `normalize` :738-820) | `board/trace/PolylineTraceNormalization` |
+| board entry points | `board/RoutingBoard.java`, `board/BasicBoard.java`, `board/ChangedArea.java` | `board/facade/*`, `board/state/ChangedArea` |
+| shove / via helpers | `board/ShoveTraceAlgo.java`, `board/OptViaAlgo.java`, `board/ForcedViaAlgo.java` | `TraceShover`, `ViaOptimizer`, `ForcedViaInserter` |
+
+### 2. Claims table
+
+Method: token-normalized diff (comments and whitespace stripped) of each v19 file against its release
+counterpart, plus `javap -p -constants` on the jar for every numeric constant.
+
+**Result up front:** every constant in §8 is byte-identical in the release. The v19↔release code diff
+for the whole pull-tight family and both locators is *purely* Java-21 pattern-matching syntax
+(`instanceof X x`), `++i`→`i++`, removal of `TestLevel`, and `FRLogger.warn`→`trace/debug`
+downgrades — with exactly **one** semantic exception (row D2).
+
+#### 2a. DIFFERS
+
+| # | Spec claim | Release reality | Release file:line |
+|---|---|---|---|
+| D1 | §Header / lines 8–27: release uses the v2 class set (`FoundConnectionLocator`, `FoundConnectionInserter`, `TraceTightener*`, `PolylineTraceNormalization`, `RoutingBoardOperations`, `autoroute/maze/AutorouteEngine`) | None of those types exist in the release source or jar. Release runs the flat v19-named classes. | see §1 table |
+| D2 | §5.2 pseudocode: `opt_changed_area` calls `smoothen_end_corners_at_trace_1(t)` (as v19 does, v19 `PullTightAlgo.java:155`) | **Release calls the net-filtered public wrapper** `smoothen_end_corners_at_trace(t)`, which short-circuits on the net filter: `if (only_net_no_arr.length > 0 && !p_trace.nets_equal(only_net_no_arr)) return false;` — so in the release, fork/end smoothing inside `opt_changed_area` is **restricted to the target net** whenever `only_net_no_arr` is non-empty (i.e. the `insert_forced_trace_polyline` pull-tight with `max_recursion_depth <= 0`, and `RoutingBoard.autoroute_item`/`fanout` which pass `{net_no}`). v19 smoothed forks on *any* net in the region. **This is the only real algorithmic delta in the family — port the release form.** | `board/PullTightAlgo.java:123` (call), `:347-356` (wrapper), `:361` (`_1` now private) |
+| D3 | §4.1 `board.normalize_traces(ctrl.net_no)` "v19 wraps in try/catch (throws at depth>16)" | Release has no try/catch — a bare call — because `normalize` no longer throws (see D4). | `autoroute/InsertFoundConnectionAlgo.java:86` |
+| D4 | §7.4 / §9 "v19 `normalize` throws past depth 16 … port the v2 behavior" | The v2 behavior **is** the release behavior: `if (normalization_depth > MAX_NORMALIZATION_DEPTH) { FRLogger.debug(...); return false; }`. No exception path. | `board/PolylineTrace.java:742-757` |
+| D5 | §4.2 stub cleanup "v19 gates this on `test_level < ALL_DEBUGGING_OUTPUT`; v2 runs unconditionally" | Release runs it unconditionally — the gate was *deleted*, not rewritten to `if (true)`. `TestLevel` no longer exists anywhere in the release. | `autoroute/InsertFoundConnectionAlgo.java:256-272` |
+| D6 | §10.3 "`PullTightAlgo.only_net_no_arr` became public" | It is `protected final int[] only_net_no_arr;`. Package visibility suffices for `PolylineTrace` (same `board` package). | `board/PullTightAlgo.java:32` |
+| D7 | §10.3 renames `ShoveTraceAlgo`→`TraceShover`, `OptViaAlgo`→`ViaOptimizer`, `ForcedViaAlgo`→`ForcedViaInserter` | Not in the release; the v19 names are shipped. | `board/{ShoveTraceAlgo,OptViaAlgo,ForcedViaAlgo}.java` |
+| D8 | §1 / §11 class names `BatchOptRoute`, `BatchOptRouteMT` | Release names are `BatchOptimizer` (rip+reroute at `opt_route_item`, snapshot at `:356`, reroute via `BatchAutorouter.autoroute_passes_for_optimizing_item`) and `BatchOptimizerMultiThreaded`. The §1 claim that the optimizer never calls pull-tight directly still **holds**. | `autoroute/BatchOptimizer.java:308`, `:356`, `:377-378`; `autoroute/BatchAutorouter.java:146` |
+| D9 | §5.1 `max_spring_over_recursion_depth` left as "(ctrl)" | Concrete value: **5**. | `autoroute/AutorouteControl.java:185` |
+| D10 | §6.1/§6.2 imply `reposition_lines` is AnyAngle-local (`…AnyAngle.java:253-278`) | `reposition_lines` (the driver) is **base-class only**; AnyAngle overrides only `reposition_line` (the per-line binary search). 45°/90° use both from the base. | `board/PullTightAlgo.java:175` (driver), `:195` (base `reposition_line`), `board/PullTightAlgoAnyAngle.java:464` (override) |
+| D11 | §6.3 90° pipeline listed as `{try_skip_second_corner; try_skip_corners; reposition_lines}` | Release (and v19) also call `avoid_acid_traps(p_polyline)` once before the loop, in **all three** modes — dead (`if (true) return`) but structurally present. | `board/PullTightAlgo90.java:21`, `PullTightAlgo45.java:28`, `PullTightAlgoAnyAngle.java:29` |
+| D12 | §"Caveat on this checkout": the `FRLogger.trace("compare_trace_…")` instrumentation is *local, not upstream* | **It shipped.** `javap -c` on the jar shows 9 `compare_trace…` string constants in `BatchAutorouter` alone; also in `InsertFoundConnectionAlgo`, `PolylineTrace`, `RoutingBoard`. Additionally the release ships a hardcoded designator filter `shouldTraceFanoutDiagnostics() { return ctrl.is_fanout && ctrl.fanout_start_pin_name != null && ctrl.fanout_start_pin_name.startsWith("U27-"); }`. All of it is logging-only and gates no control flow — safe to drop when porting, but it is release code, not a checkout artifact. | `autoroute/InsertFoundConnectionAlgo.java:490-497`; `autoroute/AutorouteControl.java:70,72` |
+| D13 | §3.2 "null tangent → warn at debug level" | Release logs these at `FRLogger.trace` (v19 used `warn`). Cosmetic; the fallback-to-corner control flow is unchanged. | `autoroute/LocateFoundConnectionAlgoAnyAngle.java:111,116,…` |
+| D14 | **Undocumented in the spec** — normalize-loop safety valve | `BasicBoard.normalize_traces` has an outer-iteration cap `MAX_NORMALIZE_ITERATIONS = 2000` plus a persistent per-board `normalizeSuppressedNetNos` set: on hitting the cap the net is logged, `break`s, and **all future `normalize_traces` calls for that net on that board return false immediately**. Not present in v19. This is load-bearing for termination and must be ported. | `board/BasicBoard.java:52` (const), `:876-905` (loop + suppression) |
+| D15 | **Undocumented in the spec** — extra autoroute retry pass | `BatchAutorouter.autoroute_item` adds a *width-necking retry*: on a failed connection, if `neck_width_um` is set and some active layer is wider, it clones `AutorouteControl` with every layer's `trace_half_width` clamped to `max(1, neck_width/2)` (preserving the clearance compensation delta), re-runs `AutorouteEngine.autoroute_connection`, and on ROUTED does another `opt_changed_area(..., 1000 ms)`. Adds a third pull-tight site to §1's call graph. | `autoroute/BatchAutorouter.java:1340-1349` (call), `:1377-1420` (`retryConnectionNecked`) |
+| D16 | §8 anchors (all file:line) | Every line number in §8 has drifted. Corrected anchors are in §2b. | — |
+
+#### 2b. MATCHES — every §8 constant, confirmed in release source *and* jar bytecode
+
+Bytecode confirmation via `javap -p -constants -classpath freerouting-2.3.0.jar` (values printed:
+`c_max_cos_angle=0.999d`, `c_min_corner_dist_square=0.9d`, `SKIP_LENGTH=10.0d`,
+`TRACE_WIDTH_TOLERANCE=2`, `DETOUR_ADD=100.0d`, `DETOUR_ITEM_COST=0.1d`, `c_tolerance=1.0d`,
+`MAX_NORMALIZATION_DEPTH=16`, `PULL_TIGHT_TIME_LIMIT=2000`, `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP=1000`,
+`MAX_NORMALIZE_ITERATIONS=2000`).
+
+| §8 knob | Spec value | Release value | Release file:line (spec's stale anchor) |
+|---|---|---|---|
+| `pull_tight_accuracy` → `min_translate_dist` | 500 → `max(x,100)` | **identical** | `autoroute/AutorouteControl.java:182` (`pull_tight_accuracy = 500;` hardcoded) · `board/PullTightAlgo.java:83` (`Math.max(p_min_translate_dist, 100)`) — *(spec: Settings.java:84, PullTightAlgo.java:110)* |
+| default `trace_pull_tight_accuracy` (settings side) | 500 | **identical**, in four places | `interactive/Settings.java:26` · `interactive/InteractiveSettings.java:222,282` · `settings/sources/DefaultSettings.java:97` · `settings/RouterSettings.java:791-794` (validator: `< 1` ⇒ reset to 500) |
+| `trace_pull_tight_region_width` | `Integer.MAX_VALUE` | **identical** | `interactive/Settings.java:109` — *(spec: Settings.java:83)* |
+| `PULL_TIGHT_TIME_LIMIT` (removals) | 2000 ms | **identical**, used at `remove_items_and_pull_tight` | `board/RoutingBoard.java:49` (const), `:144` (use) — *(spec: RoutingBoard.java:37)* |
+| `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` (per routed conn.) | 1000 ms | **identical** in both batch classes; `RoutingBoard` uses a local `final int … = 1000` rather than a field | `autoroute/BatchAutorouter.java:57` (uses at `:1250,1331,1414`) · `autoroute/BatchAutorouterV19.java:41` (uses at `:368,452`) · `board/RoutingBoard.java:964`, `:1078` — *(spec: BatchAutorouter.java:39, RoutingBoard.java:1063)* |
+| `AutorouteEngine.TRACE_WIDTH_TOLERANCE` | 2 | **identical** (`static final int`) | `autoroute/AutorouteEngine.java:33` — *(spec: :30)* |
+| AnyAngle locator `c_tolerance` | 1.0 | **identical**; also reused as the `2*d + c_tolerance` radius in `right/left_turn_next_corner` | `autoroute/LocateFoundConnectionAlgoAnyAngle.java:21` (decl), `:307`, `:329` — *(spec: :22)* |
+| `trace_halfwidth_max` / `trace_halfwidth_middle` | `hw+2` / `hw+1.0` | **identical** (`+ AutorouteEngine.TRACE_WIDTH_TOLERANCE` / `+ c_tolerance`) | `…AnyAngle.java:69-70` — *(spec: :84-86)* |
+| rear-window clearance re-check depth | 5 doors | **identical**: `Math.max(current_to_door_index - 5, current_from_door_index + 1)` | `…AnyAngle.java:244` — *(spec: :328)* |
+| `c_max_cos_angle` | 0.999 | **identical** | `board/PullTightAlgo.java:24` — *(spec: :21)* |
+| `c_min_corner_dist_square` | 0.9 | **identical** | `board/PullTightAlgo.java:27` — *(spec: :24)* |
+| AnyAngle `SKIP_LENGTH` (squared) | 10.0 | **identical** | `board/PullTightAlgoAnyAngle.java:21` — *(spec: :20)* |
+| reduce_corners `check_dist` (squared) | 100 | **identical** (`final double check_dist = 100;`, tested at `:114` and `:121`) | `board/PullTightAlgoAnyAngle.java:109` — *(spec: :126)* |
+| reduce_corners anti-loop length rule | `length_after + 1.5 < length_before` | **identical**, comment "1.5 added because of possible inaccuracy SQRT_2" preserved | `board/PullTightAlgoAnyAngle.java:151-152` — *(spec: :168-177)* |
+| reposition on-line epsilon | 0.001 | **identical** (`final double c_epsilon = 0.001;`) | `board/PullTightAlgoAnyAngle.java:485` — *(spec: :524)* |
+| numeric backoff step | 0.5 | **identical** in all binary-search loops (`shorten_value` subtraction) | `board/PullTightAlgo.java:195-290`, `PullTightAlgo45.java:366-402`, `PullTightAlgoAnyAngle.java:369-463, 464-624` |
+| 45° chamfer distance | `(√2−1)·hw`, clamp ≥0.99 → `max(d−1,1)` | **identical** (`Limits.sqrt2 - 1`), 4 occurrences | `board/PullTightAlgo45.java:251-259` (`smoothen_sharp_corner`), `:483-490` (`smoothen_end_corner_at_trace`) · `board/PullTightAlgoAnyAngle.java:799-806`, `:920-927` — *(spec: PullTightAlgo45.java:290-298, AnyAngle:853-861)* |
+| changed-area enlargement | `1.5·(max_clearance(layer) + 2·max_half_width)` | **identical** | `board/PullTightAlgo.java:108-109` — *(spec: :137-140)* |
+| shove resample width | `2·min_trace_half_width`; give up if segment > 100× | **identical** (`int sample_width = 2 * this.get_min_trace_half_width();`, `if (last_segment_length > 100 * sample_width)`) | `board/RoutingBoard.java:721`, `:725`, `:738-740` — *(spec: :821-827)* |
+| `max_shove_trace_recursion_depth` / via / spring-over | 20 / 5 / (ctrl) | **20 / 5 / 5** | `autoroute/AutorouteControl.java:183-185` — *(spec: :112-113)* |
+| neckdown `TOLERANCE` | 2 | **identical** (`final int TOLERANCE = 2;`; `ok_length -= TOLERANCE;` then `if (ok_length <= TOLERANCE) neck_down_end_point = p_from_corner;` — equivalent to the spec's "if ok_length > 2") | `autoroute/InsertFoundConnectionAlgo.java:370`, `:379`, `:381` — *(spec: :341)* |
+| `MAX_NORMALIZATION_DEPTH` | 16 | **identical** | `board/PolylineTrace.java:34` — *(spec: :33)* |
+| detour constants | ADD=100, ITEM_COST=0.1 | **identical**; formula `(trace_length + ADD)/(min_trace_length + ADD) + ITEM_COST*(n−1)` | `autoroute/Connection.java:15-16` (decl), `:154` (formula) — *(spec: :13-14)* |
+| via-opt iterations | `opt_via_location(…, min_translate_dist, 10)` | **identical** | `board/PullTightAlgo.java:128` — *(spec: :160-162)* |
+| pin edge-to-turn gate | `> 0` enables; forced to `−1` during insertion | **identical**; saved at `:108`, set `-1` at `:109`, restored at `:281` | `board/PolylineTrace.java:856` · `autoroute/InsertFoundConnectionAlgo.java:108-109, 281` — *(spec: PolylineTrace.java:824-825, Insert:124)* |
+| pull-tight #1 knobs (`insert_forced_trace_polyline`) | `keep_point=new_corner`, clip = `surrounding_octagon().enlarge(tidy_width)` (null when tidy_width==MAX_VALUE), `only_net = p_net_no_arr` iff `max_recursion_depth <= 0`, time_limit `−1` | **identical** | `board/RoutingBoard.java:821-834`, guarded call at `:887` (`if (p_tidy_width > 0 && new_trace != null)`) — *(spec: §4.6 step 8)* |
+| 45° locator acute-corner guard | 2nd nearest border point closer than `trace_halfwidth + 2` ⇒ use section midpoint; needs `to_Simplex()` | **identical** (`trace_halfwidth_add = trace_halfwidth + AutorouteEngine.TRACE_WIDTH_TOLERANCE`) | `autoroute/LocateFoundConnectionAlgo45Degree.java:114`, `:198-209` — *(spec: :232-247, :233-236)* |
+| `avoid_acid_traps` dead | `if (true) return p_polyline;` | **identical** | `board/PullTightAlgo.java:454-457` — *(spec: :516-519)* |
+| `check_trace_shape` obstacle semantics | contained contact pins skipped; any *other* Pin ⇒ obstacle even own-net; tie-pin foreign-net overlap tolerated only inside the shared pad | **identical**, line for line | `board/BasicBoard.java:1166-1221` — *(spec: :1047-1105, :1066-1099)* |
+| `get_trace_tail` | same-net trace whose first/last corner == location with zero contacts at that end | **identical** | `board/BasicBoard.java:1857` — *(spec: :1474-1498)* |
+| `remove_if_cycle` | snapshot tails, remove connection, remove only *newly created* tails | **identical** | `board/BasicBoard.java:1890-1920` — *(spec: :1504-1536)* |
+| `PolylineTrace.pull_tight` guards | on-board, not shove-fixed, `nets_normal()`, `only_net_no_arr` filter, net-class `get_pull_tight()`; then swap/correct_connection_to_pin ladder with one recursion each | **identical** | `board/PolylineTrace.java:827-875` — *(spec: :791-845)* |
+| AnyAngle pipeline order | `skip_segments_of_length_0 → reduce_lines → skip_lines → reduce_corners → reposition_lines → smoothen_corners` | **identical**, incl. the "I intended to replace reduce_corners…" comment | `board/PullTightAlgoAnyAngle.java:28-47`; fns at `:266` (reduce_lines), `:625` (skip_lines), `:54` (reduce_corners), `:207` (smoothen_corners), `:369` (smoothen_corner), `:464` (reposition_line), `:717`/`:835` (fork smoothing) — *(spec §6.1)* |
+| 45° pipeline order | `reduce_corners → smoothen_corners → reposition_lines` | **identical**; inside `smoothen_corners`, `smoothen_corner` (binary search) is tried first and `smoothen_sharp_corner` is the fallback when it returns null; `smoothen_non_integer_corner` reached from `smoothen_sharp_corner` | `board/PullTightAlgo45.java:27-37`; `:46` (reduce_corners), `:189-225` (smoothen_corners), `:333` (smoothen_corner), `:233` (smoothen_sharp_corner), `:273` (smoothen_non_integer_corner), `:415`/`:520` (fork smoothing) — *(spec §6.2)* |
+| 90° pipeline order | `try_skip_second_corner → try_skip_corners → reposition_lines`; no fork smoothing | **identical**; both fork hooks `return null` | `board/PullTightAlgo90.java:20-30`, `:35`, `:65`, `:136`, `:141` — *(spec §6.3)* |
+| `ChangedArea` | one mutable double octagon per layer (8 extremes), floor/ceil to `IntOctagon` | **identical**; fields `lx, ly, rx, uy, ulx, lrx, llx, urx` | `board/ChangedArea.java:11`, `:29` (join point), `:48` (join shape), `:61` (get_area), `:94-125` (`MutableOctagon`, `to_int`) — *(spec: board/ChangedArea.java; v2 board/state/ChangedArea.java — the v2 path does not exist)* |
+| locator dispatch + skeleton invariants | `NINETY|FORTYFIVE → …45Degree`, else `…AnyAngle`; `backtrack_array : BacktrackElement[]`; corners rounded + deduped | **identical**; `backtrack_array` really is an array built from the `LinkedList` at `:65-68` | `autoroute/LocateFoundConnectionAlgo.java:168-180`, `:45`, `:347-419` (`calculate_next_trace`), `:444` (`adjust_start_corner`), `:274`/`:287`/`:332` (corner helpers), `:463`/`:477` (nested `ResultItem`/`BacktrackElement`) |
+| insert loop ok-point trichotomy | ADVANCE / VIOLATION_CORRECTED (`--from_corner_no` only when `from_corner_no > 0 && window < 3`) / FAIL | **identical** | `autoroute/InsertFoundConnectionAlgo.java:137-253`, VIOLATION branch `:179-192` |
+
+### 3. Features the spec attributes to "v2" — PRESENT/ABSENT in the release (porting go/no-go)
+
+| v2 feature per spec | Release | Evidence |
+|---|---|---|
+| `autoroute/path/FoundConnectionLocator{,45Degree,AnyAngle}` | **ABSENT** | class set is `LocateFoundConnectionAlgo{,45Degree,AnyAngle}` |
+| `autoroute/path/FoundConnectionInserter` | **ABSENT** | class is `autoroute/InsertFoundConnectionAlgo` |
+| `autoroute/path/Connection` | **ABSENT** | class is `autoroute/Connection` |
+| `board/optimize/TraceTightener{,90,45,AnyAngle}` | **ABSENT** | classes are `board/PullTightAlgo{,90,45,AnyAngle}` |
+| `board/trace/PolylineTrace` + `PolylineTraceNormalization` | **ABSENT** | `board/PolylineTrace.java`, `normalize` inline at `:738-820` |
+| `board/facade/RoutingBoard` + `RoutingBoardOperations` | **ABSENT** | `board/RoutingBoard.java` (flat); no facade package |
+| `autoroute/maze/AutorouteEngine` | **ABSENT** | `autoroute/AutorouteEngine.java` (flat) |
+| §10.3 renames `TraceShover` / `ViaOptimizer` / `ForcedViaInserter` | **ABSENT** | `ShoveTraceAlgo` / `OptViaAlgo` / `ForcedViaAlgo` |
+| §10.3 `only_net_no_arr` made public | **ABSENT** | still `protected final` (`PullTightAlgo.java:32`) |
+| §10.1 `normalize` returns false at depth 16 instead of throwing | **PRESENT** | `board/PolylineTrace.java:742-757` (with a 7-line comment giving the two bugs it fixes) |
+| §10.1 USER_FIXED degenerate 1-corner traces skipped, not removed | **PRESENT** | `board/PolylineTrace.java:795-800` |
+| §10.2 single-corner `ResultItem` sets `first_corner` too | **PRESENT** | `autoroute/InsertFoundConnectionAlgo.java:95-103` |
+| §10.2 null-guards before `connect_to_trace` | **PRESENT** | `autoroute/InsertFoundConnectionAlgo.java:71-84` |
+| §10.2 fanout **micro-neckdown fallback** | **PRESENT** | call `:153-155`; impl `insert_fanout_micro_neckdown` `:289-330`. Exact candidate ladder (a `LinkedHashSet<Integer>`, insertion-ordered, dedup): `start_pin.get_trace_neckdown_halfwidth(layer)` (if pin on layer), `end_pin.get_trace_neckdown_halfwidth(layer)` (if pin on layer), `max(1,(base*3)/4)`, `max(1,(base*3)/5)`, `max(1, base/2)` — all **integer** division; each candidate skipped if `<= 0 || >= base_half_width`; accepted iff `insert_forced_trace_segment` returns exactly `target_point`. Gate is `!neckdown_inserted && ok_point != last_corner && ctrl.is_fanout && corner window length == 2` |
+| §10.2 stub-tail cleanup unconditional | **PRESENT** | `autoroute/InsertFoundConnectionAlgo.java:256-272` (v19's `TestLevel` gate deleted) |
+| §10.2 `ForcedVia*.check` takes `traceHalfWidth[]` + trace clearance class | **PRESENT** | sig `board/ForcedViaAlgo.java:89`; call `autoroute/InsertFoundConnectionAlgo.java:449-451`; `insert` sig `board/ForcedViaAlgo.java:165` |
+| §10.2 via-failure diagnostics split "no padstack spans layers" vs "blocked" | **PRESENT** | `found_suitable_span` flag `:441`, set `:448`, branch `:455-462` |
+| §11 `BatchOptRouteMT` board-clone parallelism | **PRESENT (renamed)** | `autoroute/BatchOptimizerMultiThreaded.java`; plus a *second* MT level the spec doesn't mention: `BatchAutorouter.autoroute_pass_multi_thread` with `BatchAutorouterThread` board clones (`autoroute/BatchAutorouter.java:315-380`) |
+
+**Go/no-go summary:** the release = **v19 algorithms + the v2 bug fixes backported into the v19 file
+layout**. Every v2 *behavior* the spec flags as "port this" is in the release; no v2 *structure* is.
+Port from the v19-named release files, and take §10.1/§10.2 as already-applied, plus D2, D14, D15.
+
+### 4. Port-from verdict
+
+| Algorithm | Porting reference in `/tmp/fr-java-release/src/main/java/app/freerouting` |
+|---|---|
+| backtrack + connection skeleton (§2) | `autoroute/LocateFoundConnectionAlgo.java` (488 L) — `backtrack` `:194`, ctor loop `:100-166`, `calculate_next_trace` `:347`, `adjust_start_corner` `:444`, corner helpers `:274/:287/:332`, nested `ResultItem` `:463` / `BacktrackElement` `:477` |
+| 45°/90° corner placement (§3.1) | `autoroute/LocateFoundConnectionAlgo45Degree.java` (282 L) — `calculate_next_trace_corners` `:88`, `calc_horizontal_first_from_door` `:35`, `_to_door` `:233`, acute-corner guard `:196-209` |
+| any-angle funnel/visibility (§3.2) | `autoroute/LocateFoundConnectionAlgoAnyAngle.java` (376 L) — `calculate_next_trace_corners` `:57`, door corners `:34/:45`, funnel loop `:98-210`, end-of-trace `:212-238`, rear-window correction `:243-270`, tangential constructions `:290-376` |
+| insertion with shove, neckdown, via (§4.1–4.4) | `autoroute/InsertFoundConnectionAlgo.java` (514 L) — driver `:41-88`, `insert_trace` `:91-287`, `insert_fanout_micro_neckdown` `:289-330`, `insert_neckdown` `:335`, `try_neck_down` `:349`, `insert_via` `:424-480` |
+| shove core / ok-point protocol (§4.6) | `board/RoutingBoard.java` (1420 L) — `insert_forced_trace_polyline` `:591-899`, resample `:715-745`, keep-point pull-tight `:821-889`; `connect_to_trace` `:1089`; `remove_items_and_pull_tight` `:106-146`; `opt_changed_area` `:192/:209`; `fanout` `:977` |
+| pull-tight framework, base binary search, fork smoothing driver (§5, §6.4) | `board/PullTightAlgo.java` (473 L) — `get_instance` `:71-85`, `opt_changed_area` `:88-133`, `pull_tight(Polyline,…)` `:140`, `is_stop_requested` `:150`, `reposition_lines` `:175`, base `reposition_line` `:195`, `skip_segments_of_length_0` `:292`, `smoothen_end_corners_at_trace` `:347` (**net-filtered wrapper — port this form**), `_1` `:361`, `split_traces_at_keep_point` `:411`, `_2` `:429`, `avoid_acid_traps` `:454` (dead) |
+| any-angle local moves (§6.1) | `board/PullTightAlgoAnyAngle.java` (953 L) — `pull_tight` `:27`, `reduce_corners` `:54`, `smoothen_corners` `:207`, `reduce_lines` `:266`, `smoothen_corner` `:369`, `reposition_line` `:464`, `skip_lines` `:625`, `smoothen_start/end_corner_at_trace` `:717`/`:835` |
+| 45° local moves (§6.2) | `board/PullTightAlgo45.java` (622 L) — `pull_tight` `:27`, `reduce_corners` `:46`, `smoothen_corners` `:189`, `smoothen_sharp_corner` `:233`, `smoothen_non_integer_corner` `:273`, `smoothen_corner` `:333`, fork smoothing `:415`/`:520` |
+| 90° local moves (§6.3) | `board/PullTightAlgo90.java` (143 L) — `pull_tight` `:20`, `try_skip_second_corner` `:35`, `try_skip_corners` `:65`, fork hooks `:136`/`:141` (both `return null`) |
+| split / combine / change / normalize (§7.1–7.4) | `board/PolylineTrace.java` (1315 L) — `combine` `:170`, `combine_at_start` `:196`, `combine_at_end` `:313`, `split(clip)` `:~440-635`, `split_inside_drill_pad_prohibited` `:637`, `split(Point)` `:675`, `split(line_no,line)` `:~700-730`, `normalize` `:738/:742`, `pull_tight` `:827`, `change` `:942`, `swap/correct_connection_to_pin` `:1069/:1125` |
+| board-level normalize/combine, clearance oracle, tails, cycles (§5.3, §7.4) | `board/BasicBoard.java` (2017 L) — `combine_traces` `:849`, `normalize_traces` `:876` (**with the 2000-iteration cap + per-net suppression — port it**), `check_trace_shape` `:1166`, `check_polyline_trace` `:1229`, `get_trace_tail` `:1857`, `remove_if_cycle` `:1890` |
+| changed-area octagon (§5.2) | `board/ChangedArea.java` (126 L) |
+| connection quality metric (§7.5) | `autoroute/Connection.java` (156 L) — `get` `:40`, `trace_length` `:136`, `get_detour` `:149` |
+| batch driver + the two pull-tight sites (§1) | `autoroute/BatchAutorouter.java` (1764 L) — `autoroute_item` `:1256`, post-ROUTED `opt_changed_area` `:1331`, `remove_tails` `:1247-1252`, necked retry `:1377-1420`; **not** `BatchAutorouterV19.java` (GUI-only) |
+| batch optimizer (rip + reroute, not pull-tight) | `autoroute/BatchOptimizer.java` — `opt_route_item` `:308`, snapshot `:356`, reroute `:377-378`; MT variant `autoroute/BatchOptimizerMultiThreaded.java` |

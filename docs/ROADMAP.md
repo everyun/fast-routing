@@ -18,15 +18,26 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
 - [ ] Measurement campaign (running): uncapped (2 h) Java runs of the 14 timeout fixtures;
       `-XX:+UseSerialGC` bound on GC cost (slow-6); profiler stage split at DEBUG (slow-6).
       → converts "5–20×" into a measured per-lever budget; supplies T_java(complete).
-- [ ] Lab jar from the **release revision** `2d4de019` (build in progress): switchable
-      `retain_autoroute_database`, expansion counters (per-pass, per-connection p50/p99/max),
-      settle-order trace. → budget calibration + the M2 differential harness oracle.
-- [ ] Conformance pass: verify the four router specs' constants/behaviors against the jar
+- [x] Lab jar from the **release revision** `2d4de019`: `/tmp/fr-lab-release/freerouting-lab.jar`,
+      proven non-perturbing (identical per-pass board hashes + SES vs the shipped jar).
+      Knobs: `-Dfrlab.retain_autoroute_database`, `-Dfrlab.settle_trace`; log prefixes
+      `FRLAB expansions_pass= / expansions_conn / settle`. First data: Issue026 pass 1
+      per-connection expansions p50=11 p99=1489.
+      **Measured warning:** retain_autoroute_database=true CHANGES routing behavior
+      (3.2× expansions, converges worse: 1 unrouted vs 0) — upstream's room retention is not a
+      free perf lever; our M3 room-retention work needs correct invalidation + equivalence
+      gates, and calibration runs must use fresh-DB mode.
+- [x] Conformance pass (DONE — see the appended "Release-jar conformance" sections;
+      headline corrections: default ripup_costs=100, ripup randomization unreachable,
+      retain-DB hard-false, fanout annulus 2.5/4.5 mm confirmed, fanout ripup protection
+      lapses from pass 3, shipped debug scaffolding must not be ported): verify the four router specs' constants/behaviors against the jar
       (`javap -p -c`) and the release-revision source; annotate each spec with a
       "release-jar conformance" section; resolve the fanout-annulus contradiction
       (2.5–4.5 mm vs 0.5–3.0 mm) against the binary; confirm/deny v2-only features
       (bend costs, pure-SMD relaxation, stop-rule constants).
-- [ ] Re-pin the reference config (`-mp 9999`, optimizer enabled, stated wall budget) and
+- [ ] Re-pin the reference config (`-mp 9999`, stated wall budget; the optimizer flag
+      defaults on — the stage only runs when routing completes, which is why the 300 s
+      `-mp 20` baseline almost never reached it) and
       re-baseline; record 3-run stability per fixture (`stable/unstable`).
 - [ ] Fixture manifest: per-board classification (`java_finished/timeout/crash/degenerate`),
       dedup (≈39 independent designs), coverage properties; `bench/fetch_fixtures.sh`.
@@ -41,10 +52,12 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
 Order (reordered after review — board+checker land before the full DSN trap list, because the
 import/checker gates are what measure the trap list):
 
-1. **Geometry kernel completion** — kill remaining f64 topology decisions (mixed Int/Rational
+1. **[DONE — wave 1]** Geometry kernel completion — kill remaining f64 topology decisions (mixed Int/Rational
    compare, LineSegment::intersection rounding); Polyline-as-lines with upstream normalization
    contract; CRIT_INT enforcement at the IO boundary; i128 promotion tier.
-2. **Arena ShapeTree + epochs** — SoA nodes, zero-alloc queries, STR bulk-load, epoch-scoped
+2. **[DONE — wave 1]** Arena ShapeTree + epochs (queries 2.6x, STR build 2.8x, removals
+   1.2x faster than MinAreaTree at 10k scale; adversarially verified incl. 4-thread
+   shared-&self query proof) — SoA nodes, zero-alloc queries, STR bulk-load, epoch-scoped
    reader snapshots; microbench vs current MinAreaTree.
 3. **Board item model** — slotmap + semantic ItemId, trace split/merge/normalize (this path is
    what Issue187/Issue103 stress — the two boards where current Rust is *slower* than Java;

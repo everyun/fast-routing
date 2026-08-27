@@ -953,3 +953,295 @@ unchanged (`v2 AutorouteControl.java:171-186`).
 - Latent bug to *not* copy blindly: `in_front_of_pad` case 0 `line_b.x + line_b.x` typo
   (`ForcedPadAlgo.java:69`, still present in v2) — decide consciously (fix + regression-test
   routing diffs, or preserve for bit-compat).
+
+---
+
+## Release-jar conformance (2.3.0 @2d4de019)
+
+Audited against `/tmp/fr-java-release/src/main/java/app/freerouting` (the true source of the
+shipped `freerouting-2.3.0.jar`, `Build-Revision 2d4de019aa89e9fa3dc1dc44e09bf509760cafc1`,
+`Build-Date 2026-08-07`), cross-checked against the jar's bytecode with `javap -p -c`.
+All line references in this section are **release-tree** unless marked `v19:`.
+
+**Headline: the release ships the v19 class names, not the v2 ones.** `jar tf` over
+`freerouting-2.3.0.jar` (2002 `app/freerouting/*` entries) contains
+`board/ShoveTraceAlgo.class`, `board/ShapeTraceEntries.class`, `board/CalcFromSide.class`,
+`board/CalcShapeAndFromSide.class`, `board/ForcedPadAlgo.class`, `board/ForcedViaAlgo.class`,
+`board/MoveDrillItemAlgo.class`, `autoroute/MazeShoveTraceAlgo.class`,
+`autoroute/MazeSearchAlgo.class` (+ `MazeSearchAlgo$ShoveResult`, `MazeShoveTraceAlgo$DoorSection`),
+`autoroute/InsertFoundConnectionAlgo.class`. It contains **zero** of
+`TraceShover`, `ShapeEntrySide`, `ShapeAndEntrySide`, `ForcedPadRouter`, `ForcedViaInserter`,
+`DrillItemMover`, `MazeTraceShover`, `MazeSearchEngine`, `MazeRipupResolver`,
+`RoutingBoardSearchFacade`, and none of the packages `board/optimize`, `board/searchtree`,
+`board/facade`, `board/actions`, `board/model`, `autoroute/maze`, `autoroute/pipeline`.
+⇒ **The whole "v2 file map" at the top of this document (§File map, §13.3) describes a tree that
+2.3.0 does not ship.** The porting reference is the flat `board/` + `autoroute/` packages.
+Confusingly, the *semantic* v2 deltas of §13.1/§13.2 **are** in the release — they were
+back/forward-ported into the v19-named classes. See table 3 below.
+
+### 1. What the release actually executes
+
+#### 1.1 Headless (CLI / API server) — always `BatchAutorouter`
+
+```
+Freerouting.main
+  → management/RoutingJobSchedulerActionThread.thread_action()
+      :106-108   // comment: "Always use standard BatchAutorouter"
+                 router = new BatchAutorouter(job);          // no V19 branch here
+      :118       batchRouter.runBatchLoop();
+  → autoroute/BatchAutorouter.runBatchLoop()                 :757
+      :824       BatchFanout.fanout_board(...)               // optional fanout pre-pass
+      :948       continueAutorouting = autoroute_pass(currentPass);
+  → BatchAutorouter.autoroute_pass(int)                      :431
+      :517       autoroute_item(curr_item, net_no, ripped_item_list, ripup_costs, pass_no)
+  → BatchAutorouter.autoroute_item(...)                      :1257
+      :1280      autoroute_control.ripup_costs = this.start_ripup_costs * p_ripup_pass_no;
+      :1311-1313 TimeLimit = 100000 * 2^(pass-1) ms, capped at Integer.MAX_VALUE
+  → board.init_autoroute(...) → autoroute/AutorouteEngine.autoroute_connection()  :127
+      :140/:155  MazeSearchAlgo.get_instance / find_connection      ← maze-time shove (§10)
+      :175       LocateFoundConnectionAlgo.get_instance
+      :241       InsertFoundConnectionAlgo.get_instance             ← insert-time shove (§11)
+```
+
+`RoutingJobSchedulerActionThread` at `:103-105` logs "Unknown router algorithm … using default"
+for any algorithm value and then constructs `BatchAutorouter` unconditionally. There is **no
+headless path to `BatchAutorouterV19`.** A fanout-only headless mode (`:163-175`) also uses
+`new BatchAutorouter(job)` with `maxPasses = 0`.
+
+#### 1.2 GUI — `BatchAutorouter` vs `BatchAutorouterV19` selection
+
+`interactive/AutorouterAndRouteOptimizerThread` ctor `:205-218`:
+
+```java
+String algorithm = routingJob.routerSettings.algorithm;
+if (RouterSettings.ALGORITHM_V19.equals(algorithm))   // "freerouting-router-v19"
+    this.batchAutorouter = new BatchAutorouterV19(routingJob);
+else {                                                 // unknown → warn + reset to default
+    if (!RouterSettings.ALGORITHM_CURRENT.equals(algorithm)) { ...logWarning...; algorithm = ALGORITHM_CURRENT; }
+    this.batchAutorouter = new BatchAutorouter(routingJob);
+}
+```
+
+(`settings/RouterSettings.java:14-15` — `ALGORITHM_CURRENT = "freerouting-router"`,
+`ALGORITHM_V19 = "freerouting-router-v19"`.) `thread_action()` `:478` dispatches via
+`instanceof` at `:513-526`. **Both classes are live**, but they differ only in the pass/ripup
+driver loop; the shove subsystem is shared and identical:
+`BatchAutorouterV19.java:402` and `BatchAutorouter.java:1280` set
+`autoroute_control.ripup_costs = start_ripup_costs * ripup_pass_no` with the same formula, and
+both then reach the same `AutorouteEngine.autoroute_connection`. **Nothing in §1-§11 of this
+document is affected by the V19/current selection.**
+
+#### 1.3 Dead code in the shove neighbourhood (do not port)
+
+- `BatchAutorouter.autoroute_pass_multi_thread(int)` `:315` is `private` and **has no caller**
+  anywhere in the release tree (verified by exhaustive grep). Its worker
+  `autoroute/BatchAutorouterThread.java` (referenced only from `:327,:343,:368,:398` inside that
+  dead method) is therefore also dead. **The 2.3.0 autoroute/shove path is strictly
+  single-threaded**, which is the empirical backing for §15's "do not parallelize inside a
+  cascade" — upstream tried board-cloning parallelism at pass granularity and shipped it disabled.
+- `MazeSearchAlgo$ShoveResult` (`autoroute/MazeSearchAlgo.java:1651-1680`) still ships with the
+  same dead javadoc referencing non-existent `MazeShoveViaAlgo` / `MazeShoveThinRoomAlgo`.
+  §File-map note confirmed verbatim in the release.
+
+#### 1.4 Debug scaffolding **shipped in the release jar** (must not be ported)
+
+This is new information; the spec (§14) attributes instrumentation only to the local v19 snapshot.
+The release is *more* instrumented, including hardcoded board-specific gates:
+
+| site | gate | release file:line |
+|---|---|---|
+| 5× `compare_trace_insert_forced_*` / obstacle dumps | `p_net_no_arr[0] == 94` (literal net number!) | `board/RoutingBoard.java:660,726,742,801,1088` |
+| `compare_trace_shove_shape` / `compare_trace_insert_forced_sub` id-generator deltas | any net | `board/RoutingBoard.java:698,708,1155` |
+| `FANOUT_DIAG` | `ctrl.is_fanout && ctrl.fanout_start_pin_name.startsWith("U27-")` | `autoroute/InsertFoundConnectionAlgo.java:490-504` |
+| `[shove_check_obstacles]` StringBuilder dumps | unconditional call | `board/ShoveTraceAlgo.java:193,212,346` |
+| `CHECK_RIPUP` full-state dump incl. per-connection item-id StringBuilder | unconditional call | `autoroute/MazeSearchAlgo.java:1424-1441,1456-1474` |
+| `compare_trace_insert_segment*` ADVANCE / RETREAT / FAIL dumps | `if (true)` | `autoroute/InsertFoundConnectionAlgo.java:159,199,229` |
+| `compare_trace_stub_cleanup` (echoes `FRLogger.isTraceEnabled()` into its own message) | unconditional | `autoroute/InsertFoundConnectionAlgo.java:272-281` |
+
+`bipush 94` is present 5× in the shipped `RoutingBoard.class` bytecode. `fanout_start_pin_name`
+*is* assigned (`board/RoutingBoard.java:1038` = `component.name + "-" + pin.name()`), so the
+`U27-` gate is live on any board with a component named `U27`. The `CHECK_RIPUP` /
+`compare_trace_*` paths build strings **before** any level check — this is a real per-call
+allocation cost in the shipped router, reinforcing §15's "gate behind tracing levels".
+
+### 2. Claims table — spec (v19/master) vs release
+
+#### 2.1 Constants — §12 table, audited exhaustively (all values verified in source **and** in
+`freerouting-2.3.0.jar` bytecode where the source was ambiguous)
+
+| §12 knob | spec value | release value | verdict | release file:line |
+|---|---|---|---|---|
+| `max_shove_trace_recursion_depth` | 20 | **20** | ✅ match (`bipush 20` in `AutorouteControl.<init>`) | `autoroute/AutorouteControl.java:183` |
+| `max_shove_via_recursion_depth` | 5 | **5** | ✅ match (`iconst_5`) | `autoroute/AutorouteControl.java:184` |
+| `max_spring_over_recursion_depth` | 5 | **5** | ✅ match | `autoroute/AutorouteControl.java:185` |
+| top-level `c_max_spring_over_recursion_depth` | 20 | **20** (method-local `final int`) | ✅ match; line moved (v19:789) | `board/ShoveTraceAlgo.java:618` |
+| `ShapeTraceEntries.c_offset_add` | 1 | **1.0d**, and it is `private static final double` | ✅ value match; line moved (spec said :15) and it is `private`, not package-visible | `board/ShapeTraceEntries.java:18` |
+| `c_offset_add` use sites | store_trace / next_piece / cutout | 4 sites: `:57,:61` (cutout_trace), `:186,:191` (next_substitute_trace_piece), `:269,:273` (store_trace) | ✅ match; 1-step compensated vs 2-step `offset(half_width)` then `offset(clearance + 1)` confirmed verbatim | `board/ShapeTraceEntries.java:57-61,186-191,269-275` |
+| stack depth gate `> 1` | ≤1 everywhere | **3 call sites**, all `> 1 ⇒ fail` | ✅ match (spec cited 3 sites) | `board/ShoveTraceAlgo.java:66`, `:215`, `board/ForcedPadAlgo.java:196` |
+| via shove candidate counts | 1 / ext 2 (90°), 4 (oct), 4 (simplex) | **1 / 2 / 4 / 4** | ✅ match | `board/MoveDrillItemAlgo.java:217,221,227,237` |
+| via shove diagonal tolerance | +2 | **`shove_distance += 2;`** with the same "empirical value" comment | ✅ match (v19:285) | `board/MoveDrillItemAlgo.java:211-213` |
+| via candidate distance gate | `(via_max_hw + shape_min_hw)²` | `max_dist = 0.5*via_bbox.max_width() + 0.5*shape_bbox.min_width()`, squared; `i == 0` always admitted | ✅ match (v19:291-299) | `board/ShoveTraceAlgo.java:219,234-238` |
+| maze section proximity | `compensated_half_width + 5` (squared) | **`+ 5`**, squared | ✅ match (v19:107) | `autoroute/MazeShoveTraceAlgo.java:110-111` |
+| maze shove shortening `−1` | −1 | **`shove_width = shove_width - 1`** | ✅ match (v19:187) | `autoroute/MazeShoveTraceAlgo.java:161` |
+| maze "segment is a point" `len² < 0.1` | 0.1 | **0.1** | ✅ match (v19:197) | `autoroute/MazeShoveTraceAlgo.java:171` |
+| partial-insert sample width | `2 * min_trace_half_width`, give up beyond `100×` | **`2 * get_min_trace_half_width()`, `> 100 * sample_width ⇒ return from_corner`** (`bipush 100` in bytecode) | ✅ match (v19:821-827) | `board/RoutingBoard.java:721,725` |
+| neckdown `TOLERANCE` | 2 | **`final int TOLERANCE = 2;`** | ✅ match (v19:341) | `autoroute/InsertFoundConnectionAlgo.java:370,379,381` |
+| `check_trace_segment` safety `−1` | −1 after clearance | **`Math.max(0.0, projection - shorten_value - 1)`** | ✅ match (v19:329) | `board/RoutingBoard.java:296` |
+| `pull_tight_accuracy` | 500 | **500** (`sipush 500`) | ✅ match | `autoroute/AutorouteControl.java:182` |
+| `ripup_costs` ctor default | 1000 | **1000** (`sipush 1000`) | ✅ match | `autoroute/AutorouteControl.java:197` |
+| `start_ripup_costs` default | 100, cited at `interactive/AutorouteSettings.java:40` | **100**, but **that file does not exist in the release**; the default now lives in the settings layer | ⚠️ value match, **citation stale** | `settings/sources/DefaultSettings.java:60` (`DEFAULT_START_RIPUP_COSTS = 100`), applied `:147`; floor of 1 at `settings/RouterSettings.java:474,481` |
+| `ctrl.ripup_costs = start × pass_no` | `BatchAutorouter.java:516,623` | same formula, **two live drivers** | ⚠️ value match, lines moved | `autoroute/BatchAutorouter.java:1280,1400`; `autoroute/BatchAutorouterV19.java:402` |
+| `ALREADY_RIPPED_COSTS` | 1 | **1** | ✅ match; line moved (v19:41) | `autoroute/MazeSearchAlgo.java:43` (used `:442`, returned `:1381`) |
+| `FANOUT_COST_CONST` | 20000 | **20000**, a *method-local* `final double` | ✅ match; line moved (v19:118) | `autoroute/MazeSearchAlgo.java:155` |
+| `MAX_RIPUP_COSTS` | `Integer.MAX_VALUE/100` | same, method-local `final int` | ✅ match; line moved (v19:1493) | `autoroute/MazeSearchAlgo.java:1454` |
+| `AutorouteEngine.TRACE_WIDTH_TOLERANCE` | 2 | **2** | ✅ match; line moved (v19:30) | `autoroute/AutorouteEngine.java:33` (used `MazeSearchAlgo.java:339`) |
+| ripup randomization `0.5 + rnd²`, pass ≥ 4 && pass%3 != 0 | as documented | **identical** | ✅ match | `autoroute/MazeSearchAlgo.java:1443-1449` |
+| ripup clamp `[1, MAX_RIPUP_COSTS]` | as documented | **identical** | ✅ match | `autoroute/MazeSearchAlgo.java:1453-1455` |
+| spring-over wrap offset `half_width + 1` (+ two half-clearance steps) | as documented | **identical** | ✅ match | `board/ShoveTraceAlgo.java:539-548` |
+| `ForcedPadAlgo` probe shape offset 1 | offset 1, 3-line polyline | **`check_line.offset_shape(1, 0)`** | ✅ match | `board/ForcedPadAlgo.java:32-43` |
+| `ForcedViaAlgo` `check_radius = via_radius + 0.5*cl(cl,cl,layer) + min_trace_half_width` | as documented | **identical** | ✅ match | `board/ForcedViaAlgo.java:41` |
+| `in_front_of_pad` typo `line_b.x + line_b.x` | present, v19:69 | **still present**, case 0 | ✅ bug confirmed shipped | `board/ForcedPadAlgo.java:65` |
+
+**Constants in the release that the §12 table does not have (new, must be ported):**
+
+| new knob | value | release file:line |
+|---|---|---|
+| per-connection `TimeLimit` for the shove `check` paths | `100000 * 2^(ripup_pass_no − 1)` ms, capped at `Integer.MAX_VALUE` | `autoroute/BatchAutorouter.java:1311-1313` (identically `autoroute/BatchAutorouterThread.java:501`, dead) |
+| hole-clearance probe radius | `ceil(drill_radius + hole_clearance + 10)`, **clearance class 0** | `board/ForcedViaAlgo.java:240-251` |
+| ripup fanout-protection window | `ctrl.ripup_costs <= start_ripup_costs * 2` (i.e. only passes 1-2 protect fanout traces) | `autoroute/MazeSearchAlgo.java:1386-1387` |
+| fanout micro-neckdown candidate half-widths | pin neckdown half-widths, then `max(1, base*3/4)`, `max(1, base*3/5)`, `max(1, base/2)`; skip if `≤0` or `≥ base` | `autoroute/InsertFoundConnectionAlgo.java:289-333` (candidates built `:299-309`) |
+| maze drill "required radius" | `max(via_radius_on_layer, ctrl.trace_half_width[layer])` | `autoroute/MazeSearchAlgo.java:1193` |
+| `CalcFromSide` fallback box tolerance | **0.01** | `board/CalcFromSide.java:120` |
+
+#### 2.2 Behaviour deltas — where the release differs from what §1-§11 document
+
+| # | spec claim | release behaviour | release file:line | port impact |
+|---|---|---|---|---|
+| **B1** | §10.2: guard is `trace_corner_no >= polyline.arr.length - 1 ⇒ FRLogger.warn + return false` | **`if (trace_corner_no < 0 \|\| trace_corner_no >= trace_polyline.arr.length - 2) return false;`** — one index stricter, also rejects negative, **no warning**. Comment: "Check if trace_corner_no allows access to indices up to trace_corner_no + 2 … Stale indices can occur when traces are modified during routing" | `autoroute/MazeShoveTraceAlgo.java:57-63` | **Port the release form.** v19 could index `arr[c+2]` out of range; this is a real crash fix and it also prunes one maze-time shove case that v19 attempted. |
+| **B2** | §10.2 door harvesting: empty door shape ⇒ `FRLogger.warn` gated on `TestLevel.ALL_DEBUGGING_OUTPUT` | unconditional `FRLogger.trace(...)`, then `continue` — same control flow, `TestLevel` type is gone from the release entirely | `autoroute/MazeShoveTraceAlgo.java:318-322` | none (logging only) |
+| **B3** | §8: `ForcedViaAlgo.check_layer(via_radius, cl, attach_smd, room_shape, location, layer, nets, max_rec, max_via_rec, board)` — 10 args, checks the via pad only | **12 args**, `+ p_trace_half_width, p_trace_clearance_class`; after the via-pad `check_forced_pad` it **additionally** runs `check_forced_pad` on a `Circle(location, trace_half_width)` bounding box/octagon with the trace clearance class and `copper_sharing = true`; result is `DRILLABLE_WITH_ATTACH_SMD` if **either** sub-check says so | `board/ForcedViaAlgo.java:28-84` | **Real behaviour change in the maze drill machinery.** The maze now refuses drills where the start-trace stub would not fit. |
+| **B4** | §8 caller: maze passes `ctrl.via_radius_arr[layer]` for a single via | release iterates `ctrl.via_rule.via_count()` per layer, takes `requiredRadius = max(0.5*viaShape.max_width(), ctrl.trace_half_width[layer])`, returns `DRILLABLE` on the first via that fits, remembering `DRILLABLE_WITH_ATTACH_SMD` | `autoroute/MazeSearchAlgo.java:1185-1204` | changes which layers are drillable; port with B3 |
+| **B5** | §11 `insert_via`: `ForcedViaAlgo.check(via_info, location, [net], 20, 5, board)` | **`check(via_info, location, nets, max_rec, max_via_rec, board, ctrl.trace_half_width, ctrl.trace_clearance_class_no)`**; also tracks `found_suitable_span` to distinguish "no via spans these layers" from "blocked by clearance/shove" in the log | `autoroute/InsertFoundConnectionAlgo.java:424-489` (the `check` call at `:449-451`, `found_suitable_span` at `:445`) | signature + stricter check |
+| **B6** | §11 `insert_trace` advance loop: advance / retreat / fail, neckdown only | release adds a **third** fallback: `insert_fanout_micro_neckdown(...)`, tried only when `!neckdown_inserted && ok_point != last_corner && ctrl.is_fanout && curr_corner_arr.length == 2`; it retries `insert_forced_trace_segment` at progressively thinner half-widths (see constants table). Success counts as ADVANCE | invoked `autoroute/InsertFoundConnectionAlgo.java:148-157`, ADVANCE test `:157`; body `:289-333` | fanout pass only (`ctrl.is_fanout` is set **only** in `board/RoutingBoard.java:1018`, reached from `BatchFanout`), but it changes fanout results |
+| **B7** | §10.4 `cost_factor` fanout protection gated on `!ctrl.remove_unconnected_vias` | gated on `preserveFanoutProtection = !ctrl.remove_unconnected_vias && ctrl.ripup_costs <= start_ripup_costs * 2` — since `ripup_costs = start × pass_no`, **fanout protection switches off from ripup pass 3 onward** | `autoroute/MazeSearchAlgo.java:1386-1396` | changes ripup costs from pass 3; port it |
+| **B8** | §11: `p_board.connect_to_trace(first_corner/last_corner, …)` unconditional | null-guarded; `first_corner == null` / `last_corner == null` ⇒ warn + skip `connect_to_trace` instead of NPE | `autoroute/InsertFoundConnectionAlgo.java:71-84`; plus a new "set both corners when the trace has 1 corner" guard at `:95-101` | defensive; keep |
+| **B9** | §9 `insert_forced_trace_polyline` step 1: non-IntPoint endpoints ⇒ warn, return `from_corner` | release adds an earlier guard: `from_corner == null \|\| to_corner == null ⇒ trace + return null` (i.e. the *damaged-board* code, before anything is modified) | `board/RoutingBoard.java:712-722` | **Note the asymmetry**: this returns `null`, which `InsertFoundConnectionAlgo` decodes as "DB damaged ⇒ FAIL". A Rust port should return the clean "nothing inserted" code here instead. |
+| **B10** | §9/§5.3 tail cleanup: `board.remove_items(items, false)` (two-arg, `p_with_delete_fixed`) | one-arg `remove_items(items)`; `BasicBoard.remove_items` now refuses items where `isDeletionForbidden() \|\| is_user_fixed()` — semantically identical to the v19 `p_with_delete_fixed = false` call | `board/BasicBoard.java:722-733`; call sites `board/ShoveTraceAlgo.java:409`, `board/ForcedPadAlgo.java:315` | none |
+| **B11** | §11 trace-tail cleanup loop gated on `board.get_test_level() < ALL_DEBUGGING_OUTPUT` | `TestLevel` removed from the release; the tail-removal loop now runs **unconditionally** | `autoroute/InsertFoundConnectionAlgo.java:256-271` | ports as "always clean tails" |
+| **B12** | (spec is silent) | `FRLogger.trace` gained a 5-arg overload `(method, operation, message, impactedItems, Point[] impactedPoints)`; every shove-path trace site now passes `new Point[0]` or a `{from_corner, to_corner}` pair. `board.normalize_traces(net)` itself is **unchanged, one-arg** (`autoroute/InsertFoundConnectionAlgo.java:86`) | `logger/FRLogger.java:367,383` | logging only |
+| **B13** | §3.7 `fast_cutout_trace` notifies observers unconditionally | wrapped in `if (board.communication != null && board.communication.observers != null)` | `board/ShapeTraceEntries.java:149-153` | none |
+| **B14** | §7.1 `in_front_of_pad` uses octagon fields `lx, ly, rx, uy, ulx, lrx, llx, urx` | the `IntOctagon` fields were renamed to `leftX, bottomY, rightX, topY, upperLeftDiagonalX, lowerRightDiagonalX, lowerLeftDiagonalX, upperRightDiagonalX`; **all 8 predicates are otherwise token-identical**, typo included | `board/ForcedPadAlgo.java:48-135` | naming only |
+
+**Spec statements that are inaccurate about *both* trees (found during this audit):**
+
+- §5.1 "Every clearance subtraction uses the asymmetric `ClearanceMatrix.get_value(a,b,layer,true)`" —
+  false for the substitute-trace branch: when clearance compensation is **on**, the code subtracts
+  `search_tree.clearance_compensation_value(piece.cl_class, layer)` instead
+  (`board/ShoveTraceAlgo.java:145-149`). Only the via branch (`:104`) is unconditionally
+  `cl_matrix.get_value(...)`, and it applies only when compensation is off.
+- §3.5 "if raising past 1, blame `curr_entry.trace`" — the guard is
+  `if (curr_level > max_stack_level) { if (max_stack_level > 1) found_obstacle = curr_entry.trace; max_stack_level = curr_level; }`
+  i.e. the blame is recorded only when `max_stack_level` was **already** > 1 before the raise
+  (`board/ShapeTraceEntries.java:530-540`). Confirmed identical in v19; the spec's phrasing is off.
+- §3.1 "`Item.java:808`" for `is_shove_fixed()` — release `board/Item.java:834`; note `Trace`
+  overrides it at `board/Trace.java:251`. `FixedState` order
+  `UNFIXED < SHOVE_FIXED < USER_FIXED < SYSTEM_FIXED` confirmed
+  (`board/FixedState.java:7-10`; the per-constant comments there are shifted by one and are wrong —
+  ignore them).
+
+#### 2.3 Explicit confirmations — everything else in §1-§11 matches
+
+Verified by comment-stripped, whitespace-normalised token-level diff of v19 vs release. Files whose
+**only** differences are cosmetic (`++i`→`i++`, Java-16 pattern-matching `instanceof`, javadoc
+rewrap) and therefore have **byte-identical algorithmic content**:
+
+| file | release path | token deltas |
+|---|---|---|
+| `ShoveTraceAlgo` (§5, incl. static check, instance check, insert, spring_over, spring_over_obstacles) | `board/ShoveTraceAlgo.java` (640 L) | cosmetic only + B10 |
+| `ShapeTraceEntries` (§3, incl. store_items, store_trace, insert_entry_point, resort, calculate_stack_levels, pop_piece, next_substitute_trace_piece, cutout_trace, fast_cutout_trace) | `board/ShapeTraceEntries.java` (725 L) | cosmetic only + B13 |
+| `CalcShapeAndFromSide` (§4, incl. the `p_in_shove_check` stack-level comment at `:65-70`) | `board/CalcShapeAndFromSide.java` (108 L) | cosmetic only |
+| `MoveDrillItemAlgo` (§6, incl. `check`, `insert`, `shove_vias`, `try_shove_via_points`, the "no time limit here" comment at `:165`) | `board/MoveDrillItemAlgo.java` (247 L) | cosmetic only (+ private ctor) |
+| `ForcedPadAlgo` (§7, incl. `check_forced_pad`, `forced_pad`, `calc_from_side`, `in_front_of_pad`) | `board/ForcedPadAlgo.java` (351 L) | B14 renames + B10 |
+| `MazeShoveTraceAlgo` (§10.2, incl. link-door/1-dim-door segment construction, `end_points_matching`, door harvesting) | `autoroute/MazeShoveTraceAlgo.java` (315 L) | B1 + B2 only |
+| `MazeSearchAlgo.expand_to_room_doors` (§10.1) | `autoroute/MazeSearchAlgo.java:323-521` | **zero** semantic deltas |
+| `MazeSearchAlgo.shove_trace_room` (§10.1) | `autoroute/MazeSearchAlgo.java:1484-1546` | **zero** deltas (normalised diff empty) |
+| `MazeSearchAlgo.check_ripup` (§10.4) | `autoroute/MazeSearchAlgo.java:1356-1476` | B7 only |
+| `MazeSearchAlgo.expand_to_target_doors` thin-room `check_forced_trace_polyline` (§10.3) | `autoroute/MazeSearchAlgo.java:571-586` | unchanged (plus new `tree_entry_no` / `target_shape == null` range guards at `:560-570`) |
+| `RoutingBoard.check_trace_segment` (§9) | `board/RoutingBoard.java:250-306` | unchanged |
+| `RoutingBoard.check_forced_trace_polyline` (§9) | `board/RoutingBoard.java:559-582` | unchanged |
+| `RoutingBoard.insert_forced_trace_polyline` (§9, all 7 steps incl. resampling) | `board/RoutingBoard.java:591-~1210` | B9 + shipped debug blocks only |
+| `RoutingBoard.move_drill_item` SHOVE_FIXED unfixing (§9) | `board/RoutingBoard.java:384-394` | unchanged |
+| `ForcedPadAlgo.calc_from_side` two-pass probe, 2nd pass with cl class 0 (§7.3) | `board/ForcedPadAlgo.java:329-347` | unchanged |
+| `MazeSearchElement.Adjustment {NONE, RIGHT, LEFT}` (§10.1) | `autoroute/MazeSearchElement.java:18,37` | unchanged |
+
+**Recursion budgets and their decrement points (explicitly re-verified, §12 "Work bounding"):**
+`max_rec` decrements **only** on substitute-trace recursion
+(`ShoveTraceAlgo.java:137` static, `:284` instance check, `:383` insert;
+`ForcedPadAlgo.java:218` check → `ShoveTraceAlgo.check(…, p_max_recursion_depth - 1, …)`,
+`:281` insert → `ShoveTraceAlgo.insert(…, p_max_recursion_depth - 1, …)`);
+`max_via_rec` decrements **only** on via cascades
+(`ShoveTraceAlgo.java:94,241`, `ForcedPadAlgo.java:175`, `MoveDrillItemAlgo.java:166,176`);
+`max_spring_over_rec` decrements **only** when `spring_over` actually changed the polyline
+(`ShoveTraceAlgo.java:275,376`). `TimeLimit` is checked in instance `check` and
+`MoveDrillItemAlgo.check` and **never** in the insert paths. All identical to §12.
+
+**`c_offset_add` semantics re-verified verbatim** (`board/ShapeTraceEntries.java:265-282`):
+
+```java
+if (search_tree.is_clearance_compensation_used()) {
+  double curr_offset = p_trace.get_compensated_half_width(search_tree) + c_offset_add;
+  offset_shape = (TileShape) shape.offset(curr_offset);
+} else {
+  // enlarge the shape in 2 steps  for symmetry reasons
+  double cl_offset = board.clearance_value(p_trace.clearance_class_no(), this.cl_class, p_trace.get_layer()) + c_offset_add;
+  offset_shape = (TileShape) shape.offset(p_trace.get_half_width());
+  offset_shape = (TileShape) offset_shape.offset(cl_offset);
+}
+// using enlarge here instead offset causes problems because of a
+// comparison in the constructor of class EntryPoint
+```
+
+Both load-bearing comments (§15 "Keep semantically") are present unchanged.
+
+### 3. §13 "v2" features — PRESENT/ABSENT in the release (porting go/no-go)
+
+| §13 item attributed to v2 | in release 2.3.0? | evidence |
+|---|---|---|
+| **§13.1** `CalcFromSide` ctor-3 nearest-side fallback when the front-side scan fails | **PRESENT** — implemented inside `CalcFromSide` (v19 name), `is_contained_in_box(side_start, side_end, 0.01)`, same `±2` rotation, `border_intersection` = middle of the chosen side, **and the v19 `FRLogger.warn` is gone** | `board/CalcFromSide.java:106-142` |
+| §13.1 `border_intersection` made a mutable public field | **PARTIAL** — it is non-`final` and package-visible (`FloatPoint border_intersection;`), **not** `public` | `board/CalcFromSide.java:17` |
+| §13.1 note: fallback leaves `nearest_side = 0` when no projection lands in any side box | **PRESENT (latent)** — `nearest_side` is initialised to 0 and never validated; also `this.border_intersection = projection` inside the loop is dead (overwritten at `:140`) | `board/CalcFromSide.java:110,125,140` |
+| **§13.2** `holeCheckShape` / hole-clearance circle `ceil(drill_radius + hole_clearance + 10)` with clearance class 0 | **PRESENT** as `hole_check_shape(...)` | `board/ForcedViaAlgo.java:240-251` |
+| §13.2 hole shape used as the pad shape on copper-less padstack layers | **PRESENT** in both `check` and `insert` | `board/ForcedViaAlgo.java:99-106` (check), `:172-180` (insert) |
+| §13.2 hole shape as an **additional** forced-pad check/insert on copper layers (`curr_clearance_class != 0`) | **PRESENT** in both | `board/ForcedViaAlgo.java:121-136` (check), `:205-217` (insert) |
+| §13.2 `check(...)` gains `tracePenHalfwidthArr` + `traceClearanceClassIndex` and now also checks the start-trace circle | **PRESENT** | `board/ForcedViaAlgo.java:88-90,138-154` |
+| §13.2 `insert` mirrors both additions | **PRESENT** (start-trace circle at `:218-224` with the "necessary in case start_trace_shape is bigger than tile_shape" comment) | `board/ForcedViaAlgo.java:165-229` |
+| **§13.3** `MazeSearchAlgo` split into `MazeSearchEngine` + `MazeRipupResolver` | **ABSENT** — single 1682-line `autoroute/MazeSearchAlgo.java`; `shove_trace_room` at `:1484`, `check_ripup` at `:1356` | jar class list |
+| §13.3 `RoutingBoard` facade split (`board/facade/RoutingBoard` + `RoutingBoardSearchFacade`) | **ABSENT** — single 1420-line `board/RoutingBoard.java` | jar class list |
+| §13.3 `ShapeTraceEntries` moved to `board/searchtree` with `shoveViaList` public | **ABSENT** — stays `board/ShapeTraceEntries.java`; the field is package-visible `final Collection<Via> shove_via_list` | `board/ShapeTraceEntries.java:18-21` |
+| §13.3 "knob defaults unchanged (`v2 AutorouteControl.java:171-186`)" | **CONFIRMED as values**, but the file is `autoroute/AutorouteControl.java:182-185` | see §2.1 |
+| §File-map `board/optimize/TraceShover`, `board/model/structure/ShapeEntrySide`, `board/actions/ForcedPadRouter` etc. | **ABSENT (all)** | jar class list |
+| §13 "Verified callers: `MazeSearchEngine.java:1130-1195` … `board/facade/RoutingBoard.java:423,521`" | **INVALID for the release** — real callers are `autoroute/MazeSearchAlgo.java:1484-1546` → `MazeShoveTraceAlgo.check_shove_trace_line`, and `board/RoutingBoard.java:566` (`check_forced_trace_polyline`) + `:638` (`insert_forced_trace_polyline`) → `new ShoveTraceAlgo(this)` | grep |
+
+**New in the release that §13 does not mention** (also go/no-go items): B1, B3-B7 above, plus
+`autoroute/RoutingFailureLog` (`board/RoutingBoard.java:50,70`) — a per-board failure log
+attached to `RoutingBoard`, not consulted by any shove decision.
+
+### 4. Port-from verdict — canonical source file per algorithm
+
+All paths relative to `/tmp/fr-java-release/src/main/java/app/freerouting`.
+
+| algorithm (this document's §) | port from | notes |
+|---|---|---|
+| From-side calculus, all 4 constructors (§2) | `board/CalcFromSide.java` (159 L) | includes the §13.1 fallback; drop the dead `border_intersection = projection` write |
+| Entry-point list, offsets, stack-level bracket calculus, substitute-piece generation, trace cutout (§3) | `board/ShapeTraceEntries.java` (725 L) | `c_offset_add` at `:18`; `cutout_trace` `:48-79`; `fast_cutout_trace` `:84-105`; `net_nos_equal` `:107-124`; `store_items` `:130-171`; `next_substitute_trace_piece` `:176-221`; `store_trace` `:265-370`; `search_from_side` `:372-388`; `resort` `:393-513`; `calculate_stack_levels` `:515-609`; `pop_piece` `:615-667`; `insert_entry_point` `:669-704`; `EntryPoint` `:709-725` |
+| Dog-ear cutting + per-segment from-side for substitute pieces (§4) | `board/CalcShapeAndFromSide.java` (108 L) | `p_in_shove_check` semantics at `:65-70` |
+| Trace shover: static length-check, instance check, destructive insert, spring-over (§5) | `board/ShoveTraceAlgo.java` (640 L) | static `check` `:37-161`; instance `check` `:166-292`; `insert` `:297-418`; `get_ignore_items_at_tie_pins` `:420-431`; `spring_over` `:437-610`; `spring_over_obstacles` `:617-640` |
+| Via/drill-item shoving (§6) | `board/MoveDrillItemAlgo.java` (247 L) | `check` `:26-76`; `insert` `:82-123`; `shove_vias` `:128-181`; `try_shove_via_points` `:187-247` |
+| Pad shoving + `in_front_of_pad` + free-standing pad from-side (§7) | `board/ForcedPadAlgo.java` (351 L) | `calc_check_shape_for_from_side` `:32-43`; `in_front_of_pad` `:48-136`; `check_forced_pad` `:141-226` (stack gate `:196`, recursion `:218`); `forced_pad` `:232-324` (tail cleanup `:311-320`); `calc_from_side` `:329-347`; `CheckDrillResult` `:349-351` |
+| Forced via insertion incl. hole clearance and start-trace circle (§8) | `board/ForcedViaAlgo.java` (333 L) | **use this, not v19** — `check_layer` `:28-84`, `check` `:89-158`, `insert` `:165-232`, `hole_check_shape` `:240-252`, `calculate_from_side` `:254-333` |
+| Board-level entry points: `check_trace_segment`, `check_forced_trace_polyline`, `insert_forced_trace_polyline`/`_segment`, `forced_via`, `move_drill_item` (§9) | `board/RoutingBoard.java` (1420 L) | `:250, :384, :496, :533, :559, :591`; **strip the `net == 94` / id-generator-delta trace blocks** |
+| Maze-time virtual shove (§10.2) | `autoroute/MazeShoveTraceAlgo.java` (315 L) | **use the release bounds guard at `:57-63` (B1)** |
+| Maze shove gating + ripup weighing (§10.1, §10.4) | `autoroute/MazeSearchAlgo.java` (1682 L) | `expand_to_room_doors` `:323`; `shove_trace_room` `:1484`; `check_ripup` `:1356` (with B7); `room_shape_is_thick` `:1331`; `calc_fanout_via_ripup_cost_factor` `:154`; maze drill check `:1185` (B4) |
+| Insertion-time integration, advance/retreat loop, neckdown (§11) | `autoroute/InsertFoundConnectionAlgo.java` (514 L) | `get_instance` `:42-91`; `insert_trace` `:94-288` (advance/retreat loop `:126-250`, tail cleanup `:256-271`); `insert_fanout_micro_neckdown` `:289-333` (B6); `insert_neckdown` `:335-347`; `try_neck_down` `:349-422` (`TOLERANCE` `:370`); `insert_via` `:424-489` (B5); dead-weight `shouldTraceFanoutDiagnostics`/`traceFanoutDiagnostic`/`formatPoint` `:490-513`. **Strip `FANOUT_DIAG` / `compare_trace_*`.** |
+| Knob defaults (§12) | `autoroute/AutorouteControl.java:150-200` (the private base ctor; defaults block `:178-200`) + `settings/sources/DefaultSettings.java:60` + `settings/RouterSettings.java:473-482` | `AutorouteSettings` no longer exists |
+| Driver / pass + ripup schedule feeding the shove budget | `autoroute/BatchAutorouter.java` (headless & GUI default) | `runBatchLoop` `:757`; `autoroute_item` `:1257-1360`. `BatchAutorouterV19.java` is GUI-only and irrelevant to shove semantics. **Do not port `autoroute_pass_multi_thread` / `BatchAutorouterThread` — dead code.** |

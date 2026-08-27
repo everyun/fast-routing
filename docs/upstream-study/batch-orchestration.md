@@ -808,3 +808,374 @@ Outbound (dependencies this layer drives):
 * **Vestigial synchronization**: `CountDownLatch task_completion_signal` counted down but never
   awaited (both trees); `awaitTermination(1 s)` polling loops for progress logging;
   `join(1000)` race in the dead MT route pass (AutoroutePassRunner.java:94).
+
+---
+
+## Release-jar conformance (2.3.0 @2d4de019)
+
+Audited against the true source of the shipped jar, `/tmp/fr-java-release/src/main/java/app/freerouting`
+(jar `/tmp/frbase/freerouting-2.3.0.jar`, `Build-Revision: 2d4de019aa89e9fa3dc1dc44e09bf509760cafc1`,
+`Build-Date: 2026-08-07`). All file:line references below are in that tree unless prefixed otherwise.
+Constants marked *(jar-verified)* were additionally read back with
+`javap -p -c -constants` from the shipped `.class` files.
+
+**Headline correction.** The body of this spec was written against `/tmp/fr-java/src` (git master),
+whose `autoroute/pipeline/` package is **not in the release**. `unzip -l freerouting-2.3.0.jar |
+grep pipeline` returns only shaded netty classes — there is no `app/freerouting/autoroute/pipeline/`.
+`RoutingPipeline`, `AutorouteBatchLoop`, `AutoroutePassRunner`, `AutorouteConnectionRouter`,
+`AutorouteAirlineCalculator`, `AutorouteRuntimeMetrics`, `AutorouteUnroutedReport`, `BatchOptRoute`,
+`BatchOptRouteMT` and `GuiRoutingJobWorker` do not exist in 2.3.0. The release is a **flat
+`autoroute/` package** in which the pipeline's responsibilities are folded back into
+`autoroute/BatchAutorouter.java` (1764 L) and the two `thread_action()` entry points.
+
+### 1. What the release actually executes, per subsystem
+
+#### 1.1 Entry-point call chains (verified by grep over the whole release tree)
+
+**Headless / API jobs** — `management/RoutingJobSchedulerActionThread.thread_action()` (`:38`):
+
+```
+:96   if (job.routerSettings.getRunRouter() && (maxPasses == null || maxPasses >= 0))
+:100-108   NamedAlgorithm router; String algorithm = job.routerSettings.algorithm;
+           if (!ALGORITHM_CURRENT.equals(algorithm)) job.logInfo("Unknown router algorithm ...");
+:106       // literal comment in the source: "Always use standard BatchAutorouter"
+:107       router = new BatchAutorouter(job);
+:118       batchRouter.runBatchLoop();
+:163  else if (job.routerSettings.isFanoutEnabled())      // fanout-only mode
+:168-170     maxPasses = 0; new BatchAutorouter(job).runBatchLoop();
+:179  if (job.routerSettings.getRunOptimizer())
+:182     BatchOptimizer optimizer = new BatchOptimizer(job);   // ALWAYS single-threaded
+:189     optimizer.runBatchLoop();
+```
+
+**GUI jobs** — `interactive/AutorouterAndRouteOptimizerThread` (ctor `:199`, `thread_action()` `:451`):
+
+```
+ctor :204-218  algorithm == RouterSettings.ALGORITHM_V19 ("freerouting-router-v19")
+                   -> batchAutorouter = new BatchAutorouterV19(job)      // :209
+               else (unknown ids normalised to ALGORITHM_CURRENT with a warning, :212-216)
+                   -> batchAutorouter = new BatchAutorouter(job)         // :217
+ctor :272      if (routerSettings.optimizer.enabled)                     // raw Boolean unboxing
+     :273-274      (!featureFlags.multiThreading || optimizer.maxThreads == 1)
+                       -> batchOptimizer = new BatchOptimizer(job)
+     :312-314      (featureFlags.multiThreading && optimizer.maxThreads > 1)
+                       -> batchOptimizer = new BatchOptimizerMultiThreaded(job)
+thread_action
+     :492      isRouterEnabled = getRunRouter() && (maxPasses == null || maxPasses >= 0)
+     :510-517  runBatchLoop() on whichever router instance
+     :518-529  else if isFanoutEnabled(): maxPasses := 0; runBatchLoop(); restore
+     :533      boardManager.replaceRoutingBoard(routingJob.board)
+     :592-607  num_threads = boardManager.get_num_threads();
+               if (num_threads > 0 && optimizer.enabled) { if (num_threads > 1) logWarning(MT-broken);
+                  if (getRunOptimizer() && !isStopRequested()) batchOptimizer.runBatchLoop(); }
+     :639-648  SES written from boardManager.saveAsSpecctraSessionSes(...)
+```
+
+**Which Batch\* class ships and runs, definitively:**
+
+| context | router class | selectable? |
+|---|---|---|
+| headless (`-de/-do`, REST API, MCP) | **`autoroute/BatchAutorouter`, always** | No. `RoutingJobSchedulerActionThread:106` hardcodes it; a non-default `algorithm` only produces a log line at `:104`. `BatchAutorouterV19` is **unreachable headless**. |
+| GUI | `BatchAutorouter` (default) or `BatchAutorouterV19` | Yes — `router.algorithm = "freerouting-router-v19"` (`settings/RouterSettings.java:15`). |
+
+`BatchAutorouterV19` (507 L) ships in the jar but is a **thin re-implementation, not the real v1.9
+loop**: `runBatchLoop()` (`:154-251`) has *no* board-hash guard, *no* `board.clone()`/`diff_traces`
+stagnation window, *no* 20-pass score-stagnation rule, *no* `BoardHistory`, *no* `start_pass_no`
+/`stop_pass_no` settings, and **no fanout stage at all** (grep: zero `BatchFanout` references in
+that file). Its only stop conditions are `maxPasses`, user stop, `job.state == TIMED_OUT`, and
+`autoroute_pass()` returning false. Its ctor forces `remove_unconnected_vias = true` (`:71`) and
+clamps `maxThreads` to 1 (`:85-88`). It scores with the same `BoardStatistics.getNormalizedScore`
+as the v2 router (`:207`) — the v19 scoring constants of §6.2 are **nowhere in the release**.
+
+#### 1.2 Stage sequencing in the release
+
+There is no orchestrator object. Stage order lives in two places:
+
+* **fanout is inside the router**: `BatchAutorouter.runBatchLoop()` runs the fanout pre-pass at
+  `:798-891`, gated on `settings.isFanoutEnabled() && !board.get_smd_pins().isEmpty()`, *before*
+  the pass loop at `:915`. This matches the spec's §1.1 description of the v2 pipeline shape.
+* **route → optimize** is sequenced by `thread_action()` in each of the two entry points above.
+
+The "`maxPasses := 0` trick" for fanout-only exists in both entry points (`RoutingJobSchedulerActionThread:168`,
+`AutorouterAndRouteOptimizerThread:521`) but **is only correct when the router was disabled via
+`router.enabled=false`**. `BatchAutorouter.runBatchLoop:894` recomputes
+`isRouterEnabled = getRunRouter() && (maxPasses == null || maxPasses >= 0)`, and the pass cap at
+`:931` requires `maxPasses > 0`. So entering fanout-only mode via a **negative** `max_passes`
+(the other way to fail the `:96`/`:492` guard) sets `maxPasses = 0`, re-enables the router inside
+`runBatchLoop`, and then runs the pass loop **with no pass cap at all** until stagnation fires.
+Port note: model fanout-only as an explicit mode, never as a magic pass count (this spec's §11.1
+already recommends that; the release is the cautionary example).
+
+### 2. Claims table — spec vs release source
+
+`=` means the release matches the spec exactly. Line refs are release-tree.
+
+#### 2.1 Structure / orchestration
+
+| # | spec claim | release | evidence |
+|---|---|---|---|
+| 1 | Batch classes live in `autoroute/pipeline/`; entered from `RoutingJobSchedulerActionThread:99` → `RoutingPipeline.createForHeadless` and `GuiRoutingJobWorker:212` → `createForGui` | **WRONG for the release.** No `pipeline` package, no `RoutingPipeline`, no `GuiRoutingJobWorker`. Entry chains are §1.1 above. | `unzip -l` (no `app/freerouting/autoroute/pipeline/*`); `management/RoutingJobSchedulerActionThread.java:96-192`; `interactive/AutorouterAndRouteOptimizerThread.java:451-701` |
+| 2 | `BatchOptimizer.createForGui` / `createForHeadless` factories, `RoutingPipeline.normalizeRouterAlgorithm`, `BatchOptimizer.normalizeAlgorithm` | **ABSENT as named APIs.** Construction and id-normalisation are inline. | `AutorouterAndRouteOptimizerThread.java:211-216` (router id), `:316-321` (optimizer id), `RoutingJobSchedulerActionThread.java:103-105` |
+| 3 | Headless: ALWAYS single-threaded `BatchOptimizer` | **=** | `RoutingJobSchedulerActionThread.java:182`; `BatchOptimizerMultiThreaded` has exactly one construction site tree-wide: `AutorouterAndRouteOptimizerThread.java:314` |
+| 4 | GUI MT optimizer iff `featureFlags.multiThreading` (default `true`) AND `optimizer.maxThreads > 1` (default `max(1, cores-1)`) | **=** | `AutorouterAndRouteOptimizerThread.java:312`; `settings/FeatureFlagsSettings.java:9`; `settings/sources/DefaultSettings.java:130` |
+| 5 | (implied) the optimizer stage gate is `optimizer.enabled` | **partly.** GUI gates the *stage* on `boardManager.get_num_threads() > 0 && optimizer.enabled` (`:593`) — i.e. on the **router's** `max_threads`, not the optimizer's — while the *class choice* used `optimizer.maxThreads`. Two different knobs. | `AutorouterAndRouteOptimizerThread.java:273/312` vs `:593`; `interactive/GuiBoardManager.java:3287` |
+
+#### 2.2 `getRunOptimizer` null-handling and `--router.optimizer.enabled=true`
+
+| # | claim | release |
+|---|---|---|
+| 6 | `getRunOptimizer()` / `optimizer.enabled` default true | **Two different defaults, and they disagree.** `RouterSettings.getRunOptimizer()` (`settings/RouterSettings.java:492-494`) is **fail-closed**: `return optimizer != null && optimizer.enabled != null ? optimizer.enabled : false;` — a `null` `enabled` means **do not optimize**. Contrast `getRunRouter()` (`:484`, fail-**open**, `null → true`) and `getRunFanout()` (`:503`, fail-open but dead — its only caller is `gui/WindowAutorouteParameter.java:628`; the live gate is `isFanoutEnabled()` at `:510`, which is fail-**closed**). |
+| 7 | — | In practice `optimizer.enabled` is never null on a job, because every job's settings come from `SettingsMerger.merge()` (`Freerouting.java:118`, `management/RoutingJobScheduler.java:107`, `gui/GuiManager.java:118`) whose priority-0 base is `DefaultSettings`, which sets `optimizer.enabled = true` (`settings/sources/DefaultSettings.java:126`). So **the optimizer runs by default, headless and GUI.** |
+| 8 | — | `--router.optimizer.enabled=true` is parsed by `settings/sources/CliSettings.java:50-56` → `applyRouterSetting` → `ReflectionUtil.setFieldValue(settings, "optimizer.enabled", "true")`, priority 60. `ReflectionUtil.copyFields` recurses into non-primitive fields (`util/ReflectionUtil.java:275-284`) instead of replacing the nested object, so the other optimizer defaults survive. **Net effect: it changes nothing over the default; it only overrides a `freerouting.json`/DSN/env source that set `false`.** The behaviourally interesting flag is `--router.optimizer.enabled=false`. |
+| 9 | — | GUI hazard: `AutorouterAndRouteOptimizerThread.java:272` and `:593` unbox `optimizer.enabled` (a `Boolean`) directly, and `:273`/`:312` unbox `optimizer.maxThreads`; any settings path that leaves them null NPEs the routing thread rather than falling back. The safe accessor `getRunOptimizer()` is used only at `:604`, after the construction decision has already been made. |
+
+#### 2.3 Fanout — including the escape-annulus contradiction
+
+**The 2.5/4.5 vs 0.5/3.0 contradiction is resolved: both pairs are in the release and they are not
+alternatives.** `2.5 / 4.5 mm` are the *configured defaults*; `0.5 / 3.0 mm` are the *hardcoded
+fallbacks used only when the setting object or field is null*:
+
+```java
+// autoroute/MazeSearchAlgo.java:80-108 — anonymous TreeSet override of add()
+if (ctrl.is_fanout && ctrl.fanout_start_pin_center != null) {
+  boolean onStartLayer = p_element.next_room != null
+      && p_element.next_room.get_layer() == ctrl.fanout_start_pin_layer;
+  if (onStartLayer) {
+    double maxLen = (ctrl.settings.fanout != null && ctrl.settings.fanout.maxEscapeLengthMm != null)
+        ? ctrl.settings.fanout.maxEscapeLengthMm * 1000.0 : 3000.0;          // :87-88  (µm)
+    double resolution = ...get_resolution(Unit.UM);
+    FloatPoint entry_point = p_element.shape_entry.a.middle_point(p_element.shape_entry.b);
+    if (entry_point.distance(pin_center_float) > maxLen * resolution) return false;   // :92
+  }
+  if (p_element.door instanceof ExpansionDrill drill) {
+    double minLen = (ctrl.settings.fanout != null && ctrl.settings.fanout.minEscapeLengthMm != null)
+        ? ctrl.settings.fanout.minEscapeLengthMm * 1000.0 : 500.0;           // :97-98  (µm)
+    if (drill.location.to_float().distance(pin_center_float) < minLen * resolution) return false; // :101
+  }
+}
+return super.add(p_element);
+```
+
+| # | spec claim | release | evidence |
+|---|---|---|---|
+| 10 | escape annulus defaults max 4.5 mm / min 2.5 mm | **=** | `settings/sources/DefaultSettings.java:117-118` |
+| 11 | "fallback 3.0 mm if unset" / "fallback 0.5 mm" | **= and live** — `3000.0` and `500.0` µm literals, reached only when `fanout` or the field is null | `autoroute/MazeSearchAlgo.java:88, :98` |
+| 12 | (spec compresses) both clamps apply "while on the start-pin's layer" | **Not quite.** The **max** clamp is gated on `onStartLayer`; the **min** clamp applies to **every** `ExpansionDrill` element on **any** layer. | `MazeSearchAlgo.java:85-95` vs `:96-104` |
+| 13 | is the annulus reachable headless? | **Yes.** `fanout.enabled` defaults `true` (`DefaultSettings.java:113`) → `BatchAutorouter.runBatchLoop:798` → `BatchFanout.fanout_board` → `RoutingBoard.fanout` sets `is_fanout = true` (`board/RoutingBoard.java:1018`) and `fanout_start_pin_center/_layer` (`:1042-1043`). Both guard conditions are satisfied on every headless fanout attempt. It is **unreachable during normal routing** (`is_fanout` is false there) and unreachable under `algorithm=freerouting-router-v19` (no fanout stage). |
+| 14 | dedicated fanout via diameters `startViaDiameterMm`/`endViaDiameterMm`, default 0.250 mm | **DEAD SETTINGS.** Declared (`settings/FanoutSettings.java:83-91`) and defaulted (`DefaultSettings.java:119-120`), but grep over the whole tree finds **zero readers**. Do not port. |
+| 15 | pin sort keys `"inner_first"`, `"outer_first"`, `"distanceToClosestOnNet"`, `"surroundingsDensity"` | **key names differ.** Release accepts `"inner_first"`, `"outer_first"`, **`"distance_to_closest_on_net"`**, **`"surroundings_density"`** (snake_case). The spec's camelCase strings would silently fall through to pin-index order. Default `"outer_first"`; hardcoded fallback also `"outer_first"`. | `autoroute/BatchFanout.java:557, 565, 573, 580`; default `DefaultSettings.java:121`, fallback `BatchFanout.java:41` |
+| 16 | `surroundingsDensity` = other SMD pins within 20.0 mm, descending | **=** (`20000.0 * resolution`, comment "20.0 mm in coordinate units"); counted over the net-filtered board SMD-pin list | `BatchFanout.java:541-551, 580-586` |
+| 17 | `distanceToClosestOnNet` precomputed O(P²) over all board pins | **=** — `p_routing_board.get_pins()` (all pins, not just SMD) | `BatchFanout.java:526-537` |
+| 18 | components sorted desc by SMD pin count, tie asc component id | **=** | `BatchFanout.java:499-509` |
+| 19 | netless SMD pins filtered out | **=** | `BatchFanout.java:45-50` |
+| 20 | fanout `maxPasses` default 20 | **=** (default `DefaultSettings.java:114`; hardcoded fallback also 20 at `BatchFanout.java:93-94`) |
+| 21 | stop when `routedCount == 0`; "v19 also requires insertErrorCount == 0" | **=** — release stops on `routed_count == 0` alone | `BatchFanout.java:111-113` |
+| 22 | oscillation detector `(routedCount<<32) ^ viaCount`, `stagnationPassLimit = 3` | **=**, incl. the "14 identical passes" comment | `BatchFanout.java:95, 114-130` |
+| 23 | board-hash-unchanged stop | **=** | `BatchFanout.java:134-138` |
+| 24 | deadline (`fanout.timeout`) and `fanout.maxItems` (default MAX_INT) | **=**, checked both between passes (`:101-108`) and between pins (`:180-184`, `:289-297`) | |
+| 25 | `ripupCosts = startRipupCosts * (passNo + 1)`, start 100; `ripupAllowed=false` → `-1` | **=** | `BatchFanout.java:155, 159-162`; `DefaultSettings.java:147` |
+| 26 | per-pin limit `10000 ms * (passNo + 1)` | **=** (default `DefaultSettings.java:115`, fallback 10000L at `BatchFanout.java:157-158`, applied `:185-186`) |
+| 27 | skip pins whose net class has no vias unless `fallbackToBoardVias` | **=**, and the release *additionally* requires the board's first via rule to have `via_count() > 0` for the fallback to count | `BatchFanout.java:191-203` |
+| 28 | `RoutingBoard.fanout` at `board/facade/RoutingBoard.java:978` | **path differs** — release has no `facade` package: `board/RoutingBoard.java:977` |
+| 29 | precondition single-layer + single-net, else ALREADY_CONNECTED; empty unconnected set → NO_UNCONNECTED_NETS | **=** | `board/RoutingBoard.java:979-996` |
+| 30 | destination seeded with board bounding box on bottom+top layers when fanout | **=** — `join(board.bounding_box, 0)` and `join(board.bounding_box, ctrl.layer_count - 1)` | `MazeSearchAlgo.java:1232-1238` |
+| 31 | search completes at first drill whose backtrack door is also a drill | **=** | `MazeSearchAlgo.java:296-302` |
+| 32 | `ctrl.removeUnconnectedVias = false` during fanout | **=** | `board/RoutingBoard.java:1044` |
+| 33 | fanout-via ripup protection factor > 1 | **=**, and the constant is `FANOUT_COST_CONST = 20000`; factor `= max(1, 20000 * (halfWidth/length)²)`; applied only when **not** in a fanout pass | `MazeSearchAlgo.java:154-189` (esp. `:155, :181-185`), gate `:1404`, `:1424` |
+| 34 | ≤4 targets → closest-first then fall back to whole set; >4 → whole set | **=** | `board/RoutingBoard.java:998-1015, 1055-1072` |
+| 35 | after ROUTED, `optChangedArea` with 1000 ms | **=** (release passes `new int[]{pin_net_no}` as the net filter) | `board/RoutingBoard.java:1077-1081` |
+| 36 | `isPinEscaped`: contacting clean Trace, or clean Via that contacts a Trace | **broader in the release**: a contacting `ConductionArea` alone counts as escaped, and a clean Via counts if it contacts a Trace **or** a ConductionArea | `core/scoring/BoardStatistics.java:508-529` |
+| 37 | fanout summary log-line format | **=** verbatim | `autoroute/BatchAutorouter.java:878-879` |
+
+#### 2.4 Route stage — item selection and one pass
+
+| # | spec claim | release | evidence |
+|---|---|---|---|
+| 38 | `getAutorouteItems` semantics (storage-order scan, `Connectable && Item && !is_routable()`, `handledItems` seeding, enqueue when `connectedSet.size() < connectable_item_count(net)` and `!has_ignored_nets()`) | **=** | `BatchAutorouter.java:250-306` |
+| 39 | plane-net filter skips items already connected to a `ConductionArea` | **=** | `BatchAutorouter.java:288-294` |
+| 40 | reusable `ArrayList`/`TreeSet` across passes | **=** | `BatchAutorouter.java:80-81, 252-255` |
+| 41 | pass skeleton, classification, `routed>0 \|\| notRouted>0` return | **=** | `BatchAutorouter.java:431-694` (`:607-631`, `:688`) |
+| 42 | `maxItems` limit "requestStop when totalItemsRouted >= max" | **= plus a consequence the spec omits**: it calls `thread.requestStop()` (ALL), not `request_stop_auto_router()`, so hitting `max_items` **also skips the optimizer stage** — documented in the release comment | `BatchAutorouter.java:496-505` |
+| 43 | `removeTails(removeUnconnectedVias ? NONE : FANOUT_VIA)` at pass end | **=** | `BatchAutorouter.java:657-661`; `remove_tails` impl `:1247-1252` (`remove_trace_tails(-1, opt)` + `opt_changed_area(..., 1000)`) |
+| 44 | ripup escalation `start_ripup_costs * passNo`, `ripup_allowed = true` | **=**, `start_ripup_costs` default 100 *(jar-verified)* | `BatchAutorouter.java:1279-1280`; `DefaultSettings.java:60, 147` |
+| 45 | via costs 50, plane via costs 5 | **=** *(jar-verified)* | `BatchAutorouter.java:1268-1273`; `DefaultSettings.java:46, 52, 145-146` |
+| 46 | per-connection budget `min(100000 * 2^(passNo-1), MAX_INT)` ms | **=** | `BatchAutorouter.java:1311-1313` (also `BatchAutorouterV19.java:433`) |
+| 47 | plane nets route connected → unconnected; else unconnected → connected; `CONNECTED_TO_PLANE` short-circuit | **=** | `BatchAutorouter.java:1289-1305` |
+| 48 | airline via `AutorouteAirlineCalculator.calculateAirline` | **class ABSENT**; the same min-distance-pair computation is `BatchAutorouter.calc_airline` (`:1486`) / `calculateMinDistance` (`:1721`) |
+| 49 | `retainAutorouteDatabase` is false in production, opt-in via `-Dfreerouting.benchmark.retain_autoroute_database` | **half wrong.** It is false — but **hardcoded**, with no system property and no setter anywhere. `grep -r "benchmark.retain"` → 0 hits. | `BatchAutorouter.java:75, 136, 1317, 1408`; same in `BatchAutorouterThread.java:79`, `BatchAutorouterV19.java:104` |
+| 50 | pull-tight accuracy default 500, time limit 1000 ms | **=** | `DefaultSettings.java:97`; `BatchAutorouter.java:57, 1331-1332` |
+| 51 | necked retry when FAILED/INSERT_ERROR and `neckWidthUm > 0` (default 0 = off), half-width clamp preserving compensation deltas, one retry | **=**; release also bails out early if no active layer is actually wider than the neck | `BatchAutorouter.java:1337-1351, 1377-1421`; default `DefaultSettings.java:105` |
+| 52 | strict DRC: serialize before routing, id-threshold violation check, remove new items, restore, report FAILED (default false) | **=**; release also reassigns `this.board` from the deserialized snapshot | `BatchAutorouter.java:1321, 1428-1438, 1447-1468`; default `DefaultSettings.java:106` |
+| 53 | per-item DRC gated behind `FRLogger.isTraceEnabled()` | **=** | `BatchAutorouter.java:543-562` |
+| 54 | statistics refreshed every `PROGRESS_STATISTICS_ITEM_INTERVAL = 10` items | **ABSENT.** No such constant in the release. The only throttle is `shouldFireBoardUpdate()` = 250 ms. | `grep PROGRESS_STATISTICS_ITEM_INTERVAL` → 0 hits; `BatchAutorouter.java:241-248, 635-645` |
+| 55 | GUI events at most every 250 ms | **=** | `BatchAutorouter.java:243` |
+| 56 | `PerformanceProfiler.recordPass(passNo, incompleteCount, durationMs, startRipupCosts*passNo)` | **=** | `BatchAutorouter.java:682-684` |
+| 57 | incomplete count from `new DesignRulesChecker(board, null).calculateAllIncompletes()` | **=** | `BatchAutorouter.java:1760-1764`, `:456-458` |
+| 58 | failure logging when ≤5 items remain or failureCount ≥ 3; `failureLog.shouldSkip` only on the dead MT path | **=**; the skip threshold is `RoutingFailureLog.FAILURE_THRESHOLD = 50` (a constant the spec omits) | `BatchAutorouter.java:620-629`; `autoroute/RoutingFailureLog.java:18`; `autoroute/BatchAutorouterThread.java:346` |
+
+#### 2.5 Batch loop stop rules — all seven constants ship
+
+Every constant in §5.2's table is present, live, and byte-identical in the release
+`autoroute/BatchAutorouter.java:52-71` *(all jar-verified via `javap -constants`)*:
+
+| constant | release value | line |
+|---|---|---|
+| `STOP_AT_PASS_MINIMUM` | 8 | `:60` |
+| `STOP_AT_PASS_MODULO` | 4 | `:63` |
+| `STAGNATION_PASS_LIMIT` | 10 | `:66` |
+| `FANOUT_RECOVERY_STAGNATION_PASSES` | 3 | `:68` |
+| `STAGNATION_SCORE_THRESHOLD` | 0.5f | `:71` |
+| `MAXIMUM_TRIES_ON_THE_SAME_BOARD` | 3 | `:56` |
+| `BOARD_RANK_LIMIT` | 30 (`= BoardHistory.MAX_HISTORY_SIZE`) | `:54` |
+| `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` | 1000 | `:57` |
+
+Flow deltas vs §5.2:
+
+| # | spec claim | release |
+|---|---|---|
+| 59 | restore check "on passes ≥ 8 with pass % 4 == 0 (or when stop requested)" | **= plus an outer guard** the spec omits: `(bh.size() >= STOP_AT_PASS_MINIMUM) \|\| stopRequested` wraps the pass test. `BatchAutorouter.java:953-955` |
+| 60 | strict `>` restore test, `restoreCount <= 3`, rank > 30 → stop | **=** for the first two; the **rank check is dead code**: `getRank` returns `1..boards.size()` and `boards.size() <= MAX_HISTORY_SIZE == BOARD_RANK_LIMIT == 30`, so `rank > 30` can never be true — despite the source comment at `:52-53` claiming the equality makes it fire. `BatchAutorouter.java:961-974`; `BoardHistory.java:29, 181-198` |
+| 61 | on restore: reset pass-local counter and `lastBestScore`, clear hash set | **=** | `BatchAutorouter.java:976-993` |
+| 62 | v19 same-board-hash stop "exists but is commented out" | **=**, verbatim, with the stated rationale | `BatchAutorouter.java:908-929` |
+| 63 | one-time fanout recovery: fanout enabled, incompletes > 0, counter ≥ 3 → `removeTails(NONE)`, rescore, reset, mark applied, clear hash set | **=** | `BatchAutorouter.java:1067-1082` |
+| 64 | pass-local stagnation (counter ≥ 10 → unrouted report + stop) | **=**; the report builder is `buildUnroutedConnectionsReport()` (`:1190-1225`), **not** a class `AutorouteUnroutedReport` (absent) | `BatchAutorouter.java:1054-1098` |
+| 65 | global tracker immune to restores; `currentPass - passOfBestScore >= 10` → stop | **=** | `BatchAutorouter.java:1100-1121` |
+| 66 | fully-routed boards reset the counter only when score > 0.5 | **=** | `BatchAutorouter.java:1123-1130` |
+| 67 | final "best board ever" restore | **=** | `BatchAutorouter.java:1141-1159` |
+| 68 | `job.board = router.board` is the only publish point | **=** for the v2 router (`BatchAutorouter.java:1161`); the release has a **second** one for the GUI-only v19 router (`BatchAutorouterV19.java:235`). Tree-wide, the only other `job.board` writes are board loading (`management/BoardLoader.java:48/56`, `management/RoutingJobScheduler.java:91`, `api/v1/JobControllerV1.java:1201`) and the GUI ctor (`AutorouterAndRouteOptimizerThread.java:203`). |
+| 69 | final `removeTails(NONE)` when complete without fanout vias; `bh.clear()`; FINISHED/CANCELLED/TIMED_OUT | **=** | `BatchAutorouter.java:1163-1185` |
+| 70 | `maxPasses` default 9999 | **=** *(jar-verified default in `DefaultSettings.java:95`)*; note the cap is skipped entirely when `maxPasses <= 0` (`:931`) — see §1.2 |
+| 71 | — (not in spec) | **Dead statement**: `float boardScoreBefore = ...getNormalizedScore(...)` at `:943` is computed once per pass (a full `BoardStatistics` build) and never read. Cost without benefit; do not port. |
+| 72 | `autoroutePassesForOptimizingItem`: ≤ `maxPassCount` passes at a fixed base ripup cost, then `removeTails(NONE)`, returns pass count (or max+1) | **=** — release `BatchAutorouter.autoroute_passes_for_optimizing_item` is `static` and constructs a fresh router with `p_remove_unconnected_vias = true` | `BatchAutorouter.java:146-167` |
+| 73 | `BoardHistory` semantics (cap 30, hash dedup, evict-worst-only-if-strictly-better, `restoreBoard(maxRestores)`, `restoreBoard(<=0)` = unlimited = `restoreBestBoard()`, Java deserialization, rwlock + `synchronized`) | **=** on every point; additionally `getMaxScore()` floors at `0` (never negative, returns 0 for an empty history) | `autoroute/BoardHistory.java:29, 48-80, 115-166, 200-213` |
+| 74 | — (not in spec) | `autoroute/BoardHistoryEntry.java` is a **dead top-level class** (holds a live board + `BoardStatistics`), shadowed by `BoardHistory`'s `private static class BoardHistoryEntry` (`:200`). Both ship in the jar. Ignore the top-level one. |
+
+#### 2.6 Scoring — exactly one formula ships
+
+| # | spec claim | release |
+|---|---|---|
+| 75 | `getNormalizedScore` formula and all weights (5 000 000 / 1 000 000 / 10 / 1.0 per mm / 50) | **= verbatim** *(all jar-verified)*. `calculateScore` `core/scoring/BoardStatistics.java:552-569`; `getMaximumScore` `:571-573`; `getNormalizedScore` `:575-586`; weights `settings/sources/DefaultSettings.java:27-67, 145-151` |
+| 76 | plane vias not special-cased in the score | **=** — `this.vias.totalCount * scoringSettings.viaCosts` (`:566`) |
+| 77 | `maxConnections = Σ max(0, endpointCount - 1)` over Pins + ConductionAreas only, at `drc/DesignRulesChecker.java:567` | **= semantics, different line**: `drc/DesignRulesChecker.java:528-537` |
+| 78 | mm normalization at `BoardStatistics.java:194-203` | **= semantics, different line**: `core/scoring/BoardStatistics.java:177-186`, used at `:562-565` |
+| 79 | guard returning 0 when `maximumScore <= 0` to keep stagnation counters advancing | **=**, comment included | `BoardStatistics.java:575-586` |
+| 80 | §6.2 v19 scoring (incompletes × 1 000 000, violations × 1 000, `connectableItemCount(net)-1`, string-key violation dedup) | **ABSENT from the release.** `BatchAutorouterV19` has no `calculateScore`; it calls `BoardStatistics.getNormalizedScore` (`BatchAutorouterV19.java:207`). **Only the §6.1 formula ships.** Violation dedup by `min-max-layer` key does exist, but in `drc/DesignRulesChecker.getAllClearanceViolations:45-60`. |
+
+#### 2.7 Optimizer
+
+| # | spec claim | release | evidence |
+|---|---|---|---|
+| 81 | `ReadSortedRouteItems` (x, y, layer) sweep, vias-then-traces so vias win ties, skip traces contacting a non-fixed via, stateful cursor, two full O(N) scans per `next()` | **=**, character-for-character the same algorithm | `autoroute/BatchOptimizer.java:464-558` |
+| 82 | `optRouteItem` steps 1–4 (self + fork contacts if `containsOnlyUnfixedTraces`, full connection ripout, user-fixed bail, snapshot, `remove_items` + `combine_traces`) | **=** | `BatchOptimizer.java:308-363`, helper `:54-61` |
+| 83 | ripup `100 × 10-at-start × 0.6-for-traces` (rounded) | **=** | `BatchOptimizer.java:366-374`; defaults `DefaultSettings.java:135-136, 147` |
+| 84 | inner reroute capped at `maxAutoroutePasses = 6` | **=** | `BatchOptimizer.java:377`; `DefaultSettings.java:137` |
+| 85 | improvement predicate lexicographic (incompletes ≻ vias ≻ trace length; ties = not improved); `compareTo` ascending; `improvedOver = compareTo < 0` | **=** | `autoroute/ItemRouteResult.java:30-48, 54-78` |
+| 86 | v19 has extra "only adopt the new length outright when incompletes/vias strictly improved, else `min`"; v2 is simpler | **= (release is the simple form)** — plain `min_cumulative_trace_length = Math.min(old, boardStatisticsAfter.traces.totalWeightedLength)` on improvement | `BatchOptimizer.java:397-399` |
+| 87 | "the *weighted* trace length metric" is what `ItemRouteResult` compares | **WRONG in the release — unit mismatch.** `ItemRouteResult` is built with `trace_length_before = min_cumulative_trace_length` (a **weighted** length, seeded from `traces.totalWeightedLength` at `:225`) and `trace_length_after = boardStatisticsAfter.traces.totalLength` (the **unweighted** raw length). The length tie-break therefore compares incommensurable quantities; on typical boards `weighted >> raw`, so the "shorter trace length" branch of `improved()` fires almost unconditionally when incompletes and vias tie. Port the intent (weighted vs weighted), not the code. | `BatchOptimizer.java:225, 390-393, 397-399`; weighted-length definition `core/scoring/BoardStatistics.java:222-241` |
+| 88 | "v19 uses integer division for `via_count_after / via_count_before` — a long-standing bug; **v2 casts to float (BatchOptimizer.java:345); pick the v2 semantics**" | **The bug is NOT fixed in the release.** `ItemRouteResult.java:50` still evaluates `via_count_after / via_count_before` in `int` arithmetic (both fields are `int`), quantising the via ratio to 0 or 1. The float cast the spec points at is a *different expression* in `BatchOptimizer.opt_route_pass:264-268`. Mitigating fact: `improvement_percentage()` is consumed **only** by `BatchOptimizerMultiThreaded` (`:244`, `:262`) — it is dead on the single-threaded production path. | `ItemRouteResult.java:50`; `BatchOptimizer.java:264-268`; consumers by grep |
+| 89 | `optimizer.maxPasses` 100, `maxItems` MAX_INT, user stop, `optimizer.timeout` | **=** | `BatchOptimizer.java:120-136`; `DefaultSettings.java:128-129` |
+| 90 | near-perfect early exit `scoreBefore * (1 + threshold) >= 1000` | **=** | `BatchOptimizer.java:142-147` |
+| 91 | `withPreferredDirections = pass % 2 != 0` | **=** | `BatchOptimizer.java:153` |
+| 92 | pass improvement is score-based `(after-before)/before`; `useIncreasedRipupCosts` + no gain → drop to normal costs and continue | **=** | `BatchOptimizer.java:161-170` |
+| 93 | stop when `improvement < optimizationImprovementThreshold` (default 0.01) | **=** | `BatchOptimizer.java:172-177`; `DefaultSettings.java:131` |
+| 94 | `maxConsecutiveFailures = 50` aborts the pass; per-item timeout/maxItems; `ProgressThrottler(1000)` | **=** | `BatchOptimizer.java:29, 232-234, 236-277`; `DefaultSettings.java:138` |
+| 95 | one `useIncreasedRipupCosts` drop rule | **Two, and they coexist.** `runBatchLoop:154` **discards** `opt_route_pass`'s return value, so the v19-style rule inside `opt_route_pass` (`:281-284`: `if (use_increased_ripup_costs && route_improved == 0) { flag = false; return -1; }`) fires on its own criterion (via/length-ratio == 0) in addition to the score-based rule at `:164-170`. Either can clear the flag. | `BatchOptimizer.java:154, 164-170, 281-284` |
+| 96 | optimizer has no whole-board snapshot/restore; monotonic keep/undo per item | **=** | `BatchOptimizer.java:354-357, 397-411` |
+
+#### 2.8 Multithreading
+
+| # | spec claim | release |
+|---|---|---|
+| 97 | §8.1 v19 `BatchOptRouteMT` + v19 `OptimizeRouteTask` | **ABSENT** — no `BatchOptRoute`/`BatchOptRouteMT` classes in the release. |
+| 98 | §8.2 `BatchOptimizerMultiThreaded` is a direct port with the listed differences | **PRESENT and GUI-only.** All structural claims hold: eager per-item task construction (`:223-230`), `synchronized is_winning_candidate` (`:101-134`), `PriorityQueue`-based PRIORITIZED ordering (`:156-173`), unseeded `Collections.shuffle` for RANDOM (`:180`), HYBRID rotation (`:47-70, 81-91, 147-150`), `pool.shutdown()` + `awaitTermination(1, SECONDS)` polling with `shutdownNow()` on stop (`:233-254`), `clean()` nulling fields (`OptimizeRouteTask.java:64-67`). |
+| 99 | task construction `job.board.deepCopy()` + `board.getItem(itemId)` | **=** — `OptimizeRouteTask.java:22-23` (`get_item`) |
+| 100 | task run creates a **fresh** `BatchOptimizer` per task with `disableSnapshots = true`, so (a) `minCumulativeTraceLength == 0.0` kills the length branch of `improved()`, (b) `useIncreasedRipupCosts == false` so tasks never get the ×10 boost | **= both regressions confirmed.** `OptimizeRouteTask.java:37`; the field is only ever set in `BatchOptimizer.opt_route_pass:225` / `BatchOptimizerMultiThreaded:142,204`, none of which the fresh instance executes. `use_increased_ripup_costs` defaults `false` (`BatchOptimizer.java:32`). |
+| 101 | `replaceMasterRoutingBoardWithTheWinningCandidate` sets only `this.board`; `job.board` is never reassigned, so subsequent tasks deep-copy a stale board and may get `itemToOptimize == null` → no-op | **=** | `BatchOptimizerMultiThreaded.java:136-145`; `OptimizeRouteTask.java:22, 33-35`; grep of `job.board` writes (see #68) |
+| 102 | "**MT optimizer improvements are dropped from the saved result entirely**" because SES is written from `routingJob.board` | **REFUTED for the release.** `replaceMaster...` fires `fireBoardUpdatedEvent(..., this.board)` (`:140`), and the GUI's MT listener calls `boardManager.replaceRoutingBoard(event.getBoard())` (`AutorouterAndRouteOptimizerThread.java:327`); the SES is then written from `boardManager.saveAsSpecctraSessionSes(...)` (`:642`), not from `routingJob.board`. The winner **does** reach the output. What is genuinely broken is only the *intra-pass* propagation (stale clones, null items). |
+| 103 | pool threads are daemons named `"batch-optimizer-worker"` | **ABSENT.** The release's thread factory is `new Thread(r)` with only an uncaught-exception handler — non-daemon, unnamed. | `BatchOptimizerMultiThreaded.java:215-220` |
+| 104 | `CountDownLatch task_completion_signal` is vestigial | **=** — `prepare_task_completion_signal()` (`:93-99`) has zero callers; `countDown()` at `:132`; nothing ever awaits it. |
+| 105 | MT defaults GREEDY / PRIORITIZED / `"1:1"` / `max(1, cores-1)` | **=** | `DefaultSettings.java:130, 132-134` |
+| 106 | §8.3 `BoardUpdateStrategy` / `ItemSelectionStrategy` enums identical | **=** — `autoroute/BoardUpdateStrategy.java`, `autoroute/ItemSelectionStrategy.java` |
+| 107 | §9: the multi-thread **route** pass has zero callers and is dead | **=** — `BatchAutorouter.autoroute_pass_multi_thread(int)` is `private` at `:315` and grep finds no call site anywhere in the tree. |
+| 108 | dead design: `maxThreads` deep copies, per-thread shuffled item list with `Random(0)`, MIN_PRIORITY daemon threads named `"Router thread #<pass>.<A..Z>"`, `BoardHistory` + `restoreBestBoard()` | **=** | `BatchAutorouter.java:120, 327-349, 380, 411`; `ThreadIndexToLetter` `:1670` |
+| 109 | latent bug: `join(TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP)` waits at most 1000 ms then reads the board anyway | **=** | `BatchAutorouter.java:372` |
+| 110 | — (not in spec) | The dead MT path also computes a `bestThread` by score (`:398-409`) but then adopts `bh.restoreBestBoard()` (`:411`); `bestThread` is used only for the `anyProgress` return (`:415`). Two independent "best" computations. |
+| 111 | upstream 2.3.0 routes strictly sequentially | **=**, for both routers. `BatchAutorouterV19` has no MT path at all and clamps `maxThreads` to 1 (`:85-88`). |
+| 112 | v19's `-mt 1` default and the "MT optimization is broken" release warning | The **warning string ships verbatim** (`AutorouterAndRouteOptimizerThread.java:598-599`), keyed on `boardManager.get_num_threads()` (the *router's* `max_threads`). But the **`-mt 1` default is v19-only**: the release defaults `router.max_threads` **and** `optimizer.max_threads` to `max(1, cores-1)` (`DefaultSettings.java:102, 130`), so on any multi-core machine the GUI silently selects `BatchOptimizerMultiThreaded` and prints the "broken" warning. Headless is unaffected (always ST). |
+
+#### 2.9 Java-isms / debug leftovers (§11 "Java-isms observed")
+
+| # | spec claim | release |
+|---|---|---|
+| 113 | per-routed-item `new RatsNest(...)` (v19 hot path) | **ABSENT** — the release routers use `DesignRulesChecker` and gate it behind `FRLogger.isTraceEnabled()` (`BatchAutorouter.java:543`). `interactive/RatsNest` survives for GUI display only. |
+| 114 | `board.clone()` per pass for `diff_traces` stagnation | **ABSENT** — no clone-per-pass anywhere in the release. Its replacement is `BoardHistory` serialization (`BatchAutorouter.java:944`). |
+| 115 | serialize-heavy control flow (BoardHistory byte[], strict-DRC per connection) | **=** | `BoardHistory.java:208` (`board.serialize(false)`), `:153` (`BasicBoard.deserialize`); strict-DRC snapshot `BatchAutorouter.java:1321` (per connection, when enabled) |
+| 116 | clone-per-task MT optimizer, all tasks constructed eagerly, contradicting the "just enough tasks" comment | **=**, comment included | `BatchOptimizerMultiThreaded.java:227-230`; `OptimizeRouteTask.java:22` |
+| 117 | O(N) `findItemOnBoard` id lookup | **ABSENT** — release uses `board.get_item(item_id)` (`OptimizeRouteTask.java:23`). |
+| 118 | fresh `TreeSet`/`LinkedHashMap` per routed connection | **=** | `BatchAutorouter.java:513-514` |
+| 119 | hardcoded net-94 dump shipped in a release path | **=, PRESENT** | `BatchAutorouter.java:564-605` |
+| 120 | `"U27-"` pin-name fanout diagnostics | **PRESENT but relocated** — not in `BatchFanout`; it is `MazeSearchAlgo.shouldTraceFanoutDiagnostics()` at `:851-855`. |
+| 121 | — (not in spec) | A third debug leftover ships: `int[] focusNets = new int[] {98, 99};` in the incomplete-count path — `drc/DesignRulesChecker.java:551`. Exclude from the port along with #119/#120. |
+| 122 | ThreadMXBean CPU/alloc sampling scattered through orchestration | **=** | `BatchAutorouter.java:211-239, 802-874`; `BatchOptimizer.java:63-91`; `management/RoutingJobSchedulerActionThread.java:219-262` |
+| 123 | — (not in spec) | Maze-search determinism detail worth porting: `MazeSearchAlgo` seeds its `Random` with the pass's ripup cost — `random_generator.setSeed(p_ctrl.ripup_costs)` (`:77-78`, comment "Keep v1.9 deterministic randomization across passes"). This is why the release's commented-out same-hash stop (#62) argues that identical boards can still progress. |
+
+### 3. Features this spec attributes to "v2" — PRESENT / ABSENT in the release (porting go/no-go)
+
+| v2 feature per the spec | release | note |
+|---|---|---|
+| `autoroute/pipeline/` package, `RoutingPipeline`, `AutorouteBatchLoop`, `AutoroutePassRunner`, `AutorouteConnectionRouter`, `AutorouteAirlineCalculator`, `AutorouteRuntimeMetrics`, `AutorouteUnroutedReport`, `BatchAutorouterThread` (pipeline one), `GuiRoutingJobWorker` | **ABSENT** | master-only; all folded into `autoroute/BatchAutorouter.java` |
+| `BatchOptimizer.createForGui` / `createForHeadless` factories | **ABSENT** | inline construction |
+| `BoardHistory` score-ranked snapshot store (cap 30) | **PRESENT** | `autoroute/BoardHistory.java` |
+| `STOP_AT_PASS_MINIMUM` / `_MODULO` / `STAGNATION_*` / `MAXIMUM_TRIES_ON_THE_SAME_BOARD` / `BOARD_RANK_LIMIT` / `FANOUT_RECOVERY_STAGNATION_PASSES` | **PRESENT** (all 7, jar-verified) | `BatchAutorouter.java:52-71`; `BOARD_RANK_LIMIT` check is unreachable (#60) |
+| board-restore machinery (`restoreBoard(3)`, rank cap, final best-board restore) | **PRESENT** | `BatchAutorouter.java:953-996, 1141-1159` |
+| pass-local **and** global stagnation trackers | **PRESENT** | `:1054-1121` |
+| one-time fanout-tail recovery | **PRESENT** | `:1067-1082` |
+| v2 scoring (`BoardStatistics.getNormalizedScore`, 5 M / 1 M / 10 / 1-per-mm / 50, pins+pours `maxConnections`, mm normalization) | **PRESENT** | the **only** scoring path in the release |
+| plane-net item filter in `getAutorouteItems` | **PRESENT** | `:288-294` |
+| `RoutingFailureLog` (+ `FAILURE_THRESHOLD = 50`) | **PRESENT** | used for logging on the live path, for skipping only on the dead MT path |
+| strict-DRC snapshot/rollback (`strict_drc`, default false) | **PRESENT** | `:1321, 1428-1468` |
+| necked retry (`neck_width_um`, default 0) | **PRESENT** | `:1377-1421` |
+| fanout: netless-pin filter, configurable pin sort order, oscillation detector, `max_items`, `timeout`, `ripup_allowed`, `fallback_to_board_vias` | **PRESENT** | `autoroute/BatchFanout.java`; sort-order **key spellings differ** (#15) |
+| fanout escape annulus (`min/max_escape_length_mm`) | **PRESENT and reachable headless** | `MazeSearchAlgo.java:80-108` |
+| fanout dedicated via diameters (`start/end_via_diameter_mm`) | **PRESENT as settings, ABSENT as behaviour** | zero readers — do not port |
+| `BatchOptimizerMultiThreaded` + `OptimizeRouteTask` | **PRESENT, GUI-only, semantically broken** | unreachable headless; see #100–#104 |
+| multi-threaded **route** pass (`autoroute_pass_multi_thread` + `autoroute/BatchAutorouterThread`) | **PRESENT as dead code** | zero callers (#107) |
+| `ProgressThrottler(1000)` / 250 ms `shouldFireBoardUpdate` | **PRESENT** | `BatchFanout.java:29`, `BatchOptimizer.java:29`, `BatchAutorouter.java:241-248` |
+| `PROGRESS_STATISTICS_ITEM_INTERVAL = 10` | **ABSENT** | master-only |
+| `-Dfreerouting.benchmark.retain_autoroute_database` opt-in | **ABSENT** | hardcoded `false` |
+| `SettingsMerger` 8-source priority chain, `DefaultSettings` as the single source of scoring truth | **PRESENT** | `settings/SettingsMerger.java:33-48`, `settings/sources/DefaultSettings.java` |
+| `ItemRouteResult` float via-ratio fix | **ABSENT** | integer division still ships (#88) |
+
+### 4. Port-from verdict — the authoritative release file per algorithm
+
+Everything below is under `/tmp/fr-java-release/src/main/java/app/freerouting/`.
+
+| algorithm / subsystem | port from | notes |
+|---|---|---|
+| Batch loop, pass scheduling, all stop rules, board-restore, stagnation, final best-board | `autoroute/BatchAutorouter.java:757-1188` (`runBatchLoop`) | the single authority; constants at `:52-71` |
+| Route pass body (item loop, classification, tail removal, accounting) | `autoroute/BatchAutorouter.java:431-694` (`autoroute_pass`) | |
+| Route work-list selection | `autoroute/BatchAutorouter.java:250-306` (`getAutorouteItems`) | |
+| Per-connection routing (costs, budgets, direction, engine init) | `autoroute/BatchAutorouter.java:1256-1366` (`autoroute_item`) | + `retryConnectionNecked:1377`, `applyStrictDrcAfterRoute:1428`, `enforceStrictDrc:1447` |
+| Optimizer inner reroute driver | `autoroute/BatchAutorouter.java:146-167` (`autoroute_passes_for_optimizing_item`) | |
+| Fanout stage orchestration, pass loop, pin/component ordering | `autoroute/BatchFanout.java` (loop `:82-144`, pass `:147-~360`, ordering `:449-594`) | |
+| Fanout escape mechanics (implicit via placement, annulus, drill-drill completion, destination seeding, fanout-via ripup protection) | `autoroute/MazeSearchAlgo.java:80-108` (annulus), `:296-302` (completion), `:1232-1238` (destination), `:154-189` + `:1395-1424` (protection) | |
+| Per-pin fanout attempt (preconditions, target ordering, via-rule fallback, pull-tight) | `board/RoutingBoard.java:977-1083` (`fanout`) | no `facade` package in the release |
+| Board score | `core/scoring/BoardStatistics.java:552-586` (+ `:177-186` mm normalization, `:222-241` weighted length, `:508-529` `isPinEscaped`) and `drc/DesignRulesChecker.java:528-537` (`max_connections`) | |
+| Scoring / router / fanout / optimizer default constants | `settings/sources/DefaultSettings.java` | single source of truth; jar-verified |
+| Optimizer batch loop and stop rules | `autoroute/BatchOptimizer.java:96-207` (`runBatchLoop`) + `:215-296` (`opt_route_pass`) | note the two independent ripup-drop rules (#95) |
+| Optimizer per-item ripout/reroute/keep-or-undo | `autoroute/BatchOptimizer.java:308-414` (`opt_route_item`) | fix the weighted/unweighted mismatch (#87) when porting |
+| Optimizer sweep order | `autoroute/BatchOptimizer.java:464-558` (`ReadSortedRouteItems`) | replace the O(N²) scan with an ordered index, per §11.2 |
+| Improvement predicate / result record | `autoroute/ItemRouteResult.java:30-78` | port `improved()`/`compareTo` as-is; **do not** port `improvement_percentage` (`:50`, integer division, MT-only) |
+| Board snapshot history | `autoroute/BoardHistory.java` | ignore the shadowed dead `autoroute/BoardHistoryEntry.java` |
+| Failure bookkeeping | `autoroute/RoutingFailureLog.java` (`FAILURE_THRESHOLD = 50`) | |
+| Settings resolution / precedence | `settings/SettingsMerger.java` + `settings/sources/*` + `util/ReflectionUtil.java:145-290` | note the fail-closed `getRunOptimizer`/`isFanoutEnabled` vs fail-open `getRunRouter`/`getRunFanout` |
+| Stage sequencing (headless) | `management/RoutingJobSchedulerActionThread.java:38-217` | the golden reference for a headless Rust driver |
+| Stage sequencing (GUI, for reference only) | `interactive/AutorouterAndRouteOptimizerThread.java:199-330, 451-701` | |
+| **Do not port** | `autoroute/BatchAutorouterV19.java` (GUI-only comparison shim, no fanout, no stop machinery), `autoroute/BatchOptimizerMultiThreaded.java` + `autoroute/OptimizeRouteTask.java` (GUI-only, stale-clone semantics), `autoroute/BatchAutorouterThread.java` + `BatchAutorouter.autoroute_pass_multi_thread` (dead), `autoroute/BoardHistoryEntry.java` (dead), fanout via-diameter settings (inert), net-94 / `U27-` / `focusNets{98,99}` debug dumps | |
+
+**Net effect on §11 (Rust design implications).** Items 1–6 of "Keep semantically" all survive the
+release audit unchanged, with three amendments: (a) §11.1's "maxPasses=0 trick replaced by an
+explicit `fanout_only` mode" is now *required*, not cosmetic (§1.2); (b) §11.5's "pick the v2
+semantics" for the integer-division bug is a **deliberate divergence from the release**, not a port
+(#88); (c) §11.6's escape annulus "2.5–4.5 mm" should be encoded as configurable defaults with the
+release's null-fallbacks (0.5/3.0 mm) documented but not replicated as magic behaviour (#10–#12).

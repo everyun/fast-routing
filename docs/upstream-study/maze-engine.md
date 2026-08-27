@@ -924,3 +924,339 @@ Port the any-angle `SortedRoomNeighbours` first (it is the general case; 90°/45
 specializations that can share the gap-room builder via an `AngleFamily` trait), and validate the
 Rust engine against the Java one by diffing the settle order `(door_id, section, g, f)` on identical
 boards with the deterministic tie-breaks enabled.
+
+---
+
+## Release-jar conformance (2.3.0 @2d4de019)
+
+Audit of the body above against the **actual source of the released jar**,
+`/tmp/fr-java-release/src/main/java/app/freerouting` (all paths in this section are relative to that
+root unless stated). Constants were cross-checked against the shipped bytecode in
+`/tmp/frbase/freerouting-2.3.0.jar` with `javap -p -c`.
+
+Bytecode spot-checks that pin this source tree to the jar:
+
+* `autoroute/MazeSearchAlgo.class` constant pool/code: `double 20000.0d` (×2), `double 0.01d`,
+  `int 21474836` (= `Integer.MAX_VALUE / 100`, ×2), `double 0.5d`, `double 2.0d`.
+* `autoroute/MazeSearchAlgo$1.class` (the anonymous `TreeSet` subclass): `1000.0d`, `3000.0d`, `500.0d`.
+* `autoroute/AutorouteControl.class`: `0.1d`, `0.8d`, `sipush 500`, `bipush 20`, `sipush 1000`.
+* `autoroute/AutorouteEngine.class`: `bipush 33 / 66 / 67` — the "net 33/66/67" debug trace is
+  **shipped upstream**, not local instrumentation (see D1).
+* `unzip -l … | grep 'autoroute/(maze|expansion|drill|pipeline|path)/'` → **0 entries**.
+
+---
+
+### 1. Which tree the release actually executes
+
+**Verdict: the release runs the flat `app.freerouting.autoroute.*` package — v1.9 class names with
+v2-era patches applied in place. The `autoroute.maze` / `autoroute.expansion` / `autoroute.drill` /
+`autoroute.pipeline` / `autoroute.path` packages that §1 and §12 of this spec describe do not exist
+in 2.3.0 (0 classes in the jar).** Every subsystem this spec covers is therefore ported from the
+flat package.
+
+#### 1.1 Headless / CLI / API (the porting-relevant path)
+
+```
+management/RoutingJobSchedulerActionThread.java:96-108
+    String algorithm = job.routerSettings.algorithm;
+    if (!RouterSettings.ALGORITHM_CURRENT.equals(algorithm))
+        job.logInfo("Unknown router algorithm '"+algorithm+"', using default (freerouting-router)");
+    // :106 comment: "Always use standard BatchAutorouter"
+    router = new BatchAutorouter(job);              // :107  <-- unconditional
+  → BatchAutorouter.runBatchLoop()                  autoroute/BatchAutorouter.java:948
+  → BatchAutorouter.autoroute_pass(int)             :431
+  → BatchAutorouter.autoroute_item(...)             :1257
+  → board.init_autoroute(net, clearance, thread, time_limit, retain=false)
+                                                    :1316-1317 → board/RoutingBoard.java:906-913
+  → AutorouteEngine.autoroute_connection(...)       autoroute/AutorouteEngine.java:127
+  → MazeSearchAlgo.get_instance(start,dest,engine,ctrl)   AutorouteEngine.java:140
+  → maze_search_algo.find_connection()              AutorouteEngine.java:155
+  → LocateFoundConnectionAlgo.get_instance(...)     AutorouteEngine.java:175
+  → clear() / reset_all_doors()                     AutorouteEngine.java:184-188
+  → InsertFoundConnectionAlgo.get_instance(...)     AutorouteEngine.java:241
+```
+
+**`BatchAutorouterV19` is unreachable headless.** The scheduler thread never instantiates it; the
+`algorithm` setting is only logged.
+
+#### 1.2 GUI (`BatchAutorouter` vs `BatchAutorouterV19` selection — both live)
+
+```
+interactive/AutorouterAndRouteOptimizerThread.java:206-219
+    if (RouterSettings.ALGORITHM_V19.equals(routingJob.routerSettings.algorithm))
+        this.batchAutorouter = new BatchAutorouterV19(routingJob);      // :209
+    else {                                                             // unknown → coerced+warned
+        routingJob.routerSettings.algorithm = ALGORITHM_CURRENT;        // :215
+        this.batchAutorouter = new BatchAutorouter(routingJob);         // :217
+    }
+    thread_action()  :451  →  :513-517  instanceof dispatch → runBatchLoop() on either
+```
+
+**This selection does not change the maze engine.** `BatchAutorouterV19.autoroute_item` calls the
+same `board.init_autoroute(...)` → `AutorouteEngine.autoroute_connection` →
+`MazeSearchAlgo` (`autoroute/BatchAutorouterV19.java:438-446`). The two Batch classes differ only in
+the *outer* pass loop / item ordering / ripup-cost escalation, not in the search. A Rust port needs
+exactly one maze engine.
+
+#### 1.3 Fanout pre-pass
+
+```
+BatchAutorouter.java:824  BatchFanout.fanout_board(board, settings, thread, …)
+  → BatchFanout.java:217  routing_board.fanout(pin, settings, ripup_costs, thread, time_limit)
+  → board/RoutingBoard.java:977-1071
+        ctrl.is_fanout = true                            :1018
+        ctrl.via_rule = via_rule ∪ board default vias    :1019-1036 (fallbackToBoardVias)
+        ctrl.fanout_start_pin_name/center/layer          :1038-1043
+        ctrl.remove_unconnected_vias = false             :1044
+        init_autoroute(..., retain=false)                :1050-1051
+  → same AutorouteEngine.autoroute_connection → same MazeSearchAlgo
+```
+
+#### 1.4 Optimizer re-route
+
+`autoroute/BatchOptimizer.java:377` → `BatchAutorouter.autoroute_passes_for_optimizing_item`
+(`BatchAutorouter.java:146-157`) → `autoroute_pass` → same chain.
+
+#### 1.5 Dead in the release
+
+* `BatchAutorouter.autoroute_pass_multi_thread` (`:315`) — **no callers**; therefore
+  `autoroute/BatchAutorouterThread.java` (the per-thread board-clone router) never runs in 2.3.0.
+  Multi-threading is applied in the *optimizer* (`BatchOptimizerMultiThreaded`), not the router.
+* `AutorouteEngine.reset_all_doors()` / `init_connection`'s net-dependent invalidation — see D3.
+* The ripup randomization branch — see D4.
+
+---
+
+### 2. Claims table (spec vs release source)
+
+#### 2.1 Load-bearing DIFFERENCES
+
+| # | Spec claim (§) | Release behaviour | Evidence (file:line) |
+|---|---|---|---|
+| D1 | Provenance caveat (spec ¶ before §1): the net-33/66/67 traces, `FANOUT_DIAG` blocks and deterministic tie-breakers are *local* instrumentation not in stock upstream | **All shipped in 2.3.0.** They are upstream code, not local patches. Keep them; they also mean the trace strings are in the jar | `AutorouteEngine.java:162-169`; `MazeSearchAlgo.java:866,1016`; `MazeListElement.java:81-113`; `SortedRoomNeighbours.java:141-147,663-667`; bytecode `AutorouteEngine.class` `bipush 33/66/67` |
+| D2 | §1, §12 rename map: 2.3.0 runs `maze/* + expansion/* + drill/*`, `MazeSearchEngine`, `MazeRipupResolver`, `MazeTraceShover`, `path.FoundConnectionLocator`, `pipeline.AutorouteConnectionRouter` | **None of these classes exist in the release.** The whole §12 rename table is a map to *git master*, not to 2.3.0. Port targets are `MazeSearchAlgo`, `MazeShoveTraceAlgo`, `LocateFoundConnectionAlgo*`, `InsertFoundConnectionAlgo`, all in flat `autoroute/` | `ls autoroute/`; jar has 0 classes under those packages |
+| D3 | §10: `maintain_database = true` for the batch autorouter; net-independent tiling shared across nets is "the main amortization in batch mode" | **`retain_autoroute_database` is hard-coded `false` at every construction site**, and both `RoutingBoard` call sites pass literal `false`. So `maintain_database` is *always* false in 2.3.0: `clear()` runs after every connection, and `reset_all_doors()`, `init_connection`'s net-dependent room removal, `get_rooms_with_target_items` reuse and `RoutingBoard.additional_update_after_change` are dead. `RoutingBoard.init_autoroute` also re-creates the engine every connection because `!p_retain_autoroute_database` is true | `BatchAutorouter.java:136`; `BatchAutorouterV19.java:104`; `BatchAutorouterThread.java:79`; `board/RoutingBoard.java:959-960, 1050-1051, 906-913`; dead paths at `AutorouteEngine.java:93-116, 186-188, 588, 624-639`, `MazeSearchAlgo.java:1267-1270`, `RoutingBoard.java:78-97` |
+| D4 | §8.1 / §11: ripup randomization fires when `ripup_pass_no >= 4 && pass % 3 != 0` | **Dead code.** `ctrl.ripup_pass_no` is set to 1 in the `AutorouteControl` ctor and never reassigned anywhere except `interactive/ExpandTestState.java:157`, which also sets 1. The batch loop escalates `ripup_costs` but not `ripup_pass_no`. The seeded RNG is therefore never consumed | `AutorouteControl.java:198`; `MazeSearchAlgo.java:1443-1448`; `BatchAutorouter.java:1280`; `BatchAutorouterThread.java:470`; `interactive/ExpandTestState.java:157` |
+| D5 | §11: default `ripup_costs` = 1000 | 1000 is only the ctor default and is overwritten on every real call by `start_ripup_costs × ripup_pass_no`, where `start_ripup_costs` default is **100** (`DEFAULT_START_RIPUP_COSTS`), falling back to **1** when `scoring == null`. With D4, pass-1 and every later pass see `ripup_costs = 100` unless the caller escalates it | `AutorouteControl.java:197`; `BatchAutorouter.java:1280, 1400`; `settings/sources/DefaultSettings.java:60,147`; `settings/RouterSettings.java:473-475` |
+| D6 | §8.1: `detour = Connection.get(item).get_detour()` unconditionally | Release only consults the connection when `fanout_via_cost_factor <= 1 && !ctrl.is_fanout`; otherwise `detour` stays 1 (no division). Also collects `trace_length`, `item_count`, `min_trace_length` for the `CHECK_RIPUP` trace | `MazeSearchAlgo.java:1419-1442` |
+| D7 | §12.4 "v2 gate difference": fanout protection only while `ripupCosts <= 2×startRipupCosts` — listed as a v2-only delta | **Present in the release**, and it gates *both* the trace branch and the via branch via one `preserveFanoutProtection` flag | `MazeSearchAlgo.java:1386-1396` |
+| D8 | §11: per-connection time limit lives in `AutorouteConnectionRouter.java:72-74` | Same formula, different home: `min(100000·2^(pass−1), Integer.MAX_VALUE)` ms | `BatchAutorouter.java:1311-1313`; `BatchAutorouterThread.java:501-503` |
+| D9 | §7.2: `DrillPage.get_drills` collects obstacles from the board search tree | Release queries the **net-clearance-compensated autoroute tree** (`p_autoroute_engine.autoroute_search_tree`), so page cutouts are compensated for the routed net's clearance class | `DrillPage.java:70` (v19 used `board.search_tree_manager.get_default_tree()`) |
+| D10 | §3.2: `for (i, cand) in completed_shapes where dim==2: if i == 0 → add_complete_room else re-complete` | The "first" is the first **2-dimensional** candidate (dimension filter applied *before* the first/rest split via an `is_first_completed_room` flag), not raw index 0. `add_complete_room` returns null (room silently dropped) when `calculate_doors` returns null or the shape is <2-dim. Whole body is wrapped in a `try/catch(Exception)` that returns an empty collection | `AutorouteEngine.java:401-477, 484-500` |
+| D11 | §2.1: `ItemAutorouteInfo.expansion_room_arr` gives ObstacleExpansionRoom identity "stable across the whole search" | Release re-allocates and `System.arraycopy`s the array whenever the item's `tree_shape_count` changes, so identity is stable only for the surviving prefix; higher indices are dropped | `ItemAutorouteInfo.java:70-79` |
+| D12 | §6 / §12.6: stale-target guard is a v2 feature | **Present in the release**: `tree_entry_no` range check + null `target_shape` check, both `continue` | `MazeSearchAlgo.java:556-567` |
+| D13 | §4.4: `g' = g + add_costs + weighted_distance(...)` | Release inserts a bend term: `g' = g + add_costs + bend_cost_penalty + weighted_distance(...)`; `f' = g' + h`. `room_ripped` and `ripup_cost` assignment unchanged | `MazeSearchAlgo.java:717-745` |
+| D14 | §8.3: `MazeShoveTraceAlgo` bounds check | Release rejects silently on `trace_corner_no < 0 \|\| trace_corner_no >= arr.length - 2` (v19 warned at `>= arr.length - 1`) | `MazeShoveTraceAlgo.java` (`check_shove_trace_line` head) |
+| D15 | §11: "drill page size = `max(5 × default_via_diameter, 10000)`" | That is the *maximum* page width fed to the grid; the actual page size is `PAGE_W = ceil(board_width / ceil(board_width / max_page_width))` (same for height), with the last column/row extended to the bbox edge | `AutorouteEngine.java:87-89`; `DrillPageArray.java:38-60` |
+| D16 | §12.2: fanout escape defaults "min 500 µm / max 3000 µm" | 500/3000 µm are only the **hardcoded fallbacks** used when `settings.fanout == null`. Real defaults are `minEscapeLengthMm = 2.5`, `maxEscapeLengthMm = 4.5` (2500 µm / 4500 µm) | `MazeSearchAlgo.java:87-88, 98-99`; `settings/sources/DefaultSettings.java:117-118` |
+| D17 | §12.5: v2's `checkLayerWithAnyMatchingVia` uses "its own radius, clearance class, attach flag" | Present, plus: `requiredRadius = max(0.5·viaShape.max_width(), ctrl.trace_half_width[layer])`, and `ForcedViaAlgo.check_layer` in the release takes **two extra args** (`trace_half_width[layer]`, `trace_clearance_class_no`) that v19 did not pass; spring-over depth is passed as literal `0` | `MazeSearchAlgo.java:1182-1204` |
+| D18 | §12.8: result handling | Present, and the release adds a gate this spec does not mention: a located connection is rejected as `FAILED` when `!ctrl.layer_active[start_layer] \|\| !ctrl.layer_active[target_layer]` | `AutorouteEngine.java:202-205` |
+| D19 | §11 table lacks the detour constants | `DETOUR_ADD = 100`, `DETOUR_ITEM_COST = 0.1`; `get_detour()` returns `Integer.MAX_VALUE` when `start_point`/`end_point` is null, which collapses ripup cost to the clamp floor 1 | `Connection.java:15-16, 149-156` |
+
+#### 2.2 Explicitly CONFIRMED (spec matches the release line-for-line)
+
+| Spec § | Confirmed in release at |
+|---|---|
+| §2.2 door sectioning: `offset = half_width + 2`; dim-1 → `diagonal_corner_segment`; free↔free dim-2 → restraint line, empty if one room inside the other; else degenerate CoG point; `shrink_segment(offset)`; `section_count = floor(len_unshrunk / (10·offset)) + 1`; `allocate_sections` reuses the array when the count matches | `ExpansionDoor.java:113-148, 199-207` |
+| §2.2 `get_shape()` recomputes `first ∩ second` on every call | `ExpansionDoor.java:51-56` |
+| §2.2 `ExpansionDoor.get_id_no() = min(id1,id2)·31 + max(id1,id2)` (collidable) | `ExpansionDoor.java:189-195` |
+| §2.1 `ObstacleExpansionRoom` id `(item_id << 10) \| index_in_item` | `ObstacleExpansionRoom.java:55-57` |
+| §2.2 `TargetItemExpansionDoor` single search element, `is_destination_door() = !start_info` | `TargetItemExpansionDoor.java` (id now `31·item_id + room_id`) |
+| §3.1 `complete_neighbour_rooms`: iterator **restarted** after completing an incomplete neighbour; `calculate_doors` once per ObstacleExpansionRoom guarded by `all_doors_calculated()` | `AutorouteEngine.java:532-557` |
+| §3.3 deterministic sort of the overlap list by `(object_id, shape_index)` and the `search_tree_object.get_id_no()` tie-break in `SortedRoomNeighbour.compareTo` | `SortedRoomNeighbours.java:141-147, 663-667` |
+| §3.3 `calculate_target_doors` marks the room net-dependent | `CompleteFreeSpaceExpansionRoom.calculate_target_doors` |
+| §3.4 `remove_complete_expansion_room`: detach door, plant half-plane incomplete room + dim-1 door on each 1-dim neighbour, remove from tree/list, `drill_page_array.invalidate(room_shape)` | `AutorouteEngine.java:359-394` |
+| §4.1 `MazeListElement.compareTo` = `sorting_value`, `expansion_value`, `door.get_id_no()`, `section_no_of_door`, then 0 (dedup) | `MazeListElement.java:81-113` |
+| §4.2 `occupy_next_element` order: stop check → pop+remove → skip occupied → settle backtrack fields → DrillPage → destination target door → fanout drill-after-drill → `expand_to_other_layers` → `expand_to_room_doors` → set `is_occupied`. DrillPage branch returns **without** occupying | `MazeSearchAlgo.java:249-316` |
+| §4.3 dead-layer early-out only for **signal** layers; plane layers fall through to target-door expansion only | `MazeSearchAlgo.java:327-334, 412-415` |
+| §4.3 split-plane CONDUCTION check for drills on inactive layers | `MazeSearchAlgo.java:398-409` |
+| §4.3 thin/thick test: `min_width() < 2·half_width`, else (dim-1, not small, not already_checked) 2nd nearest border point `> half_width + 1` | `MazeSearchAlgo.java:377-397` |
+| §4.3 `room_shape_is_thick` for obstacle rooms (trace half width + clearance compensation, or 0.5·via shape max width) `>= compensated_trace_half_width` | `MazeSearchAlgo.java:1331-1347` |
+| §4.3 delayed-occupation requeue at `+ripup_costs` on both g and f with `already_checked=true, room_ripped=true`, section left unoccupied | `MazeSearchAlgo.java:446-470` |
+| §4.3 door snapshot (`new LinkedList<>(next_room.get_doors())`) before iterating | `MazeSearchAlgo.java:476` |
+| §4.4 thick path acute-corner guard (single-section dim-1 door between two complete free rooms) rejects the whole door | `MazeSearchAlgo.java:610-630` |
+| §4.4 thin path: skip point-like first section (`dist² < 1`), else `segment_projection` | `MazeSearchAlgo.java:632-639, 195-215` |
+| §4.4 `room_ripped = (add_costs>0 && adjustment==NONE) \|\| (from.already_checked && from.room_ripped)`; `element.ripup_cost = add_costs` under the same condition | `MazeSearchAlgo.java:741-…` |
+| §5 init: tie-pin shape reduction, destination `set_start_info(false)` + bbox join, fanout board-bbox join on layer 0 and n−1, start rooms from `get_trace_connection_shape` with `shape=null`, seed elements `g=0, f=h(centre)`, fail when no destination or no start door | `MazeSearchAlgo.java:1213-1326` |
+| §6 target capture incl. `check_forced_trace_polyline` for thin rooms and the "small door only when coming from an ObstacleExpansionRoom" rule | `MazeSearchAlgo.java:534-599` |
+| §7.1 `ExpansionDrill.calculate_expansion_rooms`: point query per layer, complete a fresh room otherwise, discard unless exactly 1 room results | `ExpansionDrill.java:47-…` |
+| §7.3 hop 1 `g' = g + min_normal_via_cost`, `f' = g' + weighted_distance(nearest page point, entry_mid) + h`; `section_no = layer`; `next_room` kept | `MazeSearchAlgo.java:955-980` |
+| §7.3 hop 2 drill accepted only when `room_arr[layer] == from_room` and the layer element is free | `MazeSearchAlgo.java:982-1038` |
+| §7.3 hop 3 thin-room backtrack-door intersection rule, `shrink(via_radius[layer])`, pin `nearest_trace_exit_corner` compare corner, DrillPage backtrack skip, `+min_normal_via_cost` only on the direct-from-via path, `next_room = null` | `MazeSearchAlgo.java:872-948` |
+| §7.3 hop 4 via-ripup branch (padstack in `via_rule` + clearance class match), down-then-up scan, **abort unless the drillable interval covers the drill's full `[first_layer,last_layer]`**, via-mask matching incl. `attach_smd_allowed`, `g' += add_via_costs[from][to]` | `MazeSearchAlgo.java:1044-1180` |
+| §8.1 check_ripup structure: `!is_routable → −1`; small door probe; shoved-fork rule; `prev_item == item → ALREADY_RIPPED_COSTS`; trace `cost_factor = half_width`; via contact rules and `cost_factor *= 0.5·max(contacts−1,0)`; `ripup_cost = ripup_costs·cost_factor / detour · fanout_factor`; clamp `min(max(int(x),1), Integer.MAX_VALUE/100)` | `MazeSearchAlgo.java:1356-1456` |
+| §8.1 `FANOUT_COST_CONST = 20000`, `max(20000·(half_width/length)², 1)`, through-pin end contact or 2-corner SHOVE_FIXED exit trace | `MazeSearchAlgo.java:154-190` |
+| §8.1 RNG seeded with `ctrl.ripup_costs` in the ctor | `MazeSearchAlgo.java:76-77` |
+| §8.1 `enter_through_small_door` probe: `check_radius = compensated_half_width + 2`, ±translate, `offset_shape(check_radius, 0)`, allow only the ignored item and its same-net contacts; `check_leaving_ripped_item` reuses it | `MazeSearchAlgo.java:1558-1636` |
+| §8.3 shove restricted to the **first or last** door section; left/right attempts skipped per existing `adjustment`; `LEFT/RIGHT` only for dim-2 link doors; `add_costs = 0` | `MazeSearchAlgo.java:1484-1540` |
+| §8.2 downstream: `StopConnectionOption.FANOUT_VIA` when `!remove_unconnected_vias`, remove ripped connections, `remove_trace_tails` per changed net, then insert | `AutorouteEngine.java:213-244` |
+| §9 DestinationDistance: three aggregate boxes, all cost precomputations, the 0..3-via sketches, `active_layer_count` early-outs, `Integer.MAX_VALUE` when nothing joined, and the `calculate_cheap_distance` temporary-field-mutation trick | `DestinationDistance.java` — **byte-for-byte equivalent to v19 modulo formatting**; cheap-distance swap at `:346-353` |
+| §11 `TRACE_WIDTH_TOLERANCE = 2` | `AutorouteEngine.java:33` |
+| §11 `ALREADY_RIPPED_COSTS = 1` | `MazeSearchAlgo.java:43` |
+| §11 `MAX_RIPUP_COSTS = Integer.MAX_VALUE / 100` (= 21474836, verified in bytecode) | `MazeSearchAlgo.java:1454` |
+| §11 `min_normal_via_cost = via_costs × max(max_via_radius, 1)`; `max_via_radius = max over layers of max(via padstack radius, trace_half_width)` | `AutorouteControl.java:265-276` |
+| §11 `min_cheap_via_cost = 0.8 × min_normal_via_cost` | `AutorouteControl.java:277` |
+| §11 `add_via_costs[i].to_layer[j] = 0` for all pairs, never reassigned | `AutorouteControl.java:186-190` (only reader: `MazeSearchAlgo.java:1159`) |
+| §11 shove depths 20 / 5 / 5, pull-tight accuracy 500 | `AutorouteControl.java:182-185` |
+| §11 small 2-dim door threshold: `dist² < 4·offset²` ⇔ length < 2·(half_width+2) | `ExpansionDoor.java:134-137` |
+| §11 `via_clearance_class` from the **first** via of the rule; `via_info_arr` = one `ViaMask(from,to,attach_smd)` per padstack; `compensated_trace_half_width` = half width + clearance compensation; net-class inactive layers ANDed in | `AutorouteControl.java:214-254, 229-233` |
+| §10 stop/time-limit checked on every pop and inside `init` loops | `MazeSearchAlgo.java:258-260, 1218, 1246, 1274, 1288`; `AutorouteEngine.java:266-278` |
+| §10 `generate_room_id_no()` = monotonically increasing per-engine counter, reset by `clear()` | `AutorouteEngine.java:289, 641-643` |
+| §13 Java-isms: per-push `MazeListElement` + red-black node, `it.next(); it.remove()` pop, `LinkedList` door lists (now `ArrayList` in the room classes), unconditional trace-string concatenation in the hot path, `instanceof` dispatch per pop | `MazeSearchAlgo.java:262-264, 476-495, 686-712`; `FreeSpaceExpansionRoom.java` ("ArrayList for better performance") |
+
+---
+
+### 3. Features this spec attributes to "v2" — PRESENT/ABSENT in the release (porting go/no-go)
+
+| §12 item | Release status | Where in the release |
+|---|---|---|
+| 1. Per-layer **bend cost** on `expand_to_door_section`, sin²(angle) > 0.01 (~5.7°), off by default | **PRESENT** (identical algorithm) | `MazeSearchAlgo.java:717-733`; `ctrl.bendCosts[]` built at `AutorouteControl.java:159-162` from `RouterSettings.get_bend_cost(layer)` (`settings/RouterSettings.java:590-600`), clamped to `[MIN_BEND_COST=0.0, MAX_BEND_COST=9.9]` (`RouterSettings.java:16-17,587,596-598`), default `scoring.defaultBendCost = 0.0` (`settings/sources/DefaultSettings.java:151`). Only applied when `p_from_element.backtrack_door != null` |
+| 2. **Fanout escape-length gating inside `TreeSet.add`** | **PRESENT**, as an anonymous `TreeSet` subclass in the `MazeSearchAlgo` ctor (jar class `MazeSearchAlgo$1`) | `MazeSearchAlgo.java:80-108`. Gate 1: reject any element whose `next_room.layer == ctrl.fanout_start_pin_layer` and whose entry midpoint is farther than `maxEscapeLengthMm·1000·resolution(UM)` from the pin centre. Gate 2: reject `ExpansionDrill` elements whose `drill.location` is closer than `minEscapeLengthMm·1000·resolution(UM)`. Fallbacks 3000.0 / 500.0 µm; real defaults 4.5 / 2.5 mm (see D16) |
+| 3. **Pure-SMD net handling**: force `attachSmdAllowed`, via cost × 0.1 | **PRESENT** | `AutorouteControl.rebuild_via_info`: `isPureSmdNet` at `:280-293` (non-empty connectable set and every connectable is a `Pin` with `first_layer()==last_layer()`); attach relaxation at `:257-263` (only when `!attach_smd_allowed && layer_count > 1 && pure_smd_net`); `via_cost_factor *= 0.1` at `:271-275` (unconditional on the attach flag). Net effect: `min_normal_via_cost = via_costs × max(max_via_radius,1) × 0.1` |
+| 4. **Fanout ripup-protection gate** `ripupCosts <= 2×startRipupCosts` | **PRESENT** (not a v2-only delta) | `MazeSearchAlgo.java:1386-1387` (`preserveFanoutProtection`), applied to both trace (`:1390`) and via (`:1395`) branches |
+| 5. **Per-via-info drill check** (try every via in the rule) | **PRESENT**, as `check_layer_with_any_matching_via` | `MazeSearchAlgo.java:1182-1204`; called from both scan directions at `:1080` and `:1108`. Returns `DRILLABLE` on the first success, else `DRILLABLE_WITH_ATTACH_SMD` if any padstack got that, else `NOT_DRILLABLE` |
+| 6. **Stale-target guard** in `expand_to_target_doors` | **PRESENT** | `MazeSearchAlgo.java:556-567` |
+| 7. **Power-plane layers forced inactive** with a warning | **PRESENT** | `AutorouteControl.java:166-173` (`!layer_structure.arr[i].is_signal && activeSetting` → warn + `layer_active[i] = false`) |
+| 8. `AutorouteAttemptResult` / `AutorouteAttemptState` with failure detail | **PRESENT** | `autoroute/AutorouteAttemptResult.java`, `autoroute/AutorouteAttemptState.java`; used throughout `AutorouteEngine.autoroute_connection` (`:142-244`) |
+| — `autoroute.maze` / `expansion` / `drill` / `path` / `pipeline` packages, `MazeSearchEngine`, `MazeExpansionEngine`, `MazeRipupResolver`, `MazeTraceShover`, `MazeFanoutDiagnostics`, `AutorouteConnectionRouter`, `board.facade.RoutingBoard` | **ABSENT** | 0 classes in the jar; `ls autoroute/` shows the flat v1.9 layout |
+| — `LinkedList → ArrayList` for door lists (listed as a v2 change) | **PARTIALLY PRESENT** | `FreeSpaceExpansionRoom.java`, `IncompleteFreeSpaceExpansionRoom.java`, `ObstacleExpansionRoom.java` use `ArrayList`; the per-expansion defensive snapshot in `MazeSearchAlgo.java:476` is still a `LinkedList` |
+
+**Go/no-go summary for M2:** port items 1–8 — all eight are live in the shipped jar and must be
+reproduced. Do *not* port the §12 package/class restructuring; it does not exist in 2.3.0 and
+mapping to it will misalign line-level references.
+
+---
+
+### 4. Specifically resolved for the record
+
+**(a) Do bend costs exist in the release maze? — YES.**
+`MazeSearchAlgo.java:717-733`, inside `expand_to_door_section`, before the distance term:
+
+```java
+double bend_cost_penalty = 0.0;
+if (ctrl.bendCosts[layer] > 0.0 && p_from_element.backtrack_door != null) {
+  FloatPoint from_mid       = p_from_element.shape_entry.a.middle_point(p_from_element.shape_entry.b);
+  FloatPoint backtrack_cog  = p_from_element.backtrack_door.get_shape().centre_of_gravity();
+  double prev_dx = from_mid.x - backtrack_cog.x,  prev_dy = from_mid.y - backtrack_cog.y;
+  double next_dx = shape_entry_middle.x - from_mid.x, next_dy = shape_entry_middle.y - from_mid.y;
+  double cross_product = prev_dx * next_dy - prev_dy * next_dx;
+  double sq_len_prev = prev_dx*prev_dx + prev_dy*prev_dy;
+  double sq_len_next = next_dx*next_dx + next_dy*next_dy;
+  if (sq_len_prev > 0.0 && sq_len_next > 0.0
+      && (cross_product * cross_product) > 0.01 * sq_len_prev * sq_len_next) {
+    bend_cost_penalty = ctrl.bendCosts[layer];
+  }
+}
+double expansion_value = p_from_element.expansion_value + p_add_costs + bend_cost_penalty
+    + shape_entry_middle.weighted_distance(from_mid, trace_costs[layer].h, trace_costs[layer].v);
+```
+
+Notes for the port: the penalty is a **flat per-bend adder** (not scaled by angle); the threshold is
+`sin²θ > 0.01` on the *normalized* cross product, i.e. θ ≳ 5.74°; it costs nothing when the previous
+hop is a start seed (`backtrack_door == null`) and nothing when the backtrack door is a drill/page
+whose CoG is degenerate. `bendCosts[layer]` is a `double`, clamped to `[0.0, 9.9]`, default `0.0`,
+per-layer overridable via `layers[i].bend_cost` in the settings JSON. It is a *cost-model* term, so
+the `DestinationDistance` heuristic (which knows nothing about bends) stays admissible.
+
+**(b) Pure-SMD-net via-cost ×0.1 / `attachSmdAllowed` relaxation — PRESENT.**
+Both live in `AutorouteControl.rebuild_via_info` (`AutorouteControl.java:228-278`), which is also
+re-invoked by the fanout path after the via-rule fallback merge (`RoutingBoard.java:1036`):
+
+```java
+boolean pure_smd_net = isPureSmdNet(p_board, p_net_no);                 // :257
+if (!this.attach_smd_allowed && layer_count > 1 && pure_smd_net) {      // :258
+  this.attach_smd_allowed = true;                                      // :262
+}
+for (int j = 0; j < layer_count; j++) {                                 // :265
+  via_radius_arr[j] = max(via_radius_arr[j], trace_half_width[j]);
+  max_via_radius    = max(max_via_radius, via_radius_arr[j]);
+}
+double via_cost_factor = max(this.max_via_radius, 1);                   // :269-270
+if (pure_smd_net) { via_cost_factor *= 0.1; }                           // :271-275
+min_normal_via_cost = p_via_costs * via_cost_factor;                    // :276
+min_cheap_via_cost  = 0.8 * min_normal_via_cost;                        // :277
+```
+
+`isPureSmdNet` (`:280-293`): `board.get_connectable_items(net)` non-empty **and** every item is a
+`Pin` with `first_layer() == last_layer()`. Two asymmetries worth porting verbatim: the attach
+relaxation is guarded by `!attach_smd_allowed && layer_count > 1`, while the ×0.1 is not; and the
+×0.1 is applied *after* the `max(...,1)` floor, so it can drive the effective via cost below 1
+(e.g. `via_costs=50`, `max_via_radius=1` → 5.0 instead of 50.0). Because `min_normal_via_cost` is
+also fed to `DestinationDistance` (`MazeSearchAlgo.java:109-110`), the heuristic scales with it
+automatically.
+
+**(c) §11 constants table verified against `autoroute/`**
+
+| constant | spec value | release value | release location | verdict |
+|---|---|---|---|---|
+| `TRACE_WIDTH_TOLERANCE` | 2 | 2 | `AutorouteEngine.java:33` | ✅ |
+| `c_max_door_section_width` | `10 × (half_width + 2)` | `10 * offset`, `offset = p_offset + 2` | `ExpansionDoor.java:114, 144` | ✅ |
+| `ALREADY_RIPPED_COSTS` | 1 | 1 | `MazeSearchAlgo.java:43` | ✅ |
+| `FANOUT_COST_CONST` | 20000 | 20000.0 (bytecode `20000.0d`) | `MazeSearchAlgo.java:155` | ✅ |
+| `MAX_RIPUP_COSTS` | `Integer.MAX_VALUE / 100` | 21474836 (bytecode `ldc_w int 21474836`) | `MazeSearchAlgo.java:1454-1455` | ✅ |
+| default `ripup_costs` | 1000 | ctor 1000, but always overwritten by `start_ripup_costs × ripup_pass_no`, default start = **100** (fallback 1) | `AutorouteControl.java:197`; `BatchAutorouter.java:1280`; `DefaultSettings.java:60,147`; `RouterSettings.java:473-475` | ⚠️ **D5** |
+| ripup randomization | pass ≥ 4 && pass % 3 ≠ 0; `detour *= 0.5 + U(0,1)²`; seed = `ripup_costs` | code identical, but **unreachable** (`ripup_pass_no` is always 1) | `MazeSearchAlgo.java:1443-1448`; `AutorouteControl.java:198` | ⚠️ **D4** |
+| `min_normal_via_cost` | `via_costs × max(max_via_radius, 1)` | same, **× 0.1 extra for pure-SMD nets** | `AutorouteControl.java:269-276` | ⚠️ (add the SMD factor) |
+| `min_cheap_via_cost` | `0.8 × min_normal_via_cost` | 0.8 (bytecode `0.8d`) | `AutorouteControl.java:277` | ✅ |
+| `add_via_costs[i][j]` | all 0 (hook only) | all 0, never reassigned; sole reader `MazeSearchAlgo.java:1159` | `AutorouteControl.java:186-190` | ✅ |
+| drill page size | `max(5 × default_via_diameter, 10000)` | that is the max *width* input; page W/H = `ceil(span / ceil(span / max_width))` | `AutorouteEngine.java:87-89`; `DrillPageArray.java:38-60` | ⚠️ **D15** |
+| shove recursion depths | 20 / 5 / 5 | 20 / 5 / 5 (bytecode `bipush 20`, `iconst_5` ×2) | `AutorouteControl.java:183-185` | ✅ |
+| pull tight accuracy | 500 | 500 (bytecode `sipush 500`) | `AutorouteControl.java:182` | ✅ |
+| thin-room test | `min_width < 2·half_width`, or 2nd-nearest border point ≤ `half_width + 1` | identical (`next_room_is_thick = curr_dist > half_width + 1`) | `MazeSearchAlgo.java:381-396` | ✅ |
+| small 2-dim door threshold | length < `2·(half_width + 2)` | `distance_square < 4 * offset * offset` | `ExpansionDoor.java:134-137` | ✅ |
+| per-connection time limit | `min(100000·2^(pass−1), MAX_INT)` ms | identical formula, different file | `BatchAutorouter.java:1311-1313` | ⚠️ **D8** (location only) |
+| bend penalty trigger | sin² > 0.01 (≈5.7°) | `cross² > 0.01 · |prev|² · |next|²` (bytecode `0.01d`) | `MazeSearchAlgo.java:730` | ✅ |
+| bend cost value/range | (not stated) | `[0.0, 9.9]`, default 0.0, per-layer | `RouterSettings.java:16-17,587,596-598`; `DefaultSettings.java:151` | ➕ new |
+| pure-SMD via factor | ×0.1 | ×0.1 (bytecode `0.1d`) | `AutorouteControl.java:274` | ✅ |
+| fanout escape limits | min 500 µm / max 3000 µm | those are fallbacks; defaults are 2.5 mm / 4.5 mm | `MazeSearchAlgo.java:87-88,98-99`; `DefaultSettings.java:117-118` | ⚠️ **D16** |
+| `DETOUR_ADD` / `DETOUR_ITEM_COST` | (missing) | 100 / 0.1; `get_detour() = Integer.MAX_VALUE` when an endpoint is null | `Connection.java:15-16, 149-156` | ➕ new |
+| `DestinationDistance` result when nothing joined | `Integer.MAX_VALUE` | identical | `DestinationDistance.java` | ✅ |
+
+**(d) Drill-page constants**
+
+| item | release value | location |
+|---|---|---|
+| max page width fed to the grid | `max((int)(5 × rules.get_default_via_diameter()), 10000)` internal units | `AutorouteEngine.java:87-88` |
+| grid dimensions | `COLUMN_COUNT = ceil(board_width / max_page_width)`, `ROW_COUNT = ceil(board_height / max_page_width)` | `DrillPageArray.java:41-43` |
+| actual page size | `PAGE_WIDTH = ceil(board_width / COLUMN_COUNT)`, `PAGE_HEIGHT = ceil(board_height / ROW_COUNT)`; last column/row extended to `bounds.ur` | `DrillPageArray.java:44-60` |
+| `overlapping_pages(shape)` | `shape.bounding_box() ∩ bounds` → `min_i/min_j = floor(delta / PAGE_*)`, `max_i/max_j` kept as `double` and compared with `<`, then filtered by `intersection.dimension() > 1` | `DrillPageArray.java:82-102` |
+| drill cache key | a single mutable `net_no` field, initialised to `-1`; recomputed when `net_no != engine.get_net_no()` or after `invalidate()` (`drills = null`) | `DrillPage.java:32, 67-68, 167-169` |
+| obstacle source tree | **the autoroute (net-compensated) tree**, not the default board tree | `DrillPage.java:70` |
+| obstacle skip rules | skip `item.is_drillable(net_no)`; skip `Pin` with `drill_allowed()` when `attach_smd`; skip a cutout when `prev_obstacle_shape.contains(curr_obstacle_shape)` (dedups via shapes repeated per layer); keep only 2-dim cutouts | `DrillPage.java:80-98` |
+| drill construction | `PolylineArea(page_box, holes)` → `split_to_convex(stoppable_thread)`; location = contained drillable pin centre (component side `layer 0` first, then solder side `layer n−1`) when `attach_smd`, else `centre_of_gravity().round()`; drill spans **all layers 0..n−1**; kept only if `calculate_expansion_rooms` succeeds | `DrillPage.java:99-126`; `calc_pin_center_in_drill` at `:46-61` |
+| per-page maze elements | one `MazeSearchElement` per **layer** (`maze_search_info_arr[layer_count]`) — a page's "section" index is the layer | `DrillPage.java:23, 39-43, 142-149` |
+| `DrillPage.reset()` | resets every cached drill's elements *and* the page's own per-layer elements (drills themselves are **not** discarded) | `DrillPage.java:154-164` |
+| `DrillPage.invalidate()` | `drills = null` only | `DrillPage.java:167-169` |
+| `DrillPageArray.reset()` / `invalidate(shape)` | reset walks the whole 2-D array; invalidate marks every 2-dim-overlapping page | `DrillPageArray.java:70-77, 106-115` |
+| ids (queue tie-break) | `DrillPage.get_id_no() = 31·shape.get_id_no() + net_no`; `ExpansionDrill.get_id_no() = 31·(31·location.get_id_no() + first_layer) + last_layer` | `DrillPage.java:190-194`; `ExpansionDrill.java:128-131` |
+| `attach_smd` argument to `get_drills` | `ctrl.attach_smd_allowed` (which the pure-SMD relaxation may have forced true — see (b)) | `MazeSearchAlgo.java:985` |
+
+---
+
+### 5. Port-from verdict — the authoritative release file per algorithm
+
+| Algorithm / subsystem | Port from (in `/tmp/fr-java-release/src/main/java/app/freerouting/`) |
+|---|---|
+| Maze main loop, settle/occupy protocol, door & target expansion, thin/thick/small gating, shove entry, ripup decision, drill/via chain, `init` | `autoroute/MazeSearchAlgo.java` (1682 ln) — **single file**; §4, §5, §6, §7.3, §8.1, §8.3 all live here |
+| Priority-queue element + ordering (incl. the 4-key deterministic `compareTo`) | `autoroute/MazeListElement.java:81-113` |
+| Per-door-section persistent node state (`is_occupied`, backtrack, `room_ripped`, `ripup_cost`, `Adjustment`) | `autoroute/MazeSearchElement.java` |
+| Fanout escape-length queue gate | `autoroute/MazeSearchAlgo.java:80-108` (anonymous `TreeSet`; in Rust gate at the push sites) |
+| A* heuristic | `autoroute/DestinationDistance.java` (v19-verbatim; parameterize the via cost instead of the `calculate_cheap_distance` field swap at `:346-353`) |
+| Per-net derived control data (half widths, via radii/masks, layer activity, costs, bend costs, pure-SMD rules) | `autoroute/AutorouteControl.java` |
+| Engine lifecycle: room database, `complete_expansion_room`, `complete_neighbour_rooms`, room removal + repair frontier, `clear`/`reset_all_doors`, drill-page ownership, stop/time limit | `autoroute/AutorouteEngine.java` |
+| Room/door model | `autoroute/ExpansionRoom.java`, `CompleteExpansionRoom.java`, `FreeSpaceExpansionRoom.java`, `IncompleteFreeSpaceExpansionRoom.java`, `CompleteFreeSpaceExpansionRoom.java`, `ObstacleExpansionRoom.java`, `ExpansionDoor.java`, `TargetItemExpansionDoor.java`, `ExpandableObject.java`, `ItemAutorouteInfo.java` |
+| Room completion / neighbour tiling (port the any-angle one first) | `autoroute/SortedRoomNeighbours.java` (716 ln, any-angle reference), `autoroute/SortedOrthogonalRoomNeighbours.java` (551 ln, 90°), `autoroute/Sorted45DegreeRoomNeighbours.java` (855 ln, 45°) |
+| Drills & drill cache | `autoroute/ExpansionDrill.java`, `autoroute/DrillPage.java`, `autoroute/DrillPageArray.java` |
+| Trace shoving during search | `autoroute/MazeShoveTraceAlgo.java` (incl. `DoorSection`) |
+| Ripup cost inputs (detour / trace length / item count) | `autoroute/Connection.java` |
+| Backtracking → geometry → board mutation (out of this spec's scope, next spec) | `autoroute/LocateFoundConnectionAlgo.java` + `LocateFoundConnectionAlgoAnyAngle.java` + `LocateFoundConnectionAlgo45Degree.java`, `autoroute/InsertFoundConnectionAlgo.java` |
+| Outer batch driver (pass loop, ripup escalation, time limits, airline) — **not** the maze | `autoroute/BatchAutorouter.java` (`BatchAutorouterV19.java` is the GUI-only alternate driver over the same engine; `BatchAutorouterThread.java` is dead) |
+| Fanout pre-pass driver | `autoroute/BatchFanout.java` + `board/RoutingBoard.java:977-1071` |
+| Settings that feed the cost model | `settings/RouterSettings.java` (bend cost, via costs, start ripup costs, layer activity), `settings/ScoringSettings.java`, `settings/FanoutSettings.java`, `settings/sources/DefaultSettings.java` (all defaults) |
+
+**Net effect on §13's Rust plan:** the "restructure for performance" list stands unchanged, but two
+of its premises must be corrected. (i) The `maintain_database` cross-net room sharing that §13's
+parallelism bullet builds on is *never enabled* in 2.3.0 (D3) — treat cross-connection room reuse as
+a new capability to design, not a behaviour to reproduce. (ii) `reset_all_doors`'s cost (the
+generation-counter optimization) is likewise not on the shipped hot path; the shipped hot path pays
+`clear()` + full rebuild per connection instead, which is a much larger prize.
