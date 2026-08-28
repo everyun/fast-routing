@@ -1,0 +1,5 @@
+Imported E:\drv_e\KiCad\_Projects\display-8-digit-595__freeroute-problem\display-8-digit-hc595.dsn in 0.44s: 2 layers, 500 items (103 pins, 218 traces, 24 vias)
+Router: 1 passes, 40 routed, 0 failed, 1 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 0 clearance violations, 20 of 64 connections incomplete, score 687.48/1000
+Exported Specctra SES session file: bench/results/20260828-214345/ses/Issue229-display-8-digit-hc595.rust.ses

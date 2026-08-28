@@ -1,0 +1,5 @@
+Imported E:\Home\ProjetsRecherche\Embedded\CAN\caniot-tiny-arm\caniot-tiny-arm\freerouting.dsn in 118.63s: 2 layers, 1574 items (288 pins, 352 traces, 0 vias)
+Router: 1 passes, 206 routed, 114 failed, 212 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 4 clearance violations, 95 of 192 connections incomplete, score 501.04/1000
+Exported Specctra SES session file: bench/results/20260828-214345/ses/Issue269-caniot-tiny-arm.rust.ses

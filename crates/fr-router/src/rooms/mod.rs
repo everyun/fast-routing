@@ -27,14 +27,17 @@
 //!    [`crate::maze::nodes::NodeArena`] through a block base, so the
 //!    between-connection reset is a generation bump.
 
+use std::cell::Cell;
+
 use fr_board::item::ItemId;
 use fr_datastructures::arena_shape_tree::ArenaLeafId;
-use fr_geometry::planar::{FloatLine, Simplex};
+use fr_geometry::planar::{FloatLine, IntBox, IntOctagon, Limits, Simplex};
 
 use crate::geom;
 use crate::maze::nodes::{NodeArena, NodeIndex};
 
 pub mod complete;
+pub mod complete45;
 pub mod neighbours;
 pub mod neighbours45;
 
@@ -130,6 +133,34 @@ pub struct Room {
     /// False once the room has been removed; ids are never recycled, so a
     /// stale reference reads as dead rather than as a different room.
     pub alive: bool,
+    /// The **octagon flavor** of [`shape`](Room::shape), memoized.
+    ///
+    /// Upstream keeps the two flavors in one field: `ExpansionRoom.get_shape()`
+    /// answers a `TileShape`, which *is* an `IntOctagon` on a 45° board because
+    /// `ShapeSearchTree45Degree.complete_shape` only ever builds octagons, and
+    /// every 45° call site immediately narrows it back with
+    /// `.bounding_octagon()` (`Sorted45DegreeRoomNeighbours.java:33-35,88,114`).
+    ///
+    /// A single `Simplex` field plus this cache is the same thing without a
+    /// second shape enum threaded through the maze: the 45° constructors store
+    /// the octagon they were built from, so the narrowing is free and *exact*,
+    /// and any other room narrows on first use through
+    /// [`Simplex::bounding_octagon`]. A `Cell` because it is a pure memo — every
+    /// write to `shape` goes through [`Room::set_shape`], which clears it.
+    shape_oct: Cell<Option<IntOctagon>>,
+}
+
+/// The coordinate envelope, standing in for the bounding octagon of an
+/// unbounded room shape (upstream never asks one for its octagon; a half-plane
+/// incomplete room is octagon-clipped to the board first).
+fn unbounded_octagon() -> IntOctagon {
+    IntBox::new(
+        -Limits::CRIT_INT,
+        -Limits::CRIT_INT,
+        Limits::CRIT_INT,
+        Limits::CRIT_INT,
+    )
+    .to_int_octagon()
 }
 
 impl Room {
@@ -137,6 +168,59 @@ impl Room {
     #[inline]
     pub fn is_complete(&self) -> bool {
         matches!(self.kind, RoomKind::CompleteFree | RoomKind::Obstacle)
+    }
+
+    /// The room shape as an octagon — upstream's
+    /// `p_room.get_shape().bounding_octagon()`.
+    ///
+    /// Exact (not an over-approximation) for every room the 45° chain builds,
+    /// because those rooms *are* octagons and the round trip through
+    /// [`IntOctagon::to_simplex`] and back is lossless.
+    pub fn octagon(&self) -> IntOctagon {
+        if let Some(cached) = self.shape_oct.get() {
+            return cached;
+        }
+        let oct = if self.shape.is_bounded() {
+            self.shape.bounding_octagon().unwrap_or(IntOctagon::EMPTY)
+        } else {
+            unbounded_octagon()
+        };
+        self.shape_oct.set(Some(oct));
+        oct
+    }
+
+    /// The contained shape as an octagon — `get_contained_shape().bounding_octagon()`
+    /// (`ShapeSearchTree45Degree.java:96`).
+    ///
+    /// Not memoized: it is read once per completion, where the room shape is
+    /// read once per neighbour.
+    pub fn contained_octagon(&self) -> IntOctagon {
+        if self.contained_shape.is_bounded() {
+            self.contained_shape
+                .bounding_octagon()
+                .unwrap_or(IntOctagon::EMPTY)
+        } else {
+            unbounded_octagon()
+        }
+    }
+
+    /// Replaces the room shape, invalidating the octagon memo.
+    ///
+    /// Every write to [`shape`](Room::shape) must come through here or
+    /// [`set_shape_from_octagon`](Room::set_shape_from_octagon); that is what
+    /// makes the memo safe.
+    #[inline]
+    pub fn set_shape(&mut self, shape: Simplex) {
+        self.shape = shape;
+        self.shape_oct.set(None);
+    }
+
+    /// Replaces the room shape with an octagon, keeping the exact octagon as
+    /// the memo instead of re-deriving it from the simplex.
+    #[inline]
+    pub fn set_shape_from_octagon(&mut self, oct: IntOctagon) {
+        self.shape = oct.to_simplex();
+        self.shape_oct.set(Some(oct));
     }
 
     /// The item this obstacle room wraps.
@@ -375,8 +459,38 @@ impl RoomArena {
             doors_calculated: false,
             leaf: None,
             alive: true,
+            shape_oct: Cell::new(None),
         });
         self.incomplete.push(id);
+        id
+    }
+
+    /// [`add_incomplete_room`](Self::add_incomplete_room) with both shapes in
+    /// their octagon flavor — `Sorted45DegreeRoomNeighbours.insert_incomplete_room`
+    /// (`:374-389`), whose rooms are octagons by construction.
+    ///
+    /// Keeping the octagons means the memo is exact rather than re-derived, and
+    /// the 45° neighbour scan never pays a simplex round trip.
+    pub fn add_incomplete_room_oct(
+        &mut self,
+        shape: IntOctagon,
+        layer: i32,
+        contained_shape: IntOctagon,
+    ) -> RoomId {
+        let id = self.add_incomplete_room(
+            Some(shape.to_simplex()),
+            layer,
+            contained_shape.to_simplex(),
+        );
+        self.rooms[id.get()].shape_oct.set(Some(shape));
+        id
+    }
+
+    /// [`add_complete_free_room`](Self::add_complete_free_room) with the shape in
+    /// its octagon flavor.
+    pub fn add_complete_free_room_oct(&mut self, shape: IntOctagon, layer: i32) -> RoomId {
+        let id = self.add_complete_free_room(shape.to_simplex(), layer);
+        self.rooms[id.get()].shape_oct.set(Some(shape));
         id
     }
 
@@ -397,6 +511,7 @@ impl RoomArena {
             doors_calculated: false,
             leaf: None,
             alive: true,
+            shape_oct: Cell::new(None),
         });
         id
     }
@@ -426,6 +541,7 @@ impl RoomArena {
             doors_calculated: false,
             leaf: None,
             alive: true,
+            shape_oct: Cell::new(None),
         });
         id
     }

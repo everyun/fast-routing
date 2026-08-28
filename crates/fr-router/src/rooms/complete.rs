@@ -26,6 +26,14 @@ pub struct CompletedShape {
     pub shape: Simplex,
     /// The shape that had to stay inside it.
     pub contained: Simplex,
+    /// The exact octagon flavor of [`shape`](CompletedShape::shape), when the
+    /// candidate came out of the 45° chain
+    /// ([`complete_shape_45`](AutorouteEngine::complete_shape_45)).
+    ///
+    /// Carrying it means the room the candidate becomes gets its octagon memo
+    /// seeded with the value the completion actually computed, instead of
+    /// re-deriving it from the simplex it was just turned into.
+    pub oct: Option<fr_geometry::planar::IntOctagon>,
 }
 
 impl AutorouteEngine<'_> {
@@ -42,6 +50,13 @@ impl AutorouteEngine<'_> {
         ignore_room: Option<RoomId>,
         ignore_shape: Option<&Simplex>,
     ) -> Vec<CompletedShape> {
+        // `AutorouteEngine.java:70` picks the tree, and the tree's subclass is
+        // what decides which `complete_shape` runs. The dispatch lives here so
+        // the whole lifecycle below — `complete_expansion_room`, the re-completion
+        // of the second and later candidates, `try_remove_edge` — is shared.
+        if self.is_fortyfive_completion() {
+            return self.complete_shape_45(shape, contained, layer, ignore_room, ignore_shape);
+        }
         if contained.is_empty() {
             return Vec::new();
         }
@@ -55,6 +70,7 @@ impl AutorouteEngine<'_> {
             result.push(CompletedShape {
                 shape: start_shape,
                 contained: contained.clone(),
+                oct: None,
             });
         }
         if result.is_empty() {
@@ -195,6 +211,7 @@ impl AutorouteEngine<'_> {
                 result.push(CompletedShape {
                     shape: piece,
                     contained: shape_to_be_contained.clone(),
+                    oct: None,
                 });
             }
             self.leave_restrain();
@@ -234,6 +251,7 @@ impl AutorouteEngine<'_> {
             result.push(CompletedShape {
                 shape: piece,
                 contained: new_contained,
+                oct: None,
             });
         }
         let opposite_half_plane = geom::half_plane(&split_line.opposite());
@@ -243,6 +261,7 @@ impl AutorouteEngine<'_> {
             let rest = CompletedShape {
                 shape: rest_piece,
                 contained: rest_contained,
+                oct: None,
             };
             result.extend(self.restrain_shape(&rest, obstacle_shape));
         }
@@ -254,7 +273,7 @@ impl AutorouteEngine<'_> {
     /// whose box is wider than half the board in **both** axes is split into
     /// sections of `0.5 × max(board_h, board_w)` — *"otherwise the maze search
     /// algorithm gets problems with vias"*.
-    fn divide_large_rooms(&self, rooms: Vec<CompletedShape>) -> Vec<CompletedShape> {
+    pub(super) fn divide_large_rooms(&self, rooms: Vec<CompletedShape>) -> Vec<CompletedShape> {
         if rooms.len() != 1 {
             return rooms;
         }
@@ -289,6 +308,7 @@ impl AutorouteEngine<'_> {
                 CompletedShape {
                     shape: section,
                     contained,
+                    oct: None,
                 }
             })
             .collect()
@@ -382,9 +402,12 @@ impl AutorouteEngine<'_> {
     /// then — if the shape is still 2-dimensional — append to the complete list
     /// and insert into the room tree.
     fn add_complete_room(&mut self, candidate: &CompletedShape, layer: i32) -> Option<RoomId> {
-        let room_id = self
-            .rooms
-            .add_complete_free_room(candidate.shape.clone(), layer);
+        let room_id = match candidate.oct {
+            Some(oct) => self.rooms.add_complete_free_room_oct(oct, layer),
+            None => self
+                .rooms
+                .add_complete_free_room(candidate.shape.clone(), layer),
+        };
         self.rooms.room_mut(room_id).contained_shape = candidate.contained.clone();
         self.calculate_doors(room_id);
         if !self.rooms.room(room_id).alive || self.rooms.room(room_id).shape.dimension() != 2 {

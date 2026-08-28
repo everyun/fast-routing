@@ -80,8 +80,12 @@ MODES (default: route)
     --drc-report <FILE>         Emit the `java -drc` shaped violation JSON (gate G1.2a)
 
 ROUTING OPTIONS
-    -mp, --max-passes <N>       Ripup-and-reroute passes (Default: 1). Pass n rips at 100*n
+    -mp, --max-passes <N>       Ripup-and-reroute passes (Default: 1). Pass n rips at 100*n.
+                                Must be >= 0; a negative value is an error (upstream runs it
+                                uncapped instead — see docs/PARITY-DIVERGENCES.md)
     --fanout                    Run the SMD pin-escape pre-pass first (off by default in M2a)
+    --deterministic             Never read the wall clock for budget decisions: the
+                                per-connection allowance is spent in effort-based virtual time
 
 --drc-report OPTIONS
     --unit <mm|mil|inch|um>     Report unit (Default: mm, which is what the oracles use)
@@ -122,12 +126,40 @@ struct Args {
     max_passes: Option<usize>,
     threads: Option<usize>,
     fanout: bool,
+    deterministic: bool,
     settle_trace: Option<String>,
 }
 
 fn fail(message: &str) -> ! {
     eprintln!("fr-cli: {message}");
     process::exit(EXIT_ERROR)
+}
+
+/// `-mp <N>`, with the negative value rejected instead of silently ignored.
+///
+/// **A declared divergence** (`docs/PARITY-DIVERGENCES.md`). Upstream accepts a
+/// negative `max_passes`, and it is a latent bug: the entry point's guard
+/// `getRunRouter() && (maxPasses == null || maxPasses >= 0)` sends a negative
+/// value down the *fanout-only* branch, which sets `maxPasses = 0`; but
+/// `BatchAutorouter.runBatchLoop:894` recomputes the same guard and `:931`
+/// requires `maxPasses > 0` for the cap to apply — so the router re-enables
+/// itself and runs with **no pass cap at all** until a stagnation rule fires
+/// (conformance appendix §1.2, which names it "the cautionary example").
+///
+/// Refusing the input is the smallest fix that cannot surprise anyone: `-mp -1`
+/// has no sensible meaning, nobody can be relying on 'unbounded' from it, and
+/// the alternative — silently clamping — hides a typo in a long run. A
+/// non-numeric value is rejected for the same reason; the pre-existing
+/// `.parse().ok()` turned `-mp tow` into a silent single-pass run.
+fn parse_max_passes(value: &str) -> usize {
+    match value.parse::<i64>() {
+        Ok(passes) if passes < 0 => fail(&format!(
+            "-mp {passes}: the pass count must be >= 0 (upstream runs a negative one uncapped; \
+             see docs/PARITY-DIVERGENCES.md)"
+        )),
+        Ok(passes) => usize::try_from(passes).unwrap_or(usize::MAX),
+        Err(_) => fail(&format!("-mp {value}: expected a whole number of passes")),
+    }
 }
 
 fn main() {
@@ -171,9 +203,10 @@ fn main() {
             ),
             "--router-overrides" => args.router_overrides = true,
             "--emit-boxes" => args.emit_boxes = true,
-            "-mp" | "--max-passes" => args.max_passes = next!("-mp").parse().ok(),
+            "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
             "-us" | "--threads" => args.threads = next!("-us").parse().ok(),
             "--fanout" => args.fanout = true,
+            "--deterministic" => args.deterministic = true,
             "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
             "-v" | "--version" => {
                 println!("fast-routing v{}", env!("CARGO_PKG_VERSION"));
@@ -222,7 +255,9 @@ fn main() {
         let passes = args.max_passes.unwrap_or(1).max(1);
         let passes = i32::try_from(passes).unwrap_or(i32::MAX);
         job.with_stage(RouterStage::Maze(
-            MazeOptions::with_passes(passes).with_fanout(args.fanout),
+            MazeOptions::with_passes(passes)
+                .with_fanout(args.fanout)
+                .with_deterministic(args.deterministic),
         ))
     };
 
@@ -232,6 +267,15 @@ fn main() {
         Err(error) => fail(&describe(&error)),
     };
     fr_metrics::settle_trace::flush();
+    // `FR_METRICS_REPORT=1` dumps the `FRMETRIC` counter/stage/pass report to stderr. It is
+    // env-gated rather than a flag because it is measurement scaffolding for `bench/tools/`,
+    // not part of the drop-in CLI contract; the report is all-zero without the `metrics`
+    // feature, so the gate costs one `var_os` per run.
+    if std::env::var_os("FR_METRICS_REPORT").is_some() {
+        for line in fr_metrics::report().to_frmetric_lines() {
+            eprintln!("{line}");
+        }
+    }
     print_summary(&report, started);
     for warning in &report.warnings {
         eprintln!("warning: {warning}");
@@ -297,6 +341,25 @@ fn print_summary(report: &JobReport, started: Instant) {
         println!(
             "Router: {} passes, {} routed, {} failed, {} ripped, {} pins fanned out",
             router.passes, router.routed, router.not_routed, router.ripped, router.fanouted,
+        );
+        println!(
+            "Router stopped on {} ({} board restore{}{}{})",
+            router.stop_reason,
+            router.restores,
+            if router.restores == 1 { "" } else { "s" },
+            if router.best_board_restored {
+                ", finished on the best board seen"
+            } else {
+                ""
+            },
+            if router.connections_hitting_budget > 0 {
+                format!(
+                    ", {} connections hit their budget",
+                    router.connections_hitting_budget
+                )
+            } else {
+                String::new()
+            },
         );
     }
     println!(

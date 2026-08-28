@@ -49,7 +49,7 @@
 //! | 2.2 | `overlapping_tree_entries_with_clearance` for uncompensated trees | not here — it belongs to the checker, which is not this crate |
 
 use fr_datastructures::arena_shape_tree::{ArenaLeafId, ArenaShapeTree, OctBounds, QueryStack};
-use fr_geometry::planar::{IntOctagon, IntPoint, Point};
+use fr_geometry::planar::{IntBox, IntOctagon, IntPoint, Point};
 
 use crate::clearance::ClearanceSource;
 use crate::item::{AreaShape, Item, ItemId, ItemKind, PlacedArea};
@@ -71,6 +71,128 @@ pub const MAX_TREE_SHAPE_WIDTH: f64 = 50_000.0;
 /// edge a solid obstacle instead of a zero-area line, so leaving it out lets
 /// the router come 100 board units closer to the edge than upstream allows.
 pub const BOARD_OUTLINE_HALF_WIDTH: i32 = 100;
+
+/// The environment switch that turns the 45° tiling chain on.
+///
+/// See [`Tiling45Mode`] for the values. The flip changes the room tiling on
+/// **every** default board, so it ships off and the gate decides.
+pub const TILING_45_ENV: &str = "FR_ROUTER_TILING_45";
+
+/// How much of the 45° chain to run — the A/B switch, three-valued because the
+/// two halves of the chain measure very differently.
+///
+/// Upstream selects both halves with one tree subclass, but they are
+/// independent:
+///
+/// * `Sorted45DegreeRoomNeighbours` — the octagon **door calculation**, which
+///   relaxes all eight untouched offsets in one step instead of dropping one
+///   simplex border line per restart, and builds octagon gap rooms;
+/// * `ShapeSearchTree45Degree.complete_shape` — the octagon **room completion**.
+///
+/// Measured at `-mp 1` on the easy-10 gate set by the **M2b.2 gate**, i.e. on
+/// the merged tree that also carries the link-door `Adjustment` fix. Unrouted
+/// connections per mode (**zero** added clearance violations in every cell;
+/// Java 2.3.0 at `-mp 1` in the last column for scale):
+///
+/// | board | `Off` | `Doors` | `Full` | java |
+/// |---|---|---|---|---|
+/// | Issue026 | 5/33 | **2/33** | 4/33 | 7/33 |
+/// | Issue034 | 26/147 | **16/147** | 18/147 | 40/147 |
+/// | Issue102 | 43/106 | 45/106 | **36/106** | 52/106 |
+/// | Issue155 | 5/53 | **4/53** | 5/53 | 18/53 |
+/// | Issue159 | **2/23** | 3/23 | 3/23 | 1/23 |
+/// | Issue110 ×2 | **0/4** | 1/4 | 1/4 | 0/4 |
+/// | Issue143 ×2, Issue187 | 0 | 0 | 0 | 0 |
+///
+/// and expansions, the cost axis this chain was meant to move:
+///
+/// | board | `Off` | `Doors` | `Full` | lab jar |
+/// |---|---|---|---|---|
+/// | Issue034 | 220,048 | **118,695** | 268,333 | 41,680 |
+/// | Issue159 | **2,417** | 5,068 | 4,842 | 1,847 |
+/// | Issue155 | 56,674 | 60,672 | **33,025** | 12,962 |
+/// | Issue026 | 13,547 | **6,615** | 8,299 | 7,691 |
+/// | Issue102 | **136,251** | 166,971 | 156,380 | 86,538 |
+///
+/// So the two halves genuinely disagree, and *which* one pays depends on the
+/// board — no mode dominates on either axis. `Doors` is the strongest on
+/// expansions and on the two big boards' unrouted count; `Full` wins Issue102
+/// and Issue155's expansions outright, contradicting the pre-link-door-fix
+/// reading that the octagon completion always tiles more finely. What decides
+/// the shipped default is the gate score, not the totals: the two Issue110
+/// boards and Issue159 **complete under `Off` and regress under both 45 modes**,
+/// so `Off` scores 9/10 against 7/10 for either. Hence [`Off`](Self::Off)
+/// stays the default and the switch stays three-valued for the boards where a
+/// 45 mode is measurably better.
+///
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Tiling45Mode {
+    /// Everything any-angle. The shipped default.
+    #[default]
+    Off,
+    /// `Sorted45DegreeRoomNeighbours` only; room completion stays any-angle.
+    Doors,
+    /// The whole chain: the octagon tree flavor, `complete_shape` and the doors.
+    Full,
+}
+
+impl Tiling45Mode {
+    /// True when any part of the chain runs.
+    #[inline]
+    pub fn is_on(self) -> bool {
+        self != Tiling45Mode::Off
+    }
+}
+
+/// What [`TILING_45_ENV`] asks for. Read once per process.
+///
+/// `1` / `true` / `on` / `yes` / `full` select [`Tiling45Mode::Full`], `doors`
+/// selects [`Tiling45Mode::Doors`], anything else — including unset — is
+/// [`Tiling45Mode::Off`].
+pub fn tiling_45_mode() -> Tiling45Mode {
+    use std::sync::OnceLock;
+    static MODE: OnceLock<Tiling45Mode> = OnceLock::new();
+    *MODE.get_or_init(|| match std::env::var(TILING_45_ENV).ok().as_deref() {
+        Some("1") | Some("true") | Some("on") | Some("yes") | Some("full") => Tiling45Mode::Full,
+        Some("doors") => Tiling45Mode::Doors,
+        _ => Tiling45Mode::Off,
+    })
+}
+
+/// The **angle family** of a search tree — upstream's tree *subclass*.
+///
+/// `SearchTreeManager` grows this axis alongside the clearance-class axis:
+/// `SearchTreeManager.java:166` picks the concrete class from
+/// `rules.get_trace_angle_restriction()`, so a board can hold a
+/// `ShapeSearchTree` and a `ShapeSearchTree45Degree` for the *same* compensated
+/// clearance class and they store different geometry for the same items.
+///
+/// This is **not** [`AngleRestriction`], even though the two agree on real
+/// boards. `AngleRestriction` is a *board rule* and decides the flavor of drill
+/// and area shapes in **every** tree (`search-tree-obstacles.md` §3.4 — "the
+/// conversion mode follows `board.rules`, not the tree subclass"). The family
+/// is a property of the *tree* and decides whether the remaining shapes —
+/// traces and the outline ring — are coarsened to octagons as well.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum TreeAngleFamily {
+    /// `ShapeSearchTree` — trace shapes stay exact simplices (§3.1).
+    #[default]
+    AnyAngle,
+    /// `ShapeSearchTree45Degree` — every stored shape is an octagon (§3.3).
+    ///
+    /// Upstream leaves the *stored* trace shape a simplex and octagonizes it at
+    /// every read (`ShapeSearchTree45Degree.java:147-149`,
+    /// `Sorted45DegreeRoomNeighbours.java:113-114`, both
+    /// `get_tree_shape(...).bounding_octagon()`); doing it once at insert is the
+    /// same geometry for a 45°-restricted trace, where the octagon-clipped
+    /// offset simplex *is* its own bounding octagon. The only divergence is a
+    /// trace that is not 45°-restricted on a 45° board: its stored shape becomes
+    /// the (larger) bounding octagon, so `overlapping_tree_entries` against this
+    /// tree can report a hit upstream would have rejected. That is conservative
+    /// — never a missed obstacle — and it is exactly what upstream's own room
+    /// completion sees anyway.
+    FortyFive,
+}
 
 /// A query hit: which item, and which of its tile shapes.
 ///
@@ -139,6 +261,16 @@ pub struct ShapeContext<'a> {
 struct SlotEntry {
     id: ItemId,
     shapes: Vec<ItemTileShape>,
+    /// [`hull_box`] of each entry in `shapes`, parallel to it.
+    ///
+    /// A query's exact shape test is the single most expensive thing the router
+    /// does, and most of the answers it buys are foregone conclusions: a stored
+    /// shape wholly inside the query box meets it, no half-plane arithmetic
+    /// needed. The test is one `IntBox` containment given the shape's hull — so
+    /// the hull is computed once, at insert, rather than per query. It is kept
+    /// here rather than on [`ItemTileShape`] so that the derived value cannot be
+    /// desynchronized through that type's public fields.
+    hulls: Vec<Option<IntBox>>,
     leaves: Vec<ArenaLeafId>,
 }
 
@@ -146,6 +278,7 @@ impl SlotEntry {
     fn clear(&mut self) {
         self.id = ItemId::UNASSIGNED;
         self.shapes.clear();
+        self.hulls.clear();
         self.leaves.clear();
     }
 }
@@ -157,15 +290,23 @@ impl SlotEntry {
 #[derive(Debug, Clone)]
 pub struct SearchTree {
     compensated_class: i32,
+    angle_family: TreeAngleFamily,
     tree: ArenaShapeTree<LeafPayload>,
     slots: Vec<SlotEntry>,
 }
 
 impl SearchTree {
-    /// An empty tree compensated for `compensated_class`.
+    /// An empty any-angle tree compensated for `compensated_class`.
     pub fn new(compensated_class: i32) -> Self {
+        SearchTree::with_family(compensated_class, TreeAngleFamily::AnyAngle)
+    }
+
+    /// An empty tree compensated for `compensated_class` in `angle_family` —
+    /// the two-axis constructor `SearchTreeManager.java:160-172` dispatches on.
+    pub fn with_family(compensated_class: i32, angle_family: TreeAngleFamily) -> Self {
         SearchTree {
             compensated_class,
+            angle_family,
             tree: ArenaShapeTree::new(),
             slots: Vec::new(),
         }
@@ -175,6 +316,12 @@ impl SearchTree {
     #[inline]
     pub fn compensated_class(&self) -> i32 {
         self.compensated_class
+    }
+
+    /// Which tree subclass this tree stands for.
+    #[inline]
+    pub fn angle_family(&self) -> TreeAngleFamily {
+        self.angle_family
     }
 
     /// Number of leaves currently indexed.
@@ -229,7 +376,21 @@ impl SearchTree {
         let mut entry = std::mem::take(&mut self.slots[slot_index]);
         entry.clear();
         entry.id = item.id;
-        calculate_tree_shapes(item, self.compensated_class, ctx, &mut entry.shapes);
+        calculate_tree_shapes_for_family(
+            item,
+            self.compensated_class,
+            self.angle_family,
+            ctx,
+            &mut entry.shapes,
+        );
+
+        entry.hulls.clear();
+        entry
+            .hulls
+            .extend(entry.shapes.iter().map(|tile| match tile.shape.as_ref() {
+                Some(shape) => hull_box(shape),
+                None => None,
+            }));
 
         for (index, tile) in entry.shapes.iter().enumerate() {
             let Some(shape) = tile.shape.as_ref() else {
@@ -296,16 +457,73 @@ impl SearchTree {
         stack: &mut QueryStack,
         out: &mut Vec<TreeEntry>,
     ) {
+        self.collect_tree_entries::<true>(store, query, layer, ignore_nets, stack, out);
+    }
+
+    /// [`overlapping_tree_entries`](SearchTree::overlapping_tree_entries) with
+    /// the **exact shape test dropped**: the leaves whose bounding shape meets
+    /// `query`'s, filtered by layer and net only, in the same order.
+    ///
+    /// # When this is the faithful port and the exact one is not
+    ///
+    /// `ShapeSearchTree.complete_shape` (`ShapeSearchTree.java:578-595`) does
+    /// not call `overlapping_tree_entries` at all. It walks the tree itself:
+    ///
+    /// ```text
+    /// if (curr_node.bounding_shape.intersects(bounding_shape)) { … }
+    /// ```
+    ///
+    /// — a *regular* bounding-shape test and nothing else, then
+    /// `Collections.sort(overlapping_leaves)` (`Leaf.compareTo`, which is
+    /// [`sort_entries`]'s key). The exact work happens in the caller, where the
+    /// `intersection.dimension() == 2` gate (`:617-620`) decides whether the
+    /// obstacle carves the room; a leaf that only meets the bound is a no-op
+    /// there, so the exact test in the query is pure duplicated cost. It was
+    /// measured at 34% of an Issue034 run.
+    ///
+    /// Every other upstream query — `overlapping_objects`,
+    /// `overlapping_tree_entries`, `overlapping_items_with_clearance` — *does*
+    /// filter exactly, and its port must keep
+    /// [`overlapping_tree_entries`](SearchTree::overlapping_tree_entries).
+    /// The rule: use this one only where the caller re-does the exact geometry
+    /// itself and would discard the extra entries anyway.
+    ///
+    /// The result is a **superset** of the exact query's: a bounding-shape
+    /// overlap is implied by any shape overlap, never the other way round.
+    pub fn overlapping_tree_entries_bounds_only(
+        &self,
+        store: &ItemStore,
+        query: &TileShape,
+        layer: Option<i32>,
+        ignore_nets: &[i32],
+        stack: &mut QueryStack,
+        out: &mut Vec<TreeEntry>,
+    ) {
+        self.collect_tree_entries::<false>(store, query, layer, ignore_nets, stack, out);
+    }
+
+    /// The body both entry points share; `EXACT` is a const parameter so the
+    /// shape test is compiled away rather than branched on per leaf.
+    fn collect_tree_entries<const EXACT: bool>(
+        &self,
+        store: &ItemStore,
+        query: &TileShape,
+        layer: Option<i32>,
+        ignore_nets: &[i32],
+        stack: &mut QueryStack,
+        out: &mut Vec<TreeEntry>,
+    ) {
         out.clear();
         let bounds = query.bounds();
-        self.visit(store, &bounds, stack, |item, payload, tile| {
+        let contains = QueryContains::of(query);
+        self.visit(store, &bounds, stack, |item, payload, tile, hull| {
             if !layer_matches(layer, tile.layer) || is_ignored(item, ignore_nets) {
                 return;
             }
             let Some(shape) = tile.shape.as_ref() else {
                 return;
             };
-            if !shape.intersects(query) {
+            if EXACT && !contains.swallows(hull) && !shape.intersects(query) {
                 return;
             }
             out.push(TreeEntry {
@@ -331,19 +549,24 @@ impl SearchTree {
     ) {
         out.clear();
         let bounds = query.bounds();
-        self.visit(store, &bounds, stack, |item, payload, tile| {
+        let contains = QueryContains::of(query);
+        self.visit(store, &bounds, stack, |item, payload, tile, hull| {
             if !layer_matches(layer, tile.layer) || is_ignored(item, ignore_nets) {
                 return;
             }
             let Some(shape) = tile.shape.as_ref() else {
                 return;
             };
-            if shape.intersects(query) {
+            if contains.swallows(hull) || shape.intersects(query) {
                 out.push(payload.item);
             }
         });
         // Descending id, then deduplicate — upstream's `TreeSet<SearchTreeObject>`.
-        out.sort_by(|a, b| b.cmp(a));
+        // Unstable: the elements are plain ids, so equal ones are
+        // indistinguishable and `dedup` collapses them anyway. It also keeps the
+        // query allocation-free — the stable sort borrows a scratch buffer from
+        // the allocator once the run is longer than its in-place threshold.
+        out.sort_unstable_by(|a, b| b.cmp(a));
         out.dedup();
     }
 
@@ -359,7 +582,7 @@ impl SearchTree {
         store: &ItemStore,
         bounds: &OctBounds,
         stack: &mut QueryStack,
-        mut visit: impl FnMut(&Item, LeafPayload, &ItemTileShape),
+        mut visit: impl FnMut(&Item, LeafPayload, &ItemTileShape, Option<&IntBox>),
     ) {
         self.tree.visit_overlaps(bounds, stack, |_leaf, payload| {
             let Some(slot) = store.slot_of(payload.item) else {
@@ -374,10 +597,14 @@ impl SearchTree {
             let Some(tile) = entry.shapes.get(payload.shape_index as usize) else {
                 return;
             };
+            let hull = entry
+                .hulls
+                .get(payload.shape_index as usize)
+                .and_then(Option::as_ref);
             let Some(item) = store.get(payload.item) else {
                 return;
             };
-            visit(item, payload, tile);
+            visit(item, payload, tile, hull);
         });
     }
 
@@ -389,10 +616,29 @@ impl SearchTree {
         for (slot_index, entry) in self.slots.iter().enumerate() {
             if entry.id == ItemId::UNASSIGNED {
                 assert!(
-                    entry.leaves.is_empty() && entry.shapes.is_empty(),
+                    entry.leaves.is_empty() && entry.shapes.is_empty() && entry.hulls.is_empty(),
                     "empty slot {slot_index} still carries tree state"
                 );
                 continue;
+            }
+            // The hull cache is derived state, so the only thing that can go
+            // wrong with it is going stale — check it against the shape it was
+            // computed from, not just its length.
+            assert_eq!(
+                entry.hulls.len(),
+                entry.shapes.len(),
+                "item {} has {} shapes but {} cached hulls",
+                entry.id,
+                entry.shapes.len(),
+                entry.hulls.len()
+            );
+            for (index, tile) in entry.shapes.iter().enumerate() {
+                let expected = tile.shape.as_ref().and_then(hull_box);
+                assert_eq!(
+                    entry.hulls[index], expected,
+                    "item {} shape {index} has a stale cached hull",
+                    entry.id
+                );
             }
             let slot = store
                 .slot_of(entry.id)
@@ -470,14 +716,30 @@ impl SearchTreeManager {
         self.clearance_compensation_used
     }
 
-    /// The compensated tree for `clearance_class`, if one exists.
+    /// The any-angle compensated tree for `clearance_class`, if one exists.
     pub fn compensated_tree(&self, clearance_class: i32) -> Option<&SearchTree> {
-        if self.default_tree.compensated_class == clearance_class {
+        self.compensated_tree_with_family(clearance_class, TreeAngleFamily::AnyAngle)
+    }
+
+    /// The compensated tree at `(clearance_class, family)`, if one exists.
+    ///
+    /// The registry is two-dimensional: upstream keys its autoroute trees by
+    /// clearance class and builds each one through the subclass constructor its
+    /// angle restriction selects (`SearchTreeManager.java:160-172`), so the same
+    /// class can be present in more than one family at once.
+    pub fn compensated_tree_with_family(
+        &self,
+        clearance_class: i32,
+        family: TreeAngleFamily,
+    ) -> Option<&SearchTree> {
+        if self.default_tree.compensated_class == clearance_class
+            && self.default_tree.angle_family == family
+        {
             return Some(&self.default_tree);
         }
         self.compensated
             .iter()
-            .find(|tree| tree.compensated_class == clearance_class)
+            .find(|tree| tree.compensated_class == clearance_class && tree.angle_family == family)
     }
 
     /// Number of active trees, default included.
@@ -514,10 +776,32 @@ impl SearchTreeManager {
         store: &ItemStore,
         ctx: ShapeContext<'_>,
     ) {
-        if clearance_class <= 0 || self.compensated_tree(clearance_class).is_some() {
+        self.ensure_compensated_tree_with_family(
+            clearance_class,
+            TreeAngleFamily::AnyAngle,
+            store,
+            ctx,
+        );
+    }
+
+    /// [`ensure_compensated_tree`](Self::ensure_compensated_tree) in a chosen
+    /// angle family — upstream's `getAutorouteTree` reaching the
+    /// `ShapeSearchTree45Degree` arm of `SearchTreeManager.java:166`.
+    pub fn ensure_compensated_tree_with_family(
+        &mut self,
+        clearance_class: i32,
+        family: TreeAngleFamily,
+        store: &ItemStore,
+        ctx: ShapeContext<'_>,
+    ) {
+        if clearance_class <= 0
+            || self
+                .compensated_tree_with_family(clearance_class, family)
+                .is_some()
+        {
             return;
         }
-        let mut tree = SearchTree::new(clearance_class);
+        let mut tree = SearchTree::with_family(clearance_class, family);
         // Ascending id: tree *shape* depends on insertion order but query
         // results never do (they are sorted), and ascending is the order the
         // ordered index streams in.
@@ -585,6 +869,62 @@ impl SearchTreeManager {
 
 // ---------------------------------------------------------------- geometry
 
+/// The smallest [`IntBox`] that provably **contains** `shape`, or `None` when
+/// there is none.
+///
+/// `None` has two causes and both must stay `None`: an empty shape, whose
+/// "bounding box" is the inverted [`IntBox::EMPTY`] and would swallow any
+/// containment test; and an unbounded simplex, whose corner approximations are
+/// the `i32::MAX` sentinel of parallel border lines — or, for a two-line wedge,
+/// the single point where the lines cross while the shape itself runs to
+/// infinity. Only for a bounded shape is the corner hull a hull.
+fn hull_box(shape: &TileShape) -> Option<IntBox> {
+    let hull = match shape {
+        TileShape::Box(b) => *b,
+        TileShape::Oct(o) => o.bounding_box(),
+        TileShape::Simplex(s) if s.is_bounded() => s.bounding_box(),
+        TileShape::Simplex(_) => return None,
+    };
+    (!hull.is_empty()).then_some(hull)
+}
+
+/// The "does this query swallow a stored shape whole" test, resolved once per
+/// query instead of per leaf.
+///
+/// A stored shape whose hull lies inside the query **is** an overlap, so the
+/// exact half-plane test can be skipped for it. That is not an approximation:
+/// `shape ⊆ hull ⊆ query` gives `shape ∩ query = shape`, and a hull only exists
+/// for a non-empty shape ([`hull_box`]).
+///
+/// Only a box query gets the shortcut. An octagon or a simplex query would need
+/// its own containment predicate for a gain the profile does not show: the
+/// query that dominates a routing run is `complete_shape`'s running bound
+/// (`rooms/complete.rs`), and that one is an `IntBox`.
+#[derive(Clone, Copy)]
+enum QueryContains {
+    /// The query is an `IntBox`; a hull inside it is a hit.
+    Box(IntBox),
+    /// Anything else — every leaf takes the exact test.
+    Never,
+}
+
+impl QueryContains {
+    fn of(query: &TileShape) -> QueryContains {
+        match query {
+            TileShape::Box(b) if !b.is_empty() => QueryContains::Box(*b),
+            _ => QueryContains::Never,
+        }
+    }
+
+    #[inline]
+    fn swallows(&self, hull: Option<&IntBox>) -> bool {
+        match (self, hull) {
+            (QueryContains::Box(query), Some(hull)) => query.contains_box(hull),
+            _ => false,
+        }
+    }
+}
+
 fn layer_matches(query_layer: Option<i32>, shape_layer: i32) -> bool {
     match query_layer {
         None => true,
@@ -603,12 +943,59 @@ fn is_ignored(item: &Item, ignore_nets: &[i32]) -> bool {
     !ignore_nets.iter().any(|net| !item.contains_net(*net))
 }
 
+/// Upstream's `TreeSet<Leaf>` order: descending item id, then ascending shape
+/// index (`Leaf.compareTo` → `Item.compareTo`, which is `other.id - this.id`).
+///
+/// Unstable, because the key is the leaf's whole identity: a tree never holds
+/// two leaves with the same `(item, shape_index)`, so the comparator has no ties
+/// and stability cannot change the output. It saves the scratch allocation the
+/// stable sort takes for runs longer than its in-place threshold — this is the
+/// tail of every spatial query, and there are ~200 000 of them on Issue034.
 fn sort_entries(out: &mut [TreeEntry]) {
-    out.sort_by(|a, b| {
+    out.sort_unstable_by(|a, b| {
         b.item
             .cmp(&a.item)
             .then_with(|| a.shape_index.cmp(&b.shape_index))
     });
+}
+
+/// [`calculate_tree_shapes`] in a chosen angle family.
+///
+/// [`TreeAngleFamily::AnyAngle`] is `ShapeSearchTree` itself.
+/// [`TreeAngleFamily::FortyFive`] is `ShapeSearchTree45Degree`, whose three
+/// overrides all have the same shape — *"call super, then coarsen every result
+/// to its bounding octagon"* (`:442-461` for areas and the outline;
+/// `:411-439` for drills, which additionally keeps a box a box "to avoid small
+/// corner cutoffs when taking the offset as an octagon"). Both of those are
+/// [`TileShape::to_flavor`]`(FortyFive)`, so the family is one post-pass:
+///
+/// * a `Box` stays a `Box` — the octagon-that-is-a-box rule of §3.3;
+/// * an `Oct` stays itself;
+/// * a `Simplex` — a trace segment or an outline strip — becomes its bounding
+///   octagon, which for 45°-restricted geometry is the same region.
+///
+/// The drill and area arms already ran `to_flavor(ctx.angle_restriction)` before
+/// the compensation was applied, because §3.4 makes that a *board rule*; on a
+/// 45° board this pass therefore finds them already octagonal and is a no-op on
+/// them. On an any-angle board driving a 45° tree — which upstream never builds
+/// — it octagonizes *after* the offset instead of before, a difference of at
+/// most the corner chamfer and always in the conservative direction.
+pub fn calculate_tree_shapes_for_family(
+    item: &Item,
+    tree_class: i32,
+    family: TreeAngleFamily,
+    ctx: ShapeContext<'_>,
+    out: &mut Vec<ItemTileShape>,
+) {
+    calculate_tree_shapes(item, tree_class, ctx, out);
+    if family != TreeAngleFamily::FortyFive {
+        return;
+    }
+    for tile in out.iter_mut() {
+        if let Some(shape) = tile.shape.take() {
+            tile.shape = Some(shape.to_flavor(AngleRestriction::FortyFive));
+        }
+    }
 }
 
 /// Computes the tile shapes of `item` for a tree compensated for
@@ -870,7 +1257,7 @@ fn octagon_hull(corners: &[Point]) -> TileShape {
 
 #[cfg(test)]
 mod tests {
-    use fr_geometry::planar::{IntBox, IntVector, Polyline};
+    use fr_geometry::planar::{IntBox, IntVector, Polyline, Simplex};
 
     use super::*;
     use crate::clearance::ClearanceTable;
@@ -1111,6 +1498,226 @@ mod tests {
         assert!(store.get(out[0].item).unwrap().contains_net(2));
     }
 
+    /// The bounds-only walk keeps every filter except the shape test, so it is
+    /// a superset of the exact query, and it is a *strict* superset exactly when
+    /// a leaf's bounding shape meets the query and its shape does not.
+    ///
+    /// A shallow triangle is the smallest thing with that gap: its bounding
+    /// octagon has to square off a hypotenuse of slope −0.3, so the whole wedge
+    /// above the hypotenuse is inside the bounds and outside the shape.
+    #[test]
+    fn the_bounds_only_walk_is_a_superset_in_the_same_order() {
+        let clearances = ClearanceTable::uniform(3, 2, 20);
+        let padstacks = PadstackTable::new();
+        // Any-angle, or the keepout would be coarsened to its bounding octagon
+        // on the way in and the gap this test needs would close (§3.4).
+        let ctx = ShapeContext {
+            clearances: &clearances,
+            padstacks: &padstacks,
+            layer_count: 2,
+            angle_restriction: AngleRestriction::None,
+            max_tree_shape_width: MAX_TREE_SHAPE_WIDTH,
+        };
+
+        let mut store = ItemStore::new();
+        let mut tree = SearchTree::new(0);
+        for _ in 0..3 {
+            let id = store.insert(Item::new(
+                NetNos::from_slice(&[1]),
+                1,
+                FixedState::SystemFixed,
+                ItemKind::ObstacleArea(ObstacleArea {
+                    area: PlacedArea::new(AreaShape::Simplex(Simplex::from_convex_polygon(&[
+                        IntPoint::new(0, 0),
+                        IntPoint::new(10_000, 0),
+                        IntPoint::new(0, 3_000),
+                    ]))),
+                    layer: 0,
+                    kind: ObstacleKind::Keepout,
+                }),
+            ));
+            let slot = store.slot_of(id).unwrap();
+            tree.insert(slot, store.get(id).unwrap(), ctx);
+        }
+
+        let mut stack = QueryStack::new();
+        let mut exact = Vec::new();
+        let mut loose = Vec::new();
+
+        // Above the hypotenuse (y = 3000 − 0.3x is 1200 at x = 6000), inside the
+        // bounding octagon on all eight directions.
+        let wedge = TileShape::Box(IntBox::new(6_000, 2_000, 7_000, 2_500));
+        tree.overlapping_tree_entries(&store, &wedge, Some(0), &[], &mut stack, &mut exact);
+        tree.overlapping_tree_entries_bounds_only(
+            &store,
+            &wedge,
+            Some(0),
+            &[],
+            &mut stack,
+            &mut loose,
+        );
+        assert!(exact.is_empty(), "the exact test rejects the whole wedge");
+        assert_eq!(loose.len(), 3, "the bounding shapes all reach it");
+        assert!(loose.windows(2).all(|w| w[0].item > w[1].item));
+
+        // Layer and net filters still apply — they are not shape tests.
+        tree.overlapping_tree_entries_bounds_only(
+            &store,
+            &wedge,
+            Some(1),
+            &[],
+            &mut stack,
+            &mut loose,
+        );
+        assert!(loose.is_empty(), "layer filter survives");
+        tree.overlapping_tree_entries_bounds_only(
+            &store,
+            &wedge,
+            Some(0),
+            &[1],
+            &mut stack,
+            &mut loose,
+        );
+        assert!(loose.is_empty(), "net filter survives");
+
+        // Where the exact test does hit, the two agree entry for entry.
+        let inside = TileShape::Box(IntBox::new(100, 100, 400, 400));
+        tree.overlapping_tree_entries(&store, &inside, Some(0), &[], &mut stack, &mut exact);
+        tree.overlapping_tree_entries_bounds_only(
+            &store,
+            &inside,
+            Some(0),
+            &[],
+            &mut stack,
+            &mut loose,
+        );
+        assert_eq!(exact.len(), 3);
+        assert_eq!(exact, loose);
+    }
+
+    /// The containment shortcut is only allowed to skip the exact test where
+    /// the exact test would have said yes, so a box query has to give the same
+    /// answer as the same box handed over as a simplex — which never takes the
+    /// shortcut.
+    #[test]
+    fn the_containment_shortcut_agrees_with_the_exact_test_on_a_sweep() {
+        let clearances = ClearanceTable::uniform(3, 2, 20);
+        let padstacks = PadstackTable::new();
+        let ctx = ShapeContext {
+            clearances: &clearances,
+            padstacks: &padstacks,
+            layer_count: 2,
+            angle_restriction: AngleRestriction::None,
+            max_tree_shape_width: MAX_TREE_SHAPE_WIDTH,
+        };
+
+        let mut store = ItemStore::new();
+        let mut tree = SearchTree::new(0);
+        // A trace (simplex tile shapes) and a keepout box (a box tile shape), so
+        // both hull-bearing flavors are indexed.
+        let trace = store.insert(trace_item(
+            &[1],
+            &[
+                IntPoint::new(0, 0),
+                IntPoint::new(4_000, 1_000),
+                IntPoint::new(6_000, 5_000),
+            ],
+            0,
+            120,
+        ));
+        tree.insert(store.slot_of(trace).unwrap(), store.get(trace).unwrap(), ctx);
+        let keepout = store.insert(Item::new(
+            NetNos::EMPTY,
+            1,
+            FixedState::SystemFixed,
+            ItemKind::ObstacleArea(ObstacleArea {
+                area: PlacedArea::new(AreaShape::Box(IntBox::new(2_000, 3_000, 3_000, 4_000))),
+                layer: 0,
+                kind: ObstacleKind::Keepout,
+            }),
+        ));
+        tree.insert(
+            store.slot_of(keepout).unwrap(),
+            store.get(keepout).unwrap(),
+            ctx,
+        );
+        tree.assert_consistent(&store);
+
+        let mut stack = QueryStack::new();
+        let (mut shortcut, mut exact) = (Vec::new(), Vec::new());
+        let (mut shortcut_items, mut exact_items) = (Vec::new(), Vec::new());
+        let mut hits = 0usize;
+        for llx in (-1_000..7_000).step_by(479) {
+            for lly in (-1_000..6_000).step_by(397) {
+                for size in [0, 250, 1_500, 20_000] {
+                    let box_ = IntBox::new(llx, lly, llx + size, lly + size);
+                    let as_box = TileShape::Box(box_);
+                    // The same region as a simplex: `QueryContains::Never`, so
+                    // every leaf takes the exact test.
+                    let as_simplex = TileShape::Simplex(box_.to_simplex());
+                    tree.overlapping_tree_entries(
+                        &store,
+                        &as_box,
+                        Some(0),
+                        &[],
+                        &mut stack,
+                        &mut shortcut,
+                    );
+                    tree.overlapping_tree_entries(
+                        &store,
+                        &as_simplex,
+                        Some(0),
+                        &[],
+                        &mut stack,
+                        &mut exact,
+                    );
+                    assert_eq!(shortcut, exact, "query {box_:?}");
+                    tree.overlapping_items(
+                        &store,
+                        &as_box,
+                        Some(0),
+                        &[],
+                        &mut stack,
+                        &mut shortcut_items,
+                    );
+                    tree.overlapping_items(
+                        &store,
+                        &as_simplex,
+                        Some(0),
+                        &[],
+                        &mut stack,
+                        &mut exact_items,
+                    );
+                    assert_eq!(shortcut_items, exact_items, "items for {box_:?}");
+                    hits += shortcut.len();
+                }
+            }
+        }
+        assert!(hits > 0, "the sweep never hit anything");
+    }
+
+    /// An unbounded stored shape has no hull, so it can never take the shortcut:
+    /// the wedge below runs to infinity while its two corner approximations sit
+    /// on the single point where its border lines cross, which a query box would
+    /// otherwise "contain".
+    #[test]
+    fn only_a_bounded_non_empty_shape_gets_a_hull() {
+        let wedge = TileShape::Simplex(Simplex::get_instance(&[
+            fr_geometry::planar::Line::new(IntPoint::new(0, 0), IntPoint::new(100, 0)),
+            fr_geometry::planar::Line::new(IntPoint::new(0, 0), IntPoint::new(0, -100)),
+        ]));
+        assert!(hull_box(&wedge).is_none());
+        assert!(hull_box(&TileShape::Simplex(Simplex::EMPTY)).is_none());
+        assert!(hull_box(&TileShape::Box(IntBox::EMPTY)).is_none());
+        assert_eq!(
+            hull_box(&TileShape::Box(IntBox::new(1, 2, 3, 4))),
+            Some(IntBox::new(1, 2, 3, 4))
+        );
+        assert!(!QueryContains::of(&TileShape::Box(IntBox::EMPTY))
+            .swallows(Some(&IntBox::new(1, 2, 3, 4))));
+        assert!(!QueryContains::of(&TileShape::Box(IntBox::new(0, 0, 10, 10))).swallows(None));
+    }
+
     #[test]
     fn removal_frees_every_leaf_and_a_recycled_slot_starts_clean() {
         let fixture = Fixture::new();
@@ -1165,6 +1772,167 @@ mod tests {
 
         manager.reset_compensated_trees();
         assert_eq!(manager.tree_count(), 1);
+    }
+
+    // ---- the 45° angle family ------------------------------------------
+
+    /// The 45° tree stores octagons where the any-angle tree stores simplices,
+    /// and the region is the same for a 45°-restricted trace.
+    #[test]
+    fn the_fortyfive_family_octagonizes_trace_shapes_without_moving_them() {
+        let fixture = Fixture::new();
+        let item = trace_item(
+            &[1],
+            &[
+                IntPoint::new(0, 0),
+                IntPoint::new(1000, 0),
+                IntPoint::new(2000, 1000),
+            ],
+            0,
+            50,
+        );
+
+        let mut any = Vec::new();
+        calculate_tree_shapes_for_family(
+            &item,
+            1,
+            TreeAngleFamily::AnyAngle,
+            fixture.ctx(),
+            &mut any,
+        );
+        let mut oct = Vec::new();
+        calculate_tree_shapes_for_family(
+            &item,
+            1,
+            TreeAngleFamily::FortyFive,
+            fixture.ctx(),
+            &mut oct,
+        );
+
+        assert_eq!(any.len(), oct.len());
+        for (a, o) in any.iter().zip(oct.iter()) {
+            let a = a.shape.as_ref().unwrap();
+            let o = o.shape.as_ref().unwrap();
+            assert!(
+                matches!(a, TileShape::Simplex(_)),
+                "the any-angle tree keeps the exact offset simplex"
+            );
+            assert!(
+                matches!(o, TileShape::Oct(_) | TileShape::Box(_)),
+                "the 45° tree stores an octagon"
+            );
+            // A 45°-restricted segment's octagon-clipped offset simplex *is*
+            // its own bounding octagon, so the box must not have moved.
+            assert_eq!(a.bounding_box(), o.bounding_box());
+        }
+    }
+
+    /// The two families are separate registry slots: asking for one must not
+    /// hand back the other.
+    #[test]
+    fn the_manager_keys_trees_by_class_and_family() {
+        let fixture = Fixture::new();
+        let mut store = ItemStore::new();
+        let mut manager = SearchTreeManager::new();
+        let id = store.insert(trace_item(
+            &[1],
+            &[IntPoint::new(0, 0), IntPoint::new(1000, 0)],
+            0,
+            50,
+        ));
+        manager.insert(
+            store.slot_of(id).unwrap(),
+            store.get(id).unwrap(),
+            fixture.ctx(),
+        );
+
+        manager.ensure_compensated_tree(1, &store, fixture.ctx());
+        assert_eq!(manager.tree_count(), 2);
+        assert!(manager
+            .compensated_tree_with_family(1, TreeAngleFamily::FortyFive)
+            .is_none());
+
+        manager.ensure_compensated_tree_with_family(
+            1,
+            TreeAngleFamily::FortyFive,
+            &store,
+            fixture.ctx(),
+        );
+        assert_eq!(manager.tree_count(), 3, "both families coexist");
+        let any = manager.compensated_tree(1).unwrap();
+        let oct = manager
+            .compensated_tree_with_family(1, TreeAngleFamily::FortyFive)
+            .unwrap();
+        assert_eq!(any.angle_family(), TreeAngleFamily::AnyAngle);
+        assert_eq!(oct.angle_family(), TreeAngleFamily::FortyFive);
+        assert_eq!(any.leaf_count(), oct.leaf_count());
+
+        let slot = store.slot_of(id).unwrap();
+        assert!(matches!(
+            any.tile_shape(slot, id, 0).unwrap(),
+            TileShape::Simplex(_)
+        ));
+        assert!(!matches!(
+            oct.tile_shape(slot, id, 0).unwrap(),
+            TileShape::Simplex(_)
+        ));
+
+        // Asking twice is idempotent, and the whole board stays consistent.
+        manager.ensure_compensated_tree_with_family(
+            1,
+            TreeAngleFamily::FortyFive,
+            &store,
+            fixture.ctx(),
+        );
+        assert_eq!(manager.tree_count(), 3);
+        manager.assert_consistent(&store);
+    }
+
+    /// The 45° family never *shrinks* a shape — the property that makes it a
+    /// safe substitute in an obstacle index.
+    #[test]
+    fn the_fortyfive_family_never_loses_an_obstacle() {
+        let fixture = Fixture::new();
+        let item = trace_item(
+            &[1],
+            &[
+                IntPoint::new(0, 0),
+                // A deliberately non-45° segment: the octagon is a strict
+                // over-approximation here, which is the conservative direction.
+                IntPoint::new(1000, 300),
+            ],
+            0,
+            50,
+        );
+        let mut any = Vec::new();
+        calculate_tree_shapes_for_family(
+            &item,
+            0,
+            TreeAngleFamily::AnyAngle,
+            fixture.ctx(),
+            &mut any,
+        );
+        let mut oct = Vec::new();
+        calculate_tree_shapes_for_family(
+            &item,
+            0,
+            TreeAngleFamily::FortyFive,
+            fixture.ctx(),
+            &mut oct,
+        );
+        for (a, o) in any.iter().zip(oct.iter()) {
+            let a = a.shape.as_ref().unwrap();
+            let o = o.shape.as_ref().unwrap();
+            let a_box = a.bounding_box();
+            let o_box = o.bounding_box();
+            assert!(
+                o_box.left_x() <= a_box.left_x()
+                    && o_box.bottom_y() <= a_box.bottom_y()
+                    && o_box.right_x() >= a_box.right_x()
+                    && o_box.top_y() >= a_box.top_y(),
+                "the octagon must contain the simplex"
+            );
+        }
     }
 
     #[test]

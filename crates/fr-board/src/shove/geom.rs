@@ -328,7 +328,13 @@ pub fn overlapping_items_with_clearance(
 
     let tree = board.default_tree();
     let mut curr_half_clearance = -1i32;
-    let mut curr_offset_shape = shape.clone();
+    // Held as a `TileShape` rather than a bare `Simplex` so that the exact test
+    // below can dispatch on the *stored* shape's flavor: a pad's enlarged shape
+    // is a box or an octagon, and `TileShape::intersects` answers those against
+    // a simplex without converting them to one and running the general
+    // half-plane intersection. `-1` is not a legal half clearance, so the first
+    // item always rebuilds it.
+    let mut curr_offset_tile = TileShape::Simplex(shape.clone());
     // Upstream sorts by clearance so the offset shape is rebuilt once per
     // distinct clearance; the same trick, without the sort, is to cache the
     // last one — clearance classes repeat heavily in a single query.
@@ -340,7 +346,7 @@ pub fn overlapping_items_with_clearance(
         let half_clearance = clearance / 2;
         if half_clearance != curr_half_clearance {
             curr_half_clearance = half_clearance;
-            curr_offset_shape = shape.enlarge(half_clearance as f64);
+            curr_offset_tile = TileShape::Simplex(shape.enlarge(half_clearance as f64));
         }
         let Some(slot) = board.store().slot_of(*id) else {
             return false;
@@ -352,8 +358,7 @@ pub fn overlapping_items_with_clearance(
             let Some(tile_shape) = tile.shape.as_ref() else {
                 return false;
             };
-            let enlarged = tile_shape.enlarge(half_clearance);
-            curr_offset_shape.intersects(&tile_to_simplex(&enlarged))
+            tile_shape.enlarge(half_clearance).intersects(&curr_offset_tile)
         })
     });
 }

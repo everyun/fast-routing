@@ -1,0 +1,4 @@
+Imported C:\Users\Owner\Desktop\hw_72_nb_git_PLEASEdoNOTforget20\hw72nb.dsn in 257.70s: 2 layers, 3890 items (1133 pins, 934 traces, 43 vias)
+Router: 1 passes, 727 routed, 31 failed, 446 ripped, 0 pins fanned out
+Referee: 531 clearance violations, 52 of 552 connections incomplete, score 713.40/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue022-AutoRouter_interrupted.rust.ses

@@ -1,0 +1,5 @@
+Imported C:\Projects\CNC\PCBDesign\GenericBoard\v1.0\freerouting.dsn in 49.79s: 2 layers, 1070 items (837 pins, 0 traces, 0 vias)
+Router: 1 passes, 0 routed, 676 failed, 0 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 17 clearance violations, 378 of 424 connections incomplete, score 100.47/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue208-freerouting.rust.ses

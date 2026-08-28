@@ -19,7 +19,12 @@
 //!   1-dim doors, where the section's `shape_entry` endpoint must be within
 //!   `compensated_trace_half_width + 5` of the matching door corner.
 //! * **no side flip after `Adjustment`** — an element that came through a
-//!   shoved link door keeps shoving the same way.
+//!   shoved link door keeps shoving the same way. The tag itself is *not* set
+//!   here: it is the caller's, keyed on the reached door's dimension, and its
+//!   polarity is the opposite of the guard of the direction that produced it
+//!   (`MazeSearch::shove_trace_room`). Getting that polarity backwards makes
+//!   every link-door hop flip sides, which silently loses one connection on
+//!   small boards.
 //! * **fork exclusion** — [`end_points_matching`] for link doors, and the
 //!   "two different obstacle items" door skip during harvesting.
 //! * conformance delta **B1**: the stale-index guard is
@@ -36,11 +41,18 @@ use fr_geometry::planar::{
 
 use crate::engine::AutorouteEngine;
 use crate::geom;
-use crate::maze::nodes::Adjustment;
 use crate::maze::queue::FrontierElement;
 use crate::rooms::{DoorId, DoorKind, ExpandableRef, RoomId, RoomKind};
 
 /// `MazeShoveTraceAlgo.DoorSection` (`:290-303`).
+///
+/// Deliberately *without* an adjustment field: upstream derives the
+/// [`Adjustment`](crate::maze::nodes::Adjustment) in
+/// `MazeSearchAlgo.shove_trace_room` (`:1501-1531`) from the
+/// **reached door's dimension**, not from the branch of
+/// [`check_shove_trace_line`] that harvested it. The two are not the same set —
+/// a 2-dim door also reaches the 1-dim harvesting branch whenever
+/// `shove_width < FULL_SHOVE` — so the decision has to stay at the caller.
 #[derive(Debug, Clone, Copy)]
 pub struct DoorSection {
     /// The door the shove makes reachable.
@@ -49,9 +61,6 @@ pub struct DoorSection {
     pub section_no: u16,
     /// The section's segment.
     pub section_line: FloatLine,
-    /// `Adjustment::Left` / `Right` for a 2-dim link door, `None` otherwise
-    /// (`MazeSearchAlgo.shove_trace_room`, `:1495-1535`).
-    pub adjustment: Adjustment,
 }
 
 /// `MazeShoveTraceAlgo.check_shove_trace_line` (`:31-282`).
@@ -296,11 +305,6 @@ pub fn check_shove_trace_line(
                         door: curr_door,
                         section_no: 0,
                         section_line: section,
-                        adjustment: if shove_to_the_left {
-                            Adjustment::Left
-                        } else {
-                            Adjustment::Right
-                        },
                     });
                 }
             }
@@ -354,7 +358,6 @@ pub fn check_shove_trace_line(
                         door: curr_door,
                         section_no: i as u16,
                         section_line: curr_line_section,
-                        adjustment: Adjustment::None,
                     });
                 }
             }

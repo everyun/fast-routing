@@ -5,7 +5,7 @@
 //! `ShapeSearchTreeOrthogonal` → `SortedOrthogonalRoomNeighbours`, else the
 //! any-angle [`neighbours`](super::neighbours) (`AutorouteEngine.java:520-525`).
 //!
-//! # What is ported here, and what is blocked
+//! # What is ported here
 //!
 //! The 45° variant is **not** "the any-angle algorithm with tighter
 //! comparisons". It is a rewrite in which *every* shape is an
@@ -14,32 +14,38 @@
 //! (`left_x, bottom_y, right_x, top_y` and the four diagonals) instead of
 //! iterating border lines, which is why it can decide a touching side with two
 //! integer comparisons where the general case runs `touching_sides` over the
-//! border-line rings.
+//! border-line rings — and, far more importantly, why its gap rooms are
+//! octagons rather than arbitrarily-sloped simplices.
 //!
-//! That representation is supplied by `ShapeSearchTree45Degree`, whose own
-//! `complete_shape` override (`board/ShapeSearchTree45Degree.java:84-...`)
-//! produces `IntOctagon` rooms; `SearchTreeManager.java:166` is what selects it
-//! from the board's angle restriction. **We have no such tree.** `fr-board`
-//! exposes one compensated tree flavor, `AutorouteEngine::tree_class` is a
-//! clearance-class number rather than an angle family, and
-//! [`complete_shape`](crate::engine::AutorouteEngine::complete_shape)
-//! unconditionally yields [`Simplex`](fr_geometry::planar::Simplex) rooms. So
-//! the *dispatch* cannot be wired up from this crate alone.
+//! This is the half of the 45° chain that pays. Measured at `-mp 1` with the
+//! room completion left any-angle ([`Tiling45Mode::Doors`], full table there):
+//! Issue034 65,530 → 60,678 expansions and 37 → 32 unrouted, Issue159 3,907 →
+//! 1,255 expansions and 3 → 2 unrouted, Issue026 8 → 3 unrouted — all at zero
+//! added clearance violations. Issue155 regresses (8 → 13), so it is not a free
+//! win and the switch stays gated.
 //!
-//! What is ported here is the part that does not need the tree: the pure
-//! octagon geometry the 45° variant is built out of, transcribed line for line
-//! and covered by tests, so that wiring it up later is assembly rather than
-//! translation. Every function below is a total function of octagons — no
-//! engine state, no doors, no arena.
+//! That octagon representation is supplied by `ShapeSearchTree45Degree`
+//! (`fr_board::search_tree::TreeAngleFamily::FortyFive` here) and its
+//! `complete_shape` override ([`complete45`](super::complete45)).
+//! `SearchTreeManager.java:166` selects both from the board's angle
+//! restriction; [`default_tiling_45`](crate::engine::default_tiling_45) is that
+//! selector, gated on the A/B switch.
 //!
 //! | here | upstream |
 //! |---|---|
 //! | [`touching_sides`] | `Sorted45DegreeRoomNeighbours.java:713-760` |
 //! | [`mark_edge_interior_touches`] | `:764-790` |
-//! | [`remove_not_touching_border_lines`] | `:156-249` |
-//! | [`edge_incomplete_room`] | `:238-268` (the `switch (curr_side_no)`) |
+//! | [`remove_not_touching_border_lines`] | `:156-216` |
+//! | [`edge_incomplete_room`] | `:228-271` (the `switch (curr_side_no)`) |
 //! | [`from_side_incomplete_room`] | `:400-444` (the `switch (from_side_no)`) |
 //! | [`to_side_incomplete_room`] | `:456-489` (the `switch (to_side_no)`) |
+//! | [`free_gap_room`] | `:545-677` (the `switch (next.first_touching_side)`) |
+//! | [`compare_neighbours`] | `:797-854` (`SortedRoomNeighbour.compareTo`) |
+//! | `AutorouteEngine::calculate_doors_45` | `:44-72` (`calculate`) |
+//! | `AutorouteEngine::calculate_neighbours_45` | `:77-155` |
+//! | `AutorouteEngine::try_remove_edge_line_45` | `:276-365` |
+//! | `AutorouteEngine::calculate_new_incomplete_rooms_45` | `:503-682` |
+//! | `AutorouteEngine::obstacle_gap_rooms_45` | `:391-501` |
 //!
 //! # Side numbering
 //!
@@ -51,7 +57,13 @@
 //!   4 top         5 upper-left diagonal    6 left    7 lower-left diagonal
 //! ```
 
+use fr_board::item::ItemId;
+#[cfg(doc)]
+use fr_board::search_tree::Tiling45Mode;
 use fr_geometry::planar::{IntOctagon, Limits};
+
+use crate::engine::{AutorouteEngine, Obstacle};
+use crate::rooms::{RoomId, RoomKind};
 
 /// Number of octagon sides — the array length of `edge_interior_touches_obstacle`.
 pub const SIDE_COUNT: usize = 8;
@@ -381,6 +393,155 @@ pub fn to_side_incomplete_room(
     o.build()
 }
 
+/// The incomplete room in the gap between two neighbours of a **free** room
+/// (`Sorted45DegreeRoomNeighbours.java:545-677`).
+///
+/// Where [`from_side_incomplete_room`] and [`to_side_incomplete_room`] each
+/// build one half of the gap around an *obstacle* room's corner, a free room
+/// gets a single room spanning the whole gap, and which two offsets pin it
+/// depends on how the two neighbours' intersections are ordered along the side
+/// the next one starts on. Each of the eight arms is the same three-way
+/// comparison in the coordinate that runs along that side:
+///
+/// * the previous neighbour ends **before** the next one starts along the side —
+///   the gap is bounded by the room's own side and by both neighbours;
+/// * it ends **after** — the neighbours are ordered the other way round the
+///   ring, so the gap is pinned to the previous neighbour's far offset instead;
+/// * they are **equal** — a single pin, and the gap is degenerate unless the
+///   ring wraps.
+///
+/// The extra `prev.last == next.first` guard inside the first branch is
+/// upstream's: when the previous neighbour also *ended* on this side, its own
+/// far offset closes the gap and must be carried over too.
+pub fn free_gap_room(
+    room: &IntOctagon,
+    board: &IntOctagon,
+    prev_intersection: &IntOctagon,
+    prev_last_side: usize,
+    next_intersection: &IntOctagon,
+    next_first_side: usize,
+) -> IntOctagon {
+    let _ = room;
+    let mut o = Offsets::of(board);
+    let p = prev_intersection;
+    let n = next_intersection;
+    match next_first_side % SIDE_COUNT {
+        0 => {
+            if p.lower_left_diagonal_x < n.lower_left_diagonal_x {
+                o.upper_right_diagonal_x = n.lower_left_diagonal_x;
+                o.top_y = p.bottom_y;
+                if prev_last_side == 0 {
+                    o.upper_left_diagonal_x = p.lower_right_diagonal_x;
+                }
+            } else if p.lower_left_diagonal_x > n.lower_left_diagonal_x {
+                o.right_x = n.left_x;
+                o.upper_right_diagonal_x = p.lower_left_diagonal_x;
+            } else {
+                o.upper_right_diagonal_x = n.lower_left_diagonal_x;
+            }
+        }
+        1 => {
+            if p.bottom_y < n.bottom_y {
+                o.top_y = n.bottom_y;
+                o.upper_left_diagonal_x = p.lower_right_diagonal_x;
+                if prev_last_side == 1 {
+                    o.left_x = p.right_x;
+                }
+            } else if p.bottom_y > n.bottom_y {
+                o.top_y = p.bottom_y;
+                o.upper_right_diagonal_x = n.lower_left_diagonal_x;
+            } else {
+                o.top_y = n.bottom_y;
+            }
+        }
+        2 => {
+            if p.lower_right_diagonal_x > n.lower_right_diagonal_x {
+                o.upper_left_diagonal_x = n.lower_right_diagonal_x;
+                o.left_x = p.right_x;
+                if prev_last_side == 2 {
+                    o.lower_left_diagonal_x = p.upper_right_diagonal_x;
+                }
+            } else if p.lower_right_diagonal_x < n.lower_right_diagonal_x {
+                o.top_y = n.bottom_y;
+                o.upper_left_diagonal_x = p.lower_right_diagonal_x;
+            } else {
+                o.upper_left_diagonal_x = n.lower_right_diagonal_x;
+            }
+        }
+        3 => {
+            if p.right_x > n.right_x {
+                o.left_x = n.right_x;
+                o.lower_left_diagonal_x = p.upper_right_diagonal_x;
+                if prev_last_side == 3 {
+                    o.bottom_y = p.top_y;
+                }
+            } else if p.right_x < n.right_x {
+                o.left_x = p.right_x;
+                o.upper_left_diagonal_x = n.lower_right_diagonal_x;
+            } else {
+                o.left_x = n.right_x;
+            }
+        }
+        4 => {
+            if p.upper_right_diagonal_x > n.upper_right_diagonal_x {
+                o.lower_left_diagonal_x = n.upper_right_diagonal_x;
+                o.bottom_y = p.top_y;
+                if prev_last_side == 4 {
+                    o.lower_right_diagonal_x = p.upper_left_diagonal_x;
+                }
+            } else if p.upper_right_diagonal_x < n.upper_right_diagonal_x {
+                o.left_x = n.right_x;
+                o.lower_left_diagonal_x = p.upper_right_diagonal_x;
+            } else {
+                o.lower_left_diagonal_x = n.upper_right_diagonal_x;
+            }
+        }
+        5 => {
+            if p.top_y > n.top_y {
+                o.bottom_y = n.top_y;
+                o.lower_right_diagonal_x = p.upper_left_diagonal_x;
+                if prev_last_side == 5 {
+                    o.right_x = p.left_x;
+                }
+            } else if p.top_y < n.top_y {
+                o.bottom_y = p.top_y;
+                o.lower_left_diagonal_x = n.upper_right_diagonal_x;
+            } else {
+                o.bottom_y = n.top_y;
+            }
+        }
+        6 => {
+            if p.upper_left_diagonal_x < n.upper_left_diagonal_x {
+                o.lower_right_diagonal_x = n.upper_left_diagonal_x;
+                o.right_x = p.left_x;
+                if prev_last_side == 6 {
+                    o.upper_right_diagonal_x = p.lower_left_diagonal_x;
+                }
+            } else if p.upper_left_diagonal_x > n.upper_left_diagonal_x {
+                o.bottom_y = n.top_y;
+                o.lower_right_diagonal_x = p.upper_left_diagonal_x;
+            } else {
+                o.lower_right_diagonal_x = n.upper_left_diagonal_x;
+            }
+        }
+        _ => {
+            if p.left_x < n.left_x {
+                o.right_x = n.left_x;
+                o.upper_right_diagonal_x = p.lower_left_diagonal_x;
+                if prev_last_side == 7 {
+                    o.top_y = p.bottom_y;
+                }
+            } else if p.left_x > n.left_x {
+                o.right_x = p.left_x;
+                o.lower_right_diagonal_x = n.upper_left_diagonal_x;
+            } else {
+                o.right_x = n.left_x;
+            }
+        }
+    }
+    o.build()
+}
+
 /// The eight octagon offsets, so the `switch` arms above read like upstream's.
 struct Offsets {
     left_x: i32,
@@ -419,6 +580,465 @@ impl Offsets {
             self.upper_right_diagonal_x,
         )
         .normalize()
+    }
+}
+
+// ------------------------------------------------------------ the assembly
+
+/// One touching neighbour of the room being completed —
+/// `Sorted45DegreeRoomNeighbours.SortedRoomNeighbour` (`:687-855`).
+#[derive(Debug, Clone, Copy)]
+struct Neighbour45 {
+    /// The deterministic tie-break identity, `search_tree_object.get_id_no()`.
+    obstacle_id: i64,
+    /// `room ∩ neighbour`, normalized.
+    intersection: IntOctagon,
+    /// Where the neighbour first and last touches the room border.
+    sides: TouchingSides,
+}
+
+/// `SortedRoomNeighbour.compareTo` (`:797-854`), as an ordering.
+///
+/// Counter-clockwise around the room border: first by the side the neighbour
+/// starts on, then by *where* on that side it starts — which is a different
+/// coordinate for each of the eight sides, and runs backwards on the four that
+/// point the other way (sides 4-7) so that "further counter-clockwise" is always
+/// "greater". Ties fall through to how far the neighbour spans, then to where
+/// it ends, then to the object id.
+fn compare_neighbours(a: &Neighbour45, b: &Neighbour45) -> std::cmp::Ordering {
+    use std::cmp::Ordering;
+    if a.sides.first != b.sides.first {
+        return a.sides.first.cmp(&b.sides.first);
+    }
+    let (p, q) = (&a.intersection, &b.intersection);
+    let mut cmp = match a.sides.first {
+        0 => p.corner_x(0) - q.corner_x(0),
+        1 => p.corner_x(1) - q.corner_x(1),
+        2 => p.corner_y(2) - q.corner_y(2),
+        3 => p.corner_y(3) - q.corner_y(3),
+        4 => q.corner_x(4) - p.corner_x(4),
+        5 => q.corner_x(5) - p.corner_x(5),
+        6 => q.corner_y(6) - p.corner_y(6),
+        _ => q.corner_y(7) - p.corner_y(7),
+    };
+    if cmp == 0 {
+        // The two neighbours start at the same point; the one that wraps
+        // further around the ring comes second.
+        let span = a.sides.span().cmp(&b.sides.span());
+        if span != Ordering::Equal {
+            return span;
+        }
+        cmp = match a.sides.last {
+            0 => p.corner_x(1) - q.corner_x(1),
+            1 => p.corner_x(2) - q.corner_x(2),
+            2 => p.corner_y(3) - q.corner_y(3),
+            3 => p.corner_y(4) - q.corner_y(4),
+            4 => q.corner_x(5) - p.corner_x(5),
+            5 => q.corner_x(6) - p.corner_x(6),
+            6 => q.corner_y(7) - p.corner_y(7),
+            _ => q.corner_y(0) - p.corner_y(0),
+        };
+    }
+    if cmp != 0 {
+        return cmp.cmp(&0);
+    }
+    // `:849-852`. Upstream's key is the bare object id, so two tile shapes of
+    // the *same* item with identical geometry compare equal and the `TreeSet`
+    // silently drops one; the key here carries the shape index as well, so both
+    // survive in a fixed order. Strictly more information, never less.
+    a.obstacle_id.cmp(&b.obstacle_id)
+}
+
+/// The result of one `calculate_neighbours` pass.
+struct Neighbours45 {
+    room_shape: IntOctagon,
+    neighbours: Vec<Neighbour45>,
+    touched: [bool; SIDE_COUNT],
+    own_net: Vec<(ItemId, u16)>,
+}
+
+/// Safety valve on the `try_remove_edge_line` restart loop.
+///
+/// Upstream recurses without a bound (`:58`); termination rests on the strict
+/// area increase at `:350-352`, which holds for exact integer areas. This is a
+/// valve, not a behaviour — a real board settles in one or two rounds.
+const MAX_EDGE_REMOVAL_ROUNDS: u32 = 64;
+
+impl AutorouteEngine<'_> {
+    /// `Sorted45DegreeRoomNeighbours.calculate` (`:44-72`) — the 45° arm of
+    /// `AutorouteEngine.calculate_doors`.
+    pub fn calculate_doors_45(&mut self, room_id: RoomId) {
+        for _ in 0..MAX_EDGE_REMOVAL_ROUNDS {
+            let found = self.calculate_neighbours_45(room_id);
+            // `:54-59`: an enlarged room invalidates every door; start over.
+            if self.try_remove_edge_line_45(room_id, &found) {
+                self.remove_all_doors(room_id);
+                continue;
+            }
+            let kind = self.rooms.room(room_id).kind;
+            if found.neighbours.is_empty() {
+                if kind == RoomKind::Obstacle {
+                    // `:66` — the full ring, sides 0 through 7.
+                    self.edge_gap_rooms_45(room_id, &found.room_shape, 0, 7);
+                }
+            } else {
+                self.calculate_new_incomplete_rooms_45(room_id, &found);
+            }
+            if kind == RoomKind::CompleteFree {
+                self.calculate_target_doors(room_id, &found.own_net);
+            }
+            return;
+        }
+    }
+
+    /// `Sorted45DegreeRoomNeighbours.calculate_neighbours` (`:77-155`).
+    fn calculate_neighbours_45(&mut self, room_id: RoomId) -> Neighbours45 {
+        let (room_shape, layer, is_obstacle_room) = {
+            let room = self.rooms.room(room_id);
+            (room.octagon(), room.layer, room.kind == RoomKind::Obstacle)
+        };
+
+        let mut obstacles = Vec::new();
+        let mut own_net = Vec::new();
+        self.overlapping_obstacles_tile(
+            &fr_board::shape::TileShape::Oct(room_shape),
+            Some(layer),
+            self.ctrl.net_no,
+            &mut obstacles,
+            &mut own_net,
+        );
+        if is_obstacle_room {
+            // `:109` defers own-net objects only for a free room; for an
+            // obstacle room they are ordinary neighbours.
+            let mut promoted: Vec<Obstacle> = own_net
+                .drain(..)
+                .map(|(item, index)| Obstacle::Item(item, index))
+                .collect();
+            promoted.append(&mut obstacles);
+            promoted.sort_unstable();
+            obstacles = promoted;
+        }
+
+        let mut found = Neighbours45 {
+            room_shape,
+            neighbours: Vec::new(),
+            touched: [false; SIDE_COUNT],
+            own_net,
+        };
+
+        for obstacle in obstacles {
+            if obstacle == Obstacle::Room(room_id) {
+                continue;
+            }
+            if let (Obstacle::Item(item, index), Some((room_item, room_index))) =
+                (obstacle, self.rooms.room(room_id).item)
+            {
+                if item == room_item && index == room_index {
+                    continue;
+                }
+            }
+            let Some(neighbour_oct) = self.obstacle_octagon(obstacle) else {
+                continue;
+            };
+            let intersection = room_shape.intersection(&neighbour_oct).normalize();
+            let dimension = intersection.dimension();
+
+            if dimension > 1 && is_obstacle_room {
+                // `:117-127`: only an obstacle room may swallow a 2-dim overlap.
+                if let Obstacle::Item(item, index) = obstacle {
+                    self.create_overlap_door(room_id, item, index);
+                }
+                continue;
+            }
+            if dimension < 0 {
+                // "may happen at a corner from 2 diagonal lines with non
+                // integer coordinates" (`:128-131`).
+                continue;
+            }
+
+            // `:132` — the neighbour is recorded even for a 0-dimensional
+            // corner touch, because the gap-room ring is built from the touch
+            // intervals, not from the doors.
+            if let Some(sides) = touching_sides(&room_shape, &intersection) {
+                mark_edge_interior_touches(&room_shape, &intersection, sides, &mut found.touched);
+                found.neighbours.push(Neighbour45 {
+                    obstacle_id: self.obstacle_id(obstacle),
+                    intersection,
+                    sides,
+                });
+            }
+
+            if dimension > 0 {
+                // `:133-152`: make sure there is a door to the neighbour room.
+                let neighbour_room = match obstacle {
+                    Obstacle::Room(other) => Some(other),
+                    Obstacle::Item(item, index) => {
+                        let routable = self
+                            .board
+                            .store()
+                            .get(item)
+                            .map(|item| item.is_routable())
+                            .unwrap_or(false);
+                        if routable {
+                            self.obstacle_room(item, index)
+                        } else {
+                            None
+                        }
+                    }
+                };
+                if let Some(neighbour_room) = neighbour_room {
+                    let door_shape = intersection.to_simplex();
+                    if self.insert_door_ok(room_id, neighbour_room, &door_shape) {
+                        // `ExpansionDoor`'s 2-argument constructor derives the
+                        // dimension from the shared shape.
+                        self.rooms.add_room_door(room_id, neighbour_room, dimension);
+                    }
+                }
+            }
+        }
+
+        found.neighbours.sort_by(compare_neighbours);
+        found
+    }
+
+    /// `Sorted45DegreeRoomNeighbours.try_remove_edge_line` (`:276-365`).
+    ///
+    /// Where the any-angle variant drops **one** simplex border line per
+    /// restart, this relaxes every untouched offset at once
+    /// ([`remove_not_touching_border_lines`]) and re-completes. That is the
+    /// single biggest reason the 45° tiling converges in fewer rounds.
+    fn try_remove_edge_line_45(&mut self, room_id: RoomId, found: &Neighbours45) -> bool {
+        if self.rooms.room(room_id).kind != RoomKind::CompleteFree {
+            return false;
+        }
+        let room_oct = found.room_shape;
+        if room_oct.dimension() != 2 {
+            return false;
+        }
+        let room_area = room_oct.area();
+
+        // `:287-296`: only bother when some untouched side is a real edge and
+        // not a degenerate corner of the octagon.
+        let mut worth_trying = false;
+        for side in 0..SIDE_COUNT {
+            if found.touched[side] {
+                continue;
+            }
+            let a = room_oct.corner(side);
+            let b = room_oct.corner((side + 1) % SIDE_COUNT);
+            let dx = b.x as f64 - a.x as f64;
+            let dy = b.y as f64 - a.y as f64;
+            if dx * dx + dy * dy > 1.0 {
+                worth_trying = true;
+                break;
+            }
+        }
+        if !worth_trying {
+            return false;
+        }
+
+        // `:321-338`: the largest 2-dimensional door to an already complete
+        // free room is what `complete_shape` must not re-carve against.
+        let mut ignore_room = None;
+        let mut ignore_shape = None;
+        let mut max_door_area = 0.0f64;
+        for door_id in self.rooms.room(room_id).doors.clone() {
+            let door = self.rooms.door(door_id);
+            if door.dimension != 2 {
+                continue;
+            }
+            let Some(other) = door.other_room_any(room_id) else {
+                continue;
+            };
+            if self.rooms.room(other).kind != RoomKind::CompleteFree {
+                continue;
+            }
+            let area = crate::geom::area(&door.shape);
+            if area > max_door_area {
+                max_door_area = area;
+                ignore_shape = crate::rooms::complete45::simplex_octagon(&door.shape);
+                ignore_room = Some(other);
+            }
+        }
+
+        let enlarged = remove_not_touching_border_lines(&room_oct, &found.touched);
+        let (contained, layer) = {
+            let room = self.rooms.room(room_id);
+            (room.contained_octagon(), room.layer)
+        };
+        let new_rooms =
+            self.complete_shape_45_oct(Some(enlarged), contained, layer, ignore_room, ignore_shape);
+        if new_rooms.len() != 1 {
+            return false;
+        }
+        // `:350-352`: only adopt a strictly larger room, or the restart loop
+        // never ends.
+        if new_rooms[0].shape.area() <= room_area {
+            return false;
+        }
+        let new_room = new_rooms[0];
+        let room = self.rooms.room_mut(room_id);
+        room.set_shape_from_octagon(new_room.shape);
+        room.contained_shape = new_room.contained.to_simplex();
+        true
+    }
+
+    /// `Sorted45DegreeRoomNeighbours.insert_incomplete_room` (`:374-389`).
+    ///
+    /// The door dimension is the *contained* shape's dimension, not a constant:
+    /// a gap room that shares an area with the room gets a 2-dimensional door.
+    fn insert_incomplete_room_45(
+        &mut self,
+        room_id: RoomId,
+        room_shape: &IntOctagon,
+        new_shape: IntOctagon,
+    ) {
+        if new_shape.dimension() != 2 {
+            return;
+        }
+        let new_contained = room_shape.intersection(&new_shape).normalize();
+        if new_contained.is_empty() {
+            return;
+        }
+        let door_dimension = new_contained.dimension();
+        if door_dimension <= 0 {
+            return;
+        }
+        let layer = self.rooms.room(room_id).layer;
+        let new_room = self
+            .rooms
+            .add_incomplete_room_oct(new_shape, layer, new_contained);
+        self.rooms.add_room_door(room_id, new_room, door_dimension);
+    }
+
+    /// `calculate_edge_incomplete_rooms_of_obstacle_expansion_room` (`:228-271`):
+    /// one gap room per free side of an obstacle room, from `from_side` to
+    /// `to_side` inclusive, walking counter-clockwise.
+    ///
+    /// **Upstream quirk, reproduced deliberately:** the degenerate-side test
+    /// compares each side's *end* corner against `corner(from_side)` and not
+    /// against the side's own start corner — `curr_corner` is read once before
+    /// the loop and never reassigned (`:236,240-241`). Fixing it would create
+    /// gap rooms upstream does not create, which is exactly the tiling
+    /// difference this port is trying not to have.
+    fn edge_gap_rooms_45(
+        &mut self,
+        room_id: RoomId,
+        room_shape: &IntOctagon,
+        from_side: usize,
+        to_side: usize,
+    ) {
+        let board = self.bounds().to_int_octagon().normalize();
+        let anchor_corner = room_shape.corner(from_side % SIDE_COUNT);
+        let mut curr_side = from_side % SIDE_COUNT;
+        let to_side = to_side % SIDE_COUNT;
+        for _ in 0..SIDE_COUNT {
+            let next_side = (curr_side + 1) % SIDE_COUNT;
+            if room_shape.corner(next_side) != anchor_corner {
+                let gap = edge_incomplete_room(room_shape, &board, curr_side);
+                self.insert_incomplete_room_45(room_id, room_shape, gap);
+            }
+            if curr_side == to_side {
+                break;
+            }
+            curr_side = next_side;
+        }
+    }
+
+    /// `calculate_new_incomplete_rooms_for_obstacle_expansion_room` (`:391-501`).
+    ///
+    /// The gap around an obstacle room's corner is built in three parts: the
+    /// piece leaving the previous neighbour ([`from_side_incomplete_room`]), the
+    /// piece arriving at the next one ([`to_side_incomplete_room`]), and one
+    /// whole-side room for every side strictly between them.
+    fn obstacle_gap_rooms_45(
+        &mut self,
+        room_id: RoomId,
+        room_shape: &IntOctagon,
+        prev: &Neighbour45,
+        next: &Neighbour45,
+        same_neighbour: bool,
+    ) {
+        let from_side = prev.sides.last;
+        let to_side = next.sides.first;
+        if from_side == to_side && !same_neighbour {
+            // `:394-397` — "no return in case of only 1 neighbour".
+            return;
+        }
+        let board = self.bounds().to_int_octagon().normalize();
+        let from_room =
+            from_side_incomplete_room(room_shape, &board, from_side, &prev.intersection);
+        self.insert_incomplete_room_45(room_id, room_shape, from_room);
+        let to_room = to_side_incomplete_room(room_shape, &board, to_side, &next.intersection);
+        self.insert_incomplete_room_45(room_id, room_shape, to_room);
+
+        let curr_from = (from_side + 1) % SIDE_COUNT;
+        if curr_from == to_side {
+            return;
+        }
+        let curr_to = (to_side + SIDE_COUNT - 1) % SIDE_COUNT;
+        self.edge_gap_rooms_45(room_id, room_shape, curr_from, curr_to);
+    }
+
+    /// `Sorted45DegreeRoomNeighbours.calculate_new_incomplete_rooms` (`:503-682`).
+    fn calculate_new_incomplete_rooms_45(&mut self, room_id: RoomId, found: &Neighbours45) {
+        let neighbours = &found.neighbours;
+        if neighbours.is_empty() {
+            return;
+        }
+        let room_shape = found.room_shape;
+        let is_obstacle_room = self.rooms.room(room_id).kind == RoomKind::Obstacle;
+
+        // `:505-510` — an obstacle room with a single neighbour wraps the ring
+        // from that neighbour back to itself.
+        if is_obstacle_room && neighbours.len() == 1 {
+            let only = neighbours[0];
+            self.obstacle_gap_rooms_45(room_id, &room_shape, &only, &only, true);
+            return;
+        }
+
+        let mut prev = neighbours[neighbours.len() - 1];
+        for next in neighbours.iter().copied() {
+            let insert = if is_obstacle_room && neighbours.len() == 2 {
+                // `:515-531`: with exactly two neighbours, decide whether this
+                // side of the obstacle is closed off or open.
+                let touch = next
+                    .intersection
+                    .intersection(&prev.intersection)
+                    .normalize();
+                if touch.is_empty() {
+                    true
+                } else if touch.dimension() >= 1 {
+                    false
+                } else if prev.sides.last == next.sides.first {
+                    // A corner touch along one side of the room shape.
+                    false
+                } else {
+                    prev.sides.last != (next.sides.first + 1) % SIDE_COUNT
+                }
+            } else {
+                // `:534` — the two neighbours simply do not touch.
+                !next.intersection.intersects(&prev.intersection)
+            };
+
+            if insert {
+                if is_obstacle_room && next.sides.first != prev.sides.last {
+                    self.obstacle_gap_rooms_45(room_id, &room_shape, &prev, &next, false);
+                } else {
+                    let board = self.bounds().to_int_octagon().normalize();
+                    let gap = free_gap_room(
+                        &room_shape,
+                        &board,
+                        &prev.intersection,
+                        prev.sides.last,
+                        &next.intersection,
+                        next.sides.first,
+                    );
+                    self.insert_incomplete_room_45(room_id, &room_shape, gap);
+                }
+            }
+            prev = next;
+        }
     }
 }
 

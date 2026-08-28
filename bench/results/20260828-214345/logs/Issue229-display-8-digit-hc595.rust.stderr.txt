@@ -1,0 +1,2 @@
+warning: Keepout zone '' was skipped because its geometry is degenerate
+20 of 64 connections still incomplete

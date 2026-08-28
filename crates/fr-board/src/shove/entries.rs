@@ -92,25 +92,106 @@ impl SubstitutePiece {
     }
 }
 
-/// `Item.get_compensated_half_width(search_tree)` (`Item.java:954`).
-pub fn compensated_half_width(board: &Board, half_width: i32, cl_class: i32, layer: i32) -> i32 {
-    if board.trees().clearance_compensation_used() {
-        half_width + board.clearances().compensation_value(cl_class, layer)
-    } else {
-        half_width
+/// Everything the offset rule needs that does **not** depend on which obstacle
+/// is being looked at: the tree's compensation flag, the clearance matrix, the
+/// shove shape's layer and its clearance class (upstream's `cl_type`).
+///
+/// `shove.md` §15, *"Precompute per `(cl_type, layer, obstacle_class)` offset
+/// parameters — the clearance matrix + compensation lookups appear inside every
+/// `store_trace`/`next_piece`/`cutout`; hoist to a small struct computed once
+/// per `ShapeTraceEntries`."* Upstream re-reads
+/// `SearchTreeManager.clearance_compensation_used()` and re-resolves
+/// `board.rules.clearance_matrix` at every one of those call sites, and so did
+/// this port; resolving them once per shove-shape operation leaves exactly one
+/// matrix read per obstacle, which is the irreducible part.
+///
+/// It is built per operation rather than stored in [`ShapeTraceEntries`] because
+/// it borrows the board immutably and
+/// [`cutout_traces`](ShapeTraceEntries::cutout_traces) needs the board mutably.
+#[derive(Clone, Copy)]
+pub struct OffsetParams<'a> {
+    clearances: &'a dyn ClearanceSource,
+    compensation_used: bool,
+    layer: i32,
+    own_cl_class: i32,
+}
+
+impl<'a> OffsetParams<'a> {
+    /// Resolves the board-wide half of the offset rule for one shove shape.
+    pub fn new(board: &'a Board, layer: i32, own_cl_class: i32) -> OffsetParams<'a> {
+        OffsetParams {
+            clearances: board.clearances(),
+            compensation_used: board.trees().clearance_compensation_used(),
+            layer,
+            own_cl_class,
+        }
+    }
+
+    /// `Item.get_compensated_half_width(search_tree)` (`Item.java:954`).
+    ///
+    /// The layer is the shove shape's, which is the layer every obstacle this
+    /// struct is used for runs on — the shape and its obstacles are coplanar by
+    /// construction (`ShapeTraceEntries.java:265`).
+    pub fn compensated_half_width(&self, half_width: i32, cl_class: i32) -> i32 {
+        if self.compensation_used {
+            half_width + self.clearances.compensation_value(cl_class, self.layer)
+        } else {
+            half_width
+        }
+    }
+
+    /// Whether the search tree carries the clearance
+    /// (`SearchTreeManager.clearance_compensation_used()`), which is what picks
+    /// the one-step offset over the two-step one.
+    pub fn is_compensated(&self) -> bool {
+        self.compensation_used
+    }
+
+    /// The pairwise clearance between the shove shape's class and `cl_class`.
+    pub fn clearance_to(&self, cl_class: i32) -> i32 {
+        self.clearances.value(cl_class, self.own_cl_class, self.layer)
+    }
+
+    /// The shove shape grown by an obstacle trace's reach, `c_offset_add`
+    /// included.
+    ///
+    /// `ShapeTraceEntries.java:265-282`, verbatim: one compensated step when the
+    /// tree carries the clearance, otherwise **two** steps —
+    /// `offset(half_width)` then `offset(clearance + 1)` — "for symmetry
+    /// reasons". The comment two lines down ("using enlarge here instead offset
+    /// causes problems because of a comparison in the constructor of class
+    /// EntryPoint") is why this is `offset`, which translates every border line,
+    /// and not `enlarge`, which additionally clips to the bounding octagon and
+    /// would move the edge indices the entry list is sorted on.
+    pub fn offset_shape_for_trace(
+        &self,
+        shape: &Simplex,
+        trace_half_width: i32,
+        trace_cl_class: i32,
+    ) -> Simplex {
+        if self.compensation_used {
+            let curr_offset =
+                self.compensated_half_width(trace_half_width, trace_cl_class) as f64 + C_OFFSET_ADD;
+            shape.offset(curr_offset)
+        } else {
+            let cl_offset = self.clearance_to(trace_cl_class) as f64 + C_OFFSET_ADD;
+            shape.offset(trace_half_width as f64).offset(cl_offset)
+        }
     }
 }
 
-/// The shove shape grown by an obstacle trace's reach, `c_offset_add` included.
+/// [`OffsetParams::compensated_half_width`] for a one-off caller that has no
+/// [`OffsetParams`] to hand.
 ///
-/// `ShapeTraceEntries.java:265-282`, verbatim: one compensated step when the
-/// tree carries the clearance, otherwise **two** steps —
-/// `offset(half_width)` then `offset(clearance + 1)` — "for symmetry reasons".
-/// The comment two lines down ("using enlarge here instead offset causes
-/// problems because of a comparison in the constructor of class EntryPoint")
-/// is why this is `offset`, which translates every border line, and not
-/// `enlarge`, which additionally clips to the bounding octagon and would move
-/// the edge indices the entry list is sorted on.
+/// The clearance class of the *shove shape* is irrelevant here — the
+/// compensation is a property of the obstacle's own class alone — so the
+/// throwaway `OffsetParams` is built with the null class.
+pub fn compensated_half_width(board: &Board, half_width: i32, cl_class: i32, layer: i32) -> i32 {
+    OffsetParams::new(board, layer, 0).compensated_half_width(half_width, cl_class)
+}
+
+/// [`OffsetParams::offset_shape_for_trace`] for a one-off caller that has no
+/// [`OffsetParams`] to hand.
 pub fn offset_shape_for_trace(
     board: &Board,
     shape: &Simplex,
@@ -119,18 +200,11 @@ pub fn offset_shape_for_trace(
     trace_layer: i32,
     own_cl_class: i32,
 ) -> Simplex {
-    if board.trees().clearance_compensation_used() {
-        let curr_offset =
-            compensated_half_width(board, trace_half_width, trace_cl_class, trace_layer) as f64
-                + C_OFFSET_ADD;
-        shape.offset(curr_offset)
-    } else {
-        let cl_offset = board
-            .clearances()
-            .value(trace_cl_class, own_cl_class, trace_layer) as f64
-            + C_OFFSET_ADD;
-        shape.offset(trace_half_width as f64).offset(cl_offset)
-    }
+    OffsetParams::new(board, trace_layer, own_cl_class).offset_shape_for_trace(
+        shape,
+        trace_half_width,
+        trace_cl_class,
+    )
 }
 
 /// The tile shape of `id` on `layer` in the default tree, upstream's
@@ -223,6 +297,9 @@ impl ShapeTraceEntries {
         is_pad_check: bool,
         copper_sharing_allowed: bool,
     ) -> bool {
+        // §15: one resolution of the tree flag and the clearance matrix for the
+        // whole item list, instead of one per `store_trace`.
+        let offsets = OffsetParams::new(board, self.layer, self.cl_class);
         for &id in item_list {
             let Some(item) = board.store().get(id) else {
                 continue;
@@ -253,7 +330,7 @@ impl ShapeTraceEntries {
                     }
                 }
                 ItemKind::Trace(_) => {
-                    if !self.store_trace(board, id, item) {
+                    if !self.store_trace(board, offsets, id, item) {
                         return false;
                     }
                 }
@@ -282,18 +359,26 @@ impl ShapeTraceEntries {
     }
 
     /// `store_trace(trace)` (`:265-370`) — the entry-point computation.
-    fn store_trace(&mut self, board: &Board, id: ItemId, item: &Item) -> bool {
+    fn store_trace(
+        &mut self,
+        board: &Board,
+        offsets: OffsetParams<'_>,
+        id: ItemId,
+        item: &Item,
+    ) -> bool {
         let ItemKind::Trace(trace) = &item.kind else {
             return true;
         };
-        let offset_shape = offset_shape_for_trace(
-            board,
-            &self.shape,
-            trace.half_width,
-            item.clearance_class,
-            trace.layer,
-            self.cl_class,
+        // `offsets` carries the shove shape's layer, where the pre-hoist code
+        // passed `trace.layer`. The two are the same by construction: the item
+        // list comes from an overlap query on `self.layer`, so a trace in it
+        // runs on that layer.
+        debug_assert_eq!(
+            trace.layer, self.layer,
+            "store_trace got an obstacle from another layer"
         );
+        let offset_shape =
+            offsets.offset_shape_for_trace(&self.shape, trace.half_width, item.clearance_class);
         if offset_shape.is_empty() {
             return true;
         }
@@ -354,23 +439,13 @@ impl ShapeTraceEntries {
                             };
                             let via_simplex = geom::tile_to_simplex(&via_shape);
                             let mut via_trace_diff = via_simplex.smallest_radius()
-                                - compensated_half_width(
-                                    board,
+                                - offsets.compensated_half_width(
                                     trace.half_width,
                                     item.clearance_class,
-                                    trace.layer,
                                 ) as f64;
-                            if !board.trees().clearance_compensation_used() {
-                                let via_clearance = board.clearances().value(
-                                    contact.clearance_class,
-                                    self.cl_class,
-                                    self.layer,
-                                );
-                                let trace_clearance = board.clearances().value(
-                                    item.clearance_class,
-                                    self.cl_class,
-                                    self.layer,
-                                );
+                            if !offsets.is_compensated() {
+                                let via_clearance = offsets.clearance_to(contact.clearance_class);
+                                let trace_clearance = offsets.clearance_to(item.clearance_class);
                                 if trace_clearance > via_clearance {
                                     via_trace_diff += (via_clearance - trace_clearance) as f64;
                                 }
@@ -808,16 +883,14 @@ impl ShapeTraceEntries {
     /// `next_substitute_trace_piece()` (`:176-221`): the popped entry pair as a
     /// polyline hugging the offset border between the two entry lines.
     pub fn next_substitute_trace_piece(&mut self, board: &Board) -> Option<SubstitutePiece> {
+        let offsets = OffsetParams::new(board, self.layer, self.cl_class);
         loop {
             let (first, last) = self.pop_piece()?;
             let info = self.traces[self.entries[first as usize].trace_ref as usize].clone();
-            let offset_shape = offset_shape_for_trace(
-                board,
+            let offset_shape = offsets.offset_shape_for_trace(
                 &self.shape,
                 info.half_width,
                 info.cl_class,
-                self.layer,
-                self.cl_class,
             );
             let edge_count = self.shape.border_line_count();
             if edge_count == 0 || offset_shape.border_line_count() != edge_count {

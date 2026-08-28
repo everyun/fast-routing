@@ -143,8 +143,10 @@ name = "fr-router"
 version = "0.1.0"
 dependencies = [
  "fr-board",
+ "fr-check",
  "fr-datastructures",
  "fr-geometry",
+ "fr-io",
  "fr-metrics",
  "fr-router",
  "fr-rules",

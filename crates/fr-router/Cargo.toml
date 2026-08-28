@@ -7,6 +7,11 @@ description = "The M2 shape-expansion maze router for the freerouting Rust port:
 
 [dependencies]
 fr-board = { path = "../fr-board" }
+# The optimizer's pass loop stops on a *score* delta, and the score counts
+# clearance violations and connections — questions only the referee is allowed
+# to answer (see `fr_router::optimizer::stats`). No cycle: `fr-check` depends
+# on `fr-board` / `fr-geometry` / `fr-rules` only.
+fr-check = { path = "../fr-check" }
 fr-datastructures = { path = "../fr-datastructures" }
 fr-geometry = { path = "../fr-geometry" }
 fr-metrics = { path = "../fr-metrics" }
@@ -21,6 +26,10 @@ test-support = []
 [dev-dependencies]
 fr-router = { path = ".", features = ["test-support"] }
 fr-metrics = { path = "../fr-metrics" }
+# `tests/batch_multipass.rs` drives the batch loop over the real fixture corpus,
+# which means importing a `.dsn`. A dev-dependency, so the router itself still
+# knows nothing about file formats.
+fr-io = { path = "../fr-io" }
 
 [[example]]
 name = "settle_trace"

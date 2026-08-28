@@ -1,0 +1,5 @@
+Imported C:\Users\YI\Downloads\中文测试目录\interf_u.dsn in 3.51s: 2 layers, 1593 items (379 pins, 679 traces, 84 vias)
+Router: 1 passes, 82 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 192 clearance violations, 18 of 201 connections incomplete, score 719.39/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue093-interf_u.rust.ses

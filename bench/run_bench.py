@@ -105,6 +105,24 @@ RE_RUST_COMPLETE = re.compile(
     r"(\d+) vias, DRC violations: (\d+)"
 )
 
+# fr-cli since M2a prints the summary as three lines instead, and the counting
+# unit moved from nets to *connections* — the same unit Java's "(N unrouted and
+# M violations)" uses, so the two tools stayed comparable while this parser did
+# not. Without these the whole `--only-rust` sweep records `parse_ok = False`
+# and every row is classified CRASH.
+#
+#   Imported <name> in 36.35s: 2 layers, 1139 items (278 pins, 217 traces, 27 vias)
+#   Router: 1 passes, 392 routed, 20 failed, 275 ripped, 0 pins fanned out
+#   Referee: 0 clearance violations, 26 of 147 connections incomplete, score 823.12/1000
+RE_RUST_IMPORTED = re.compile(r"^Imported .* in ([\d.]+)s: ", re.M)
+RE_RUST_REFEREE = re.compile(
+    r"^Referee: (\d+) clearance violations, (\d+) of (\d+) connections incomplete, "
+    r"score ([\d.]+)/1000",
+    re.M,
+)
+RE_RUST_ROUTER = re.compile(r"^Router: (\d+) passes, ", re.M)
+RE_RUST_VIAS = re.compile(r"items \(\d+ pins, \d+ traces, (\d+) vias\)")
+
 _HEAP_MULT = {"KB": 1024, "MB": 1024**2, "GB": 1024**3}
 
 
@@ -209,6 +227,28 @@ def parse_rust_log(stdout: str) -> dict:
         out["vias_reported"] = int(m.group(5))
         out["violations"] = int(m.group(6))
         out["parse_ok"] = True
+        return out
+
+    # The M2a+ three-line summary. `unrouted`/`total` are connections, not
+    # nets, so `routed_nets`/`total_nets` stay `None` rather than being filled
+    # with a different unit; nothing downstream reads them for the rust side.
+    referee = RE_RUST_REFEREE.search(stdout)
+    if referee is None:
+        return out
+    out["violations"] = int(referee.group(1))
+    out["unrouted"] = int(referee.group(2))
+    imported = RE_RUST_IMPORTED.search(stdout)
+    if imported:
+        # `Imported ... in Xs` is the whole run's elapsed time, printed after
+        # routing (`fr-cli/src/main.rs` `print_summary`), so it is the tool
+        # time in the same sense as Java's auto-routing stage total.
+        out["tool_time_s"] = float(imported.group(1))
+    vias = RE_RUST_VIAS.search(stdout)
+    if vias:
+        out["vias_reported"] = int(vias.group(1))
+    # A routing run must have printed the `Router:` line; an `--import-only`
+    # style stdout is not a routing result.
+    out["parse_ok"] = RE_RUST_ROUTER.search(stdout) is not None
     return out
 
 

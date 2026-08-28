@@ -57,8 +57,10 @@ use fr_check::{
     ScoreWeights, StoreView, Violation,
 };
 use fr_io::specctra::{self, ImportError, ImportOptions, ImportedDesign, SesInput, Unit};
+use fr_router::batch::budget::BudgetPolicy;
 use fr_router::batch::BatchRouter;
 use fr_router::fanout::{fanout_board, FanoutConfig};
+use fr_router::StopReason;
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 
 /// The router stage.
@@ -76,6 +78,11 @@ pub enum RouterStage {
 pub struct MazeOptions {
     /// Ripup-and-reroute passes. Pass *n* routes at `start_ripup_costs * n`
     /// (`batch-orchestration.md` §4, row 44). `-mp` on the command line.
+    ///
+    /// Must be `>= 1`: upstream's `maxPasses <= 0` re-enables the router with
+    /// **no pass cap at all** (conformance appendix §1.2), and this port
+    /// refuses to reach that state by accident — `fr-cli` rejects a negative
+    /// `-mp` with an error, and [`MazeOptions::with_passes`] clamps.
     pub max_passes: i32,
     /// Run the SMD pin-escape pre-pass first.
     ///
@@ -84,6 +91,10 @@ pub struct MazeOptions {
     /// every other connection, and a fanout that escapes into a bad via placement is much harder
     /// to undo than a connection that simply fails. It is opt-in until the insert wave lands.
     pub fanout: bool,
+    /// Spend the per-connection budget in effort-based virtual time instead of wall time, so no
+    /// routing decision can depend on machine load (`fr_router::batch::budget`, gate G2.2).
+    /// `--deterministic` on the command line.
+    pub deterministic: bool,
 }
 
 impl Default for MazeOptions {
@@ -91,6 +102,7 @@ impl Default for MazeOptions {
         MazeOptions {
             max_passes: 1,
             fanout: false,
+            deterministic: false,
         }
     }
 }
@@ -109,6 +121,12 @@ impl MazeOptions {
         self.fanout = fanout;
         self
     }
+
+    /// Turns the effort-based virtual budget clock on or off.
+    pub fn with_deterministic(mut self, deterministic: bool) -> MazeOptions {
+        self.deterministic = deterministic;
+        self
+    }
 }
 
 /// What the router stage did, `None` when it did not run.
@@ -124,9 +142,20 @@ pub struct RouterReport {
     pub ripped: usize,
     /// SMD pins escaped by the fanout pre-pass.
     pub fanouted: usize,
-    /// Ratsnest incompletes when the router stopped — the router's own count,
-    /// before the referee re-derives it.
+    /// Ratsnest incompletes when the router stopped, as the referee counts them —
+    /// the batch loop's stop rules read the referee's score, so this is the same number
+    /// [`JobReport::stats`] carries and not a second opinion.
     pub incomplete_count: usize,
+    /// Why the batch loop stopped (`fr_router::StopReason`), as a short label
+    /// for the summary line.
+    pub stop_reason: &'static str,
+    /// Board restores the pass ≥ 8 check performed.
+    pub restores: usize,
+    /// Whether the run ended by restoring the best board it ever held.
+    pub best_board_restored: bool,
+    /// Connections that reached their per-connection budget, summed over the
+    /// passes — ARCHITECTURE "Budgets"'s `connections_hitting_budget`.
+    pub connections_hitting_budget: usize,
 }
 
 /// Millimetres to board units for this design.
@@ -173,7 +202,18 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
         report.fanouted = outcome.total_items_fanouted;
     }
 
-    let mut router = BatchRouter::new(&design.rules, &settings);
+    // The batch loop needs three things the design knows and the board does not: whether the
+    // fanout stage actually ran (it gates the one-time fanout-tail recovery, `:1073`), the unit
+    // conversion of the score's trace-length term, and the budget clock.
+    let budget = if options.deterministic {
+        BudgetPolicy::deterministic()
+    } else {
+        BudgetPolicy::default()
+    };
+    let mut router = BatchRouter::new(&design.rules, &settings)
+        .with_fanout(options.fanout)
+        .with_board_units_per_mm(scale)
+        .with_budget(budget);
     let outcome = router.run(&mut design.board, options.max_passes);
     report.passes = outcome.passes.len();
     report.routed = outcome.passes.iter().map(|pass| pass.routed).sum();
@@ -184,7 +224,30 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
         .sum();
     report.not_routed = outcome.passes.last().map_or(0, |pass| pass.not_routed);
     report.incomplete_count = outcome.incomplete_count;
+    report.stop_reason = describe_stop(outcome.stop_reason);
+    report.restores = outcome.restores;
+    report.best_board_restored = outcome.best_board_restored;
+    report.connections_hitting_budget = outcome
+        .passes
+        .iter()
+        .map(|pass| pass.connections_hitting_budget)
+        .sum();
     report
+}
+
+/// A short label for the batch loop's stop reason.
+fn describe_stop(reason: Option<StopReason>) -> &'static str {
+    match reason {
+        None => "not started",
+        Some(StopReason::BoardComplete) => "board complete",
+        Some(StopReason::NoProgress) => "no progress",
+        Some(StopReason::MaxPasses) => "pass limit",
+        Some(StopReason::ItemLimit) => "item limit",
+        Some(StopReason::NoBetterBoard) => "no better board",
+        Some(StopReason::RankLimit) => "board rank limit",
+        Some(StopReason::PassLocalStagnation) => "stagnation (pass-local)",
+        Some(StopReason::GlobalStagnation) => "stagnation (global)",
+    }
 }
 
 /// Why a job could not produce a report.

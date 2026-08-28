@@ -1,0 +1,5 @@
+Imported C:\Users\SetonixSynth\Desktop\eeschema files\tidbit audio\2hp passive LED\setonix_2hpblank-pcb.dsn in 0.25s: 2 layers, 232 items (32 pins, 33 traces, 0 vias)
+Router: 1 passes, 33 routed, 4 failed, 15 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 0 clearance violations, 2 of 23 connections incomplete, score 913.04/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue159-setonix_2hp-pcb.rust.ses

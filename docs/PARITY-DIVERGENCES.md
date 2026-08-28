@@ -39,22 +39,43 @@ ARCHITECTURE "Budgets".
   a new pin grows the via count, so the counter never advances. Bounded and one-sided; measure
   on Issue219 when the fanout gate runs.
 
-- **Ripped connections are requeued inside the pass** (`fr_router::batch::BatchRouter`,
-  `requeue_ripped_items`, default on).
+- **Ripped connections are requeued inside the pass, at `-mp 1` only**
+  (`fr_router::batch::schedule::RequeuePolicy`, default `SinglePassOnly`).
   *Upstream* (`autoroute/BatchAutorouter.java:431-694`) derives the work list once per pass
   (`getAutorouteItems`, `:250-306`) and never adds to it; a net whose wiring a later connection
   ripped is picked up by the *next* pass, which re-derives the list from scratch and retries at
   `start_ripup_costs * pass_no` (§4.1: "there is **no retry inside a pass**").
   *We* re-enqueue a net whose copper an insert deleted, once per ripup, capped at the pass's
-  own work-list length so a pass can at most double.
-  *Why*: with `-mp 1` — the M2a default and what the CLI ships — there is no next pass, so a
-  ripup would otherwise be a pure loss: the router would trade a routed connection for an
-  unrouted one and report success.
-  *Effect*: on `-mp 1` this can only reduce incompletes. On `-mp >= 2` it front-loads work the
-  release would have done in the following pass, at that pass's *lower* ripup budget, so the
-  intermediate boards differ from upstream's even when the final one does not. Revisit when the
-  M2c pass scheduler lands: the honest long-run configuration is `requeue_ripped_items = false`
-  plus upstream's stop rules.
+  own work-list length so a pass can at most double — **but only when the run was asked for a
+  single pass**. At `-mp >= 2` the policy resolves to upstream's rule and nothing is requeued.
+  *Why*: with `-mp 1` there is no next pass, so a ripup would otherwise be a pure loss: the
+  router would trade a routed connection for an unrouted one and report success. Now that the
+  M2c pass scheduler has landed, `-mp >= 2` *has* the next pass upstream relies on, so the
+  divergence has no reason to exist there and is switched off — as the earlier version of this
+  entry said it should be.
+  *Effect*: on `-mp 1` this can only reduce incompletes (measured on Issue026: one connection
+  requeued in-pass). On `-mp >= 2` there is now **no divergence**: pass boundaries, work lists
+  and ripup budgets are the release's. `RequeuePolicy::Always` keeps the old behaviour available
+  for A/B measurement of the divergence itself; `tests/batch_multipass.rs` asserts the switch.
+
+- **A negative `-mp` is rejected instead of running uncapped** (`fr-cli`, `parse_max_passes`).
+  *Upstream* accepts it, and it is a latent bug the conformance appendix flags as "the
+  cautionary example" (§1.2): the entry-point guard
+  `getRunRouter() && (maxPasses == null || maxPasses >= 0)` sends a negative value down the
+  *fanout-only* branch, which sets `maxPasses = 0`; `BatchAutorouter.runBatchLoop:894` then
+  recomputes the same guard and re-enables the router, while the pass cap at `:931` requires
+  `maxPasses > 0` — so `-mp -1` routes with **no pass limit at all**, ended only by a stagnation
+  rule.
+  *We* fail the argument scan with an error and exit 1. A non-numeric `-mp` is rejected the same
+  way; the pre-existing `.parse().ok()` silently turned `-mp tow` into a one-pass run.
+  *Why not replicate*: `-mp -1` has no meaning a user could be relying on, and the failure mode
+  is a run that does not end. Silently clamping to 1 was rejected as the other option, because
+  it hides a typo in a long batch.
+  *Effect*: none on any fixture or harness — `bench/run_bench.py` passes positive counts only.
+  The uncapped loop stays reachable deliberately through
+  `fr_router::LoopConfig { max_passes: 0, .. }`, which is how the loop's own tests exercise it.
+  Fanout-only is an explicit mode (`--fanout` with the router stage off), never a magic pass
+  count, per `batch-orchestration.md` §11.1.
 
 ## Referee
 

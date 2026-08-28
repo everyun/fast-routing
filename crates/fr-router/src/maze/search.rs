@@ -17,17 +17,23 @@
 //! `already_checked = true` and the section is left unoccupied, so another door
 //! section may still shove the room before it is ripped.
 //!
-//! Two integration points are still the M2a stand-ins, both flagged at their
-//! call sites:
+//! The two M2a stand-ins are gone; both drill paths now run the real shove:
 //!
-//! * `ForcedViaAlgo.check_layer` — the shove-aware version now exists as
-//!   [`fr_board::ShoveCheck::check_via_layer`] (with conformance deltas B3/B4),
-//!   but the drill scan here still uses
-//!   [`MazeSearch::check_layer_with_any_matching_via`];
-//! * `check_forced_trace_polyline` for the thin-room target hookup
-//!   (`shove.md` §10.3) — still the straight-segment predicate.
+//! * `ForcedViaAlgo.check_layer` — [`MazeSearch::check_layer_with_any_matching_via`]
+//!   calls [`fr_board::ShoveCheck::check_via_layer`] (conformance deltas
+//!   B3/B4) per via-rule candidate, so a drill layer counts as drillable when
+//!   room can be *made* for the pad;
+//! * `RoutingBoard.check_forced_trace_polyline` — the thin-room target hookup
+//!   (`shove.md` §10.3) runs [`MazeSearch::check_forced_trace_polyline`], the
+//!   full recursive shove check over the two-corner polyline, instead of the
+//!   straight-segment containment predicate.
+//!
+//! The `Adjustment` pairing the shove side-flip rule rests on is
+//! [`link_door_adjustment`] / [`blocking_adjustment`]; see
+//! [`MazeSearch::shove_trace_room`] for why they are opposites.
 
 use fr_board::item::{ItemClass, ItemId, ItemKind};
+use fr_board::shove::{CheckDrillResult, FromSide};
 use fr_geometry::planar::{FloatLine, FloatPoint, IntBox, Point, Simplex};
 
 use crate::ctrl::{ALREADY_RIPPED_COSTS, TRACE_WIDTH_TOLERANCE};
@@ -105,6 +111,9 @@ pub struct MazeSearch<'e, 'b> {
     shove_section_scratch: Vec<crate::maze::shove::DoorSection>,
     /// Scratch buffer for overlapping drill pages.
     page_scratch: Vec<PageId>,
+    /// Reusable buffer for the via-rule candidates of one drill layer check;
+    /// the drill scan runs it per layer per drill.
+    via_candidate_scratch: Vec<ViaCandidate>,
     /// Cap on settled elements; `None` = unbounded. Stands in for upstream's
     /// `TimeLimit` (`BatchAutorouter.java:1311-1313`), which belongs to the
     /// batch wave.
@@ -140,6 +149,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             section_scratch: Vec::new(),
             shove_section_scratch: Vec::new(),
             page_scratch: Vec::new(),
+            via_candidate_scratch: Vec::new(),
             expansion_limit: None,
             expansions: 0,
         };
@@ -696,11 +706,14 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             let connection_point = target_shape.nearest_point_approx(shape_entry_middle);
             if !next_room_is_thick {
                 // `:570-588`: verify a real trace can be forced from the entry
-                // to the connection point. That is `check_forced_trace_polyline`,
-                // i.e. the shove engine; with shove stubbed, M2a admits the hop
-                // only when the straight segment stays inside the room, which
-                // is the no-shove case of the same predicate.
-                if !self.straight_segment_fits(next_room, shape_entry_middle, &connection_point) {
+                // to the connection point — the full recursive shove check,
+                // not a containment test (`shove.md` §10.3).
+                let layer = self.engine.rooms.room(next_room).layer;
+                if !self.check_forced_trace_polyline(
+                    shape_entry_middle,
+                    &connection_point,
+                    layer,
+                ) {
                     continue;
                 }
             }
@@ -964,9 +977,14 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
     /// puts the caller on the delayed-ripup branch.
     ///
     /// Note the naming inversion upstream ships and this keeps: the *first*
-    /// block passes `shove_to_the_left = false` and tags its link doors
-    /// [`Adjustment::Left`]; the pairing, not the word, is what the side-flip
-    /// guard reads.
+    /// block passes `shove_to_the_left = false`, is guarded by
+    /// `adjustment != RIGHT` and tags its link doors [`Adjustment::Left`]. The
+    /// tag and the guard of one block are therefore *opposites*, which is
+    /// exactly what makes the rule "keep shoving the same way": an element
+    /// tagged `Left` fails the second block's `adjustment != LEFT` guard and so
+    /// re-runs the first block, i.e. `shove_to_the_left = false` again. Pairing
+    /// the tag with its own block's guard instead would flip the side on every
+    /// hop.
     fn shove_trace_room(&mut self, element: &FrontierElement, obstacle_room: RoomId) -> bool {
         // Inner sections of a door are not shoved, so the occupation need not
         // be delayed for them (`:1485-1492`).
@@ -979,11 +997,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let mut result = false;
         let mut sections = std::mem::take(&mut self.shove_section_scratch);
         for shove_to_the_left in [false, true] {
-            let blocked_by = if shove_to_the_left {
-                Adjustment::Left
-            } else {
-                Adjustment::Right
-            };
+            let blocked_by = blocking_adjustment(shove_to_the_left);
+            let link_door_adjustment = link_door_adjustment(shove_to_the_left);
             if element.payload.adjustment == blocked_by {
                 continue;
             }
@@ -997,7 +1012,15 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             ) {
                 result = true;
             }
-            for section in sections.iter() {
+            for &section in sections.iter() {
+                // Keyed on the reached door, not on the harvesting branch: a
+                // 2-dim door also comes back from the 1-dim branch when the
+                // shove was only partially wide (`:1502-1507`).
+                let adjustment = if self.engine.rooms.door(section.door).dimension == 2 {
+                    link_door_adjustment
+                } else {
+                    Adjustment::None
+                };
                 self.expand_to_door_section(
                     ExpandableRef::Door(section.door),
                     section.section_no,
@@ -1005,7 +1028,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     element,
                     obstacle_room,
                     0,
-                    section.adjustment,
+                    adjustment,
                 );
             }
         }
@@ -1028,17 +1051,76 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         0.0
     }
 
-    /// The no-shove case of `board.check_forced_trace_polyline`: does the
-    /// straight segment from the entry to the connection point stay inside the
-    /// room?
-    fn straight_segment_fits(&self, room: RoomId, from: &FloatPoint, to: &FloatPoint) -> bool {
+    /// `RoutingBoard.check_forced_trace_polyline` (`RoutingBoard.java:559-582`)
+    /// for the two-corner polyline the thin-room target hookup builds
+    /// (`MazeSearchAlgo.java:570-588`): can a trace of the routed width be
+    /// forced from `from` to `to` on `layer`, shoving whatever it meets?
+    ///
+    /// `check_points[0].equals(check_points[1])` short-circuits to `true`
+    /// upstream, before the polyline is built.
+    fn check_forced_trace_polyline(&self, from: &FloatPoint, to: &FloatPoint, layer: i32) -> bool {
         let from_point = from.round();
         let to_point = to.round();
         if from_point == to_point {
             return true;
         }
-        let shape = &self.engine.rooms.room(room).shape;
-        shape.contains(&Point::Int(from_point)) && shape.contains(&Point::Int(to_point))
+        let half_width = self
+            .engine
+            .ctrl
+            .trace_half_width
+            .get(layer.max(0) as usize)
+            .copied()
+            .unwrap_or(0);
+        let cl_class = self.engine.ctrl.trace_clearance_class_no;
+        // `:563` — on the default tree, whose compensation is off headless, so
+        // this is plain `half_width` and the clearance is added by the shove's
+        // own overlap query.
+        let compensated_half_width = fr_board::shove::entries::compensated_half_width(
+            self.engine.board,
+            half_width,
+            cl_class,
+            layer,
+        );
+        let polyline = fr_geometry::planar::Polyline::new_from_two_points(
+            &Point::Int(from_point),
+            &Point::Int(to_point),
+        );
+        if polyline.arr.len() < 3 {
+            // A degenerate polyline yields no offset shape; upstream's loop
+            // then runs zero times and answers true.
+            return true;
+        }
+        let orthogonal_mode =
+            self.engine.board.angle_restriction() == fr_board::shape::AngleRestriction::Ninety;
+        let net_no_arr = fr_board::net_nos::NetNos::of(self.engine.ctrl.net_no);
+        let bounds = self.engine.bounds();
+        let mut checker = fr_board::ShoveCheck::new(self.engine.board, bounds);
+        for (index, shape) in polyline
+            .offset_shapes(compensated_half_width)
+            .iter()
+            .enumerate()
+        {
+            let shape = if orthogonal_mode && shape.is_bounded() {
+                shape.bounding_box().to_simplex()
+            } else {
+                shape.clone()
+            };
+            let from_side = FromSide::from_polyline(&polyline, index + 1, &shape);
+            if !checker.check(
+                &shape,
+                Some(from_side),
+                None,
+                layer,
+                &net_no_arr,
+                cl_class,
+                self.engine.ctrl.max_shove_trace_recursion_depth,
+                self.engine.ctrl.max_shove_via_recursion_depth,
+                self.engine.ctrl.max_spring_over_recursion_depth,
+            ) {
+                return false;
+            }
+        }
+        true
     }
 
     /// The split-plane check of `:399-409`: is there a foreign-net conduction
@@ -1505,96 +1587,93 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
     /// own radius, clearance class and attach flag; `DRILLABLE` on the first
     /// success, else `DRILLABLE_WITH_ATTACH_SMD` if any padstack got that.
     ///
-    /// `ForcedViaAlgo.check_layer` itself is the shove engine's entry point.
-    /// M2a's stand-in is the no-shove case: the via pad must fit inside the
-    /// free room and must meet nothing that is not drillable for the routed
-    /// net, with a drillable pin counting as attach-SMD.
+    /// The per-candidate check is [`fr_board::ShoveCheck::check_via_layer`],
+    /// the real `ForcedViaAlgo.check_layer` (deltas B3/B4), no longer the M2a
+    /// no-shove stand-in: a layer now counts as drillable when the via pad can
+    /// be made room for by *shoving* what it meets, which is what upstream
+    /// asks. Upstream passes `max_via_recursion_depth = 0` here
+    /// (`:1195-1197`) — a via checked for a drill may push traces but not
+    /// other vias.
     fn check_layer_with_any_matching_via(
         &mut self,
         location: &fr_geometry::planar::IntPoint,
         layer: i32,
         room_shape: &Simplex,
     ) -> CheckDrillResult {
-        let mut drillable_with_attach_smd = false;
-        // The candidate list is snapshotted first: `check_layer` needs `&mut
-        // self` for the tree query, and the via rule lives inside `self.ctrl`.
+        // The candidate list is snapshotted first: the check borrows the board
+        // while the via rule lives inside `self.engine.ctrl`.
         let trace_half_width = self
             .engine
             .ctrl
             .trace_half_width
             .get(layer.max(0) as usize)
             .copied()
-            .unwrap_or(0) as f64;
-        let candidates: Vec<(f64, bool)> = (0..self.engine.ctrl.via_rule.via_count())
-            .filter_map(|index| {
-                let via = self.engine.ctrl.via_rule.get_via(index)?;
-                let padstack = via.padstack();
-                if (layer as usize) < padstack.from_layer()
-                    || (layer as usize) > padstack.to_layer()
-                {
-                    return None;
+            .unwrap_or(0);
+        let mut candidates = std::mem::take(&mut self.via_candidate_scratch);
+        candidates.clear();
+        for index in 0..self.engine.ctrl.via_rule.via_count() {
+            let Some(via) = self.engine.ctrl.via_rule.get_via(index) else {
+                continue;
+            };
+            let padstack = via.padstack();
+            if (layer as usize) < padstack.from_layer() || (layer as usize) > padstack.to_layer() {
+                continue;
+            }
+            let via_radius = padstack
+                .get_shape(layer as usize)
+                .map(|shape| 0.5 * shape.max_width())
+                .unwrap_or(0.0);
+            // Delta B4 (`:1193`): the radius is lifted to the trace half
+            // width, so a drill never promises less room than the trace it
+            // continues.
+            candidates.push(ViaCandidate {
+                required_radius: via_radius.max(trace_half_width as f64),
+                clearance_class: via.clearance_class() as i32,
+                attach_smd_allowed: via.attach_smd_allowed(),
+            });
+        }
+
+        let net_no_arr = fr_board::net_nos::NetNos::of(self.engine.ctrl.net_no);
+        let max_recursion_depth = self.engine.ctrl.max_shove_trace_recursion_depth;
+        let trace_clearance_class = self.engine.ctrl.trace_clearance_class_no;
+        let bounds = self.engine.bounds();
+        let mut checker = fr_board::ShoveCheck::new(self.engine.board, bounds);
+        let mut drillable_with_attach_smd = false;
+        let mut result = CheckDrillResult::NotDrillable;
+        for candidate in candidates.iter() {
+            match checker.check_via_layer(
+                candidate.required_radius,
+                candidate.clearance_class,
+                candidate.attach_smd_allowed,
+                room_shape,
+                *location,
+                layer,
+                &net_no_arr,
+                max_recursion_depth,
+                0,
+                trace_half_width,
+                trace_clearance_class,
+            ) {
+                CheckDrillResult::Drillable => {
+                    result = CheckDrillResult::Drillable;
+                    break;
                 }
-                let via_radius = padstack
-                    .get_shape(layer as usize)
-                    .map(|shape| 0.5 * shape.max_width())
-                    .unwrap_or(0.0);
-                Some((via_radius.max(trace_half_width), via.attach_smd_allowed()))
-            })
-            .collect();
-        for (required_radius, attach_smd_allowed) in candidates {
-            match self.check_layer(location, layer, room_shape, required_radius) {
-                CheckDrillResult::Drillable => return CheckDrillResult::Drillable,
-                CheckDrillResult::DrillableWithAttachSmd => {
-                    if attach_smd_allowed {
-                        drillable_with_attach_smd = true;
-                    }
-                }
+                // Upstream trusts `check_layer`'s own attach handling here: the
+                // flag was already passed in, so the answer is not re-gated
+                // (`:1201-1203`).
+                CheckDrillResult::DrillableWithAttachSmd => drillable_with_attach_smd = true,
                 CheckDrillResult::NotDrillable => {}
             }
+        }
+        candidates.clear();
+        self.via_candidate_scratch = candidates;
+        if result == CheckDrillResult::Drillable {
+            return result;
         }
         if drillable_with_attach_smd {
             CheckDrillResult::DrillableWithAttachSmd
         } else {
             CheckDrillResult::NotDrillable
-        }
-    }
-
-    fn check_layer(
-        &mut self,
-        location: &fr_geometry::planar::IntPoint,
-        layer: i32,
-        room_shape: &Simplex,
-        required_radius: f64,
-    ) -> CheckDrillResult {
-        let pad = Point::Int(*location)
-            .surrounding_octagon()
-            .offset(required_radius)
-            .to_simplex();
-        if !geom::contains_shape(room_shape, &pad) {
-            return CheckDrillResult::NotDrillable;
-        }
-        let mut entries = Vec::new();
-        self.engine
-            .overlapping_items_on_layer(&pad, Some(layer), &mut entries);
-        let net_no = self.engine.ctrl.net_no;
-        let mut attach_smd = false;
-        for (item_id, _) in entries {
-            let Some(item) = self.engine.board.store().get(item_id) else {
-                continue;
-            };
-            if item.is_drillable(net_no) {
-                continue;
-            }
-            if item.class() == ItemClass::Pin && item.drill_allowed() {
-                attach_smd = true;
-                continue;
-            }
-            return CheckDrillResult::NotDrillable;
-        }
-        if attach_smd {
-            CheckDrillResult::DrillableWithAttachSmd
-        } else {
-            CheckDrillResult::Drillable
         }
     }
 
@@ -1805,12 +1884,41 @@ fn nearest_box_point(boundary: &IntBox, point: &FloatPoint) -> FloatPoint {
     )
 }
 
-/// `ForcedPadAlgo.CheckDrillResult`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum CheckDrillResult {
-    NotDrillable,
-    Drillable,
-    DrillableWithAttachSmd,
+/// The [`Adjustment`] that stops `MazeSearchAlgo.shove_trace_room` from
+/// running this direction at all (`:1493` for `shove_to_the_left = false`,
+/// `:1515` for `true`).
+fn blocking_adjustment(shove_to_the_left: bool) -> Adjustment {
+    if shove_to_the_left {
+        Adjustment::Left
+    } else {
+        Adjustment::Right
+    }
+}
+
+/// The [`Adjustment`] this direction tags a reached 2-dim link door with
+/// (`:1502-1507` for `shove_to_the_left = false`, `:1523-1528` for `true`).
+///
+/// It is the **opposite** of [`blocking_adjustment`] for the same direction,
+/// and that is the whole no-side-flip rule: the tag blocks the *other*
+/// direction next time, so the element keeps shoving the way it already went.
+fn link_door_adjustment(shove_to_the_left: bool) -> Adjustment {
+    if shove_to_the_left {
+        Adjustment::Right
+    } else {
+        Adjustment::Left
+    }
+}
+
+/// One entry of `ctrl.via_rule` resolved for one layer
+/// (`MazeSearchAlgo.java:1186-1194`).
+#[derive(Debug, Clone, Copy)]
+struct ViaCandidate {
+    /// `max(0.5 * via_shape.max_width(), ctrl.trace_half_width[layer])`.
+    required_radius: f64,
+    /// `via_info.get_clearance_class()`.
+    clearance_class: i32,
+    /// `via_info.attach_smd_allowed()`.
+    attach_smd_allowed: bool,
 }
 
 #[cfg(test)]
@@ -1848,5 +1956,28 @@ mod tests {
         let _ = search.find_connection();
         assert!(!search.settles().is_empty());
         assert_eq!(search.settles().len() as u64, search.expansions());
+    }
+
+    /// `MazeSearchAlgo.shove_trace_room` pairs each direction's link-door tag
+    /// with the *opposite* direction's guard (`:1493`/`:1502-1507` and
+    /// `:1515`/`:1523-1528`). Pairing a tag with its own guard instead makes an
+    /// element flip sides on every link-door hop, which is exactly the maze
+    /// walking off the trace it was shoving.
+    #[test]
+    fn a_link_door_tag_never_blocks_its_own_shove_direction() {
+        for shove_to_the_left in [false, true] {
+            let tag = link_door_adjustment(shove_to_the_left);
+            assert_ne!(tag, Adjustment::None);
+            assert_ne!(
+                tag,
+                blocking_adjustment(shove_to_the_left),
+                "a {shove_to_the_left} shove must stay runnable after it tagged a link door"
+            );
+            assert_eq!(
+                tag,
+                blocking_adjustment(!shove_to_the_left),
+                "a {shove_to_the_left} shove must block the opposite direction"
+            );
+        }
     }
 }

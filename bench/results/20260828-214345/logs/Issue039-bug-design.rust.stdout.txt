@@ -1,0 +1,5 @@
+Imported /home/sliedes/projects/xyz/pcm1681.dsn in 84.21s: 2 layers, 1405 items (281 pins, 267 traces, 62 vias)
+Router: 1 passes, 455 routed, 76 failed, 371 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 25 clearance violations, 67 of 204 connections incomplete, score 647.05/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue039-bug-design.rust.ses

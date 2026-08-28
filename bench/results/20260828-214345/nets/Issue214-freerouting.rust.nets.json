@@ -1,0 +1,982 @@
+{
+ "+3V3": {
+  "pins": 5,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 18.752,
+  "wire_length_raw": 187520.1597
+ },
+ "+5V": {
+  "pins": 53,
+  "wire_count": 209,
+  "via_count": 26,
+  "wire_length_mm": 324.2327,
+  "wire_length_raw": 3242326.955
+ },
+ "+6V": {
+  "pins": 10,
+  "wire_count": 22,
+  "via_count": 5,
+  "wire_length_mm": 140.2717,
+  "wire_length_raw": 1402716.984
+ },
+ "/ESP32/BUF1_IN": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 10.1637,
+  "wire_length_raw": 101637.3207
+ },
+ "/ESP32/BUF1_OUT": {
+  "pins": 2,
+  "wire_count": 4,
+  "via_count": 1,
+  "wire_length_mm": 11.79,
+  "wire_length_raw": 117899.6882
+ },
+ "/ESP32/CHIP_PU": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 1,
+  "wire_length_mm": 46.6293,
+  "wire_length_raw": 466292.74
+ },
+ "/ESP32/GPIO0": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 18.8329,
+  "wire_length_raw": 188328.9968
+ },
+ "/ESP32/GPIO1": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 19.0278,
+  "wire_length_raw": 190278.0034
+ },
+ "/ESP32/GPIO10": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 13.7774,
+  "wire_length_raw": 137773.8727
+ },
+ "/ESP32/GPIO11": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 14.6317,
+  "wire_length_raw": 146316.8138
+ },
+ "/ESP32/GPIO12": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 15.5429,
+  "wire_length_raw": 155428.9548
+ },
+ "/ESP32/GPIO13": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 16.5016,
+  "wire_length_raw": 165016.0295
+ },
+ "/ESP32/GPIO14": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 17.5002,
+  "wire_length_raw": 175001.8065
+ },
+ "/ESP32/GPIO15": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 10.6094,
+  "wire_length_raw": 106094.4862
+ },
+ "/ESP32/GPIO16": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 10.503,
+  "wire_length_raw": 105029.7577
+ },
+ "/ESP32/GPIO17": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 10.5494,
+  "wire_length_raw": 105494.2652
+ },
+ "/ESP32/GPIO18": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 10.7468,
+  "wire_length_raw": 107468.1813
+ },
+ "/ESP32/GPIO2": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 18.5588,
+  "wire_length_raw": 185588.2219
+ },
+ "/ESP32/GPIO21": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 23.9881,
+  "wire_length_raw": 239880.8381
+ },
+ "/ESP32/GPIO3": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 24.1743,
+  "wire_length_raw": 241742.6514
+ },
+ "/ESP32/GPIO35": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 21.0385,
+  "wire_length_raw": 210384.5487
+ },
+ "/ESP32/GPIO36": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 18.0567,
+  "wire_length_raw": 180566.6631
+ },
+ "/ESP32/GPIO37": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 20.4538,
+  "wire_length_raw": 204537.9649
+ },
+ "/ESP32/GPIO38": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 17.6746,
+  "wire_length_raw": 176746.4
+ },
+ "/ESP32/GPIO39": {
+  "pins": 4,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 21.2498,
+  "wire_length_raw": 212497.8231
+ },
+ "/ESP32/GPIO4": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 12.402,
+  "wire_length_raw": 124020.1597
+ },
+ "/ESP32/GPIO40": {
+  "pins": 4,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 27.3104,
+  "wire_length_raw": 273103.521
+ },
+ "/ESP32/GPIO41": {
+  "pins": 4,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 29.9734,
+  "wire_length_raw": 299733.8289
+ },
+ "/ESP32/GPIO42": {
+  "pins": 4,
+  "wire_count": 8,
+  "via_count": 0,
+  "wire_length_mm": 36.0433,
+  "wire_length_raw": 360432.6672
+ },
+ "/ESP32/GPIO45": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 21.9928,
+  "wire_length_raw": 219927.7655
+ },
+ "/ESP32/GPIO46": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 12.2864,
+  "wire_length_raw": 122863.5015
+ },
+ "/ESP32/GPIO47": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 20.618,
+  "wire_length_raw": 206179.8932
+ },
+ "/ESP32/GPIO48": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 19.9504,
+  "wire_length_raw": 199503.8994
+ },
+ "/ESP32/GPIO5": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 11.7754,
+  "wire_length_raw": 117753.5137
+ },
+ "/ESP32/GPIO6": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 11.2576,
+  "wire_length_raw": 112576.0188
+ },
+ "/ESP32/GPIO7": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 10.8643,
+  "wire_length_raw": 108643.4996
+ },
+ "/ESP32/GPIO8": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 11.0871,
+  "wire_length_raw": 110870.9159
+ },
+ "/ESP32/GPIO9": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 12.9912,
+  "wire_length_raw": 129912.4705
+ },
+ "/ESP32/U0RXD": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 19.5792,
+  "wire_length_raw": 195792.1191
+ },
+ "/ESP32/U0TXD": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 20.2053,
+  "wire_length_raw": 202052.9533
+ },
+ "/LED_DATA": {
+  "pins": 2,
+  "wire_count": 5,
+  "via_count": 1,
+  "wire_length_mm": 53.0538,
+  "wire_length_raw": 530537.8502
+ },
+ "/Motors/CS1": {
+  "pins": 2,
+  "wire_count": 10,
+  "via_count": 0,
+  "wire_length_mm": 21.4614,
+  "wire_length_raw": 214614.2578
+ },
+ "/Motors/CS1N": {
+  "pins": 3,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 7.4973,
+  "wire_length_raw": 74973.4897
+ },
+ "/Motors/CS1P": {
+  "pins": 3,
+  "wire_count": 9,
+  "via_count": 2,
+  "wire_length_mm": 19.1896,
+  "wire_length_raw": 191895.9888
+ },
+ "/Motors/CS1_PK": {
+  "pins": 4,
+  "wire_count": 20,
+  "via_count": 0,
+  "wire_length_mm": 44.5451,
+  "wire_length_raw": 445450.9009
+ },
+ "/Motors/CS2": {
+  "pins": 2,
+  "wire_count": 8,
+  "via_count": 2,
+  "wire_length_mm": 15.586,
+  "wire_length_raw": 155860.3765
+ },
+ "/Motors/CS2N": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 7.6691,
+  "wire_length_raw": 76690.7263
+ },
+ "/Motors/CS2P": {
+  "pins": 3,
+  "wire_count": 7,
+  "via_count": 2,
+  "wire_length_mm": 23.1482,
+  "wire_length_raw": 231482.1591
+ },
+ "/Motors/CS2_PK": {
+  "pins": 4,
+  "wire_count": 15,
+  "via_count": 2,
+  "wire_length_mm": 40.6593,
+  "wire_length_raw": 406592.5635
+ },
+ "/Motors/CS3": {
+  "pins": 2,
+  "wire_count": 8,
+  "via_count": 0,
+  "wire_length_mm": 11.7671,
+  "wire_length_raw": 117670.7167
+ },
+ "/Motors/CS3N": {
+  "pins": 3,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 7.032,
+  "wire_length_raw": 70319.9611
+ },
+ "/Motors/CS3P": {
+  "pins": 3,
+  "wire_count": 6,
+  "via_count": 2,
+  "wire_length_mm": 19.5435,
+  "wire_length_raw": 195434.694
+ },
+ "/Motors/CS3_PK": {
+  "pins": 4,
+  "wire_count": 18,
+  "via_count": 2,
+  "wire_length_mm": 32.9567,
+  "wire_length_raw": 329567.2245
+ },
+ "/Motors/CS4": {
+  "pins": 2,
+  "wire_count": 8,
+  "via_count": 2,
+  "wire_length_mm": 23.2043,
+  "wire_length_raw": 232043.1938
+ },
+ "/Motors/CS4N": {
+  "pins": 3,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 7.6964,
+  "wire_length_raw": 76963.6744
+ },
+ "/Motors/CS4P": {
+  "pins": 3,
+  "wire_count": 9,
+  "via_count": 2,
+  "wire_length_mm": 18.4776,
+  "wire_length_raw": 184776.2314
+ },
+ "/Motors/CS4_PK": {
+  "pins": 4,
+  "wire_count": 17,
+  "via_count": 0,
+  "wire_length_mm": 36.3102,
+  "wire_length_raw": 363101.8577
+ },
+ "/Motors/CS_REF": {
+  "pins": 10,
+  "wire_count": 31,
+  "via_count": 9,
+  "wire_length_mm": 78.954,
+  "wire_length_raw": 789539.9507
+ },
+ "/Motors/CS_RESET": {
+  "pins": 6,
+  "wire_count": 13,
+  "via_count": 3,
+  "wire_length_mm": 45.7033,
+  "wire_length_raw": 457032.8268
+ },
+ "/Motors/MOTOR1_N": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 9.65,
+  "wire_length_raw": 96500.0
+ },
+ "/Motors/MOTOR1_PWM": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 1,
+  "wire_length_mm": 51.9359,
+  "wire_length_raw": 519358.9056
+ },
+ "/Motors/MOTOR2_N": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 9.63,
+  "wire_length_raw": 96300.0
+ },
+ "/Motors/MOTOR2_PWM": {
+  "pins": 3,
+  "wire_count": 6,
+  "via_count": 1,
+  "wire_length_mm": 47.0588,
+  "wire_length_raw": 470588.4759
+ },
+ "/Motors/MOTOR3_N": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 9.3514,
+  "wire_length_raw": 93514.2136
+ },
+ "/Motors/MOTOR3_PWM": {
+  "pins": 3,
+  "wire_count": 5,
+  "via_count": 1,
+  "wire_length_mm": 41.48,
+  "wire_length_raw": 414800.3082
+ },
+ "/Motors/MOTOR4_N": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 9.51,
+  "wire_length_raw": 95100.0
+ },
+ "/Motors/MOTOR4_PWM": {
+  "pins": 3,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 27.552,
+  "wire_length_raw": 275519.7185
+ },
+ "/NUMBER_DATA": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 1,
+  "wire_length_mm": 35.0708,
+  "wire_length_raw": 350708.3448
+ },
+ "/Numeric Display/DIGIT1": {
+  "pins": 8,
+  "wire_count": 15,
+  "via_count": 2,
+  "wire_length_mm": 67.8704,
+  "wire_length_raw": 678703.5516
+ },
+ "/Numeric Display/DIGIT2": {
+  "pins": 8,
+  "wire_count": 17,
+  "via_count": 2,
+  "wire_length_mm": 68.1995,
+  "wire_length_raw": 681994.89
+ },
+ "/Numeric Display/DIGIT3": {
+  "pins": 8,
+  "wire_count": 12,
+  "via_count": 2,
+  "wire_length_mm": 72.8427,
+  "wire_length_raw": 728426.935
+ },
+ "/Numeric Display/DIGIT4": {
+  "pins": 8,
+  "wire_count": 13,
+  "via_count": 2,
+  "wire_length_mm": 83.212,
+  "wire_length_raw": 832119.9455
+ },
+ "/Numeric Display/DIGIT5": {
+  "pins": 3,
+  "wire_count": 7,
+  "via_count": 3,
+  "wire_length_mm": 62.2131,
+  "wire_length_raw": 622130.9527
+ },
+ "/Numeric Display/NUMBER_DATA_5V": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 6.0674,
+  "wire_length_raw": 60674.2778
+ },
+ "/Numeric Display/SEG_A": {
+  "pins": 6,
+  "wire_count": 18,
+  "via_count": 6,
+  "wire_length_mm": 99.545,
+  "wire_length_raw": 995449.8362
+ },
+ "/Numeric Display/SEG_B": {
+  "pins": 6,
+  "wire_count": 17,
+  "via_count": 7,
+  "wire_length_mm": 72.3183,
+  "wire_length_raw": 723182.523
+ },
+ "/Numeric Display/SEG_C": {
+  "pins": 5,
+  "wire_count": 11,
+  "via_count": 6,
+  "wire_length_mm": 83.4411,
+  "wire_length_raw": 834410.98
+ },
+ "/Numeric Display/SEG_COLON": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "/Numeric Display/SEG_D": {
+  "pins": 5,
+  "wire_count": 16,
+  "via_count": 5,
+  "wire_length_mm": 85.696,
+  "wire_length_raw": 856959.6996
+ },
+ "/Numeric Display/SEG_E": {
+  "pins": 5,
+  "wire_count": 15,
+  "via_count": 6,
+  "wire_length_mm": 91.2409,
+  "wire_length_raw": 912408.6639
+ },
+ "/Numeric Display/SEG_F": {
+  "pins": 5,
+  "wire_count": 13,
+  "via_count": 5,
+  "wire_length_mm": 115.1384,
+  "wire_length_raw": 1151384.3973
+ },
+ "/Numeric Display/SEG_G": {
+  "pins": 5,
+  "wire_count": 12,
+  "via_count": 6,
+  "wire_length_mm": 90.8737,
+  "wire_length_raw": 908736.9181
+ },
+ "/POWER_IN": {
+  "pins": 13,
+  "wire_count": 27,
+  "via_count": 11,
+  "wire_length_mm": 202.5311,
+  "wire_length_raw": 2025311.2137
+ },
+ "GND": {
+  "pins": 83,
+  "wire_count": 182,
+  "via_count": 33,
+  "wire_length_mm": 301.0336,
+  "wire_length_raw": 3010336.4497
+ },
+ "Net-(D201-A)": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 4.1478,
+  "wire_length_raw": 41477.7705
+ },
+ "Net-(D201-C)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 4.288,
+  "wire_length_raw": 42880.0
+ },
+ "Net-(D201-K)": {
+  "pins": 4,
+  "wire_count": 11,
+  "via_count": 0,
+  "wire_length_mm": 17.1443,
+  "wire_length_raw": 171443.4212
+ },
+ "Net-(D202-A)": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 4.0821,
+  "wire_length_raw": 40820.9163
+ },
+ "Net-(D202-C)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 4.3001,
+  "wire_length_raw": 43001.3203
+ },
+ "Net-(D202-K)": {
+  "pins": 4,
+  "wire_count": 12,
+  "via_count": 2,
+  "wire_length_mm": 19.3714,
+  "wire_length_raw": 193714.1918
+ },
+ "Net-(D203-A)": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 4.3265,
+  "wire_length_raw": 43264.7763
+ },
+ "Net-(D203-C)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 4.3658,
+  "wire_length_raw": 43658.1746
+ },
+ "Net-(D203-K)": {
+  "pins": 4,
+  "wire_count": 11,
+  "via_count": 0,
+  "wire_length_mm": 17.1478,
+  "wire_length_raw": 171478.2738
+ },
+ "Net-(D204-A)": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 4.3649,
+  "wire_length_raw": 43649.3434
+ },
+ "Net-(D204-C)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 4.3587,
+  "wire_length_raw": 43587.1068
+ },
+ "Net-(D204-K)": {
+  "pins": 4,
+  "wire_count": 14,
+  "via_count": 2,
+  "wire_length_mm": 18.4577,
+  "wire_length_raw": 184577.2316
+ },
+ "Net-(D401-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.3932,
+  "wire_length_raw": 33931.8803
+ },
+ "Net-(D402-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8427,
+  "wire_length_raw": 38426.6445
+ },
+ "Net-(D403-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8423,
+  "wire_length_raw": 38422.6482
+ },
+ "Net-(D404-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8424,
+  "wire_length_raw": 38423.8173
+ },
+ "Net-(D405-DO)": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 3.8424,
+  "wire_length_raw": 38424.4349
+ },
+ "Net-(D406-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.843,
+  "wire_length_raw": 38429.6397
+ },
+ "Net-(D407-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8426,
+  "wire_length_raw": 38425.877
+ },
+ "Net-(D408-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8421,
+  "wire_length_raw": 38421.049
+ },
+ "Net-(D409-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8425,
+  "wire_length_raw": 38424.5986
+ },
+ "Net-(D410-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8428,
+  "wire_length_raw": 38428.0286
+ },
+ "Net-(D411-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8428,
+  "wire_length_raw": 38427.7683
+ },
+ "Net-(D412-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.842,
+  "wire_length_raw": 38420.284
+ },
+ "Net-(D413-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8424,
+  "wire_length_raw": 38424.0682
+ },
+ "Net-(D414-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8425,
+  "wire_length_raw": 38424.6662
+ },
+ "Net-(D415-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.3932,
+  "wire_length_raw": 33931.8803
+ },
+ "Net-(D416-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 6.8747,
+  "wire_length_raw": 68746.8181
+ },
+ "Net-(D417-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.3932,
+  "wire_length_raw": 33931.8803
+ },
+ "Net-(D418-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8426,
+  "wire_length_raw": 38426.0383
+ },
+ "Net-(D419-DO)": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 3.8424,
+  "wire_length_raw": 38424.4825
+ },
+ "Net-(D420-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8422,
+  "wire_length_raw": 38422.1393
+ },
+ "Net-(D421-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8424,
+  "wire_length_raw": 38423.9177
+ },
+ "Net-(D422-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.843,
+  "wire_length_raw": 38429.6397
+ },
+ "Net-(D423-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8425,
+  "wire_length_raw": 38424.877
+ },
+ "Net-(D424-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.842,
+  "wire_length_raw": 38420.049
+ },
+ "Net-(D425-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8426,
+  "wire_length_raw": 38425.5986
+ },
+ "Net-(D426-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8429,
+  "wire_length_raw": 38428.9145
+ },
+ "Net-(D427-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.8427,
+  "wire_length_raw": 38426.5414
+ },
+ "Net-(D428-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.842,
+  "wire_length_raw": 38420.284
+ },
+ "Net-(D429-DO)": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 3.8426,
+  "wire_length_raw": 38426.0583
+ },
+ "Net-(D430-DO)": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 3.8425,
+  "wire_length_raw": 38424.7715
+ },
+ "Net-(D431-DO)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.3932,
+  "wire_length_raw": 33931.8803
+ },
+ "Net-(D432-DO)": {
+  "pins": 2,
+  "wire_count": 6,
+  "via_count": 2,
+  "wire_length_mm": 59.754,
+  "wire_length_raw": 597539.642
+ },
+ "Net-(U102-ADJ)": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 5.4952,
+  "wire_length_raw": 54951.6811
+ },
+ "Net-(U203-+)": {
+  "pins": 4,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 4.7219,
+  "wire_length_raw": 47219.0909
+ },
+ "unconnected-(J101-Pad3)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J103-KEY-Pad7)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J104-Pin_19-Pad19)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J104-Pin_20-Pad20)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J107-Pin_11-Pad11)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J107-Pin_12-Pad12)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U101-GPIO19{slash}USB_D--Pad25)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U101-GPIO20{slash}USB_D+-Pad26)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U206-NC-Pad10)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U206-NC-Pad11)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ }
+}

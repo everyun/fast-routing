@@ -1,0 +1,240 @@
+{
+ "/3V3": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 19.6734,
+  "wire_length_raw": 196734.4824
+ },
+ "/5V": {
+  "pins": 10,
+  "wire_count": 11,
+  "via_count": 0,
+  "wire_length_mm": 116.7982,
+  "wire_length_raw": 1167981.8793
+ },
+ "/CLKOUT": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 16.0788,
+  "wire_length_raw": 160788.293
+ },
+ "/GND": {
+  "pins": 16,
+  "wire_count": 18,
+  "via_count": 0,
+  "wire_length_mm": 135.7293,
+  "wire_length_raw": 1357293.3573
+ },
+ "/MISO": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 1,
+  "wire_length_mm": 33.7059,
+  "wire_length_raw": 337059.1896
+ },
+ "/MOSI": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 1,
+  "wire_length_mm": 39.8434,
+  "wire_length_raw": 398433.6301
+ },
+ "/SCK": {
+  "pins": 3,
+  "wire_count": 4,
+  "via_count": 2,
+  "wire_length_mm": 36.5754,
+  "wire_length_raw": 365754.0922
+ },
+ "/SD_MISO": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 24.1186,
+  "wire_length_raw": 241186.223
+ },
+ "/SD_MOSI": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 36.4769,
+  "wire_length_raw": 364769.3357
+ },
+ "/SD_SCK": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "/VBAT": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 23.7302,
+  "wire_length_raw": 237302.2143
+ },
+ "/~{ACT}": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 24.1521,
+  "wire_length_raw": 241520.68
+ },
+ "/~{IRQ0}": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "/~{IRQ1}": {
+  "pins": 3,
+  "wire_count": 7,
+  "via_count": 1,
+  "wire_length_mm": 39.8995,
+  "wire_length_raw": 398995.4917
+ },
+ "/~{IRQ2}": {
+  "pins": 3,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "/~{SD_SS}": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 17.6786,
+  "wire_length_raw": 176785.5368
+ },
+ "/~{SS0}": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 19.0442,
+  "wire_length_raw": 190442.049
+ },
+ "/~{SS1}": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 7.2723,
+  "wire_length_raw": 72723.288
+ },
+ "Net-(D0-Pad1)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.805,
+  "wire_length_raw": 38050.0
+ },
+ "Net-(J1-Pad2)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 8.8362,
+  "wire_length_raw": 88361.8795
+ },
+ "Net-(J1-Pad3)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 8.8362,
+  "wire_length_raw": 88361.8795
+ },
+ "Net-(U0-Pad1)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.6446,
+  "wire_length_raw": 36446.0381
+ },
+ "Net-(U0-Pad2)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 3.501,
+  "wire_length_raw": 35009.5454
+ },
+ "Net-(U1-Pad13)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 24.8084,
+  "wire_length_raw": 248083.7717
+ },
+ "Net-(U1-Pad14)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 33.8411,
+  "wire_length_raw": 338411.0663
+ },
+ "unconnected-(U1-Pad15)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad16)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad17)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad2)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad21)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad27)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad5)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad6)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(U1-Pad8)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ }
+}

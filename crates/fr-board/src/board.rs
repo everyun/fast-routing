@@ -566,6 +566,21 @@ impl Board {
             *max_tree_shape_width,
         );
         trees.ensure_compensated_tree(clearance_class, store, ctx);
+        // `SearchTreeManager.java:160-172`: which subclass `getAutorouteTree`
+        // constructs is the board's angle restriction's decision. The 45° family
+        // is a *second* tree rather than a replacement, because the any-angle one
+        // is what shove, pull-tight and insert read; it is therefore built only
+        // when the chain is switched on (`search_tree::TILING_45_ENV`).
+        if *angle_restriction == AngleRestriction::FortyFive
+            && crate::search_tree::tiling_45_mode().is_on()
+        {
+            trees.ensure_compensated_tree_with_family(
+                clearance_class,
+                crate::search_tree::TreeAngleFamily::FortyFive,
+                store,
+                ctx,
+            );
+        }
     }
 
     /// Turns clearance compensation of the default tree on or off, upstream's

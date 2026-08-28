@@ -1,0 +1,317 @@
+{
+ "GND": {
+  "pins": 6,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 37.4942,
+  "wire_length_raw": 374941.7759
+ },
+ "GP0": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "GP1": {
+  "pins": 4,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 11.7209,
+  "wire_length_raw": 117208.9942
+ },
+ "GP10": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "GP11": {
+  "pins": 26,
+  "wire_count": 42,
+  "via_count": 0,
+  "wire_length_mm": 288.4469,
+  "wire_length_raw": 2884468.8699
+ },
+ "GP12": {
+  "pins": 22,
+  "wire_count": 43,
+  "via_count": 0,
+  "wire_length_mm": 281.8322,
+  "wire_length_raw": 2818321.5107
+ },
+ "GP13": {
+  "pins": 26,
+  "wire_count": 43,
+  "via_count": 0,
+  "wire_length_mm": 315.9813,
+  "wire_length_raw": 3159812.6504
+ },
+ "GP14": {
+  "pins": 8,
+  "wire_count": 7,
+  "via_count": 1,
+  "wire_length_mm": 41.94,
+  "wire_length_raw": 419400.282
+ },
+ "GP15": {
+  "pins": 11,
+  "wire_count": 12,
+  "via_count": 0,
+  "wire_length_mm": 93.3984,
+  "wire_length_raw": 933984.2261
+ },
+ "GP2": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "GP26": {
+  "pins": 11,
+  "wire_count": 17,
+  "via_count": 0,
+  "wire_length_mm": 128.0566,
+  "wire_length_raw": 1280565.7328
+ },
+ "GP27": {
+  "pins": 11,
+  "wire_count": 12,
+  "via_count": 1,
+  "wire_length_mm": 150.2859,
+  "wire_length_raw": 1502859.2741
+ },
+ "GP28": {
+  "pins": 11,
+  "wire_count": 14,
+  "via_count": 0,
+  "wire_length_mm": 165.7075,
+  "wire_length_raw": 1657075.3464
+ },
+ "GP29": {
+  "pins": 11,
+  "wire_count": 12,
+  "via_count": 0,
+  "wire_length_mm": 195.0166,
+  "wire_length_raw": 1950166.4401
+ },
+ "GP3": {
+  "pins": 5,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 79.2177,
+  "wire_length_raw": 792176.8559
+ },
+ "GP4": {
+  "pins": 5,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 76.6265,
+  "wire_length_raw": 766265.1624
+ },
+ "GP5": {
+  "pins": 5,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 80.6017,
+  "wire_length_raw": 806017.1893
+ },
+ "GP6": {
+  "pins": 5,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 87.6141,
+  "wire_length_raw": 876141.4003
+ },
+ "GP7": {
+  "pins": 5,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 40.076,
+  "wire_length_raw": 400759.6395
+ },
+ "GP8": {
+  "pins": 22,
+  "wire_count": 24,
+  "via_count": 0,
+  "wire_length_mm": 254.4598,
+  "wire_length_raw": 2544598.1722
+ },
+ "GP9": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "P3V3": {
+  "pins": 4,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 30.2086,
+  "wire_length_raw": 302085.628
+ },
+ "P5V": {
+  "pins": 2,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "board_index_bottom": {
+  "pins": 7,
+  "wire_count": 9,
+  "via_count": 0,
+  "wire_length_mm": 41.5951,
+  "wire_length_raw": 415950.6263
+ },
+ "board_index_far_bottom": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 36.6445,
+  "wire_length_raw": 366444.8636
+ },
+ "board_index_far_home": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 38.5647,
+  "wire_length_raw": 385647.4732
+ },
+ "board_index_far_top": {
+  "pins": 7,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 39.4038,
+  "wire_length_raw": 394038.3356
+ },
+ "board_index_home": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 39.7916,
+  "wire_length_raw": 397915.8328
+ },
+ "board_index_top": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 39.7541,
+  "wire_length_raw": 397540.6773
+ },
+ "board_middle_bottom": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 40.0754,
+  "wire_length_raw": 400754.0397
+ },
+ "board_middle_home": {
+  "pins": 7,
+  "wire_count": 9,
+  "via_count": 0,
+  "wire_length_mm": 41.3072,
+  "wire_length_raw": 413072.3857
+ },
+ "board_middle_top": {
+  "pins": 7,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 34.4808,
+  "wire_length_raw": 344808.2681
+ },
+ "board_pinky_bottom": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 42.8392,
+  "wire_length_raw": 428392.1063
+ },
+ "board_pinky_home": {
+  "pins": 7,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 37.942,
+  "wire_length_raw": 379420.1716
+ },
+ "board_pinky_top": {
+  "pins": 7,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 37.9778,
+  "wire_length_raw": 379778.4719
+ },
+ "board_ring_bottom": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 38.5348,
+  "wire_length_raw": 385347.6374
+ },
+ "board_ring_home": {
+  "pins": 7,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 40.4747,
+  "wire_length_raw": 404747.3116
+ },
+ "board_ring_top": {
+  "pins": 7,
+  "wire_count": 9,
+  "via_count": 0,
+  "wire_length_mm": 34.9258,
+  "wire_length_raw": 349257.777
+ },
+ "index_extra_extraC_ebottom": {
+  "pins": 7,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 35.9098,
+  "wire_length_raw": 359098.2788
+ },
+ "index_extra_extraC_etop": {
+  "pins": 7,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 34.5564,
+  "wire_length_raw": 345563.5633
+ },
+ "thumb_far_thumbR": {
+  "pins": 7,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 33.8209,
+  "wire_length_raw": 338209.4086
+ },
+ "thumb_far_up_thumbR": {
+  "pins": 7,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 35.6311,
+  "wire_length_raw": 356310.7964
+ },
+ "thumb_home_thumbR": {
+  "pins": 7,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 38.4598,
+  "wire_length_raw": 384598.0334
+ },
+ "thumb_near_right_thumbR": {
+  "pins": 7,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 33.8277,
+  "wire_length_raw": 338276.9254
+ },
+ "thumb_near_thumbR": {
+  "pins": 7,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 36.0483,
+  "wire_length_raw": 360482.9145
+ }
+}

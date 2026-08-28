@@ -1,0 +1,5 @@
+Imported C:\Work\freerouting\tests\Issue230-CNH_Functional_Tester\CNH_Functional_Tester_1.dsn in 176.14s: 4 layers, 2285 items (966 pins, 193 traces, 2 vias)
+Router: 1 passes, 353 routed, 15 failed, 223 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 16 clearance violations, 11 of 203 connections incomplete, score 930.04/1000
+Exported Specctra SES session file: bench/results/20260828-214345/ses/Issue230-CNH_Functional_Tester_1.rust.ses

@@ -34,9 +34,10 @@ use std::collections::BTreeMap;
 
 use fr_board::board::Board;
 use fr_board::item::{ItemId, ItemKind};
-use fr_board::search_tree::SearchTree;
+use fr_board::search_tree::{SearchTree, Tiling45Mode, TreeAngleFamily};
+use fr_board::shape::AngleRestriction;
 use fr_datastructures::arena_shape_tree::{ArenaShapeTree, QueryStack};
-use fr_geometry::planar::{IntBox, Simplex};
+use fr_geometry::planar::{IntBox, IntOctagon, Simplex};
 use fr_rules::board_rules::BoardRules;
 
 use crate::ctrl::AutorouteControl;
@@ -73,6 +74,8 @@ pub struct AutorouteEngine<'b> {
 
     /// Which compensated tree the queries run against.
     tree_class: i32,
+    /// How much of the 45° tiling chain runs — the flavor selector.
+    tiling_45: Tiling45Mode,
     /// The engine-local room tree (see the module docs).
     room_tree: ArenaShapeTree<RoomId>,
     /// Reusable DFS stack for the item tree.
@@ -127,6 +130,7 @@ impl<'b> AutorouteEngine<'b> {
             board,
             rules,
             tree_class: ctrl.trace_clearance_class_no,
+            tiling_45: default_tiling_45(board),
             ctrl,
             rooms,
             nodes: NodeArena::new(),
@@ -150,12 +154,55 @@ impl<'b> AutorouteEngine<'b> {
     }
 
     /// The compensated tree every obstacle query runs against.
+    ///
+    /// `AutorouteEngine.java:70` reads one tree, and which *subclass* it gets is
+    /// `SearchTreeManager`'s decision from the board's angle restriction. Here
+    /// that is a lookup on both axes, with two fallbacks that keep the 45°
+    /// chain usable before its tree exists: the any-angle compensated tree, then
+    /// the uncompensated default one. Falling back is not a correctness hole —
+    /// the room algorithms narrow every shape to its bounding octagon anyway,
+    /// which is exactly what upstream's 45° tree does at each read
+    /// (`ShapeSearchTree45Degree.java:147-149`) — it only costs the narrowing.
     #[inline]
     pub fn tree(&self) -> &SearchTree {
-        self.board
-            .trees()
-            .compensated_tree(self.tree_class)
+        let trees = self.board.trees();
+        trees
+            .compensated_tree_with_family(self.tree_class, self.angle_family())
+            .or_else(|| trees.compensated_tree(self.tree_class))
             .unwrap_or_else(|| self.board.default_tree())
+    }
+
+    /// How much of the 45° chain this engine runs.
+    #[inline]
+    pub fn tiling_45(&self) -> Tiling45Mode {
+        self.tiling_45
+    }
+
+    /// Which tree subclass the queries read — `ShapeSearchTree45Degree` as soon
+    /// as any part of the chain is on, because both halves narrow every shape to
+    /// its bounding octagon and reading octagons back is what makes that free.
+    #[inline]
+    pub fn angle_family(&self) -> TreeAngleFamily {
+        if self.tiling_45.is_on() {
+            TreeAngleFamily::FortyFive
+        } else {
+            TreeAngleFamily::AnyAngle
+        }
+    }
+
+    /// Overrides the mode — the A/B switch's programmatic form, and how the
+    /// tests pin a mode regardless of the environment.
+    ///
+    /// Must be called before any room is built: the modes produce different
+    /// tilings and a half-and-half arena is meaningless.
+    #[inline]
+    pub fn set_tiling_45(&mut self, mode: Tiling45Mode) {
+        debug_assert_eq!(
+            self.rooms.room_count(),
+            0,
+            "the tiling mode must be fixed before the first room is built"
+        );
+        self.tiling_45 = mode;
     }
 
     /// `AutorouteEngine.clear()` (`:280-291`): drop every room, every door and
@@ -369,6 +416,35 @@ impl<'b> AutorouteEngine<'b> {
         }
     }
 
+    /// One tile shape of an item in its **octagon** flavor.
+    ///
+    /// Upstream's `curr_object.get_tree_shape(tree, i).bounding_octagon()`
+    /// (`ShapeSearchTree45Degree.java:147-149`,
+    /// `Sorted45DegreeRoomNeighbours.java:113-114`). Free when the tree already
+    /// stores octagons (the [`TreeAngleFamily::FortyFive`] tree), a narrowing
+    /// otherwise — which is what upstream pays on every read.
+    pub fn item_tile_octagon(&self, item: ItemId, index: u16) -> Option<IntOctagon> {
+        let slot = self.board.store().slot_of(item)?;
+        let tile = self
+            .tree()
+            .item_shapes(slot, item)
+            .get(index as usize)?
+            .shape
+            .as_ref()?;
+        tile_octagon(tile)
+    }
+
+    /// [`obstacle_shape`](Self::obstacle_shape) in the octagon flavor.
+    pub fn obstacle_octagon(&self, obstacle: Obstacle) -> Option<IntOctagon> {
+        match obstacle {
+            Obstacle::Item(item, index) => self.item_tile_octagon(item, index),
+            Obstacle::Room(room) => {
+                let room = self.rooms.room(room);
+                room.alive.then(|| room.octagon())
+            }
+        }
+    }
+
     /// The layer of one obstacle.
     pub fn obstacle_layer(&self, obstacle: Obstacle) -> Option<i32> {
         match obstacle {
@@ -402,6 +478,30 @@ impl<'b> AutorouteEngine<'b> {
 
     pub(crate) fn leave_restrain(&mut self) {
         self.restrain_depth = self.restrain_depth.saturating_sub(1);
+    }
+}
+
+/// The tiling mode an engine starts in.
+///
+/// Upstream has no choice here — `SearchTreeManager.java:166` reads the board's
+/// angle restriction and that is that. The chain ships **off** because the flip
+/// changes the tiling on every default board, so the gate can A/B it: it turns
+/// on for a 45° board only when [`TILING_45_ENV`](fr_board::search_tree::TILING_45_ENV)
+/// says so, and [`AutorouteEngine::set_tiling_45`] overrides either way.
+pub fn default_tiling_45(board: &Board) -> Tiling45Mode {
+    if board.angle_restriction() == AngleRestriction::FortyFive {
+        fr_board::search_tree::tiling_45_mode()
+    } else {
+        Tiling45Mode::Off
+    }
+}
+
+/// A tile shape as an octagon, `None` for one that has no bounding octagon.
+fn tile_octagon(tile: &fr_board::shape::TileShape) -> Option<IntOctagon> {
+    match tile {
+        fr_board::shape::TileShape::Box(b) => Some(b.to_int_octagon().normalize()),
+        fr_board::shape::TileShape::Oct(o) => Some(o.normalize()),
+        fr_board::shape::TileShape::Simplex(s) => crate::rooms::complete45::simplex_octagon(s),
     }
 }
 

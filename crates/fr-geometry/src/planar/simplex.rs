@@ -498,12 +498,111 @@ impl Simplex {
     }
 
     /// Checks if this simplex intersects an `IntBox`.
+    ///
+    /// # Why there is a bounding-box gate in front of the exact test
+    ///
+    /// The exact test is [`Simplex::intersection`]: three heap allocations (the
+    /// concatenated line array, the deduplicated one, the side cache), a sort,
+    /// and an `i128` `side_of_intersection` per surviving line. Every hot caller
+    /// — `ShapeSearchTree.overlapping_tree_entries` under a box query, and the
+    /// obstacle gather of `complete_shape` — asks about a *small* stored shape
+    /// against a *large* query box and gets "yes"; paying the full construction
+    /// to learn that is what put this function at 34% of an Issue034 run.
+    ///
+    /// Both gates are exact, not heuristic, and both need the simplex to be
+    /// **bounded**, which is why [`Simplex::bounded_bounding_box`] answers the
+    /// two questions in one pass:
+    ///
+    /// * A bounded simplex is contained in its [`Simplex::bounding_box`] — the
+    ///   `floor`/`ceil` there round outward, so the `f64` corner approximations
+    ///   cannot shrink it below the true hull. `box ⊇ bounding_box ⊇ self` then
+    ///   gives `self ∩ box = self`, non-empty exactly when `self` is, and
+    ///   "non-empty" is `!arr.is_empty()` throughout this crate.
+    /// * The same containment run backwards gives the disjoint gate: no point of
+    ///   `self` lies outside `bounding_box`, so a box that misses the bounding
+    ///   box misses the simplex.
+    ///
+    /// An **unbounded** simplex takes neither gate. Its bounding box is not a
+    /// hull at all — two crossing border lines approximate to the single corner
+    /// where they meet while the wedge itself runs to infinity, and parallel
+    /// neighbours approximate to the `i32::MAX` sentinel of
+    /// [`Line::intersection_approx`] — so both gates would be unsound, and the
+    /// exact test is the only answer.
     pub fn intersects_box(&self, box_: &IntBox) -> bool {
+        if self.arr.is_empty() {
+            return false;
+        }
+        if let Some(bounds) = self.bounded_bounding_box() {
+            if !bounds.intersects(box_) {
+                return false;
+            }
+            if box_.contains_box(&bounds) {
+                return !box_.is_empty();
+            }
+        }
         self.intersects(&box_.to_simplex())
     }
 
+    /// [`Simplex::bounding_box`], but `None` unless the simplex is bounded and
+    /// therefore actually contained in it.
+    ///
+    /// This is [`Simplex::is_bounded`] fused with [`Simplex::bounding_box`] so
+    /// that the gate in [`Simplex::intersects_box`] walks the border lines once.
+    /// The boundedness test drops the `Direction` normalization
+    /// [`Simplex::corner_is_bounded`] goes through: normalizing divides both
+    /// components of a delta by a *positive* gcd, which cannot change the sign
+    /// of the determinant the test reads.
+    fn bounded_bounding_box(&self) -> Option<IntBox> {
+        if self.arr.len() < 3 {
+            // Fewer than three half-planes never bound a region — the empty
+            // simplex included, which `intersects_box` has already answered.
+            return None;
+        }
+        let mut llx = f64::MAX;
+        let mut lly = f64::MAX;
+        let mut urx = f64::MIN;
+        let mut ury = f64::MIN;
+        let mut prev = self.arr[self.arr.len() - 1];
+        for curr in &self.arr {
+            let prev_delta = prev.b.difference_by_int(&prev.a);
+            let curr_delta = curr.b.difference_by_int(&curr.a);
+            if prev_delta.determinant(&curr_delta) <= 0 {
+                return None;
+            }
+            let corner = curr.intersection_approx(&prev);
+            llx = llx.min(corner.x);
+            lly = lly.min(corner.y);
+            urx = urx.max(corner.x);
+            ury = ury.max(corner.y);
+            prev = *curr;
+        }
+        Some(IntBox::new(
+            llx.floor() as i32,
+            lly.floor() as i32,
+            urx.ceil() as i32,
+            ury.ceil() as i32,
+        ))
+    }
+
     /// Checks if this simplex intersects an `IntOctagon`.
+    ///
+    /// The same two gates as [`Simplex::intersects_box`], and sound for the same
+    /// reason — an octagon is the intersection of its eight half-planes, so it
+    /// contains an [`IntBox`] exactly when the box's extremes satisfy all eight,
+    /// and it is contained in its own bounding box. On top of the exact test
+    /// this also saves the `to_simplex` conversion, which builds eight `Line`s.
     pub fn intersects_octagon(&self, oct: &IntOctagon) -> bool {
+        if self.arr.is_empty() {
+            return false;
+        }
+        if let Some(bounds) = self.bounded_bounding_box() {
+            if !bounds.intersects(&oct.bounding_box()) {
+                return false;
+            }
+            if octagon_contains_box(oct, &bounds) {
+                return !oct.is_empty();
+            }
+        }
         self.intersects(&oct.to_simplex())
     }
 
@@ -1213,6 +1312,26 @@ impl Simplex {
     }
 }
 
+/// True when every point of `box_` satisfies all eight octagon constraints.
+///
+/// The constraints are `left_x ≤ x ≤ right_x`, `bottom_y ≤ y ≤ top_y`,
+/// `upper_left_diagonal_x ≤ x − y ≤ lower_right_diagonal_x` and
+/// `lower_left_diagonal_x ≤ x + y ≤ upper_right_diagonal_x`; each is linear, so
+/// testing it at the two box corners that extremize it decides the whole box.
+/// `i64` because `x ± y` of two `Limits::CRIT_INT` coordinates overflows `i32`.
+fn octagon_contains_box(oct: &IntOctagon, box_: &IntBox) -> bool {
+    let (llx, lly) = (box_.left_x() as i64, box_.bottom_y() as i64);
+    let (urx, ury) = (box_.right_x() as i64, box_.top_y() as i64);
+    llx >= oct.left_x as i64
+        && urx <= oct.right_x as i64
+        && lly >= oct.bottom_y as i64
+        && ury <= oct.top_y as i64
+        && (llx - ury) >= oct.upper_left_diagonal_x as i64
+        && (urx - lly) <= oct.lower_right_diagonal_x as i64
+        && (llx + lly) >= oct.lower_left_diagonal_x as i64
+        && (urx + ury) <= oct.upper_right_diagonal_x as i64
+}
+
 impl Area for Simplex {
     fn is_empty(&self) -> bool {
         self.is_empty()
@@ -1433,5 +1552,228 @@ mod tests {
     fn fewer_than_two_corners_is_the_empty_simplex() {
         assert!(Simplex::from_convex_polygon(&[]).is_empty());
         assert!(Simplex::from_convex_polygon(&[IntPoint::new(7, 9)]).is_empty());
+    }
+
+    // ---- the `intersects_box` bounding-box gate --------------------------------------------
+
+    /// The exact answer, i.e. what `intersects_box` was before the gate.
+    fn intersects_box_exact(simplex: &Simplex, box_: &IntBox) -> bool {
+        simplex.intersects(&box_.to_simplex())
+    }
+
+    #[test]
+    fn bounded_bounding_box_agrees_with_is_bounded_and_bounding_box() {
+        let shapes = [
+            Simplex::from_convex_polygon(&[
+                IntPoint::new(0, 0),
+                IntPoint::new(100, 0),
+                IntPoint::new(60, 90),
+                IntPoint::new(10, 70),
+            ]),
+            Simplex::from_convex_polygon(&[
+                IntPoint::new(-4_000, -7_000),
+                IntPoint::new(3_333, -7_000),
+                IntPoint::new(0, 5_555),
+            ]),
+            // Unbounded: the Issue179 two-line strip, and a wedge of two crossing lines.
+            Simplex::from_convex_polygon(&issue179_pad()),
+            Simplex::get_instance(&[
+                Line::new(IntPoint::new(0, 0), IntPoint::new(100, 0)),
+                Line::new(IntPoint::new(0, 0), IntPoint::new(0, -100)),
+            ]),
+            Simplex::EMPTY,
+        ];
+        for shape in &shapes {
+            match shape.bounded_bounding_box() {
+                Some(bounds) => {
+                    assert!(shape.is_bounded(), "gate accepted an unbounded shape");
+                    assert_eq!(bounds, shape.bounding_box());
+                }
+                None => assert!(
+                    !shape.is_bounded() || shape.is_empty(),
+                    "gate rejected a bounded shape"
+                ),
+            }
+        }
+    }
+
+    /// The gate may not change a single answer, on either arm or in the
+    /// fall-through, for boxes that contain / are contained by / straddle /
+    /// touch / miss the shape.
+    #[test]
+    fn intersects_box_matches_the_exact_test_over_a_deterministic_sweep() {
+        let shapes = [
+            // Bounded, so both arms are live.
+            Simplex::from_convex_polygon(&[
+                IntPoint::new(0, 0),
+                IntPoint::new(100, 0),
+                IntPoint::new(60, 90),
+                IntPoint::new(10, 70),
+            ]),
+            Simplex::from_convex_polygon(&[
+                IntPoint::new(17, -33),
+                IntPoint::new(91, 5),
+                IntPoint::new(44, 61),
+            ]),
+            IntBox::new(-20, -20, 20, 20).to_simplex(),
+            IntOctagon::new(-30, -30, 30, 30, -45, 45, -45, 45).to_simplex(),
+            // Unbounded, so neither arm may fire.
+            Simplex::from_convex_polygon(&issue179_pad()).offset(1.0),
+            Simplex::get_instance(&[
+                Line::new(IntPoint::new(0, 0), IntPoint::new(100, 0)),
+                Line::new(IntPoint::new(0, 0), IntPoint::new(0, -100)),
+            ]),
+            Simplex::EMPTY,
+        ];
+        // A deterministic spread of boxes: degenerate, touching, straddling,
+        // containing and far away, plus a few off-grid offsets so that the
+        // `floor`/`ceil` rounding of the bounding box is exercised on both
+        // sides of every border.
+        let mut boxes = Vec::new();
+        for &llx in &[-4_000, -101, -30, -1, 0, 1, 31, 60, 100, 101, 4_000] {
+            for &lly in &[-4_000, -101, -30, -1, 0, 1, 31, 60, 100, 101, 4_000] {
+                for &size in &[0, 1, 7, 59, 250, 9_000] {
+                    boxes.push(IntBox::new(llx, lly, llx + size, lly + size));
+                }
+            }
+        }
+        // An inverted box is `IntBox::is_empty`; the gate must not invent a hit.
+        boxes.push(IntBox::new(10, 10, 5, 5));
+        boxes.push(IntBox::EMPTY);
+
+        let mut gated_true = 0usize;
+        for shape in &shapes {
+            for box_ in &boxes {
+                assert_eq!(
+                    shape.intersects_box(box_),
+                    intersects_box_exact(shape, box_),
+                    "shape {shape:?} vs box {box_:?}"
+                );
+                gated_true += usize::from(shape.intersects_box(box_));
+            }
+        }
+        assert!(gated_true > 0, "the sweep never produced a hit");
+    }
+
+    /// The containment arm is the one the routing profile is about, so pin that
+    /// it is really taken rather than being dead weight in front of the exact
+    /// test.
+    #[test]
+    fn a_shape_strictly_inside_the_query_box_never_reaches_the_exact_test() {
+        let shape = Simplex::from_convex_polygon(&[
+            IntPoint::new(0, 0),
+            IntPoint::new(100, 0),
+            IntPoint::new(60, 90),
+        ]);
+        let bounds = shape
+            .bounded_bounding_box()
+            .expect("a triangle is bounded");
+        assert_eq!(bounds, shape.bounding_box());
+        let query = IntBox::new(
+            bounds.left_x() - 1,
+            bounds.bottom_y() - 1,
+            bounds.right_x() + 1,
+            bounds.top_y() + 1,
+        );
+        assert!(query.contains_box(&bounds));
+        assert!(shape.intersects_box(&query));
+        assert!(intersects_box_exact(&shape, &query));
+    }
+
+    #[test]
+    fn intersects_octagon_matches_the_exact_test_over_a_deterministic_sweep() {
+        let shapes = [
+            Simplex::from_convex_polygon(&[
+                IntPoint::new(0, 0),
+                IntPoint::new(100, 0),
+                IntPoint::new(60, 90),
+                IntPoint::new(10, 70),
+            ]),
+            Simplex::from_convex_polygon(&[
+                IntPoint::new(17, -33),
+                IntPoint::new(91, 5),
+                IntPoint::new(44, 61),
+            ]),
+            IntBox::new(-20, -20, 20, 20).to_simplex(),
+            Simplex::from_convex_polygon(&issue179_pad()).offset(1.0),
+            Simplex::EMPTY,
+        ];
+        let mut octagons = Vec::new();
+        for &shift in &[-4_000, -60, -7, 0, 7, 60, 4_000] {
+            for &size in &[1, 25, 120, 9_000] {
+                octagons.push(
+                    IntOctagon::new(
+                        shift,
+                        shift,
+                        shift + size,
+                        shift + size,
+                        shift - size,
+                        shift + size,
+                        shift + shift - size,
+                        shift + shift + 2 * size,
+                    )
+                    .normalize(),
+                );
+            }
+        }
+        octagons.push(IntOctagon::EMPTY);
+
+        for shape in &shapes {
+            for oct in &octagons {
+                assert_eq!(
+                    shape.intersects_octagon(oct),
+                    shape.intersects(&oct.to_simplex()),
+                    "shape {shape:?} vs octagon {oct:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn octagon_contains_box_agrees_with_the_octagon_as_a_simplex() {
+        let oct = IntOctagon::new(-100, -100, 100, 100, -150, 150, -150, 150);
+        let as_simplex = oct.to_simplex();
+        for &llx in &[-200, -120, -100, -40, 0, 40, 100, 120] {
+            for &lly in &[-200, -120, -100, -40, 0, 40, 100, 120] {
+                for &size in &[0, 1, 30, 90] {
+                    let box_ = IntBox::new(llx, lly, llx + size, lly + size);
+                    let by_corners = (0..4).all(|corner| {
+                        let point = match corner {
+                            0 => IntPoint::new(box_.left_x(), box_.bottom_y()),
+                            1 => IntPoint::new(box_.right_x(), box_.bottom_y()),
+                            2 => IntPoint::new(box_.right_x(), box_.top_y()),
+                            _ => IntPoint::new(box_.left_x(), box_.top_y()),
+                        };
+                        as_simplex.contains(&Point::Int(point))
+                    });
+                    assert_eq!(
+                        octagon_contains_box(&oct, &box_),
+                        by_corners,
+                        "box {box_:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The disjoint arm, likewise: a box outside the bounding box is answered
+    /// without building the intersection.
+    #[test]
+    fn a_box_outside_the_bounding_box_is_rejected_by_the_gate() {
+        let shape = Simplex::from_convex_polygon(&[
+            IntPoint::new(0, 0),
+            IntPoint::new(100, 0),
+            IntPoint::new(60, 90),
+        ]);
+        let bounds = shape.bounded_bounding_box().expect("bounded");
+        let query = IntBox::new(
+            bounds.right_x() + 5,
+            bounds.top_y() + 5,
+            bounds.right_x() + 15,
+            bounds.top_y() + 15,
+        );
+        assert!(!bounds.intersects(&query));
+        assert!(!shape.intersects_box(&query));
+        assert!(!intersects_box_exact(&shape, &query));
     }
 }

@@ -1,0 +1,5 @@
+Imported  in 138.33s: 2 layers, 1327 items (564 pins, 762 traces, 0 vias)
+Router: 1 passes, 298 routed, 36 failed, 0 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 275 clearance violations, 124 of 410 connections incomplete, score 563.41/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue070-Autorouter_FQ101_PCB_2022-05-13.rust.ses

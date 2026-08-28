@@ -13,27 +13,36 @@
 //! | [`remove_tails`] | `RoutingBoard.remove_trace_tails` (`:1164-1211`) |
 //! | [`is_tail`] | `Trace.is_tail` / `Via.is_tail` |
 //! | [`is_fanout_via`] | `Item.is_fanout_via` (`:1251-1282`) |
+//! | [`schedule`] | `BatchAutorouter.runBatchLoop` (`:757-1188`) — pass scheduling, every stop rule |
+//! | [`history`] | `autoroute/BoardHistory.java` — the score-ranked snapshot store |
+//! | [`scoring`] | `BoardStatistics.getNormalizedScore`, through `fr_check` |
+//! | [`budget`] | the per-connection `TimeLimit` (`:1311-1313`) and ARCHITECTURE's effort ceiling |
 //!
 //! Corner placement and insertion are **not** here: this module hands the found
 //! connection to [`crate::locate`] and [`crate::insert`], the port of
 //! `LocateFoundConnectionAlgo` / `InsertFoundConnectionAlgo`.
 //!
-//! # M2a scope
+//! # Scope
 //!
-//! * **One pass is the contract.** [`BatchRouter::run`] repeats
-//!   [`BatchRouter::autoroute_pass`] up to `max_passes` times with the upstream
-//!   ripup escalation, and stops on "nothing left" or "no progress". The real
-//!   schedule — `BoardHistory` snapshots, the pass ≥ 8 restore check, the two
-//!   stagnation trackers (`batch-orchestration.md` §5.2) — is M2c. Every hook it
-//!   needs is a field of [`PassOutcome`], so it slots in without moving code.
-//! * **Ripped connections are requeued inside the pass.** Upstream re-derives
-//!   the work list next pass instead; with `max_passes = 1` there is no next
-//!   pass. Declared in `docs/PARITY-DIVERGENCES.md`.
+//! * **The pass is here; the schedule is in [`schedule`].** [`BatchRouter::run`]
+//!   is a thin adapter: it resolves the settings a run needs and hands itself to
+//!   [`schedule::BatchLoop`] as a [`schedule::PassDriver`]. Everything the
+//!   release does *between* passes — the [`history::BoardSnapshotStore`]
+//!   snapshots, the pass ≥ 8 restore check, the two stagnation trackers, the
+//!   one-time fanout recovery, the final best-board restore
+//!   (`batch-orchestration.md` §5.2 and the conformance appendix's rows 59-69) —
+//!   lives there.
+//! * **Ripped connections are requeued inside the pass at `-mp 1` only.**
+//!   Upstream re-derives the work list next pass instead; with `max_passes = 1`
+//!   there is no next pass. The switch is [`schedule::RequeuePolicy`], declared
+//!   in `docs/PARITY-DIVERGENCES.md`.
 //! * The per-connection pull-tight (`opt_changed_area`, `:1327-1333`) runs, over
 //!   [`crate::insert::InsertOutcome::changed_area`] — see [`crate::pull_tight`]
 //!   for what of the family is ported and what is not. The one argument that is
 //!   deliberately not upstream's is the stall guard: a wall clock there would
 //!   make the routed board depend on machine load.
+//! * The per-connection budget ([`budget`]) is armed around every connection and
+//!   accounted for; see that module for what binds today and what does not.
 //!
 //! # The routing sequence, per connection
 //!
@@ -56,6 +65,7 @@ use std::collections::BTreeSet;
 use fr_board::board::Board;
 use fr_board::connectivity;
 use fr_board::item::{FixedState, Item, ItemId, ItemKind};
+use fr_board::store::StoreDelta;
 use fr_geometry::planar::Point;
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::RouterSettings;
@@ -64,6 +74,17 @@ use crate::ctrl::AutorouteControl;
 use crate::engine::AutorouteEngine;
 use crate::maze::search::MazeSearch;
 use crate::pull_tight::PullTightAlgo;
+
+pub mod budget;
+pub mod history;
+pub mod schedule;
+pub mod scoring;
+
+use crate::batch::budget::BudgetPolicy;
+use crate::batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
+use crate::batch::scoring::CheckScorer;
+
+pub use crate::batch::schedule::{RunOutcome, StopReason};
 
 /// `Item.PROTECT_FANOUT_LENGTH` (`Item.java:39`): a contact trace longer than
 /// this many half widths does not make its via a fanout via.
@@ -767,29 +788,25 @@ pub struct PassOutcome {
     pub requeued: usize,
     /// Ratsnest incompletes after the pass, tails already removed.
     pub incomplete_count: usize,
+    /// The ripup budget the pass ran at: `start_ripup_costs * pass_no`.
+    pub ripup_costs: i32,
+    /// Milliseconds — wall, or virtual under
+    /// [`BudgetMode::Deterministic`](budget::BudgetMode::Deterministic) — spent
+    /// inside the pass's connections. Bench's `time_used`.
+    pub time_used_ms: u64,
+    /// Effort units charged over the pass's connections. Bench's `effort_used`.
+    pub effort_used: u64,
+    /// Connections that reached their [`budget`] allowance.
+    pub connections_hitting_budget: usize,
+    /// The pass stopped on `settings.maxItems` (`:496-505`). Upstream turns
+    /// this into a stop request over every stage, so the batch loop ends here
+    /// and the optimizer never runs.
+    pub hit_item_cap: bool,
     /// `autoroute_pass` returned false because the work list was empty — the
     /// board is complete (`:437-440`).
     pub board_complete: bool,
     /// `routed > 0 || not_routed > 0` (`:688`): something was attempted.
     pub progressed: bool,
-}
-
-/// Everything a [`BatchRouter::run`] produced.
-#[derive(Debug, Clone, Default)]
-pub struct RunOutcome {
-    /// One entry per pass actually run.
-    pub passes: Vec<PassOutcome>,
-    /// Ratsnest incompletes when the run stopped.
-    pub incomplete_count: usize,
-    /// Items inserted over the whole run.
-    pub inserted_count: usize,
-}
-
-impl RunOutcome {
-    /// Nothing left unconnected.
-    pub fn is_complete(&self) -> bool {
-        self.incomplete_count == 0
-    }
 }
 
 /// The single-threaded batch autorouter.
@@ -805,12 +822,24 @@ pub struct BatchRouter<'r> {
     /// `BatchAutorouter.remove_unconnected_vias`; drives the tail-cleanup stop
     /// option (`:657-661`).
     pub remove_unconnected_vias: bool,
-    /// Re-attempt a connection whose wiring a later connection ripped, inside
-    /// the same pass. **Divergence**, on by default: upstream relies on the
-    /// next pass re-deriving the work list, which a one-pass run never gets.
-    pub requeue_ripped_items: bool,
+    /// When a connection whose copper was ripped is re-attempted inside the
+    /// same pass — the one declared divergence of this module. Default
+    /// [`RequeuePolicy::SinglePassOnly`]: upstream's no-retry rule for
+    /// `-mp >= 2`, the requeue for `-mp 1`.
+    pub requeue_policy: RequeuePolicy,
+    /// Whether the fanout stage ran, gating the batch loop's one-time
+    /// fanout-tail recovery (`:1073`). Set by whoever ran the stage.
+    pub fanout_enabled: bool,
+    /// The per-connection budget policy — upstream's wall constants by default.
+    pub budget: BudgetPolicy,
     /// `settings.maxItems` (`:496-505`), counted over the whole run.
     pub max_items: i32,
+    /// Board units per millimetre, for the score's trace-length term. See
+    /// [`CheckScorer::new`].
+    pub board_units_per_mm: f64,
+    /// Whether the current run requeues; resolved from
+    /// [`BatchRouter::requeue_policy`] by [`BatchRouter::run`].
+    requeue_active: bool,
     total_items_routed: i32,
     scratch: ContactScratch,
 }
@@ -827,11 +856,38 @@ impl<'r> BatchRouter<'r> {
             settings,
             start_ripup_costs: settings.scoring.start_ripup_costs(),
             remove_unconnected_vias: false,
-            requeue_ripped_items: true,
+            requeue_policy: RequeuePolicy::default(),
+            fanout_enabled: false,
+            budget: BudgetPolicy::default(),
             max_items: settings.max_items,
+            board_units_per_mm: 1.0,
+            // A direct `autoroute_pass` caller drives a single pass, which is
+            // the case the requeue exists for; `run` overwrites this.
+            requeue_active: true,
             total_items_routed: 0,
             scratch: ContactScratch::new(),
         }
+    }
+
+    /// Sets the trace-length unit conversion of the score
+    /// ([`CheckScorer::new`]). The importer is the only thing that knows it.
+    pub fn with_board_units_per_mm(mut self, board_units_per_mm: f64) -> BatchRouter<'r> {
+        self.board_units_per_mm = board_units_per_mm;
+        self
+    }
+
+    /// Records that the fanout stage ran, arming the batch loop's one-time
+    /// fanout-tail recovery.
+    pub fn with_fanout(mut self, ran: bool) -> BatchRouter<'r> {
+        self.fanout_enabled = ran;
+        self
+    }
+
+    /// Sets the per-connection budget policy — `--deterministic` picks
+    /// [`BudgetPolicy::deterministic`].
+    pub fn with_budget(mut self, budget: BudgetPolicy) -> BatchRouter<'r> {
+        self.budget = budget;
+        self
     }
 
     /// Items routed so far, across every pass — upstream's `totalItemsRouted`.
@@ -839,12 +895,31 @@ impl<'r> BatchRouter<'r> {
         self.total_items_routed
     }
 
+    /// Whether the pass currently being run re-attempts ripped connections.
+    pub fn requeue_active(&self) -> bool {
+        self.requeue_active
+    }
+
     /// One pass — `BatchAutorouter.autoroute_pass` (`:431-694`).
     ///
-    /// `pass_no` is 1-based and multiplies the ripup budget.
+    /// `pass_no` is 1-based and multiplies the ripup budget. Runs under the
+    /// default budget policy for that pass; the batch loop calls
+    /// [`BatchRouter::autoroute_pass_with`] with the context it built.
     pub fn autoroute_pass(&mut self, board: &mut Board, pass_no: i32) -> PassOutcome {
-        let mut outcome = PassOutcome {
+        let ctx = PassContext::new(
             pass_no,
+            self.start_ripup_costs,
+            &self.budget,
+            self.remove_unconnected_vias,
+        );
+        self.autoroute_pass_with(board, &ctx)
+    }
+
+    /// [`BatchRouter::autoroute_pass`] with the schedule's own context.
+    pub fn autoroute_pass_with(&mut self, board: &mut Board, ctx: &PassContext) -> PassOutcome {
+        let mut outcome = PassOutcome {
+            pass_no: ctx.pass_no,
+            ripup_costs: ctx.ripup_costs,
             ..PassOutcome::default()
         };
         let work = autoroute_items(board, self.rules, &mut self.scratch);
@@ -855,7 +930,6 @@ impl<'r> BatchRouter<'r> {
             outcome.incomplete_count = incomplete_count(board);
             return outcome;
         }
-        let ripup_costs = self.start_ripup_costs.saturating_mul(pass_no);
 
         let mut queue = work;
         let mut index = 0;
@@ -865,27 +939,41 @@ impl<'r> BatchRouter<'r> {
         while index < queue.len() {
             let entry = queue[index];
             index += 1;
+            // `:496-505` — the item cap. Upstream calls `requestStop()` (ALL
+            // stages) rather than `request_stop_auto_router()`, so hitting it
+            // also skips the optimizer; the flag is what carries that to the
+            // batch loop and to `optimizer::route_then_optimize`.
             if self.max_items > 0 && self.total_items_routed >= self.max_items {
+                outcome.hit_item_cap = true;
                 break;
             }
             self.total_items_routed += 1;
+            // `:1315-1318` — the connection's allowance is armed here. It is
+            // accounted for rather than enforced; see `batch::budget`.
+            let clock = ctx.budget.start();
             let attempt = autoroute_item(
                 board,
                 self.rules,
                 self.settings,
                 entry.item,
                 entry.net_no,
-                ripup_costs,
-                self.remove_unconnected_vias,
+                ctx.ripup_costs,
+                ctx.remove_unconnected_vias,
                 &mut self.scratch,
             );
+            let usage = clock.finish();
+            outcome.time_used_ms += usage.time_used_ms;
+            outcome.effort_used += usage.effort_used;
+            if usage.hit_budget {
+                outcome.connections_hitting_budget += 1;
+            }
             match attempt.state() {
                 AttemptState::Routed => outcome.routed += 1,
                 state if state.is_skip() => outcome.skipped += 1,
                 _ => outcome.not_routed += 1,
             }
             outcome.ripped_item_count += attempt.ripped.len();
-            if self.requeue_ripped_items && outcome.requeued < requeue_budget {
+            if self.requeue_active && outcome.requeued < requeue_budget {
                 for net_no in attempt.changed_nets.iter().copied() {
                     if net_no == entry.net_no {
                         continue;
@@ -902,7 +990,7 @@ impl<'r> BatchRouter<'r> {
         }
 
         // `:657-661` — end-of-pass tail cleanup.
-        let stop = if self.remove_unconnected_vias {
+        let stop = if ctx.remove_unconnected_vias {
             StopConnection::None
         } else {
             StopConnection::FanoutVia
@@ -914,26 +1002,53 @@ impl<'r> BatchRouter<'r> {
         outcome
     }
 
-    /// Repeats [`BatchRouter::autoroute_pass`] up to `max_passes` times.
+    /// The full batch loop — `BatchAutorouter.runBatchLoop` (`:757-1188`), i.e.
+    /// [`schedule::BatchLoop`] with this router as its driver and
+    /// [`CheckScorer`] as its scorer.
     ///
-    /// **M2a schedule**: stop when the board is complete, when a pass attempted
-    /// nothing, or at the cap. The release's `BoardHistory` restores and the two
-    /// stagnation trackers (`batch-orchestration.md` §5.2) are M2c; they read
-    /// only [`PassOutcome`] fields, so they attach here without moving code.
+    /// `max_passes` is clamped to at least 1: upstream's `maxPasses <= 0`
+    /// escape hatch runs the loop **uncapped** (conformance appendix §1.2), and
+    /// this port refuses to produce that state from a pass count — the CLI
+    /// rejects a negative `-mp` outright, and [`schedule::LoopConfig`] is the
+    /// only way to ask for the uncapped loop deliberately.
     pub fn run(&mut self, board: &mut Board, max_passes: i32) -> RunOutcome {
-        let mut outcome = RunOutcome::default();
-        let passes = max_passes.max(1);
-        for pass_no in 1..=passes {
-            let pass = self.autoroute_pass(board, pass_no);
-            let done = pass.board_complete || !pass.progressed;
-            outcome.incomplete_count = pass.incomplete_count;
-            outcome.inserted_count += pass.routed;
-            outcome.passes.push(pass);
-            if done {
-                break;
-            }
-        }
-        outcome
+        let max_passes = max_passes.max(1);
+        self.requeue_active = self.requeue_policy.applies_to(max_passes);
+        let config = LoopConfig {
+            max_passes,
+            start_ripup_costs: self.start_ripup_costs,
+            fanout_enabled: self.fanout_enabled,
+            remove_unconnected_vias: self.remove_unconnected_vias,
+            history_limit: history::MAX_HISTORY_SIZE,
+            budget: self.budget,
+        };
+        // Copied out of `self` so the scorer's borrow of the rules is
+        // independent of the `&mut self` the loop takes as its driver.
+        let rules: &'r BoardRules = self.rules;
+        let mut scorer = CheckScorer::new(rules, self.board_units_per_mm)
+            .with_weights(scoring::weights_from(&self.settings.scoring));
+        BatchLoop::new(config).run(board, self, &mut scorer)
+    }
+}
+
+impl PassDriver for BatchRouter<'_> {
+    fn run_pass(&mut self, board: &mut Board, ctx: &PassContext) -> PassOutcome {
+        self.autoroute_pass_with(board, ctx)
+    }
+
+    fn remove_tails(&mut self, board: &mut Board, stop: StopConnection) {
+        remove_tails(board, -1, stop, &mut self.scratch);
+    }
+
+    fn on_board_restored(&mut self, _board: &Board, _delta: &StoreDelta) {
+        // The restored board carries its own search trees and connectivity, so
+        // nothing *inside* it is stale, and this router builds its engine — and
+        // therefore its room database — per connection, so there is no room
+        // cache to clear either. Dropping the scratch buffers is the whole of
+        // the router-side invalidation today; this is the seam a persistent
+        // room database subscribes to, with `delta` telling it which items
+        // moved (`ARCHITECTURE.md`, fr-board mechanism 2).
+        self.scratch = ContactScratch::new();
     }
 }
 

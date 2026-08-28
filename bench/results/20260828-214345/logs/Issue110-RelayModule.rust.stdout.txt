@@ -1,0 +1,5 @@
+Imported /home/bond12/2/RelayModule.dsn in 19.04s: 2 layers, 1058 items (152 pins, 145 traces, 30 vias)
+Router: 1 passes, 157 routed, 21 failed, 60 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 4 clearance violations, 12 of 88 connections incomplete, score 854.53/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue110-RelayModule.rust.ses

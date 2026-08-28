@@ -1,0 +1,5 @@
+Imported /Applications/KiCad/demos/pic_programmer/pic_programmer.dsn in 0.28s: 2 layers, 1595 items (241 pins, 311 traces, 6 vias)
+Router: 1 passes, 36 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 6 clearance violations, 9 of 126 connections incomplete, score 919.04/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue163-pic_programmer.rust.ses

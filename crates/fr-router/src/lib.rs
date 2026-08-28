@@ -27,7 +27,9 @@
 //! | [`maze::search`] | `MazeSearchAlgo` — the loop |
 //! | [`result`] | the backtrack chain `LocateFoundConnectionAlgo` consumes |
 //! | [`batch`] | `BatchAutorouter` — work-list selection, one pass, tail cleanup |
+//! | [`batch::schedule`] | `BatchAutorouter.runBatchLoop` — pass scheduling and every stop rule |
 //! | [`fanout`] | `BatchFanout` + `RoutingBoard.fanout` — the SMD pin-escape stage |
+//! | [`optimizer`] | `BatchOptimizer` — the post-routing rip-and-reroute stage |
 //! | [`maze::shove`] | `MazeShoveTraceAlgo` — the maze-time virtual shove |
 //! | [`pull_tight`] | `PullTightAlgo` + `opt_changed_area` — post-route trace optimization |
 //! | [`pull_tight45`] | `PullTightAlgo45` — the 45° local moves (the default board flavor) |
@@ -106,6 +108,7 @@ pub mod insert_forced;
 pub mod locate;
 pub mod locate45;
 pub mod maze;
+pub mod optimizer;
 pub mod pull_tight;
 pub mod pull_tight45;
 pub mod result;
@@ -114,10 +117,16 @@ pub mod rooms;
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
 
-pub use batch::{AttemptState, BatchRouter, PassOutcome, RunOutcome};
+pub use batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
+pub use batch::scoring::{BoardScore, BoardScorer, CheckScorer};
+pub use batch::{AttemptState, BatchRouter, PassOutcome, RunOutcome, StopReason};
 pub use ctrl::AutorouteControl;
 pub use engine::AutorouteEngine;
 pub use fanout::{fanout_board, FanoutConfig, FanoutOutcome};
 pub use maze::search::{MazeSearch, SearchFailure, SettleRecord};
+pub use optimizer::{
+    route_then_optimize, run_optimization_stage, BatchOptimizer, ItemRouteResult, LengthMetric,
+    LoopExit, OptimizerOutcome, OptimizerPassOutcome, PassExit, StageOutcome,
+};
 pub use pull_tight::PullTightAlgo;
 pub use result::{BacktrackElement, BacktrackKind, FoundConnection, RippedItem};

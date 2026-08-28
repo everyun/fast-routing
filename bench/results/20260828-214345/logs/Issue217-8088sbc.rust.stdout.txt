@@ -1,0 +1,5 @@
+Imported /home/ken/play/uC/8088/project/8088sbc/8088sbc.dsn in 72.44s: 2 layers, 1260 items (343 pins, 269 traces, 11 vias)
+Router: 1 passes, 556 routed, 7 failed, 344 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 0 clearance violations, 31 of 235 connections incomplete, score 868.08/1000
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260828-214345/ses/Issue217-8088sbc.rust.ses

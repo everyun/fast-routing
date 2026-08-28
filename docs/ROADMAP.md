@@ -151,7 +151,13 @@ Gates (all executable without a router):
 
 ## M2 — Capability parity: the sequential router (three slices, each with an external oracle)
 
-- **M2a [LANDED, gate NOT met — 3/10 vs bar 7/10; axes diagnosed]** Result (referee-judged,
+- **M2a+M2b [GATE PASSED 9/10 vs bar 7/10 — 2026-08-28]** Easy-10 at -mp 1, referee-judged,
+  45-flavor OFF default: zero added violations 10/10; unrouted beats Java on 5 boards
+  (Issue026 5v7, Issue155 5v18, Issue102 43v52, Issue034 26v40); sole miss Issue159 (2v1).
+  Link-door root cause was Adjustment polarity (fixed faithfully). Perf debt moved to M3:
+  with real shove enabled expansions are 5.3x the lab jar's on Issue034 (search-efficiency,
+  not per-step: per-exp cost is 2.1x) — the M3 attack list.
+  Historical (M2a first attempt): Result (referee-judged,
   -mp 1): with the target-capture fix, ours ties/beats Java on 4 boards (Issue155 9 vs 18
   unrouted) but adds 1-8 clearance violations on 6 boards (staircase geometry without
   pull-tight) and stays behind on unrouted where shove is needed. Perf red flag: 20-32x

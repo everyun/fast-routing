@@ -57,6 +57,12 @@ impl AutorouteEngine<'_> {
     /// `try_remove_edge` maximality loop and builds the gap rooms. The room's
     /// own shape may shrink inside this call (the corner cut-off at `:457-478`).
     pub fn calculate_doors(&mut self, room_id: RoomId) {
+        // `AutorouteEngine.java:520-525` dispatches on the *tree* subclass:
+        // `ShapeSearchTree45Degree` → `Sorted45DegreeRoomNeighbours`, else this
+        // one. Here the subclass is the engine's angle family.
+        if self.is_fortyfive() {
+            return self.calculate_doors_45(room_id);
+        }
         // `:60-65`: an edge removal restarts the whole calculation. The loop is
         // bounded by the strict area increase the removal is gated on.
         loop {
@@ -270,7 +276,7 @@ impl AutorouteEngine<'_> {
     }
 
     /// The `get_id_no()` the neighbour sort's tie-break reads (`:666`).
-    fn obstacle_id(&self, obstacle: Obstacle) -> i64 {
+    pub(super) fn obstacle_id(&self, obstacle: Obstacle) -> i64 {
         match obstacle {
             Obstacle::Item(item, index) => ((item.raw() as i64) << 10) | index as i64,
             // Rooms sort after every item, matching the obstacle visit order.
@@ -281,7 +287,7 @@ impl AutorouteEngine<'_> {
     /// `ObstacleExpansionRoom.create_overlap_door` (`:75-100`): a 2-dimensional
     /// door between two obstacle rooms of the same net. For two pieces of the
     /// same trace only consecutive segments get one.
-    fn create_overlap_door(&mut self, room_id: RoomId, item: ItemId, index: u16) {
+    pub(super) fn create_overlap_door(&mut self, room_id: RoomId, item: ItemId, index: u16) {
         let routable = self
             .board
             .store()
@@ -327,7 +333,12 @@ impl AutorouteEngine<'_> {
     }
 
     /// `SortedRoomNeighbours.insert_door_ok` (`:246-301`).
-    fn insert_door_ok(&self, first: RoomId, second: RoomId, door_shape: &Simplex) -> bool {
+    pub(super) fn insert_door_ok(
+        &self,
+        first: RoomId,
+        second: RoomId,
+        door_shape: &Simplex,
+    ) -> bool {
         if first == second || self.rooms.door_exists(first, second) {
             return false;
         }
@@ -380,7 +391,7 @@ impl AutorouteEngine<'_> {
 
     /// `SortedRoomNeighbours.insert_door_ok(ObstacleExpansionRoom, Line)`
     /// (`:287-301`).
-    fn trace_end_door_ok(&self, room_id: RoomId, door_line: &Line) -> bool {
+    pub(super) fn trace_end_door_ok(&self, room_id: RoomId, door_line: &Line) -> bool {
         let Some((item_id, index)) = self.rooms.room(room_id).item else {
             return true;
         };
@@ -462,7 +473,7 @@ impl AutorouteEngine<'_> {
         let shape = new_room.shape.clone();
         let contained = new_room.contained.clone();
         let room = self.rooms.room_mut(room_id);
-        room.shape = shape;
+        room.set_shape(shape);
         room.contained_shape = contained;
         true
     }
@@ -497,7 +508,11 @@ impl AutorouteEngine<'_> {
     /// Every deferred same-net tree entry that is connectable, carries the
     /// routed net and whose connection shape meets the room becomes a target
     /// door — and any deferred entry at all marks the room net-dependent.
-    fn calculate_target_doors(&mut self, room_id: RoomId, own_net_objects: &[(ItemId, u16)]) {
+    pub(super) fn calculate_target_doors(
+        &mut self,
+        room_id: RoomId,
+        own_net_objects: &[(ItemId, u16)],
+    ) {
         if own_net_objects.is_empty() {
             return;
         }
@@ -608,7 +623,7 @@ impl AutorouteEngine<'_> {
                             let cut_half_plane = geom::half_plane(&cut_line);
                             let new_shape =
                                 self.rooms.room(room_id).shape.intersection(&cut_half_plane);
-                            self.rooms.room_mut(room_id).shape = new_shape;
+                            self.rooms.room_mut(room_id).set_shape(new_shape);
                             corner_cut_off = geom::side_of_line(
                                 &self.rooms.room(room_id).contained_shape,
                                 &cut_line,

@@ -1,0 +1,35 @@
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+52 of 552 connections still incomplete
+      257.70 real       255.75 user         0.86 sys
+            51675136  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                6090  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   2  voluntary context switches
+              107269  involuntary context switches
+       3717042543907  instructions retired
+        915397032492  cycles elapsed
+            43155864  peak memory footprint
