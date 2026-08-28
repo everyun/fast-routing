@@ -1,27 +1,25 @@
-//! Headless Freerouting, in Rust — the drop-in CLI, now driving the M1 pipeline.
+//! Headless Freerouting, in Rust — the drop-in CLI, driving the M2a pipeline.
 //!
-//! # What changed in M1, and what it means for a caller
+//! # What a plain run does
 //!
-//! The default path is [`fr_core::RoutingJob`] v2: `fr_io::specctra` import →
-//! [`fr_board::Board`] + `fr_rules` → **no router** → `fr_check` referee → `fr_io` SES writer v2.
-//! The pre-rewrite `DsnDocument` → `BasicBoard` → `fr-autoroute` chain is not reachable from
-//! here at all; it survives as `fr_core::legacy` for its own tests until M2 deletes it.
-//!
-//! So a plain `-de board.dsn -do board.ses` invocation still reads the design, still judges it,
-//! and still writes a valid session — but the session carries the wiring the *input* had, not a
-//! route. Pretending otherwise would be the worst possible failure mode for a benchmark
-//! harness, so the run says so on stderr and exits **3**:
+//! `-de board.dsn -do board.ses` runs [`fr_core::RoutingJob`] v2 end to end: `fr_io::specctra`
+//! import → [`fr_board::Board`] + `fr_rules` → **`fr_router`, `-mp` passes of it** → `fr_check`
+//! referee → `fr_io` SES writer v2. The session carries our copper. The pre-rewrite
+//! `DsnDocument` → `BasicBoard` → `fr-autoroute` chain is not reachable from here at all; it
+//! survives as `fr_core::legacy` for its own tests until M2 deletes it.
 //!
 //! | exit | meaning |
 //! |---|---|
-//! | 0 | the requested work finished (`--import-only`, `--golden-dump`, `--drc-report`, `--version`, `--help`) |
+//! | 0 | the requested work finished **and nothing is left unconnected** |
 //! | 1 | usage error, unreadable input, unwritable output, or an import failure |
-//! | 2 | *(reserved — the pre-rewrite binary used it for "routed, but not clean")* |
-//! | 3 | **routing was requested and this build cannot route yet**; import + check + SES passthrough ran and the `.ses` was written |
+//! | 2 | the board was routed and the `.ses` written, but incompletes remain |
 //!
-//! 3 is deliberately distinct from 1: `bench/run_bench.py` classifies a crash and an
-//! honest "not implemented" differently, and a board that cannot be routed yet must not be
-//! confused with a board that broke the tool.
+//! 2 is the pre-rewrite binary's contract ("routed, but not clean"), restored now that there is
+//! a router behind it. The M1-only exit 3 ("cannot route yet") is gone; `bench/run_bench.py`
+//! reads 2 as a routing-quality result and 1 as a tool failure.
+//!
+//! `--import-only`, `--golden-dump` and `--drc-report` never route and always exit 0 on success:
+//! their contract is "this is what the *input* looks like", and the gates depend on it.
 //!
 //! # The gate flags are first class now
 //!
@@ -38,10 +36,15 @@
 //!
 //! # Flags
 //!
-//! Every pre-existing flag is preserved, including the ones that no longer do anything:
-//! `-mp/--max-passes` and `-us/--threads` are accepted and echoed, because a harness that
-//! passes them must not start failing on an unknown-argument error. They are marked as inert in
-//! `--help` rather than silently ignored.
+//! Every pre-existing flag is preserved. `-mp/--max-passes` is live now: it is the pass cap the
+//! batch driver runs to, and pass *n* routes at `start_ripup_costs * n`
+//! (`batch-orchestration.md` §4). `-us/--threads` is still inert, and honestly so: upstream
+//! 2.3.0 routes strictly sequentially — its multi-threaded pass is private with no call site
+//! (conformance #107, #111).
+//!
+//! `--settle-trace FILE` turns on the differential harness's record stream: one
+//! `FRMETRIC settle <door> <section> <g> <f>` line per settled maze element, the same shape the
+//! lab jar emits under `-Dfrlab.settle_trace=1`, for `bench/tools/frlab_parse.py`.
 
 use std::env;
 use std::fs;
@@ -51,17 +54,14 @@ use std::process;
 use std::time::Instant;
 
 use fr_core::drc_report::{self, ReportOptions, DRC_IMPORT_OPTIONS};
-use fr_core::{JobError, JobReport, RoutingJob};
+use fr_core::{JobError, JobReport, MazeOptions, RouterStage, RoutingJob};
 use fr_io::golden_dump;
 use fr_io::specctra::ImportOptions;
 
-/// `--import-only` and the two emitters exit 0; a routing request exits with this.
-const EXIT_ROUTER_NOT_IMPLEMENTED: i32 = 3;
+/// Routed, `.ses` written, but the board still has incompletes.
+const EXIT_INCOMPLETE: i32 = 2;
 /// Usage, IO and import failures.
 const EXIT_ERROR: i32 = 1;
-
-const ROUTER_NOTICE: &str =
-    "router rewrite in progress — running import+check+SES passthrough (M1); routing lands in M2";
 
 fn print_usage() {
     eprintln!(
@@ -74,10 +74,14 @@ INPUT / OUTPUT
     -de, --design <FILE>        Input Specctra .dsn design file path (Required)
     -do, --output <FILE>        Output Specctra .ses session file path (Default: <input>.ses)
 
-MODES (default: route — which in this build is import + check + SES passthrough, exit 3)
+MODES (default: route)
     --import-only               Import and judge the board; write the .ses only if -do was given
     --golden-dump <FILE>        Emit the `fast-routing.golden-dump/1` model dump (gate G1.1)
     --drc-report <FILE>         Emit the `java -drc` shaped violation JSON (gate G1.2a)
+
+ROUTING OPTIONS
+    -mp, --max-passes <N>       Ripup-and-reroute passes (Default: 1). Pass n rips at 100*n
+    --fanout                    Run the SMD pin-escape pre-pass first (off by default in M2a)
 
 --drc-report OPTIONS
     --unit <mm|mil|inch|um>     Report unit (Default: mm, which is what the oracles use)
@@ -86,16 +90,19 @@ MODES (default: route — which in this build is import + check + SES passthroug
     --emit-boxes                Also write one BOX line per item to stderr
     --pin-frame-fix             Deprecated no-op; the importer now places pads in the pin frame
 
-ACCEPTED BUT INERT UNTIL M2 (kept so existing harnesses keep parsing)
-    -mp, --max-passes <N>       Autorouter passes
-    -us, --threads <N>          Rayon worker threads
+DIAGNOSTICS
+    --settle-trace <FILE>       Write one `FRMETRIC settle` line per settled maze element, the
+                                lab jar's `-Dfrlab.settle_trace=1` format (`1`/`stderr` = stderr)
+
+ACCEPTED BUT INERT (kept so existing harnesses keep parsing)
+    -us, --threads <N>          Worker threads; upstream 2.3.0 routes single-threaded
 
     -v,  --version              Print version information
     -h,  --help                 Print help
 
 EXIT CODES
-    0  the requested work finished          2  (reserved)
-    1  usage / IO / import failure          3  routing requested; not implemented yet (M1)
+    0  finished, nothing left unconnected   2  routed and written, incompletes remain
+    1  usage / IO / import failure
 "#,
         env!("CARGO_PKG_VERSION")
     );
@@ -114,6 +121,8 @@ struct Args {
     emit_boxes: bool,
     max_passes: Option<usize>,
     threads: Option<usize>,
+    fanout: bool,
+    settle_trace: Option<String>,
 }
 
 fn fail(message: &str) -> ! {
@@ -164,6 +173,8 @@ fn main() {
             "--emit-boxes" => args.emit_boxes = true,
             "-mp" | "--max-passes" => args.max_passes = next!("-mp").parse().ok(),
             "-us" | "--threads" => args.threads = next!("-us").parse().ok(),
+            "--fanout" => args.fanout = true,
+            "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
             "-v" | "--version" => {
                 println!("fast-routing v{}", env!("CARGO_PKG_VERSION"));
                 return;
@@ -181,11 +192,14 @@ fn main() {
         fail("missing required input design file (-de <file.dsn>)");
     };
 
-    if let Some(passes) = args.max_passes {
-        eprintln!("note: -mp {passes} is accepted but inert until M2 — nothing routes yet");
-    }
     if let Some(threads) = args.threads {
-        eprintln!("note: -us {threads} is accepted but inert until M2 — nothing routes yet");
+        eprintln!(
+            "note: -us {threads} is accepted but inert — upstream 2.3.0 routes single-threaded"
+        );
+    }
+    // Must be set before anything asks the sink, which resolves the environment once.
+    if let Some(path) = &args.settle_trace {
+        env::set_var("FR_SETTLE_TRACE", path);
     }
 
     let job = match RoutingJob::from_path(&input_path) {
@@ -200,11 +214,24 @@ fn main() {
         return;
     }
 
+    // `--import-only` keeps the M1 contract: no router stage, so the board the referee judges
+    // and the session carries is exactly the imported one.
+    let job = if args.import_only {
+        job
+    } else {
+        let passes = args.max_passes.unwrap_or(1).max(1);
+        let passes = i32::try_from(passes).unwrap_or(i32::MAX);
+        job.with_stage(RouterStage::Maze(
+            MazeOptions::with_passes(passes).with_fanout(args.fanout),
+        ))
+    };
+
     let started = Instant::now();
     let report = match job.run() {
         Ok(report) => report,
         Err(error) => fail(&describe(&error)),
     };
+    fr_metrics::settle_trace::flush();
     print_summary(&report, started);
     for warning in &report.warnings {
         eprintln!("warning: {warning}");
@@ -227,8 +254,17 @@ fn main() {
     if args.import_only {
         return;
     }
-    eprintln!("{ROUTER_NOTICE}");
-    process::exit(EXIT_ROUTER_NOT_IMPLEMENTED);
+    // The old contract, now that there is a router behind it: 0 when the board came out fully
+    // connected, 2 when it did not. The referee's count is the one that decides, not the
+    // router's own — they are computed by different code over the same board, and disagreeing
+    // with the judge in our favour is the one failure mode a harness cannot detect.
+    if report.stats.incomplete_count > 0 {
+        eprintln!(
+            "{} of {} connections still incomplete",
+            report.stats.incomplete_count, report.stats.max_connections
+        );
+        process::exit(EXIT_INCOMPLETE);
+    }
 }
 
 /// `<input>.dsn` → `<input>.ses`; anything else just gains `.ses`.
@@ -257,6 +293,12 @@ fn print_summary(report: &JobReport, started: Instant) {
         report.census.traces,
         report.census.vias,
     );
+    if let Some(router) = &report.router {
+        println!(
+            "Router: {} passes, {} routed, {} failed, {} ripped, {} pins fanned out",
+            router.passes, router.routed, router.not_routed, router.ripped, router.fanouted,
+        );
+    }
     println!(
         "Referee: {} clearance violations, {} of {} connections incomplete, score {:.2}/1000",
         report.stats.clearance_violation_count,

@@ -7,8 +7,8 @@
 //! bytes ──▶ fr_io::specctra::import ──▶ Board + BoardRules      [`RoutingJob::import`]
 //!                                        │
 //!                                        ▼
-//!                              ┌── the router ──┐               [`RouterStage`]  ← M2 lands here
-//!                              └───── (none) ───┘
+//!                         ┌── fr_router: fanout + maze passes ──┐  [`RouterStage`]
+//!                         └──────── or nothing at all ──────────┘
 //!                                        │
 //!                                        ▼
 //!                          fr_check: clearance + connectivity   [`Referee::judge`]
@@ -18,26 +18,26 @@
 //!                          fr_io::specctra::ses_write           [`write_session`]
 //! ```
 //!
-//! # There is deliberately no router in it
+//! # The router stage is opt-in, and it is the only thing that may mutate the board
 //!
-//! M1's contract is that *nothing routes*. The board that reaches the referee and the SES writer
-//! is exactly the board the importer built, so a G1.1 or G1.2a delta can only ever be an
-//! importer or a checker bug — "the router did it" is not available as an explanation. The old
-//! `fr-autoroute` toy would happily run here and it must not: it is written against
-//! [`fr_board::BasicBoard`], a second item model that the importer never produces, and its
-//! output has never been judged by [`fr_check`]. It stays reachable through
-//! [`crate::legacy`] and nowhere else.
+//! [`RouterStage::ImportOnly`] is still the default and is a no-op *by construction*: its match
+//! arm never receives `&mut design.board`. The M1 contract it protects — a G1.1 or G1.2a delta
+//! can only ever be an importer or a checker bug — therefore still holds for every gate emitter,
+//! for `--import-only`, and for both `--*-report` modes.
 //!
-//! [`RouterStage`] is the seam. Today it has one variant; M2 adds the real one, and the only
-//! code that changes is [`RoutingJob::run`]'s single `match`.
+//! [`RouterStage::Maze`] is M2a: [`fr_router::fanout`] (optional) followed by
+//! [`fr_router::BatchRouter`], writing into the imported board in place. The pre-rewrite
+//! `fr-autoroute` toy is still not reachable from here — it is written against
+//! [`fr_board::BasicBoard`], a second item model the importer never produces, and its output has
+//! never been judged by [`fr_check`]. It stays behind [`crate::legacy`] and nowhere else.
 //!
 //! # What "SES passthrough" means
 //!
-//! The session file carries the wiring the DSN already had — `(type route)` copper, plus
-//! whatever a previous tool left behind — re-emitted through the v2 writer with its endpoint
-//! snapping (`dsn-board-semantics.md` §12.3). It is a *valid* session that KiCad will accept;
-//! it is not a *routed* one. Callers that need to tell the difference read
-//! [`JobReport::routed`], and `fr-cli` turns that into its own exit code.
+//! Under [`RouterStage::ImportOnly`] the session file carries the wiring the DSN already had —
+//! `(type route)` copper, plus whatever a previous tool left behind — re-emitted through the v2
+//! writer with its endpoint snapping (`dsn-board-semantics.md` §12.3). It is a *valid* session
+//! that KiCad will accept; it is not a *routed* one. Callers that need to tell the difference
+//! read [`JobReport::routed`], and `fr-cli` turns that into its own exit code.
 //!
 //! ```no_run
 //! let job = fr_core::RoutingJob::from_path("board.dsn").unwrap();
@@ -57,16 +57,134 @@ use fr_check::{
     ScoreWeights, StoreView, Violation,
 };
 use fr_io::specctra::{self, ImportError, ImportOptions, ImportedDesign, SesInput, Unit};
+use fr_router::batch::BatchRouter;
+use fr_router::fanout::{fanout_board, FanoutConfig};
+use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 
-/// Where the router would go.
-///
-/// One variant today. M2a adds `Route(RouterSettings)` and the pipeline gains a stage between
-/// the import and the referee; nothing else in this module moves.
+/// The router stage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RouterStage {
     /// Import, judge, write the imported wiring back out. No routing, no board mutation.
     #[default]
     ImportOnly,
+    /// M2a: the shape-expansion maze router, in place on the imported board.
+    Maze(MazeOptions),
+}
+
+/// How the [`RouterStage::Maze`] stage is run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MazeOptions {
+    /// Ripup-and-reroute passes. Pass *n* routes at `start_ripup_costs * n`
+    /// (`batch-orchestration.md` §4, row 44). `-mp` on the command line.
+    pub max_passes: i32,
+    /// Run the SMD pin-escape pre-pass first.
+    ///
+    /// **Off by default, unlike upstream** (`router.fanout.enabled` defaults `true`,
+    /// `DefaultSettings.java:113`): the escape via is placed by the same M2a stand-in locator as
+    /// every other connection, and a fanout that escapes into a bad via placement is much harder
+    /// to undo than a connection that simply fails. It is opt-in until the insert wave lands.
+    pub fanout: bool,
+}
+
+impl Default for MazeOptions {
+    fn default() -> Self {
+        MazeOptions {
+            max_passes: 1,
+            fanout: false,
+        }
+    }
+}
+
+impl MazeOptions {
+    /// `max_passes` passes, no fanout.
+    pub fn with_passes(max_passes: i32) -> MazeOptions {
+        MazeOptions {
+            max_passes: max_passes.max(1),
+            ..MazeOptions::default()
+        }
+    }
+
+    /// Turns the fanout pre-pass on or off.
+    pub fn with_fanout(mut self, fanout: bool) -> MazeOptions {
+        self.fanout = fanout;
+        self
+    }
+}
+
+/// What the router stage did, `None` when it did not run.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RouterReport {
+    /// Passes actually run.
+    pub passes: usize,
+    /// Connections routed, summed over the passes.
+    pub routed: usize,
+    /// Connections the maze could not make, in the last pass.
+    pub not_routed: usize,
+    /// Items ripped up, summed over the passes.
+    pub ripped: usize,
+    /// SMD pins escaped by the fanout pre-pass.
+    pub fanouted: usize,
+    /// Ratsnest incompletes when the router stopped — the router's own count,
+    /// before the referee re-derives it.
+    pub incomplete_count: usize,
+}
+
+/// Millimetres to board units for this design.
+///
+/// The importer stores `Unit::scale(1, unit, UM) / resolution` micrometres per board unit
+/// (`board_geometry_stats`); the fanout annulus wants the inverse, in millimetres.
+fn board_units_per_mm(design: &ImportedDesign) -> f64 {
+    let um_per_board_unit =
+        Unit::scale(1.0, design.unit, Unit::Um) / f64::from(design.resolution.max(1));
+    if um_per_board_unit > 0.0 {
+        1000.0 / um_per_board_unit
+    } else {
+        1.0
+    }
+}
+
+/// The router settings this design routes under: the shipped defaults, sized to the board and
+/// through [`RouterSettings::apply_board_specific_optimizations`] — without which every layer
+/// costs 1.0/1.0 and the maze has no preferred direction.
+fn settings_for(design: &ImportedDesign, options: MazeOptions) -> RouterSettings {
+    let mut settings = RouterSettings::default();
+    settings.set_layer_count(design.rules.layer_structure.len());
+    settings.apply_board_specific_optimizations(
+        BoardAspectRatio::from_bounding_box(
+            f64::from(design.bounds.width()),
+            f64::from(design.bounds.height()),
+        ),
+        &design.rules.layer_structure,
+    );
+    settings.max_passes = options.max_passes.max(1);
+    settings
+}
+
+/// Runs [`RouterStage::Maze`] over `design` in place.
+fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterReport {
+    let settings = settings_for(design, options);
+    let scale = board_units_per_mm(design);
+    let mut report = RouterReport::default();
+
+    if options.fanout {
+        let config = FanoutConfig::from_settings(&settings, scale);
+        // Disjoint field borrows: the router needs `&mut board` and `&rules` at once.
+        let outcome = fanout_board(&mut design.board, &design.rules, &settings, &config);
+        report.fanouted = outcome.total_items_fanouted;
+    }
+
+    let mut router = BatchRouter::new(&design.rules, &settings);
+    let outcome = router.run(&mut design.board, options.max_passes);
+    report.passes = outcome.passes.len();
+    report.routed = outcome.passes.iter().map(|pass| pass.routed).sum();
+    report.ripped = outcome
+        .passes
+        .iter()
+        .map(|pass| pass.ripped_item_count)
+        .sum();
+    report.not_routed = outcome.passes.last().map_or(0, |pass| pass.not_routed);
+    report.incomplete_count = outcome.incomplete_count;
+    report
 }
 
 /// Why a job could not produce a report.
@@ -194,13 +312,14 @@ impl RoutingJob {
 
     /// The whole pipeline.
     pub fn run(&self) -> Result<JobReport, JobError> {
-        let design = self.import()?;
-        // The router stage. `ImportOnly` is a no-op *by construction*: it does not receive
-        // `&mut design.board`, so no future edit to this match arm can start mutating the
-        // board by accident.
-        let routed = match self.stage {
-            RouterStage::ImportOnly => false,
+        let mut design = self.import()?;
+        // The router stage. `ImportOnly` is a no-op *by construction*: its arm does not receive
+        // `&mut design`, so no future edit to it can start mutating the board by accident.
+        let router = match self.stage {
+            RouterStage::ImportOnly => None,
+            RouterStage::Maze(options) => Some(run_maze_stage(&mut design, options)),
         };
+        let routed = router.is_some();
         let referee = Referee::judge(&design, &self.weights);
         let session = write_session(&design, &self.design_name);
         Ok(JobReport {
@@ -220,6 +339,7 @@ impl RoutingJob {
                 .chain(session.warnings)
                 .collect(),
             routed,
+            router,
             design,
         })
     }
@@ -247,9 +367,11 @@ pub struct JobReport {
     pub ses: String,
     /// Importer and writer warnings, in that order.
     pub warnings: Vec<String>,
-    /// **False in M1.** True only once a router stage actually changed the board; the SES is a
-    /// passthrough of the imported wiring until then.
+    /// True when a router stage ran, i.e. when the SES carries our work rather than a
+    /// passthrough of the imported wiring.
     pub routed: bool,
+    /// What the router stage did; `None` under [`RouterStage::ImportOnly`].
+    pub router: Option<RouterReport>,
     /// The imported design, kept so a caller can re-read the session against it or emit a
     /// golden dump without importing twice.
     pub design: ImportedDesign,

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "source": "Issue054-tairakb.dsn",
+  "generator": "fr-check drc_report",
+  "violations": [
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [/row4] (expected: 0.2002 mm, actual: 0.1531 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.15309789123535156, "items": [{"description": "BoardOutline", "pos": {"x": 153.831, "y": -101.4495}, "uuid": "1"}, {"description": "Pin [/row4]", "pos": {"x": 79.195, "y": -137.875}, "uuid": "5102"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [/row3] (expected: 0.2002 mm, actual: 0.1531 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.15309789123535156, "items": [{"description": "BoardOutline", "pos": {"x": 153.831, "y": -101.4495}, "uuid": "1"}, {"description": "Pin [/row3]", "pos": {"x": 79.195, "y": -118.825}, "uuid": "5284"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [/row2] (expected: 0.2002 mm, actual: 0.1531 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.15309789123535156, "items": [{"description": "BoardOutline", "pos": {"x": 153.831, "y": -101.4495}, "uuid": "1"}, {"description": "Pin [/row2]", "pos": {"x": 79.195, "y": -99.775}, "uuid": "5466"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [/row1] (expected: 0.2002 mm, actual: 0.1531 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.15309789123535156, "items": [{"description": "BoardOutline", "pos": {"x": 153.831, "y": -101.4495}, "uuid": "1"}, {"description": "Pin [/row1]", "pos": {"x": 79.195, "y": -80.725}, "uuid": "5648"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [/row0] (expected: 0.2002 mm, actual: 0.1531 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.15309789123535156, "items": [{"description": "BoardOutline", "pos": {"x": 153.831, "y": -101.4495}, "uuid": "1"}, {"description": "Pin [/row0]", "pos": {"x": 79.195, "y": -61.675}, "uuid": "5830"}]}
+  ]
+}

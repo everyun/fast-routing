@@ -26,6 +26,8 @@ fr-io = { path = "../fr-io" }
 # drop `fr-autoroute` and `fr-drc` from the graph — turning off *our* `legacy` feature would
 # otherwise still pull `fr-core`'s default one.
 fr-core = { path = "../fr-core", default-features = false }
+# `--settle-trace` writes through the same sink the router's expansion loop uses.
+fr-metrics = { path = "../fr-metrics" }
 fr-autoroute = { path = "../fr-autoroute", optional = true }
 fr-board = { path = "../fr-board", optional = true }
 fr-datastructures = { path = "../fr-datastructures", optional = true }

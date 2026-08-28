@@ -7,9 +7,10 @@
 //! fixture corpus. The corpus-dependent assertions live in `fr-core`'s pipeline tests, where a
 //! missing fixture is supposed to fail loudly.
 //!
-//! The exit codes are a contract with `bench/run_bench.py`: 3 means "routing was asked for and
-//! this build cannot do it yet", which a harness must classify as unroutable-yet rather than as
-//! a crash. A test that only checked `success()` would not notice 3 becoming 1.
+//! The exit codes are a contract with `bench/run_bench.py`: **2** means "the board was routed and
+//! the session written, but incompletes remain", which a harness must classify as a routing-quality
+//! result rather than as a crash; **1** is a tool failure. A test that only checked `success()`
+//! would not notice 2 becoming 1. (The M1-only exit 3, "cannot route yet", is gone.)
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -46,6 +47,39 @@ const BOARD: &str = r#"(pcb cli_smoke
   )
 )"#;
 
+/// Four pads on two nets and **no `(wiring)` scope at all**: nothing is connected, so the
+/// router has to make both connections itself. The two nets are 3 mm apart and each spans 5 mm
+/// on an empty 10 mm board, so a straight trace on `F.Cu` exists for both and the run must come
+/// out with zero incompletes and zero violations.
+const UNROUTED_BOARD: &str = r#"(pcb cli_route
+  (parser (string_quote "))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path signal 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (rule (width 250) (clearance 200))
+  )
+  (placement
+    (component pad4
+      (place P1 1000 1000 front 0)
+      (place P2 6000 1000 front 0)
+      (place P3 1000 4000 front 0)
+      (place P4 6000 4000 front 0)
+    )
+  )
+  (library
+    (image pad4 (pin round_pad 1 0 0))
+    (padstack round_pad (shape (circle F.Cu 400)) (shape (circle B.Cu 400)) (attach off))
+  )
+  (network
+    (net SIG (pins P1-1 P2-1))
+    (net SIG2 (pins P3-1 P4-1))
+    (class default SIG SIG2 (rule (width 250) (clearance 200)))
+  )
+)"#;
+
 /// A scratch directory holding `board.dsn`, removed when the test ends.
 struct Workspace {
     dir: PathBuf,
@@ -53,10 +87,14 @@ struct Workspace {
 
 impl Workspace {
     fn new(tag: &str) -> Workspace {
+        Workspace::with_board(tag, BOARD)
+    }
+
+    fn with_board(tag: &str, board: &str) -> Workspace {
         let dir = std::env::temp_dir().join(format!("fr-cli-{}-{tag}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).expect("create the scratch directory");
-        std::fs::write(dir.join("board.dsn"), BOARD).expect("write the board");
+        std::fs::write(dir.join("board.dsn"), board).expect("write the board");
         Workspace { dir }
     }
 
@@ -131,10 +169,11 @@ fn no_arguments_is_a_usage_error() {
 // the default path: routing was requested
 // =================================================================================================
 
-/// The headline behaviour change. A plain `-de/-do` run does the M1 work, writes a real session,
-/// says what it did not do, and exits 3.
+/// The headline behaviour change: a plain `-de/-do` run **routes**. This board arrives with its
+/// one connection already wired, so the router finds nothing to do, the referee finds nothing
+/// wrong, and the run exits 0.
 #[test]
-fn a_routing_request_writes_the_passthrough_session_and_exits_three() {
+fn a_routing_request_writes_the_session_and_exits_zero_when_the_board_is_complete() {
     let workspace = Workspace::new("route");
     let ses = workspace.path("out.ses");
     let output = run(&[
@@ -144,15 +183,7 @@ fn a_routing_request_writes_the_passthrough_session_and_exits_three() {
         ses.as_os_str(),
     ]);
 
-    assert_eq!(code(&output), 3, "stderr: {}", stderr(&output));
-    assert!(
-        stderr(&output).contains(
-            "router rewrite in progress — running import+check+SES passthrough (M1); \
-             routing lands in M2"
-        ),
-        "stderr: {}",
-        stderr(&output)
-    );
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
 
     let session = std::fs::read_to_string(&ses).expect("the session was written");
     // The session name comes from the *design* — `designName.replace(".dsn", ".ses")`,
@@ -160,13 +191,78 @@ fn a_routing_request_writes_the_passthrough_session_and_exits_three() {
     assert!(session.starts_with("(session board.ses"), "{session}");
     assert!(session.contains("(base_design board.dsn)"));
     assert!(session.contains("(routes"));
-    // The imported wire is passed through, so the session is not empty of copper.
     assert!(session.contains("(wire"), "{session}");
 
-    // The referee ran and reported.
+    // Both stages reported.
     let report = stdout(&output);
+    assert!(report.contains("Router:"), "{report}");
     assert!(report.contains("Referee:"), "{report}");
     assert!(report.contains("clearance violations"), "{report}");
+}
+
+/// **The M2a acceptance case.** An unrouted two-net board goes in, a routed one comes out: zero
+/// incompletes, zero clearance violations from the referee, real copper in the session, exit 0.
+#[test]
+fn an_unrouted_two_net_board_comes_out_complete_and_clean() {
+    let workspace = Workspace::with_board("unrouted", UNROUTED_BOARD);
+    let ses = workspace.path("routed.ses");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "-mp".as_ref(),
+        "1".as_ref(),
+    ]);
+
+    let report = stdout(&output);
+    assert_eq!(
+        code(&output),
+        0,
+        "stdout: {report}\nstderr: {}",
+        stderr(&output)
+    );
+    assert!(
+        report.contains("0 clearance violations, 0 of 2 connections incomplete"),
+        "{report}"
+    );
+    // Two connections, so at least two routed items and no failures in the final pass.
+    assert!(report.contains("Router:"), "{report}");
+    assert!(report.contains("0 failed"), "{report}");
+
+    // The session carries copper the input did not have.
+    let session = std::fs::read_to_string(&ses).expect("the session was written");
+    assert!(session.contains("(wire"), "{session}");
+    assert!(
+        session.matches("(wire").count() >= 2,
+        "one wire per net at least: {session}"
+    );
+}
+
+/// A board the router cannot finish exits 2, not 0 and not 1. Nothing on this board can reach
+/// `NC`'s second pad — it is outside the outline — so one connection stays open.
+#[test]
+fn an_unfinishable_board_exits_two_with_the_session_still_written() {
+    let unreachable = UNROUTED_BOARD.replace(
+        "(place P4 6000 4000 front 0)",
+        "(place P4 60000 40000 front 0)",
+    );
+    let workspace = Workspace::with_board("incomplete", &unreachable);
+    let ses = workspace.path("partial.ses");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+    ]);
+
+    assert_eq!(code(&output), 2, "stdout: {}", stdout(&output));
+    assert!(
+        stderr(&output).contains("still incomplete"),
+        "stderr: {}",
+        stderr(&output)
+    );
+    assert!(ses.is_file(), "the session is written even when incomplete");
 }
 
 /// With no `-do`, the default path still writes `<input>.ses` next to the design — the
@@ -175,13 +271,14 @@ fn a_routing_request_writes_the_passthrough_session_and_exits_three() {
 fn the_default_output_path_is_the_design_with_a_ses_extension() {
     let workspace = Workspace::new("default-out");
     let output = run(&["-de".as_ref(), workspace.design().as_os_str()]);
-    assert_eq!(code(&output), 3);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
     assert!(workspace.path("board.ses").is_file());
 }
 
-/// `-mp` and `-us` are inert but must not become argument errors: a harness passes them.
+/// `-mp` is live and `-us` is inert, and neither may become an argument error: a harness passes
+/// both. `-us` says so on stderr rather than being silently dropped.
 #[test]
-fn the_inert_router_flags_are_still_accepted() {
+fn the_router_flags_are_still_accepted() {
     let workspace = Workspace::new("inert");
     let output = run(&[
         "-de".as_ref(),
@@ -191,9 +288,44 @@ fn the_inert_router_flags_are_still_accepted() {
         "-us".as_ref(),
         "4".as_ref(),
     ]);
-    assert_eq!(code(&output), 3, "stderr: {}", stderr(&output));
-    assert!(stderr(&output).contains("-mp 20 is accepted but inert"));
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
     assert!(stderr(&output).contains("-us 4 is accepted but inert"));
+    assert!(
+        !stderr(&output).contains("-mp 20 is accepted but inert"),
+        "-mp is live now: {}",
+        stderr(&output)
+    );
+}
+
+/// `--settle-trace` is the differential harness's producer: one `FRMETRIC settle` record per
+/// settled maze element, in the lab jar's field order.
+#[test]
+fn settle_trace_writes_the_frlab_shaped_records() {
+    let workspace = Workspace::with_board("settle", UNROUTED_BOARD);
+    let trace = workspace.path("settle.log");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        workspace.path("out.ses").as_os_str(),
+        "--settle-trace".as_ref(),
+        trace.as_os_str(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+
+    let log = std::fs::read_to_string(&trace).expect("the trace was written");
+    let mut lines = log.lines().filter(|line| line.starts_with("FRMETRIC settle "));
+    let first = lines.next().expect("at least one settle record");
+    // `FRMETRIC settle <door_id> <section> <g> <f>` — four fields after the tag.
+    let fields: Vec<&str> = first.split_whitespace().collect();
+    assert_eq!(fields.len(), 6, "{first}");
+    assert_eq!(fields[0], "FRMETRIC");
+    assert_eq!(fields[1], "settle");
+    fields[2].parse::<u64>().expect("door id");
+    fields[3].parse::<u32>().expect("section");
+    let g: f64 = fields[4].parse().expect("g");
+    let f: f64 = fields[5].parse().expect("f");
+    assert!(f >= g, "f is never below g: {first}");
 }
 
 // =================================================================================================
@@ -344,9 +476,9 @@ fn an_unreadable_design_is_an_error_not_a_panic() {
     assert!(stderr(&output).contains("read /nonexistent/definitely-not-here.dsn"));
 }
 
-/// A file that is not a DSN exits 1, **not** 3: the design is broken, not the router.
+/// A file that is not a DSN exits 1, **not** 2: the design is broken, not the routing.
 #[test]
-fn a_non_dsn_input_exits_one_not_three() {
+fn a_non_dsn_input_exits_one_not_two() {
     let workspace = Workspace::new("junk");
     let junk = workspace.path("junk.dsn");
     std::fs::write(&junk, "this is not a board").expect("write");

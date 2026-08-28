@@ -15,6 +15,7 @@ members = [
     "crates/fr-drc",
     "crates/fr-check",
     "crates/fr-metrics",
+    "crates/fr-router",
     "crates/fr-core",
     "crates/fr-cli",
 ]

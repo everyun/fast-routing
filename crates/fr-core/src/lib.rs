@@ -12,13 +12,17 @@
 //! which takes an [`fr_io::specctra::ImportedDesign`] and needs nothing this crate owns.
 //! `fr-cli --golden-dump` calls it directly.
 //!
-//! # M1 status: the pipeline does not route
+//! # Routing is opt-in
 //!
-//! [`pipeline::RouterStage`] has one variant, `ImportOnly`. The board that reaches the referee
-//! and the session writer is the board the importer built, unmodified, so every number this
-//! crate reports is a property of the *input design* and of `fr-io` / `fr-check`. That is
-//! deliberate — it is what makes G1.1 and G1.2a measure the importer and the checker rather
-//! than a router. M2 adds the routing stage, and takes [`legacy`] and `fr-drc` out with it.
+//! [`pipeline::RouterStage::ImportOnly`] is still the default, and under it the board that
+//! reaches the referee and the session writer is the board the importer built, unmodified — so
+//! every number a `--import-only`, `--golden-dump` or `--drc-report` run reports is a property
+//! of the *input design* and of `fr-io` / `fr-check`. That is what keeps G1.1 and G1.2a
+//! measuring the importer and the checker rather than a router.
+//!
+//! [`pipeline::RouterStage::Maze`] is the M2a router: [`fr_router`]'s fanout stage (opt-in) and
+//! batch pass driver, writing into the imported board in place. [`legacy`] and `fr-drc` go out
+//! when M2 completes.
 
 pub mod drc_report;
 #[cfg(feature = "legacy")]
@@ -26,7 +30,9 @@ pub mod legacy;
 pub mod pipeline;
 
 pub use drc_report::{report as drc_json_report, ReportOptions, DRC_IMPORT_OPTIONS};
-pub use pipeline::{BoardCensus, JobError, JobReport, Referee, RouterStage, RoutingJob};
+pub use pipeline::{
+    BoardCensus, JobError, JobReport, MazeOptions, Referee, RouterReport, RouterStage, RoutingJob,
+};
 
 /// Returns the crate version.
 pub fn version() -> &'static str {

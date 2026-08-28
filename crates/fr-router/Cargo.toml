@@ -1,0 +1,27 @@
+[package]
+name = "fr-router"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The M2 shape-expansion maze router for the freerouting Rust port: rooms, doors, drills, the A* frontier and the found-connection backtrack chain."
+
+[dependencies]
+fr-board = { path = "../fr-board" }
+fr-datastructures = { path = "../fr-datastructures" }
+fr-geometry = { path = "../fr-geometry" }
+fr-metrics = { path = "../fr-metrics" }
+fr-rules = { path = "../fr-rules" }
+
+[features]
+default = []
+# Exposes `fr_router::test_support`, the synthetic boards the integration tests
+# build against. Enabled automatically for this crate's own `cfg(test)` build.
+test-support = []
+
+[dev-dependencies]
+fr-router = { path = ".", features = ["test-support"] }
+fr-metrics = { path = "../fr-metrics" }
+
+[[example]]
+name = "settle_trace"
+required-features = []

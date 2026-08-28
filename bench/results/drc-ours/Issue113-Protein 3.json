@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "source": "Issue113-Protein.dsn",
+  "generator": "fr-check drc_report",
+  "violations": [
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [CHOICE_RESET] (expected: 0.2002 mm, actual: 0.0750 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.07502306823730469, "items": [{"description": "BoardOutline", "pos": {"x": 103.7575, "y": -117.5}, "uuid": "1"}, {"description": "Pin [CHOICE_RESET]", "pos": {"x": 164.8725, "y": -97.175}, "uuid": "1284"}]}
+  ]
+}

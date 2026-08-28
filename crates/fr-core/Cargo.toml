@@ -19,6 +19,7 @@ fr-board = { path = "../fr-board" }
 fr-rules = { path = "../fr-rules" }
 fr-io = { path = "../fr-io" }
 fr-check = { path = "../fr-check" }
+fr-router = { path = "../fr-router" }
 fr-autoroute = { path = "../fr-autoroute", optional = true }
 fr-drc = { path = "../fr-drc", optional = true }
 rayon = { workspace = true, optional = true }

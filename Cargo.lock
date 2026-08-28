@@ -78,6 +78,7 @@ dependencies = [
  "fr-datastructures",
  "fr-geometry",
  "fr-io",
+ "fr-metrics",
  "rayon",
 ]
 
@@ -91,6 +92,7 @@ dependencies = [
  "fr-drc",
  "fr-geometry",
  "fr-io",
+ "fr-router",
  "fr-rules",
  "rayon",
 ]
@@ -135,6 +137,18 @@ dependencies = [
 [[package]]
 name = "fr-metrics"
 version = "0.1.0"
+
+[[package]]
+name = "fr-router"
+version = "0.1.0"
+dependencies = [
+ "fr-board",
+ "fr-datastructures",
+ "fr-geometry",
+ "fr-metrics",
+ "fr-router",
+ "fr-rules",
+]
 
 [[package]]
 name = "fr-rules"

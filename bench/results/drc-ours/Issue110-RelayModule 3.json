@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "source": "Issue110-RelayModule.dsn",
+  "generator": "fr-check drc_report",
+  "violations": [
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [Net-(FU1-Pad1)] (expected: 2.0002 mm, actual: 1.9901 mm)", "layer": 0, "expected_mm": 2.0002, "actual_mm": 1.990097671508789, "items": [{"description": "BoardOutline", "pos": {"x": 142.25, "y": -202.5}, "uuid": "1"}, {"description": "Pin [Net-(FU1-Pad1)]", "pos": {"x": 113.25, "y": -221.75}, "uuid": "10"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between BoardOutline and Pin [Net-(FU1-Pad1)] (expected: 2.0002 mm, actual: 1.9901 mm)", "layer": 1, "expected_mm": 2.0002, "actual_mm": 1.990097671508789, "items": [{"description": "BoardOutline", "pos": {"x": 142.25, "y": -202.5}, "uuid": "1"}, {"description": "Pin [Net-(FU1-Pad1)]", "pos": {"x": 113.25, "y": -221.75}, "uuid": "10"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Via [/KN1] and Via [/KN2] (expected: 0.2002 mm, actual: 0.2001 mm)", "layer": 0, "expected_mm": 0.2002, "actual_mm": 0.2000991912841797, "items": [{"description": "Via [/KN1]", "pos": {"x": 169.122, "y": -205.95}, "uuid": "889"}, {"description": "Via [/KN2]", "pos": {"x": 169.302, "y": -206.95}, "uuid": "890"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Via [/KN1] and Via [/KN2] (expected: 0.2002 mm, actual: 0.2001 mm)", "layer": 1, "expected_mm": 0.2002, "actual_mm": 0.2000991912841797, "items": [{"description": "Via [/KN1]", "pos": {"x": 169.122, "y": -205.95}, "uuid": "889"}, {"description": "Via [/KN2]", "pos": {"x": 169.302, "y": -206.95}, "uuid": "890"}]}
+  ]
+}

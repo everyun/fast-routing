@@ -151,7 +151,16 @@ Gates (all executable without a router):
 
 ## M2 — Capability parity: the sequential router (three slices, each with an external oracle)
 
-- **M2a** maze + locate + insert + **fanout** (fanout is 27 % of suite stage time and the sole
+- **M2a [LANDED, gate NOT met — 3/10 vs bar 7/10; axes diagnosed]** Result (referee-judged,
+  -mp 1): with the target-capture fix, ours ties/beats Java on 4 boards (Issue155 9 vs 18
+  unrouted) but adds 1-8 clearance violations on 6 boards (staircase geometry without
+  pull-tight) and stays behind on unrouted where shove is needed. Perf red flag: 20-32x
+  slower than Java routing on the two big boards (missing 45-degree room-neighbour
+  specializations suspected; settle-diff harness needs position-based comparability before
+  it can attribute). Both axes are the documented M2b scope. Also surfaced:
+  fr_geometry::Line::is_equal_or_opposite is point-identity, upstream is collinearity —
+  latent bug for all callers, M2b item.
+  Original scope: maze + locate + insert + **fanout** (fanout is 27 % of suite stage time and the sole
   stage on 6 of the 14 Java timeouts — it goes first, not sixth) + the no-progress fanout
   detector. Oracle: settle-order agreement with the lab jar on 2 instrumented boards; gate:
   `-mp 1`, the 10 easy fixtures (Java 0/0 in <4 s: Issue026, Issue143×2, Issue155, Issue159,
