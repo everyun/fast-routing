@@ -15,9 +15,37 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
 
 ## M0.5 — Calibration & conformance (IN PROGRESS)
 
-- [ ] Measurement campaign (running): uncapped (2 h) Java runs of the 14 timeout fixtures;
-      `-XX:+UseSerialGC` bound on GC cost (slow-6); profiler stage split at DEBUG (slow-6).
-      → converts "5–20×" into a measured per-lever budget; supplies T_java(complete).
+- [x] Measurement campaign (DONE — consolidated in `bench/analysis/measurement-campaign.md`,
+      per-board data folded into `bench/fixtures-manifest.json` `fixtures[].uncapped`):
+      uncapped (2 h) Java runs of the 14 timeout fixtures; `-XX:+UseSerialGC` bound on GC
+      cost (slow-6); profiler stage split at DEBUG (slow-6).
+      **Results.** `T_java(complete)` measured for 11 of the 14 (296–4675 s each; the suite is
+      now costed for 42/46 boards at 18 690.5 s = 5.19 h). None of the 11 converged — 6 stop on
+      the score stall rule, 5 exhaust `-mp 20`; best is Issue219 at 2 unrouted, worst Issue145
+      at 135. GC bound: forcing `SerialGC` costs +6.0 % wall on the one clean, outcome-identical
+      pair (Issue190) and +2.7…+17.4 % against same-phase default-GC controls, with allocation
+      volume unchanged (+0.4 %) and peak heap down 2.6–10.1× — the parallel collector is
+      absorbing collection off the critical path, so **allocation elimination alone is not the
+      speedup story** (independent confirmation of ARCHITECTURE v3's off-CPU argument; keeps
+      recompute elimination as lever 1). Issue219's fanout non-convergence quantified: 10 of 20
+      passes add +0 vias for 71.06 s = 28.9 % of the stage, and the fanout loop has no stall
+      detector at all (its exit test is "0 pins fanouted"), unlike the auto-router's.
+      Still pending, tracked below:
+  - [ ] `T_java(complete)` for 3 boards. Issue208 hit the 2 h cap without finishing pass #1
+        (378 unrouted items — a different pathology from the rest, needs its own look);
+        Issue029 and Issue107-bad never routed at all — they block on a modal
+        `GuiManager.read_rules_file` confirmation dialog (jstack in the write-up §4), which is
+        reproducible on *any* board with a matching `.rules` sidecar. Re-run headless
+        (`-Djava.awt.headless=true`) and make the runner report a stage-less run as a harness
+        failure, not a slow board.
+  - [ ] Resolve the fanout confound: the whole 05:03+ campaign ran with **zero** fanout stages
+        while the 300 s baseline ran 37/46, same jar and flags. Until that is explained, the
+        uncapped walls describe an auto-routing-only pipeline and cross-campaign stage sums are
+        not comparable. The re-baseline must pass `--router.fanout.enabled=…` explicitly and
+        record the resolved value.
+  - [ ] Stage split: `-Dfreerouting.logging.console.level=DEBUG` produced 0 DEBUG lines in all
+        5 runs (property name never reaches `LoggingSettings`), so the split is unmeasured. The
+        runs were repurposed as the default-GC control for the SerialGC comparison.
 - [x] Lab jar from the **release revision** `2d4de019`: `/tmp/fr-lab-release/freerouting-lab.jar`,
       proven non-perturbing (identical per-pass board hashes + SES vs the shipped jar).
       Knobs: `-Dfrlab.retain_autoroute_database`, `-Dfrlab.settle_trace`; log prefixes
@@ -85,7 +113,18 @@ Gates (all executable without a router):
 - **G1.1** import parity: our dump matches Java's `-do` dump on the compared-field list (layers,
   scale, full clearance matrix by name, padstack shapes per layer, resolved placements + pin
   centres + pin clearance classes, item counts by kind and fixed state, net membership, via
-  rules), with documented lossy exclusions. 46/46.
+  rules), with documented lossy exclusions. **43/43, not 46/46** — Java itself hangs importing
+  `Issue029-hw48na` and both `Issue107-freq_teiler_200kHz_kicad*`, so no oracle exists for them
+  (they stay in G1.2b/G1.2c and M2's absolute gates). Mechanics: `bench/tools/golden_compare.py`
+  (pure Python, no Rust dependency — built and validated before the importer); exchange format
+  `fast-routing.golden-dump/1`, which `fr-cli` must emit and whose schema, field groups and seven
+  lossy exclusions are normative in `bench/tools/README.md`. Two exclusions bind the gate's
+  strength: the release writer emits only the clearance-matrix **diagonal**
+  (`write_non_default_clearance_rules` is commented out at `parser/Rule.java:185`), so
+  off-diagonal parity belongs to G1.2a; and wiring is compared as counts by
+  `(kind, fixed state)`, because upstream's re-import splits a net's copper by insertion order.
+  Harness proven today by a Java-dump→schema adapter self-comparing all 43 dumps clean
+  (`golden_compare.py --all`, 91 self-tests) — that is G1.0; only `--ours-dir` output moves G1.1.
 - **G1.2a** checker parity: fr-check's violation multiset `(pos_a, pos_b, expected_clearance)`
   on every **input board** equals the `java -drc` JSON (types clearance+holeClearance). 46/46.
   (Verified feasible: the filter reproduces Java's in-log M exactly, e.g. Issue190 = 1372.)

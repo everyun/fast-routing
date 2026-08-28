@@ -53,6 +53,17 @@ From the released jar, 46-fixture suite, 300 s cap, `-mp 20` (`bench/results/202
 | allocation rate while routing | ≈ 8.9 GB/s mean (per-stage telemetry) |
 | optimizer stage ran | on 1 of 46 fixtures, 0.18 s total |
 | stage split | fanout 499 s / routing 1344 s / optimize 0.2 s |
+| **`T_java(complete)`** *(uncapped: 2 h cap, `-mp 20`, `bench/results/java-uncapped/`; fanout stage did **not** run in this campaign — not the same pipeline as the rows above)* | 11 of the 14 ex-timeout boards finish in **296 – 4675 s** each; suite now costed for 42/46 boards at **18 690.5 s = 5.19 h**. 1 board (Issue208) still hits the 2 h cap without finishing pass #1; 2 (Issue029, Issue107-bad) never route at all — they block on a modal `GuiManager.read_rules_file` confirmation dialog, so the earlier reading "two fixtures hang in DSN import" is superseded. |
+
+Uncapped-row provenance and every caveat behind it:
+`bench/analysis/measurement-campaign.md` (tables regenerable with
+`python3 bench/analysis/campaign.py`; per-board values in
+`bench/fixtures-manifest.json` under `fixtures[].uncapped`, where
+`status == "completed"` is the only value whose wall time may be cited).
+That write-up also carries the campaign's GC bound — forcing `SerialGC` costs
++6.0 % wall on the one clean, outcome-identical pair with allocation volume
+unchanged — which is independent confirmation, from the collector side, of the
+off-CPU argument in the next section.
 
 From the **instrumented git-master source tree** (not the shipped jar — carries debug
 instrumentation worth an estimated 15–35 % of time/bytes): the 3 TB-per-board and 5.9 GB

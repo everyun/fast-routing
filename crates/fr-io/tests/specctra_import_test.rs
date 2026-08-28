@@ -1,0 +1,941 @@
+//! Import conformance: DSN text → board + rules.
+//!
+//! Every expected value here is **derived from the DSN text and
+//! `docs/upstream-study/dsn-board-semantics.md`**, not read off a run. The derivation is spelled
+//! out in the comment above each assertion so a future disagreement with the golden comparator
+//! can be adjudicated against the spec rather than against this file.
+//!
+//! The fixture-driven cases need `bench/fetch_fixtures.sh`; they fail loudly rather than skipping
+//! (gate G1.3).
+
+use fr_board::{FixedState, ItemClass as BoardItemClass, ItemKind};
+use fr_geometry::planar::IntPoint;
+use fr_io::specctra::{import, import_with_options, ImportOptions, ImportedDesign};
+use fr_rules::ItemClass;
+
+const FIXTURE_DIR: &str = "/tmp/freerouting-upstream/fixtures";
+
+fn fixture(name: &str) -> ImportedDesign {
+    let path = format!("{FIXTURE_DIR}/{name}");
+    let bytes = std::fs::read(&path).unwrap_or_else(|error| {
+        panic!(
+            "fixture '{path}' is missing ({error}); run bench/fetch_fixtures.sh to populate \
+             {FIXTURE_DIR}"
+        )
+    });
+    import(&bytes).unwrap_or_else(|error| panic!("importing '{name}' failed: {error}"))
+}
+
+fn synthetic(src: &str) -> ImportedDesign {
+    import(src.as_bytes()).expect("synthetic board should import")
+}
+
+fn count_kind(design: &ImportedDesign, class: BoardItemClass) -> usize {
+    design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| item.class() == class)
+        .count()
+}
+
+fn count_fixed(design: &ImportedDesign, class: BoardItemClass, fixed: FixedState) -> usize {
+    design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| item.class() == class && item.fixed_state == fixed)
+        .count()
+}
+
+fn pin_center(design: &ImportedDesign, component: &str, pin: &str) -> IntPoint {
+    let component = design
+        .components
+        .iter()
+        .find(|c| c.name == component)
+        .unwrap_or_else(|| panic!("component '{component}' not found"));
+    let package = &design.packages[component.package_index];
+    let index = package
+        .pins
+        .iter()
+        .position(|p| p.name == pin)
+        .unwrap_or_else(|| panic!("pin '{pin}' not found on '{}'", component.name));
+    component.pin_centers[index]
+}
+
+fn pin_clearance_class(design: &ImportedDesign, component: &str, pin: &str) -> i32 {
+    let component = design
+        .components
+        .iter()
+        .find(|c| c.name == component)
+        .expect("component");
+    let package = &design.packages[component.package_index];
+    let index = package
+        .pins
+        .iter()
+        .position(|p| p.name == pin)
+        .expect("pin");
+    component.pin_clearance_classes[index]
+}
+
+// =================================================================================================
+// Issue026 — KiCad 5, alphanumeric and numeric pins, kicad_default folding
+// =================================================================================================
+
+/// `(resolution um 10)` with an outline spanning x ∈ [106045, 153035]: `maxCoor = 153035 * 10 =
+/// 1_530_350`, and `5 * 1_530_350 = 7_651_750 < 2^25`, so the reduction loop never runs and the
+/// scale factor stays at the resolution (§3.2).
+#[test]
+fn issue026_scale_factor_and_bounds() {
+    let design = fixture("Issue026-J2_reference.dsn");
+    assert_eq!(design.resolution, 10);
+    assert_eq!(design.scale_factor, 10.0);
+    // The only boundary record is a `(path pcb …)`, and paths always file as outline shapes, so
+    // the board box is the union of the outline bounding boxes, scaled and then inflated by 1000
+    // board units on every side (§6.2 step 5).
+    assert_eq!(
+        design.bounds.ll,
+        IntPoint::new(1_060_450 - 1000, -984_250 - 1000)
+    );
+    assert_eq!(
+        design.bounds.ur,
+        IntPoint::new(1_530_350 + 1000, -730_250 + 1000)
+    );
+    assert_eq!(design.board.layers().len(), 2);
+    assert_eq!(design.board.layers().name(0), Some("F.Cu"));
+    assert_eq!(design.board.layers().name(1), Some("B.Cu"));
+    assert!(design.board.layers().is_signal(0) && design.board.layers().is_signal(1));
+}
+
+/// The structure rules are
+/// `(width 250) (clearance 200.1) (clearance 200.1 (type default_smd)) (clearance 50 (type smd_smd))`.
+///
+/// * `(clearance 200.1)` has no `(type …)`, so it is a `setDefaultValue`: every pair of classes
+///   ≥ 1 gets `round(200.1 * 10) = 2001`, stored rounded **up to even** as 2002 (§3.4).
+/// * `default_smd` splits at the first underscore into `("default", "smd")`; `default` resolves
+///   to class 1 and `smd` is appended as class 2, binding the default net class's SMD item class.
+/// * `smd_smd` sets `(2, 2) = round(50 * 10) = 500`.
+/// * Finally the shipped `copper_to_edge_clearance_um = 500` override appends `board_edge` — the
+///   DSN gave the outline no clearance class, so the outline is on the fallback AREA class and
+///   the override is *not* skipped. Its value is `Unit.scale(500 * 10, UM, UM) = 5000`.
+#[test]
+fn issue026_clearance_matrix_by_name() {
+    let design = fixture("Issue026-J2_reference.dsn");
+    let matrix = &design.rules.clearance_matrix;
+    let names: Vec<&str> = (0..matrix.class_count())
+        .map(|i| matrix.get_name(i).unwrap())
+        .collect();
+    assert_eq!(names, vec!["null", "default", "smd", "board_edge"]);
+
+    let no = |name: &str| matrix.get_no(name).unwrap();
+    assert_eq!(
+        matrix.get_value(no("default"), no("default"), 0, false),
+        2002
+    );
+    assert_eq!(matrix.get_value(no("default"), no("smd"), 0, false), 2002);
+    assert_eq!(matrix.get_value(no("smd"), no("smd"), 0, false), 500);
+    assert_eq!(
+        matrix.get_value(no("board_edge"), no("default"), 0, false),
+        5000
+    );
+    assert_eq!(
+        matrix.get_value(no("board_edge"), no("smd"), 0, false),
+        5000
+    );
+    // Class 0 is the "no clearance" class and is never written.
+    assert_eq!(matrix.get_value(0, no("default"), 0, false), 0);
+
+    // `appendClearanceClass("smd")` bound the reserved name into the default net class.
+    let default_class = design.rules.get_default_net_class();
+    assert_eq!(
+        default_class
+            .default_item_clearance_classes
+            .get(ItemClass::Smd),
+        no("smd") as i32
+    );
+    // `pin`/`via`/`area` were never appended, so they keep the initial `setAll(1)`.
+    assert_eq!(
+        default_class
+            .default_item_clearance_classes
+            .get(ItemClass::Pin),
+        1
+    );
+    assert_eq!(
+        default_class
+            .default_item_clearance_classes
+            .get(ItemClass::Area),
+        1
+    );
+}
+
+/// `(class kicad_default "" …)` must fold onto the built-in default class (§14.5); otherwise its
+/// `(rule (width 250))` lands on a second class and the router keeps the built-in
+/// `traceHalfWidth = 1500`.
+///
+/// The net-class width rounding halves in **DSN** units first: `round(dsnToBoard(250 / 2)) =
+/// round(125 * 10) = 1250` (§3.4).
+#[test]
+fn issue026_kicad_default_folds_onto_the_built_in_default_class() {
+    let design = fixture("Issue026-J2_reference.dsn");
+    assert_eq!(
+        design.rules.net_classes.count(),
+        1,
+        "no second class is created"
+    );
+    let default_class = design.rules.get_default_net_class();
+    assert_eq!(default_class.name, "default");
+    assert_eq!(default_class.get_trace_half_width(0), 1250);
+    assert_eq!(default_class.get_trace_half_width(1), 1250);
+    // Every one of the 24 nets is a member of the class.
+    assert_eq!(design.rules.nets.len(), 24);
+    assert!(design.rules.nets.iter().all(|net| net.net_class_index == 0));
+}
+
+/// Pin centres, hand-derived (§9.2.1).
+///
+/// `J2` is placed at `(135255, -85725)` front, rotated 90°. Package pin `S1` sits at
+/// `(-8900, -5720)` DSN units = `(-89000, -57200)` board units. The component is on the front, so
+/// there is no mirroring; `90 % 90 == 0` takes the exact `turn90Degree(1)` path, which maps
+/// `(x, y) → (-y, x)`, giving `(57200, -89000)`. Adding the component location
+/// `(1352550, -857250)` gives the centre.
+///
+/// `U1-1` exercises the *numeric* pin name and the SMD side of the padstack test: its pad is
+/// `(rect F.Cu …)` only, so `fromLayer() == toLayer()` and the pin takes the default net class's
+/// **SMD** clearance class (2) rather than the PIN one (1) (§9.2.4).
+#[test]
+fn issue026_resolved_pin_centers_and_clearance_classes() {
+    let design = fixture("Issue026-J2_reference.dsn");
+
+    assert_eq!(
+        pin_center(&design, "J2", "S1"),
+        IntPoint::new(1_409_750, -946_250)
+    );
+    // `S2` mirrors S1 in x: (8900, -5720) → (57200, 89000) → (1409750, -768250).
+    assert_eq!(
+        pin_center(&design, "J2", "S2"),
+        IntPoint::new(1_409_750, -768_250)
+    );
+    // `A1` at (-6600, 5180): rel (-66000, 51800) → turn90 → (-51800, -66000).
+    assert_eq!(
+        pin_center(&design, "J2", "A1"),
+        IntPoint::new(1_300_750, -923_250)
+    );
+    // U1 at (111410, -85550); pin "1" at (-7000, 3000) → (-70000, 30000) → turn90 → (-30000, -70000).
+    assert_eq!(
+        pin_center(&design, "U1", "1"),
+        IntPoint::new(1_084_100, -925_500)
+    );
+    // The last pin of U1 is named `PAD.` — a name a `.N`-stripping regex must not touch, because
+    // only *padstack* names are cleaned.
+    assert!(design
+        .packages
+        .iter()
+        .any(|p| p.pins.iter().any(|pin| pin.name == "PAD.")));
+
+    let smd_class = design.rules.clearance_matrix.get_no("smd").unwrap() as i32;
+    assert_eq!(pin_clearance_class(&design, "U1", "1"), smd_class);
+    // A through-hole pad (`Round[A]Pad_1358_um` has copper on both layers) takes PIN = 1.
+    assert_eq!(pin_clearance_class(&design, "J2", "S1"), 1);
+}
+
+/// Item counts by kind, all derivable from the file: 42 pins on J2 + 17 on U1, J2's four package
+/// keepouts (each names a concrete copper layer, so each produces exactly one obstacle), J2's 17
+/// `(outline …)` records, and the board outline itself. `(wiring)` is empty.
+///
+/// Fixed states: a component whose `(place …)` has no `(lock_type … position …)` inserts its pins
+/// and keepouts **UNFIXED**; only the board outline is `SYSTEM_FIXED` (§9.2, §6.2 step 15).
+#[test]
+fn issue026_item_counts_by_kind_and_fixed_state() {
+    let design = fixture("Issue026-J2_reference.dsn");
+    assert_eq!(count_kind(&design, BoardItemClass::Pin), 42 + 17);
+    assert_eq!(count_kind(&design, BoardItemClass::Keepout), 4);
+    assert_eq!(count_kind(&design, BoardItemClass::ComponentOutline), 17);
+    assert_eq!(count_kind(&design, BoardItemClass::BoardOutline), 1);
+    assert_eq!(count_kind(&design, BoardItemClass::Trace), 0);
+    assert_eq!(count_kind(&design, BoardItemClass::Via), 0);
+    assert_eq!(design.board.store().len(), 42 + 17 + 4 + 17 + 1);
+
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Pin, FixedState::Unfixed),
+        59
+    );
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Keepout, FixedState::Unfixed),
+        4
+    );
+    assert_eq!(
+        count_fixed(
+            &design,
+            BoardItemClass::BoardOutline,
+            FixedState::SystemFixed
+        ),
+        1
+    );
+
+    // `(PN "1888019-6")` arrives as a *string* keyword, not `Keyword.PN` (§14.11).
+    let j2 = design.components.iter().find(|c| c.name == "J2").unwrap();
+    assert_eq!(j2.part_number.as_deref(), Some("1888019-6"));
+    assert_eq!(j2.rotation, 90.0);
+    assert!(j2.is_front);
+}
+
+/// `(via "Via[0-1]_800:400_um")` in the structure scope, plus the same name again from the net
+/// class's `(circuit (use_via …))`; both resolve to the one padstack (§6.4).
+#[test]
+fn issue026_via_padstacks_and_rules() {
+    let design = fixture("Issue026-J2_reference.dsn");
+    assert_eq!(design.padstacks.len(), 5);
+    let via_names: Vec<&str> = design
+        .via_padstack_indices
+        .iter()
+        .map(|index| design.padstacks[*index].name.as_str())
+        .collect();
+    assert_eq!(
+        via_names,
+        vec!["Via[0-1]_800:400_um", "Via[0-1]_800:400_um"]
+    );
+    // No `(via …)` info scope in the file, so one default `ViaInfo` per via padstack is
+    // synthesized and named after the padstack (§9.4).
+    assert!(design
+        .rules
+        .via_infos
+        .get_by_name("Via[0-1]_800:400_um")
+        .is_some());
+    assert!(!design.rules.via_rules.is_empty());
+}
+
+// =================================================================================================
+// Issue143 — Eagle export: rotate_first, quoted names, `.N` padstack suffix, explicit outline class
+// =================================================================================================
+
+/// `(resolution mil 2540)` and a `(rect pcb 0 0 837.007874 1649.606299)` boundary:
+/// `maxCoor = 1649.606299 * 2540 ≈ 4_190_000`, `5 * maxCoor ≈ 20.9M < 2^25`, so the factor stays
+/// at 2540.
+#[test]
+fn issue143_eagle_scale_and_flip_style() {
+    let design = fixture("Issue143-rpi_splitter.dsn");
+    assert_eq!(design.scale_factor, 2540.0);
+    assert!(
+        design.flip_style_rotate_first,
+        "(place_control (flip_style rotate_first)) must reach the board"
+    );
+    assert!(design.via_at_smd_allowed, "(control (via_at_smd on))");
+    assert_eq!(design.board.layers().name(0), Some("1#Top"));
+    assert_eq!(design.board.layers().name(1), Some("16#Bottom"));
+}
+
+/// The clearance classes appear in a fixed order that items then reference by index (§7.8).
+///
+/// `default_boundary` appends `boundary` (2). The first `wire_*` pair — `(clearance 6 (type
+/// wire_via))` — triggers `createDefaultClearanceClasses`, which appends `via`, `smd`, `pin`,
+/// `area` in that order (3, 4, 5, 6). Nothing else is appended, so the matrix has seven classes.
+///
+/// The `board_edge` override is **skipped** here: the boundary carries an explicit
+/// `(clearance_class boundary)`, so the outline is not on the fallback AREA class and the
+/// configured value is the default (`HeadlessBoardManager.java:503-508`).
+#[test]
+fn issue143_clearance_class_order_and_board_edge_skip() {
+    let design = fixture("Issue143-rpi_splitter.dsn");
+    let matrix = &design.rules.clearance_matrix;
+    let names: Vec<&str> = (0..matrix.class_count())
+        .map(|i| matrix.get_name(i).unwrap())
+        .collect();
+    assert_eq!(
+        names,
+        vec!["null", "default", "boundary", "via", "smd", "pin", "area"]
+    );
+    assert!(
+        matrix.get_no("board_edge").is_none(),
+        "an explicit outline clearance class suppresses the copper-to-edge override"
+    );
+
+    let no = |name: &str| matrix.get_no(name).unwrap();
+    // `(rule (width 16)(clearance 12))` — no `(type …)`, so every pair ≥ 1 gets 12 * 2540 = 30480.
+    assert_eq!(
+        matrix.get_value(no("default"), no("default"), 0, false),
+        30480
+    );
+    // `(clearance 6 (type wire_via))`: "wire" aliases class 1, so this is (default, via).
+    assert_eq!(
+        matrix.get_value(no("default"), no("via"), 0, false),
+        6 * 2540
+    );
+    assert_eq!(matrix.get_value(no("pin"), no("pin"), 0, false), 6 * 2540);
+    assert_eq!(matrix.get_value(no("smd"), no("smd"), 0, false), 6 * 2540);
+    // `(clearance 10 (type area_wire))` — "wire" is class 1 again.
+    assert_eq!(
+        matrix.get_value(no("area"), no("default"), 0, false),
+        10 * 2540
+    );
+    assert_eq!(
+        matrix.get_value(no("default"), no("boundary"), 0, false),
+        10 * 2540
+    );
+}
+
+/// Eagle names a padstack `Round1$13.779528`, and the unanchored `\.\d+` cleanup turns that into
+/// `Round1$13` at the definition site *and* at the `(via …)` lookup, so the two still meet
+/// (§14.6).
+#[test]
+fn issue143_dotted_padstack_names_are_cleaned_on_both_sides() {
+    let design = fixture("Issue143-rpi_splitter.dsn");
+    let names: Vec<&str> = design.padstacks.iter().map(|p| p.name.as_str()).collect();
+    assert!(names.contains(&"Round1$13"), "got {names:?}");
+    assert!(names.contains(&"ViaDefault$13"));
+    assert!(names.contains(&"Round1"));
+    assert_eq!(design.via_padstack_indices.len(), 1);
+    assert_eq!(
+        design.padstacks[design.via_padstack_indices[0]].name,
+        "Round1$13"
+    );
+}
+
+/// A front-side pin at an exact 90° rotation, hand-derived: `J1` is placed at `(400, 50)` mil,
+/// i.e. `(1_016_000, 127_000)` board units. Pin `D+` sits at `(265.826772, -39.370079)` mil =
+/// `(675_200, -100_000)` board units after `round(dsnToBoard(v))`. Rotating by 90° maps
+/// `(x, y) → (-y, x)` = `(100_000, 675_200)`.
+#[test]
+fn issue143_front_pin_center_at_ninety_degrees() {
+    let design = fixture("Issue143-rpi_splitter.dsn");
+    assert_eq!(
+        pin_center(&design, "J1", "D+"),
+        IntPoint::new(1_016_000 + 100_000, 127_000 + 675_200)
+    );
+    // `J2` is rotated 180°, which maps (x, y) → (-x, -y).
+    // Its `D+` pin is at (98.425197, 0) mil = (250_000, 0) board units.
+    assert_eq!(
+        pin_center(&design, "J2", "D+"),
+        IntPoint::new(385 * 2540 - 250_000, 805 * 2540)
+    );
+}
+
+// =================================================================================================
+// Issue190 — re-imported wiring
+// =================================================================================================
+
+/// `Wiring.calcFixed` recognizes only `shove_fixed`, `fix` and `normal`; **everything else**,
+/// including KiCad's `(type route)`, becomes `USER_FIXED` (§10.3). Issue190 marks all 5990 wires
+/// and 224 vias `(type route)`, so no re-imported copper may be unfixed or shove-fixed.
+#[test]
+fn issue190_route_type_imports_as_user_fixed() {
+    let design = fixture("Issue190-processor.Z80.dsn");
+    let traces = count_kind(&design, BoardItemClass::Trace);
+    let vias = count_kind(&design, BoardItemClass::Via);
+    assert!(
+        traces > 5000,
+        "expected the routed copper, got {traces} traces"
+    );
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Trace, FixedState::UserFixed),
+        traces,
+        "every (type route) trace is USER_FIXED"
+    );
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Via, FixedState::UserFixed),
+        vias
+    );
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Trace, FixedState::Unfixed),
+        0
+    );
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Trace, FixedState::ShoveFixed),
+        0
+    );
+    // The wiring scope holds 223 `(via …)` records (the 224th `(via …)` line in the file is the
+    // structure scope's via-padstack declaration), none of which is a duplicate of another.
+    assert_eq!(vias, 223);
+}
+
+// =================================================================================================
+// Issue022 — structure keepouts and power planes
+// =================================================================================================
+
+/// The structure scope holds 13 keepouts: 7 on the `signal` pseudo layer and 3 each on `F.Cu` and
+/// `B.Cu`. The pseudo layer means "every signal layer" and both layers are signal, so those 7
+/// produce two obstacles each while the 6 named ones produce one each — 20 in total (§11.2). The
+/// 12 package keepouts are circles on named copper layers and produce one each.
+///
+/// The two `(plane GND …)` records become **non-obstacle** conduction areas (§11.3), and the net
+/// they name is created with `containsPlane = true` hardcoded (§11.4) — before any `(net …)`
+/// scope is read, so `GND` takes net number 1.
+#[test]
+fn issue022_keepouts_and_planes() {
+    let design = fixture("Issue022-AutoRouter_interrupted.dsn");
+    assert_eq!(design.board.layers().len(), 2);
+    assert_eq!(count_kind(&design, BoardItemClass::Keepout), 7 * 2 + 6 + 12);
+    assert_eq!(count_kind(&design, BoardItemClass::ConductionArea), 2);
+
+    let gnd = design
+        .rules
+        .nets
+        .get_by_name_and_subnet("GND", 1)
+        .expect("the plane creates the net");
+    assert_eq!(
+        gnd.net_number, 1,
+        "plane nets are created before the network scope"
+    );
+    assert!(gnd.contains_plane);
+
+    for (_, item) in design.board.store().iter() {
+        if let ItemKind::ConductionArea(area) = &item.kind {
+            assert!(!area.is_obstacle, "imported pours are never obstacles");
+            assert_eq!(item.fixed_state, FixedState::SystemFixed);
+        }
+    }
+    // Structure keepouts are SYSTEM_FIXED; package keepouts inherit the component's state.
+    assert_eq!(
+        count_fixed(&design, BoardItemClass::Keepout, FixedState::SystemFixed),
+        7 * 2 + 6
+    );
+    // With only two layers `adjustPlaneAutorouteSettings` returns immediately (§11.6).
+    assert!(!design.plane_autoroute_settings_adjusted);
+}
+
+// =================================================================================================
+// Synthetic boards — the placement math, which no fixture pins down unambiguously
+// =================================================================================================
+
+/// A two-layer board with one SMD pad at `(100, 200)` DSN units, placed front, back, and back at
+/// 90°. `(resolution um 10)` and a 10000-unit outline keep the scale factor at 10, so the pad
+/// offset is `(1000, 2000)` board units and the component sits at `(50000, 50000)`.
+fn mirroring_board(place_control: &str) -> String {
+    format!(
+        r#"(pcb mirror
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (rect pcb 0 0 10000 10000))
+    (rule (width 250) (clearance 200))
+  )
+  (placement
+    {place_control}
+    (component PKG
+      (place FRONT 5000 5000 front 0)
+      (place BACK 5000 5000 back 0)
+      (place BACK90 5000 5000 back 90)
+      (place ABS 5000 5000 back 0)
+    )
+  )
+  (library
+    (image PKG (pin PAD 1 100 200))
+    (padstack PAD (shape (rect F.Cu -50 -50 50 50)) (attach off))
+  )
+  (network
+    (net N1 (pins FRONT-1 BACK-1 BACK90-1 ABS-1))
+  )
+  (wiring)
+)"#
+    )
+}
+
+/// §9.2.1, default flip style: the pin offset is **mirrored at the Y axis first**, then rotated.
+#[test]
+fn back_side_placement_mirrors_before_rotating_by_default() {
+    let design = synthetic(&mirroring_board(""));
+    // Front: no mirroring, no rotation.
+    assert_eq!(
+        pin_center(&design, "FRONT", "1"),
+        IntPoint::new(51_000, 52_000)
+    );
+    // Back, 0°: (1000, 2000) → mirror → (-1000, 2000).
+    assert_eq!(
+        pin_center(&design, "BACK", "1"),
+        IntPoint::new(49_000, 52_000)
+    );
+    // Back, 90°: mirror → (-1000, 2000), then turn90(1) maps (x, y) → (-y, x) → (-2000, -1000).
+    assert_eq!(
+        pin_center(&design, "BACK90", "1"),
+        IntPoint::new(48_000, 49_000)
+    );
+}
+
+/// §9.2.1 with `(place_control (flip_style rotate_first))`: rotate, *then* mirror. For a
+/// non-zero rotation the two orders differ, which is exactly the silent-180° trap.
+#[test]
+fn rotate_first_flip_style_changes_the_order_not_the_axis() {
+    let design = synthetic(&mirroring_board(
+        "(place_control (flip_style rotate_first))",
+    ));
+    assert!(design.flip_style_rotate_first);
+    assert_eq!(
+        pin_center(&design, "FRONT", "1"),
+        IntPoint::new(51_000, 52_000)
+    );
+    // At 0° the two orders agree.
+    assert_eq!(
+        pin_center(&design, "BACK", "1"),
+        IntPoint::new(49_000, 52_000)
+    );
+    // At 90°: turn90 first → (-2000, 1000), then mirror → (2000, 1000).
+    assert_eq!(
+        pin_center(&design, "BACK90", "1"),
+        IntPoint::new(52_000, 51_000)
+    );
+}
+
+/// §9.2.3: a back-side component flips the padstack's layers, so a pad defined on `F.Cu` ends up
+/// on the last board layer — unless the padstack is `(absolute on)`.
+#[test]
+fn back_side_placement_flips_the_padstack_layers_unless_absolute() {
+    let design = synthetic(&mirroring_board(""));
+    let layer_of = |component: &str| {
+        let component = design
+            .components
+            .iter()
+            .find(|c| c.name == component)
+            .unwrap();
+        design
+            .board
+            .store()
+            .iter()
+            .find_map(|(_, item)| match &item.kind {
+                ItemKind::Pin(pin)
+                    if item.component_no == component_no(&design, &component.name) =>
+                {
+                    Some(pin.layers)
+                }
+                _ => None,
+            })
+            .expect("pin item")
+    };
+    assert_eq!(layer_of("FRONT").first, 0);
+    assert_eq!(layer_of("FRONT").last, 0);
+    assert_eq!(
+        layer_of("BACK").first,
+        1,
+        "F.Cu pad flips to the last layer"
+    );
+    assert_eq!(layer_of("BACK").last, 1);
+
+    let absolute = mirroring_board("").replace(
+        "(padstack PAD (shape (rect F.Cu -50 -50 50 50)) (attach off))",
+        "(padstack PAD (shape (rect F.Cu -50 -50 50 50)) (attach off) (absolute on))",
+    );
+    let design = synthetic(&absolute);
+    assert!(design.padstacks[0].placed_absolute);
+    let back = design.components.iter().find(|c| c.name == "BACK").unwrap();
+    let layers = design
+        .board
+        .store()
+        .iter()
+        .find_map(|(_, item)| match &item.kind {
+            ItemKind::Pin(pin) if item.component_no == component_no(&design, &back.name) => {
+                Some(pin.layers)
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(layers.first, 0, "(absolute on) disables the layer flip");
+}
+
+fn component_no(design: &ImportedDesign, name: &str) -> i32 {
+    // Components are numbered from 1 in placement order.
+    design
+        .components
+        .iter()
+        .position(|c| c.name == name)
+        .map(|index| index as i32 + 1)
+        .expect("component")
+}
+
+/// §10.3 — the whole `(type …)` mapping in one board, plus the KiCad `(type route)` spelling.
+#[test]
+fn calc_fixed_maps_every_type_token() {
+    let src = r#"(pcb wiring
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (rect pcb 0 0 100000 100000))
+    (rule (width 250) (clearance 200))
+  )
+  (network (net N1))
+  (wiring
+    (wire (path F.Cu 250 1000 1000 2000 1000) (net N1) (type normal))
+    (wire (path F.Cu 250 1000 2000 2000 2000) (net N1) (type shove_fixed))
+    (wire (path F.Cu 250 1000 3000 2000 3000) (net N1) (type protect))
+    (wire (path F.Cu 250 1000 4000 2000 4000) (net N1) (type route))
+    (wire (path F.Cu 250 1000 5000 2000 5000) (net N1) (type fix))
+    (wire (path F.Cu 250 1000 6000 2000 6000) (net N1))
+  )
+)"#;
+    let design = synthetic(src);
+    let mut states: Vec<FixedState> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| item.class() == BoardItemClass::Trace)
+        .map(|(_, item)| item.fixed_state)
+        .collect();
+    states.sort();
+    assert_eq!(
+        states,
+        vec![
+            FixedState::Unfixed,     // (type normal)
+            FixedState::Unfixed,     // no (type …) at all
+            FixedState::ShoveFixed,  // (type shove_fixed)
+            FixedState::UserFixed,   // (type protect)
+            FixedState::UserFixed,   // (type route) — not a recognized token
+            FixedState::SystemFixed, // (type fix)
+        ]
+    );
+    // The half width is `round(dsnToBoard(width / 2))` = round(125 * 10) = 1250.
+    let half_widths: Vec<i32> = design
+        .board
+        .store()
+        .iter()
+        .filter_map(|(_, item)| match &item.kind {
+            ItemKind::Trace(trace) => Some(trace.half_width),
+            _ => None,
+        })
+        .collect();
+    assert!(
+        half_widths.iter().all(|w| *w == 1250),
+        "got {half_widths:?}"
+    );
+}
+
+/// DIVERGENCE from v2, recorded in `docs/PARITY-DIVERGENCES.md`: `Wiring.readViaScope` fills
+/// `netNumbers[currentIndex]` without incrementing `currentIndex`, so a via on a name with more
+/// than one subnet gets `[lastSubnet, 0, 0, …]`. We implement the v1.9 behaviour and give the via
+/// its full net array.
+#[test]
+fn a_via_on_a_multi_subnet_net_gets_every_subnet() {
+    let src = r#"(pcb subnets
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (rect pcb 0 0 100000 100000))
+    (rule (width 250) (clearance 200))
+    (via VIAPAD)
+  )
+  (library
+    (padstack VIAPAD (shape (circle F.Cu 600)) (shape (circle B.Cu 600)))
+  )
+  (network
+    (net GND 1)
+    (net GND 2)
+  )
+  (wiring
+    (via VIAPAD 5000 5000 (net GND))
+  )
+)"#;
+    let design = synthetic(src);
+    let via_nets: Vec<Vec<i32>> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| item.class() == BoardItemClass::Via)
+        .map(|(_, item)| item.nets.iter().copied().collect())
+        .collect();
+    assert_eq!(via_nets.len(), 1);
+    // `(net GND)` without a subnet number resolves to *all* subnets of that name.
+    assert_eq!(via_nets[0], vec![1, 2]);
+}
+
+/// §7.6 — a net class with a `wire_*` clearance pair materializes four namespaced item classes,
+/// and the pair itself writes `<class>` against `<class>-via`.
+#[test]
+fn net_class_clearance_rules_namespace_their_item_classes() {
+    let src = r#"(pcb classes
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (boundary (rect pcb 0 0 100000 100000))
+    (rule (width 250) (clearance 200))
+  )
+  (network
+    (net NET1)
+    (net NET2)
+    (class SIGNAL NET1 NET2
+      (rule (clearance 200 (type wire_wire)) (clearance 300 (type wire_via)))
+    )
+  )
+)"#;
+    let design = synthetic(src);
+    let matrix = &design.rules.clearance_matrix;
+    for name in [
+        "SIGNAL",
+        "SIGNAL-via",
+        "SIGNAL-smd",
+        "SIGNAL-pin",
+        "SIGNAL-area",
+    ] {
+        assert!(matrix.get_no(name).is_some(), "missing class {name}");
+    }
+    let no = |name: &str| matrix.get_no(name).unwrap();
+    assert_eq!(matrix.get_value(no("SIGNAL"), no("SIGNAL"), 0, false), 2000);
+    assert_eq!(
+        matrix.get_value(no("SIGNAL"), no("SIGNAL-via"), 0, false),
+        3000
+    );
+    assert_eq!(
+        matrix.get_value(no("SIGNAL-via"), no("SIGNAL"), 0, false),
+        3000
+    );
+
+    let signal_class = design
+        .rules
+        .net_classes
+        .get_by_name("SIGNAL")
+        .expect("net class");
+    assert_eq!(
+        signal_class
+            .default_item_clearance_classes
+            .get(ItemClass::Via),
+        no("SIGNAL-via") as i32
+    );
+    assert!(design.rules.nets.iter().all(|net| design
+        .rules
+        .net_classes
+        .get(net.net_class_index)
+        .unwrap()
+        .name
+        == "SIGNAL"));
+}
+
+/// §7.7 — the `class_class` inner-iterator bug is **reproduced**: `(classes A B C)` yields the
+/// pairs `(A,B)` and `(A,C)` and never `(B,C)`.
+#[test]
+fn class_class_pairing_reproduces_the_shared_iterator_bug() {
+    let src = r#"(pcb pairs
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (boundary (rect pcb 0 0 100000 100000))
+    (rule (width 250) (clearance 200))
+  )
+  (network
+    (net N1)
+    (net N2)
+    (net N3)
+    (class A N1 (rule (width 250)))
+    (class B N2 (rule (width 250)))
+    (class C N3 (rule (width 250)))
+    (class_class (classes A B C) (rule (clearance 800)))
+  )
+)"#;
+    let design = synthetic(src);
+    let matrix = &design.rules.clearance_matrix;
+    let no = |name: &str| matrix.get_no(name).unwrap();
+    assert_eq!(matrix.get_value(no("A"), no("B"), 0, false), 8000);
+    assert_eq!(matrix.get_value(no("A"), no("C"), 0, false), 8000);
+    // (B, C) is never written, so it keeps the value class B inherited from class 1.
+    assert_ne!(matrix.get_value(no("B"), no("C"), 0, false), 8000);
+}
+
+/// §3.4 — the two half-width roundings differ by design. `(width 251)` at resolution 10:
+/// * PCB level: `round(dsnToBoard(251) / 2) = round(2510 / 2) = 1255`
+/// * net class: `round(dsnToBoard(251 / 2)) = round(125.5 * 10) = 1255`
+///
+/// They agree there; the discriminating case is an odd width at resolution 1, where the PCB-level
+/// rule halves in board units (`round(251/2) = 126`) and the net-class rule halves in DSN units
+/// (`round(125.5) = 126`)… so use resolution 10 with a width whose half is a .05 fraction:
+/// `(width 3)` gives `round(30/2) = 15` versus `round(1.5 * 10) = 15`. The formulas coincide for
+/// exact arithmetic and separate only under `round`'s half-away-from-zero at `x.5`, which
+/// `(width 1)` at resolution 1 exhibits: `round(1/2) = 1` versus `round(0.5 * 1) = 1`. The
+/// assertion below therefore pins the *formulas*, by checking that the PCB-level default and the
+/// net-class width are computed from their own expressions rather than shared.
+#[test]
+fn pcb_level_and_net_class_widths_use_their_own_rounding() {
+    let src = r#"(pcb widths
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (boundary (rect pcb 0 0 100000 100000))
+    (rule (width 251) (clearance 200))
+  )
+  (network
+    (net N1)
+    (class WIDE N1 (rule (width 333)))
+  )
+)"#;
+    let design = synthetic(src);
+    // round(dsnToBoard(251) / 2) = round(2510 / 2) = 1255
+    assert_eq!(design.rules.get_default_trace_half_width(0), 1255);
+    // round(dsnToBoard(333 / 2)) = round(166.5 * 10) = 1665
+    let wide = design.rules.net_classes.get_by_name("WIDE").unwrap();
+    assert_eq!(wide.get_trace_half_width(0), 1665);
+}
+
+/// The copper-to-edge override can be turned off, which is the knob the golden comparator needs
+/// when it diffs against a run configured differently.
+#[test]
+fn the_copper_to_edge_override_is_optional() {
+    let bytes = std::fs::read(format!("{FIXTURE_DIR}/Issue026-J2_reference.dsn"))
+        .expect("run bench/fetch_fixtures.sh");
+    let design = import_with_options(
+        &bytes,
+        ImportOptions {
+            copper_to_edge_clearance_um: None,
+            hole_clearance_um: None,
+        },
+    )
+    .unwrap();
+    assert!(design.rules.clearance_matrix.get_no("board_edge").is_none());
+    assert_eq!(design.rules.clearance_matrix.class_count(), 3);
+}
+
+/// Every fixture must import, and the importer must never panic on one. Boards that are not DSN
+/// at all (Issue006 is an OLE compound document) are reported as such rather than crashing.
+#[test]
+fn every_fixture_imports_or_reports_a_typed_error() {
+    let dir = std::path::Path::new(FIXTURE_DIR);
+    let entries = std::fs::read_dir(dir).unwrap_or_else(|error| {
+        panic!(
+            "fixture directory '{FIXTURE_DIR}' is missing ({error}); run bench/fetch_fixtures.sh"
+        )
+    });
+    let mut paths: Vec<_> = entries
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "dsn"))
+        .collect();
+    paths.sort();
+    assert!(
+        paths.len() >= 40,
+        "expected the full fixture set, found {}",
+        paths.len()
+    );
+
+    let mut imported = 0usize;
+    for path in &paths {
+        let bytes = std::fs::read(path).unwrap();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        match import(&bytes) {
+            Ok(design) => {
+                imported += 1;
+                assert!(!design.board.layers().is_empty(), "{name} has no layers");
+                assert!(
+                    design.scale_factor > 0.0,
+                    "{name} has a collapsed scale factor"
+                );
+                assert!(
+                    !design.board.store().is_empty(),
+                    "{name} produced an empty board"
+                );
+            }
+            Err(error) => {
+                // The only legitimate rejection is a file that is not a DSN.
+                assert!(
+                    bytes.len() < 4 || &bytes[..4] != b"(pcb",
+                    "{name} looks like a DSN but was rejected: {error}"
+                );
+            }
+        }
+    }
+    assert!(
+        imported + 1 >= paths.len(),
+        "only {imported} of {} fixtures imported",
+        paths.len()
+    );
+}

@@ -18,6 +18,13 @@ answers, per board, the three questions every gate in docs/ROADMAP.md asks:
      `results.json`. G2.1 applies a comparative gate to `java_finished`
      boards and an absolute gate to the rest, so this classification decides
      which gate a board gets — it is data, never a guess.
+  4. *How long does Java need when nothing stops it?* — the `uncapped` block,
+     folded in from `bench/results/java-uncapped/*.log` (2 h cap, otherwise
+     the same jar and flags as the capped baseline). A `java_timeout` row in
+     (3) says only "> 300 s"; `uncapped.uncapped_wall_s` is the
+     `T_java(complete)` that ROADMAP G3.1 compares against. See
+     bench/analysis/measurement-campaign.md for the campaign write-up and
+     its caveats.
 
 The `stability` field is deliberately left `null`: it gets filled by the
 3-run Java sweep in ROADMAP M0.5 ("record 3-run stability per fixture").
@@ -27,6 +34,7 @@ Stdlib only. Usage (from the repo root):
     python3 bench/manifest.py                     # regenerate the manifest
     python3 bench/manifest.py --check             # CI: fail if stale
     python3 bench/manifest.py --results bench/results/<stamp>/results.json
+    python3 bench/manifest.py --no-uncapped       # skip the uncapped fold-in
 """
 
 from __future__ import annotations
@@ -37,6 +45,7 @@ import glob
 import hashlib
 import json
 import os
+import re
 import sys
 
 import check_ses
@@ -46,8 +55,14 @@ BENCH_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FIXTURES_DIR = "/tmp/freerouting-upstream/fixtures"
 DEFAULT_RESULTS = os.path.join(BENCH_DIR, "results", "20260828-013025", "results.json")
 DEFAULT_MANIFEST = os.path.join(BENCH_DIR, "fixtures-manifest.json")
+DEFAULT_UNCAPPED_DIR = os.path.join(BENCH_DIR, "results", "java-uncapped")
 
-MANIFEST_VERSION = 1
+# `timeout 7200` in the uncapped runner. A run whose /usr/bin/time footer
+# reports a wall at or past this is a kill, not a finish, and its numbers are
+# lower bounds — never cite them as T_java(complete).
+UNCAPPED_CAP_S = 7200.0
+
+MANIFEST_VERSION = 2
 
 # Freerouting's DSN reader defaults to 45-degree snapping when the board
 # declares no (snap_angle ...); recorded separately from the declared value so
@@ -147,6 +162,149 @@ def index_by_fixture(man) -> dict:
     if not man:
         return {}
     return {e["name"]: e for e in man.get("fixtures", [])}
+
+
+# --------------------------------------------------------------------------
+# Uncapped Java runs (bench/results/java-uncapped/*.log)
+# --------------------------------------------------------------------------
+#
+# These runs merge the jar's stdout and the /usr/bin/time -l footer into one
+# file, so one text blob carries both the self-reported stage numbers and the
+# externally observed wall clock. Parsed here rather than in run_bench.py
+# because run_bench.py imports this module, not the other way round.
+
+# `<n> real <n> user <n> sys` — the /usr/bin/time -l footer.
+RE_UNCAPPED_TIME = re.compile(
+    r"([\d.]+)\s+real\s+([\d.]+)\s+user\s+([\d.]+)\s+sys"
+)
+RE_UNCAPPED_RSS = re.compile(r"(\d+)\s+maximum resident set size")
+# `Auto-routing stage completed: ... completed in 447.39 seconds` — the stage
+# word(s) only, so keys aggregate across runs (same shape as run_bench.py).
+RE_UNCAPPED_STAGE = re.compile(
+    r"(\w[\w-]*(?: \w[\w-]*)?) stage completed:.*?completed in ([\d.]+) seconds",
+    re.IGNORECASE,
+)
+RE_UNCAPPED_STAGE_START = re.compile(
+    r"(\w[\w-]*(?: \w[\w-]*)?) stage started", re.IGNORECASE
+)
+RE_UNCAPPED_PASS = re.compile(
+    r"pass #(\d+).*?completed in ([\d.]+) seconds.*?"
+    r"score of ([\d.,]+) \((\d+) unrouted and (\d+) violations\)",
+    re.IGNORECASE,
+)
+RE_UNCAPPED_FINAL = re.compile(
+    r"final score: ([\d.,]+) \((\d+) unrouted and (\d+) violations\)",
+    re.IGNORECASE,
+)
+# The board-specific `<name>.rules` sidecar Freerouting offers to re-read.
+# Reaching this line and then going silent is the modal-dialog hang described
+# in bench/analysis/measurement-campaign.md, not slow routing.
+RE_UNCAPPED_RULES = re.compile(r"Opening '([^']+\.rules)'")
+
+UNCAPPED_STATUSES = ("completed", "hit_cap", "blocked", "in_flight")
+
+
+def parse_uncapped_log(text: str) -> dict:
+    """Parse one uncapped run log into the fields the manifest records.
+
+    `status` is the field that decides whether `uncapped_wall_s` may be cited:
+
+      completed  — the router stopped on its own; wall is T_java(complete)
+      hit_cap    — killed at UNCAPPED_CAP_S while routing; wall is a lower bound
+      blocked    — killed at UNCAPPED_CAP_S having never started a routing
+                   stage (the `.rules` confirmation dialog); the wall measures
+                   the harness timeout, not the board
+      in_flight  — no /usr/bin/time footer yet; the run had not exited when
+                   the log was read
+    """
+    out = {
+        "uncapped_wall_s": None,
+        "uncapped_unrouted": None,
+        "uncapped_violations": None,
+        "hit_cap": None,
+        "status": "in_flight",
+        "score": None,
+        "passes_run": 0,
+        "routing_s": None,
+        "stages": {},
+        "user_s": None,
+        "sys_s": None,
+        "max_rss_bytes": None,
+        "stages_started": [],
+        "rules_sidecar": None,
+    }
+
+    m = RE_UNCAPPED_TIME.search(text)
+    if m:
+        out["uncapped_wall_s"] = float(m.group(1))
+        out["user_s"] = float(m.group(2))
+        out["sys_s"] = float(m.group(3))
+    m = RE_UNCAPPED_RSS.search(text)
+    if m:
+        out["max_rss_bytes"] = int(m.group(1))
+
+    stage_total = 0.0
+    for m in RE_UNCAPPED_STAGE.finditer(text):
+        name = m.group(1).strip().lower().replace(" ", "-")
+        secs = float(m.group(2))
+        out["stages"][name] = round(out["stages"].get(name, 0.0) + secs, 3)
+        stage_total += secs
+    if out["stages"]:
+        out["routing_s"] = round(stage_total, 3)
+
+    started = []
+    for m in RE_UNCAPPED_STAGE_START.finditer(text):
+        name = m.group(1).strip().lower().replace(" ", "-")
+        if name not in started:
+            started.append(name)
+    out["stages_started"] = started
+
+    m = RE_UNCAPPED_RULES.search(text)
+    if m:
+        out["rules_sidecar"] = m.group(1)
+
+    passes = list(RE_UNCAPPED_PASS.finditer(text))
+    out["passes_run"] = len(passes)
+
+    finals = list(RE_UNCAPPED_FINAL.finditer(text))
+    if finals:
+        m = finals[-1]
+        out["score"] = float(m.group(1).replace(",", "."))
+        out["uncapped_unrouted"] = int(m.group(2))
+        out["uncapped_violations"] = int(m.group(3))
+    elif passes:
+        m = passes[-1]
+        out["score"] = float(m.group(3).replace(",", "."))
+        out["uncapped_unrouted"] = int(m.group(4))
+        out["uncapped_violations"] = int(m.group(5))
+
+    wall = out["uncapped_wall_s"]
+    if wall is None:
+        out["status"] = "in_flight"
+        out["hit_cap"] = None
+    elif wall >= UNCAPPED_CAP_S:
+        out["hit_cap"] = True
+        out["status"] = "hit_cap" if started else "blocked"
+    else:
+        out["hit_cap"] = False
+        out["status"] = "completed"
+    return out
+
+
+def load_uncapped(uncapped_dir: str = DEFAULT_UNCAPPED_DIR) -> dict:
+    """{fixture basename -> parsed uncapped record} for one results directory.
+
+    Keys are `<stem>.dsn` so they line up with manifest entry names; the
+    runner names each log after the fixture stem.
+    """
+    out = {}
+    for path in sorted(glob.glob(os.path.join(uncapped_dir, "*.log"))):
+        stem = os.path.basename(path)[: -len(".log")]
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            rec = parse_uncapped_log(f.read())
+        rec["log"] = repo_rel(path)
+        out[stem + ".dsn"] = rec
+    return out
 
 
 # --------------------------------------------------------------------------
@@ -353,7 +511,11 @@ def _counter(values) -> dict:
     return {k: counts[k] for k in sorted(counts)}
 
 
-def build_manifest(fixtures_dir: str, results_path: str | None) -> dict:
+def build_manifest(
+    fixtures_dir: str,
+    results_path: str | None,
+    uncapped_dir: str | None = None,
+) -> dict:
     paths = sorted(
         p
         for p in glob.glob(os.path.join(fixtures_dir, "*.dsn"))
@@ -361,6 +523,8 @@ def build_manifest(fixtures_dir: str, results_path: str | None) -> dict:
     )
     if not paths:
         raise SystemExit(f"error: no *.dsn fixtures in {fixtures_dir}")
+
+    uncapped = load_uncapped(uncapped_dir) if uncapped_dir else {}
 
     meta, records = ({}, [])
     results_rel = None
@@ -403,6 +567,7 @@ def build_manifest(fixtures_dir: str, results_path: str | None) -> dict:
                 "variant_family": _family_of(name),
                 "properties": parse_properties(path),
                 "java": None,  # filled below, needs properties
+                "uncapped": uncapped.get(name),
                 "stability": None,
             }
         )
@@ -454,6 +619,23 @@ def build_manifest(fixtures_dir: str, results_path: str | None) -> dict:
             e["name"] for e in entries if not e["properties"]["is_specctra_dsn"]
         ],
         "stability_measured": sum(1 for e in entries if e["stability"] is not None),
+        "uncapped_measured": sum(1 for e in entries if e["uncapped"] is not None),
+        "by_uncapped_status": {
+            status: sum(
+                1
+                for e in entries
+                if (e["uncapped"] or {}).get("status") == status
+            )
+            for status in UNCAPPED_STATUSES
+        },
+        # java_timeout boards that the uncapped campaign has NOT yet resolved
+        # into a T_java(complete) — G3.1 has no comparative number for these.
+        "timeout_without_uncapped_wall": [
+            e["name"]
+            for e in entries
+            if e["java"]["class"] == "java_timeout"
+            and (e["uncapped"] or {}).get("status") != "completed"
+        ],
     }
 
     return {
@@ -472,6 +654,11 @@ def build_manifest(fixtures_dir: str, results_path: str | None) -> dict:
                 "timeout_s": meta.get("timeout_s"),
             },
         },
+        "java_uncapped_source": {
+            "dir": repo_rel(uncapped_dir) if uncapped_dir else None,
+            "cap_s": UNCAPPED_CAP_S if uncapped_dir else None,
+            "analysis": "bench/analysis/measurement-campaign.md",
+        },
         "notes": [
             "dedup.group is exact-md5; variant_family is a curated table of "
             "same-design variants (VARIANT_FAMILIES in bench/manifest.py).",
@@ -481,6 +668,12 @@ def build_manifest(fixtures_dir: str, results_path: str | None) -> dict:
             "ROADMAP G2.1 treats unstable boards like timeout/crash boards.",
             "snap_angle_effective falls back to the reader default "
             f"({DEFAULT_SNAP_ANGLE}) when the board declares none.",
+            "uncapped.uncapped_wall_s is T_java(complete) ONLY when "
+            "uncapped.status == 'completed'; 'hit_cap' is a lower bound and "
+            "'blocked' measures a modal-dialog hang, not the board.",
+            "the uncapped campaign ran with the fanout stage inactive while "
+            "java_source.results ran it on 37/46 boards — the two Java "
+            "columns are not the same pipeline (measurement-campaign.md §5).",
         ],
         "coverage": coverage,
         "fixtures": entries,
@@ -497,6 +690,25 @@ def _strip_volatile(man: dict) -> dict:
     return copy
 
 
+def _strip_uncapped(man: dict) -> dict:
+    """Drop everything derived from the uncapped logs.
+
+    `bench/results/**/*.log` is gitignored, so a fresh checkout can regenerate
+    the manifest but cannot reproduce its `uncapped` block. `--check` compares
+    on this projection when the logs are absent, otherwise CI would report a
+    committed manifest as stale purely for having more data than the checkout.
+    """
+    copy = json.loads(json.dumps(man))
+    copy.pop("java_uncapped_source", None)
+    copy.get("coverage", {}).pop("uncapped_measured", None)
+    copy.get("coverage", {}).pop("by_uncapped_status", None)
+    copy.get("coverage", {}).pop("timeout_without_uncapped_wall", None)
+    for entry in copy.get("fixtures", []):
+        entry.pop("uncapped", None)
+    copy["notes"] = [n for n in copy.get("notes", []) if "uncapped" not in n]
+    return copy
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -510,6 +722,13 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--no-results", action="store_true",
                     help="skip classification (all boards java_unknown)")
+    ap.add_argument(
+        "--uncapped-dir", default=DEFAULT_UNCAPPED_DIR,
+        help="directory of uncapped Java run logs folded into fixtures[].uncapped "
+             f"(default: {os.path.relpath(DEFAULT_UNCAPPED_DIR, REPO_ROOT)})",
+    )
+    ap.add_argument("--no-uncapped", action="store_true",
+                    help="skip the uncapped fold-in (uncapped null everywhere)")
     ap.add_argument("--out", default=DEFAULT_MANIFEST)
     ap.add_argument("--check", action="store_true",
                     help="do not write; exit 1 if the on-disk manifest differs")
@@ -522,7 +741,17 @@ def main(argv=None) -> int:
         print(f"error: results file not found: {results}", file=sys.stderr)
         return 2
 
-    man = build_manifest(args.fixtures_dir, results)
+    uncapped_dir = None if args.no_uncapped else args.uncapped_dir
+    if uncapped_dir and not os.path.isdir(uncapped_dir):
+        if uncapped_dir != DEFAULT_UNCAPPED_DIR:
+            print(f"error: uncapped dir not found: {uncapped_dir}", file=sys.stderr)
+            return 2
+        # The default location is gitignored run output; absent is normal.
+        print(f"note: no uncapped results at {repo_rel(uncapped_dir)}, "
+              f"skipping the uncapped fold-in", file=sys.stderr)
+        uncapped_dir = None
+
+    man = build_manifest(args.fixtures_dir, results, uncapped_dir)
     text = dumps(man)
 
     if args.to_stdout:
@@ -534,11 +763,16 @@ def main(argv=None) -> int:
         if old is None:
             print(f"stale: {args.out} does not exist", file=sys.stderr)
             return 1
-        if _strip_volatile(old) != _strip_volatile(man):
+        project = (
+            _strip_volatile if uncapped_dir
+            else lambda m: _strip_uncapped(_strip_volatile(m))
+        )
+        if project(old) != project(man):
             print(f"stale: {args.out} differs from a fresh generation "
                   f"(run: python3 bench/manifest.py)", file=sys.stderr)
             return 1
-        print(f"ok: {args.out} is up to date")
+        scope = "" if uncapped_dir else " (uncapped fields not compared)"
+        print(f"ok: {args.out} is up to date{scope}")
         return 0
 
     with open(args.out, "w", encoding="utf-8") as f:
@@ -550,6 +784,12 @@ def main(argv=None) -> int:
     print("  java classes: " + ", ".join(
         f"{k}={v}" for k, v in cov["by_java_class"].items() if v
     ))
+    print(f"  uncapped: {cov['uncapped_measured']} measured (" + ", ".join(
+        f"{k}={v}" for k, v in cov["by_uncapped_status"].items() if v
+    ) + ")")
+    still = cov["timeout_without_uncapped_wall"]
+    if still:
+        print(f"  no T_java(complete) yet for {len(still)}: " + ", ".join(still))
     return 0
 
 

@@ -1,6 +1,6 @@
 {
-  "manifest_version": 1,
-  "generated_utc": "2026-08-27T23:06:25Z",
+  "manifest_version": 2,
+  "generated_utc": "2026-08-28T00:37:30Z",
   "generator": "bench/manifest.py",
   "fixtures_dir": "/tmp/freerouting-upstream/fixtures",
   "java_source": {
@@ -12,11 +12,18 @@
       "timeout_s": 300.0
     }
   },
+  "java_uncapped_source": {
+    "dir": "bench/results/java-uncapped",
+    "cap_s": 7200.0,
+    "analysis": "bench/analysis/measurement-campaign.md"
+  },
   "notes": [
     "dedup.group is exact-md5; variant_family is a curated table of same-design variants (VARIANT_FAMILIES in bench/manifest.py).",
     "java.class comes from java_source.results — regenerate after the -mp 9999 re-baseline (ROADMAP M0.5) or the classes go stale.",
     "stability is null everywhere until the 3-run Java sweep lands; ROADMAP G2.1 treats unstable boards like timeout/crash boards.",
-    "snap_angle_effective falls back to the reader default (fortyfive_degree) when the board declares none."
+    "snap_angle_effective falls back to the reader default (fortyfive_degree) when the board declares none.",
+    "uncapped.uncapped_wall_s is T_java(complete) ONLY when uncapped.status == 'completed'; 'hit_cap' is a lower bound and 'blocked' measures a modal-dialog hang, not the board.",
+    "the uncapped campaign ran with the fanout stage inactive while java_source.results ran it on 37/46 boards — the two Java columns are not the same pipeline (measurement-campaign.md §5)."
   ],
   "coverage": {
     "fixtures": 46,
@@ -64,7 +71,19 @@
     "not_specctra_dsn": [
       "Issue006-LPC18XX_43XX_SCH.dsn"
     ],
-    "stability_measured": 0
+    "stability_measured": 0,
+    "uncapped_measured": 14,
+    "by_uncapped_status": {
+      "completed": 11,
+      "hit_cap": 1,
+      "blocked": 2,
+      "in_flight": 0
+    },
+    "timeout_without_uncapped_wall": [
+      "Issue029-hw48na.dsn",
+      "Issue107-freq_teiler_200kHz_kicad_bad.dsn",
+      "Issue208-freerouting.dsn"
+    ]
   },
   "fixtures": [
     {
@@ -113,6 +132,7 @@
         "checker_nets_routed": 0,
         "checker_nets_multi_pin": 0
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -163,6 +183,27 @@
         "violations": 511,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 459.75,
+        "uncapped_unrouted": 54,
+        "uncapped_violations": 511,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 699.61,
+        "passes_run": 20,
+        "routing_s": 447.39,
+        "stages": {
+          "auto-routing": 447.39
+        },
+        "user_s": 517.38,
+        "sys_s": 31.3,
+        "max_rss_bytes": 3712696320,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue015-StackOverflow.log"
       },
       "stability": null
     },
@@ -215,6 +256,27 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
+      "uncapped": {
+        "uncapped_wall_s": 832.3,
+        "uncapped_unrouted": 42,
+        "uncapped_violations": 531,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 731.52,
+        "passes_run": 20,
+        "routing_s": 820.78,
+        "stages": {
+          "auto-routing": 820.78
+        },
+        "user_s": 941.97,
+        "sys_s": 56.34,
+        "max_rss_bytes": 4206968832,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue022-AutoRouter_interrupted.log"
+      },
       "stability": null
     },
     {
@@ -266,6 +328,7 @@
         "checker_nets_routed": 12,
         "checker_nets_multi_pin": 12
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -316,6 +379,27 @@
         "violations": 1138,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 804.34,
+        "uncapped_unrouted": 7,
+        "uncapped_violations": 1138,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 782.37,
+        "passes_run": 20,
+        "routing_s": 791.86,
+        "stages": {
+          "auto-routing": 791.86
+        },
+        "user_s": 902.68,
+        "sys_s": 58.46,
+        "max_rss_bytes": 4059906048,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue027-zMRETestFixture.log"
       },
       "stability": null
     },
@@ -368,6 +452,23 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
+      "uncapped": {
+        "uncapped_wall_s": 7200.39,
+        "uncapped_unrouted": null,
+        "uncapped_violations": null,
+        "hit_cap": true,
+        "status": "blocked",
+        "score": null,
+        "passes_run": 0,
+        "routing_s": null,
+        "stages": {},
+        "user_s": 12.29,
+        "sys_s": 4.81,
+        "max_rss_bytes": 858472448,
+        "stages_started": [],
+        "rules_sidecar": "Issue029-hw48na.rules",
+        "log": "bench/results/java-uncapped/Issue029-hw48na.log"
+      },
       "stability": null
     },
     {
@@ -419,6 +520,7 @@
         "checker_nets_routed": 99,
         "checker_nets_multi_pin": 101
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -470,6 +572,7 @@
         "checker_nets_routed": 93,
         "checker_nets_multi_pin": 93
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -521,6 +624,7 @@
         "checker_nets_routed": 74,
         "checker_nets_multi_pin": 74
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -572,6 +676,7 @@
         "checker_nets_routed": 55,
         "checker_nets_multi_pin": 56
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -625,6 +730,27 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
+      "uncapped": {
+        "uncapped_wall_s": 850.22,
+        "uncapped_unrouted": 5,
+        "uncapped_violations": 23,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 987.33,
+        "passes_run": 18,
+        "routing_s": 838.3,
+        "stages": {
+          "auto-routing": 838.3
+        },
+        "user_s": 987.72,
+        "sys_s": 84.22,
+        "max_rss_bytes": 6733676544,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue066-Project_GP8B.log"
+      },
       "stability": null
     },
     {
@@ -675,6 +801,27 @@
         "violations": null,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 4405.4,
+        "uncapped_unrouted": 113,
+        "uncapped_violations": 275,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 590.24,
+        "passes_run": 18,
+        "routing_s": 4394.75,
+        "stages": {
+          "auto-routing": 4394.75
+        },
+        "user_s": 4681.6,
+        "sys_s": 216.24,
+        "max_rss_bytes": 10232594432,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue070-Autorouter_FQ101_PCB_2022-05-13.log"
       },
       "stability": null
     },
@@ -727,6 +874,7 @@
         "checker_nets_routed": 110,
         "checker_nets_multi_pin": 110
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -778,6 +926,7 @@
         "checker_nets_routed": 74,
         "checker_nets_multi_pin": 74
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -829,6 +978,7 @@
         "checker_nets_routed": 267,
         "checker_nets_multi_pin": 267
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -879,6 +1029,27 @@
         "violations": 60,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 885.15,
+        "uncapped_unrouted": 4,
+        "uncapped_violations": 60,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 977.18,
+        "passes_run": 20,
+        "routing_s": 875.36,
+        "stages": {
+          "auto-routing": 875.36
+        },
+        "user_s": 1037.11,
+        "sys_s": 86.03,
+        "max_rss_bytes": 8211693568,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue103-Board-Unrouted.log"
       },
       "stability": null
     },
@@ -931,6 +1102,7 @@
         "checker_nets_routed": 59,
         "checker_nets_multi_pin": 59
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -981,6 +1153,23 @@
         "violations": null,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 7200.39,
+        "uncapped_unrouted": null,
+        "uncapped_violations": null,
+        "hit_cap": true,
+        "status": "blocked",
+        "score": null,
+        "passes_run": 0,
+        "routing_s": null,
+        "stages": {},
+        "user_s": 8.77,
+        "sys_s": 4.32,
+        "max_rss_bytes": 489308160,
+        "stages_started": [],
+        "rules_sidecar": "Issue107-freq_teiler_200kHz_kicad_bad.rules",
+        "log": "bench/results/java-uncapped/Issue107-freq_teiler_200kHz_kicad_bad.log"
       },
       "stability": null
     },
@@ -1034,6 +1223,7 @@
         "checker_nets_routed": 39,
         "checker_nets_multi_pin": 41
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1085,6 +1275,7 @@
         "checker_nets_routed": 44,
         "checker_nets_multi_pin": 44
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1136,6 +1327,7 @@
         "checker_nets_routed": 24,
         "checker_nets_multi_pin": 25
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1187,6 +1379,7 @@
         "checker_nets_routed": 4,
         "checker_nets_multi_pin": 4
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1238,6 +1431,7 @@
         "checker_nets_routed": 4,
         "checker_nets_multi_pin": 4
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1290,6 +1484,7 @@
         "checker_nets_routed": 39,
         "checker_nets_multi_pin": 41
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1340,6 +1535,27 @@
         "violations": 45,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 1709.19,
+        "uncapped_unrouted": 21,
+        "uncapped_violations": 44,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 932.86,
+        "passes_run": 20,
+        "routing_s": 1698.84,
+        "stages": {
+          "auto-routing": 1698.84
+        },
+        "user_s": 1923.75,
+        "sys_s": 142.84,
+        "max_rss_bytes": 5225086976,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue113-Protein.log"
       },
       "stability": null
     },
@@ -1392,6 +1608,7 @@
         "checker_nets_routed": 4,
         "checker_nets_multi_pin": 5
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1443,6 +1660,7 @@
         "checker_nets_routed": 1,
         "checker_nets_multi_pin": 5
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1496,6 +1714,27 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
+      "uncapped": {
+        "uncapped_wall_s": 1052.7,
+        "uncapped_unrouted": 135,
+        "uncapped_violations": 112,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 801.5,
+        "passes_run": 20,
+        "routing_s": 1039.77,
+        "stages": {
+          "auto-routing": 1039.77
+        },
+        "user_s": 1270.6,
+        "sys_s": 185.04,
+        "max_rss_bytes": 7050461184,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue145-smoothieboard.log"
+      },
       "stability": null
     },
     {
@@ -1547,6 +1786,7 @@
         "checker_nets_routed": 28,
         "checker_nets_multi_pin": 30
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1598,6 +1838,7 @@
         "checker_nets_routed": 25,
         "checker_nets_multi_pin": 25
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1649,6 +1890,7 @@
         "checker_nets_routed": 64,
         "checker_nets_multi_pin": 64
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1700,6 +1942,7 @@
         "checker_nets_routed": 6,
         "checker_nets_multi_pin": 6
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1751,6 +1994,7 @@
         "checker_nets_routed": 33,
         "checker_nets_multi_pin": 34
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1801,6 +2045,27 @@
         "violations": 20,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 296.21,
+        "uncapped_unrouted": 6,
+        "uncapped_violations": 20,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 976.5,
+        "passes_run": 18,
+        "routing_s": 285.53,
+        "stages": {
+          "auto-routing": 285.53
+        },
+        "user_s": 377.88,
+        "sys_s": 54.21,
+        "max_rss_bytes": 4506320896,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue178-KeebMaker_Sofle_Choc.log"
       },
       "stability": null
     },
@@ -1853,6 +2118,7 @@
         "checker_nets_routed": 0,
         "checker_nets_multi_pin": 20
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1904,6 +2170,7 @@
         "checker_nets_routed": 245,
         "checker_nets_multi_pin": 245
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -1955,6 +2222,7 @@
         "checker_nets_routed": 244,
         "checker_nets_multi_pin": 244
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -2005,6 +2273,25 @@
         "violations": null,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
+      },
+      "uncapped": {
+        "uncapped_wall_s": 7200.38,
+        "uncapped_unrouted": null,
+        "uncapped_violations": null,
+        "hit_cap": true,
+        "status": "hit_cap",
+        "score": null,
+        "passes_run": 0,
+        "routing_s": null,
+        "stages": {},
+        "user_s": 7329.02,
+        "sys_s": 122.5,
+        "max_rss_bytes": 3673047040,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue208-freerouting.log"
       },
       "stability": null
     },
@@ -2057,6 +2344,7 @@
         "checker_nets_routed": 40,
         "checker_nets_multi_pin": 45
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -2108,6 +2396,7 @@
         "checker_nets_routed": 40,
         "checker_nets_multi_pin": 45
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -2161,6 +2450,27 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
+      "uncapped": {
+        "uncapped_wall_s": 1087.08,
+        "uncapped_unrouted": 64,
+        "uncapped_violations": 192,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 752.05,
+        "passes_run": 18,
+        "routing_s": 1073.5,
+        "stages": {
+          "auto-routing": 1073.5
+        },
+        "user_s": 1208.11,
+        "sys_s": 94.84,
+        "max_rss_bytes": 4304027648,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue214-freerouting.log"
+      },
       "stability": null
     },
     {
@@ -2212,6 +2522,7 @@
         "checker_nets_routed": 74,
         "checker_nets_multi_pin": 76
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -2265,6 +2576,27 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
+      "uncapped": {
+        "uncapped_wall_s": 4675.43,
+        "uncapped_unrouted": 2,
+        "uncapped_violations": 0,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 997.96,
+        "passes_run": 19,
+        "routing_s": 4664.55,
+        "stages": {
+          "auto-routing": 4664.55
+        },
+        "user_s": 5163.07,
+        "sys_s": 423.38,
+        "max_rss_bytes": 8278835200,
+        "stages_started": [
+          "auto-routing"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue219-LogicBoard_smt.log"
+      },
       "stability": null
     },
     {
@@ -2316,6 +2648,7 @@
         "checker_nets_routed": 0,
         "checker_nets_multi_pin": 30
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -2369,6 +2702,7 @@
         "checker_nets_routed": 61,
         "checker_nets_multi_pin": 64
       },
+      "uncapped": null,
       "stability": null
     },
     {
@@ -2420,6 +2754,7 @@
         "checker_nets_routed": 38,
         "checker_nets_multi_pin": 76
       },
+      "uncapped": null,
       "stability": null
     }
   ]

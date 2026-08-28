@@ -1,12 +1,13 @@
 # bench/tools/ — measurement contracts and the differential harness
 
-Two instrumentation streams feed the benchmark and gate machinery. This file is
-their normative contract; anything that emits or parses them must match it.
+Three data contracts feed the benchmark and gate machinery. This file is their
+normative definition; anything that emits or parses them must match it.
 
-| stream | producer | consumer |
-|---|---|---|
-| `FRLAB …` | the instrumented **lab jar**, `/tmp/fr-lab-release/freerouting-lab.jar` | `frlab_parse.py` |
-| `FRMETRIC …` | our router, via the **`fr-metrics`** crate | `frlab_parse.py`, `run_bench.py` |
+| contract | producer | consumer | gate |
+|---|---|---|---|
+| `FRLAB …` | the instrumented **lab jar**, `/tmp/fr-lab-release/freerouting-lab.jar` | `frlab_parse.py` | M2a–c settle order |
+| `FRMETRIC …` | our router, via the **`fr-metrics`** crate | `frlab_parse.py`, `run_bench.py` | M2/M3 counters |
+| **golden-dump JSON** (`fast-routing.golden-dump/1`) | `fr-cli` (future) and the Java-dump adapter | `golden_compare.py` | **G1.0 / G1.1 import parity** |
 
 `frlab_parse.py` parses both and diffs the settle sequences against each other.
 That diff is the M2 oracle: it answers *"did our maze engine visit the same
@@ -304,3 +305,288 @@ board — a non-deterministic reference would make the gate meaningless.
 - The lab jar's log prefix (timestamp, level, job id) is not part of the
   contract — the parser anchors on the `FRLAB`/`FRMETRIC` token anywhere in the
   line, and tolerates any prefix or none.
+
+---
+
+# `golden_compare.py` — the G1.0/G1.1 golden-dump comparator
+
+`java -de f.dsn -do f.import.dsn --router.enabled=false
+--router.fanout.enabled=false --router.optimizer.enabled=false` makes the
+release jar import a board and immediately serialise it back out through
+`DsnWriter`. `bench/golden/dumps/<fixture>.import.dsn` is therefore **not** the
+input file — it is Java's *resolved board model*: clearance classes
+materialised, placements resolved, net classes bound, pre-existing wiring
+re-imported with its fixed states. That is the G1.0 oracle, and `ROADMAP` G1.1
+gates our importer against it.
+
+`golden_compare.py` is pure stdlib Python with **no dependency on the Rust
+tree**, so the harness lands and is validated before the importer exists. It
+reuses `bench/check_ses.py`'s tolerant S-expression machinery rather than
+carrying a second lexer.
+
+```sh
+# One board, field-level diff report; exit 0 = agree, 1 = differ, 2 = usage/IO
+python3 bench/tools/golden_compare.py \
+    --java-dump bench/golden/dumps/Issue026-J2_reference.import.dsn \
+    --ours /tmp/ours.json
+
+# Every fixture, summary table (self-comparison when --ours-dir is omitted)
+python3 bench/tools/golden_compare.py --all [--ours-dir target/golden]
+
+# The reference encoder: adapt a Java dump into the exchange schema
+python3 bench/tools/golden_compare.py --emit <dump> > /tmp/java.json
+
+python3 bench/tools/golden_compare.py --exclusions   # the lossy axes, verbatim
+python3 bench/tools/golden_compare.py --self-test    # 91 tests
+```
+
+Useful flags: `--gate-only` (compare only the G1.1 groups), `--float-decimals N`
+(quantisation, default 6), `--max-diffs N` / `-v`, `--json`.
+
+## The exchange format — `fast-routing.golden-dump/1`
+
+Both sides produce this document; the comparator only ever sees the document,
+never a board. The Rust side will emit it from `fr-cli`; the Java side gets it
+from the adapter built into this file, which is what makes the Java-vs-Java
+self-comparison a real test of the parser *and* the comparator.
+
+Everything is JSON. Numbers are JSON numbers (never strings). `null` means "the
+model has no value here", which is distinct from `0`.
+
+```jsonc
+{
+  "schema":   "fast-routing.golden-dump/1",   // required, exact
+  "producer": "fr-cli 0.1.0",                 // metadata, not compared
+  "source":   "Issue026-J2_reference.dsn",    // metadata, not compared
+  "design":   "Issue026-J2_reference",        // metadata, not compared
+
+  "unit":       "um",                          // lowercase
+  "resolution": { "unit": "um", "value": 10 },
+
+  // ORDER IS SEMANTIC — index decides layer flip and matrix indexing.
+  "layers": [ { "name": "F.Cu", "type": "signal" },     // "signal" | "power"
+              { "name": "B.Cu", "type": "signal" } ],
+
+  "rules": {
+    // (class-pair, layer) -> value, already expanded per layer: a layer with
+    // no rule of its own repeats layer 0's row. `classes` is a two-element
+    // array, so the DSN spelling ambiguity (smd / smd_smd / smd-smd) is gone.
+    "clearance_matrix": [
+      { "classes": ["default", "default"], "layer": "F.Cu", "value": 200.2 },
+      { "classes": ["smd", "smd"],         "layer": "F.Cu", "value": 50.0  }
+    ],
+    "default_trace_width": { "F.Cu": 250.0, "B.Cu": 250.0 },  // per layer
+    "smd_to_turn_gap":     { "F.Cu": 125.0, "B.Cu": 125.0 },  // per layer
+    "snap_angle":  "fortyfive_degree",        // "none" | "fortyfive_degree" | "ninety_degree"
+    "via_at_smd":  "off"                      // "on" | "off" | null
+  },
+
+  "padstacks": [ {
+    "name": "Round[A]Pad_1358_um",
+    "attach":   false,          // attach_allowed; DSN omits `(attach off)`'s inverse
+    "absolute": false,          // placed_absolute
+    "shapes": [ { "kind": "circle", "layer": "F.Cu", "coords": [1358.0, 0.0, 0.0] } ]
+    // kind: "circle" (d[,x,y]) | "rect" (x1 y1 x2 y2) | "polygon" (aperture x y …)
+    //     | "path"/"polyline_path" (width x y …). `coords` is every number after
+    //     the layer name, in file order.
+  } ],
+
+  "images": [ {
+    "name": "TE_1888019-6:TE_1888019-6",
+    "side": "front",                                   // "front" | "back"
+    "pins": [ { "padstack": "…", "name": "S1", "x": -8900.0, "y": -5720.0, "rotation": 0 } ],
+    "keepouts": 4, "via_keepouts": 0, "place_keepouts": 0,   // counts
+    "outlines": [ /* area objects, see below */ ]
+  } ],
+
+  "components": [ {
+    "name": "J2", "image": "TE_1888019-6:TE_1888019-6",
+    "placed": true, "x": 135255.0, "y": -85725.0,
+    "side": "front", "rotation": 90, "position_fixed": false,
+    "pins":     [ { "name": "S1", "clearance_class": "default" } ],
+    "keepouts": [ { "kind": "keepout", "name": "keepout_1", "clearance_class": "default" } ]
+    // kind: "keepout" | "via_keepout" | "place_keepout"
+  } ],
+
+  "nets":        [ { "name": "GND", "subnet": 1, "pins": [ ["U1", "10"], ["J2", "B18"] ] } ],
+  "net_classes": [ {
+    "name": "default", "nets": ["GND", "+3V3"],
+    "clearance_class": "default", "via_rule": "default", "trace_width": 250.0,
+    "use_layer": ["F.Cu", "B.Cu"], "length_max": null, "length_min": null,
+    "pull_tight": true, "shove_fixed": false
+  } ],
+
+  "via_padstacks": ["Via[0-1]_800:400_um", "Via[0-1]_800:400_um"],  // structure (via …), multiplicity kept
+  "via_infos":     [ { "name": "…", "padstack": "…", "clearance_class": "default", "attach": false } ],
+  "via_rules":     [ { "name": "default", "vias": ["Via[0-1]_800:400_um"] } ],
+
+  "wiring": {
+    "by_kind_fixed": [ { "kind": "trace", "fixed": "user_fixed", "count": 1462 } ]
+    // kind:  "trace" | "via" | "conduction_area"
+    // fixed: "unfixed" | "shove_fixed" | "system_fixed" | "user_fixed"
+  },
+
+  "boundary":        [ /* area objects: bounding box first, then the outline */ ],
+  "structure_areas": [ /* area objects; planes also carry "net" */ ]
+}
+```
+
+**Area object** (board outline, structure keepouts, planes, image outlines) —
+deliberately reduced, see the exclusions:
+
+```jsonc
+{ "kind": "keepout",        // boundary | outline | keepout | via_keepout | place_keepout | plane
+  "shape": "polygon",       // the geometric primitive, or null
+  "layer": "F.Cu",
+  "corners": 37,
+  "bbox": [xmin, ymin, xmax, ymax],   // or null
+  "windows": 0,                        // hole count
+  "clearance_class": null,
+  "net": "GND" }                       // planes only
+```
+
+### Fixed-state spelling
+
+The DSN dump writes `Wiring.write_fixed_state`'s four cases; the schema uses the
+board-model names, because `fix` vs `protect` is not self-explanatory:
+
+| DSN `(type …)` | schema `fixed` | Java `FixedState` |
+|---|---|---|
+| *absent* | `unfixed` | `UNFIXED` |
+| `shove_fixed` | `shove_fixed` | `SHOVE_FIXED` |
+| `fix` | `system_fixed` | `SYSTEM_FIXED` |
+| `protect` | `user_fixed` | `USER_FIXED` |
+
+## Field groups and what G1.1 gates
+
+| group | gate | shape | comparison |
+|---|---|---|---|
+| `resolution` | G1.1 | map | exact (unit lowercased) |
+| `layers` | G1.1 | **ordered list** | index by index |
+| `clearance_matrix` | G1.1 | map `(a,b)@layer` | value, diagonal only |
+| `padstacks` | G1.1 | map by name → per-layer shapes | exact coords |
+| `components` | G1.1 | map by name, recursed to `C.pin.<name>` | placement + per-pin clearance class |
+| `nets` | G1.1 | map `name#subnet` → pin bag | membership |
+| `wiring` | G1.1 | map `kind/fixed` | counts |
+| `via_rules` | G1.1 | multiset (via infos + via rules + structure padstack list) | with multiplicity |
+| `images` | extra | map by name, recursed to `I.pin.<name>` | pin → padstack binding |
+| `net_classes` | extra | map by name | class → clearance/via rule/width/layers |
+| `rules_misc` | extra | map | snap angle, via_at_smd, per-layer width and smd gap |
+| `boundary` | extra | multiset of areas | reduced geometry |
+| `structure_areas` | extra | multiset of areas | reduced geometry |
+
+`extra` groups are compared by default (they are free, and they localise a
+failure faster than a clearance-matrix delta does) but are not part of the G1.1
+gate; `--gate-only` drops them.
+
+Differences are reported as `-` (only on the left), `+` (only on the right),
+`~` (both present, values differ), and are recursed into nested objects so the
+report names the field:
+
+```
+components (2 difference(s))
+  ~ J1.pin.D+: left="smd"  right="via"
+  ~ J1.rotation: left=90.0  right=180.0
+nets (1 difference(s))
+  + D+#1.pin.Xnew-1: left=<absent>  right=1
+```
+
+## Known-lossy exclusions
+
+`--exclusions` prints these; the authoritative list is `EXCLUSIONS` in the
+source. Summarised:
+
+1. **Class-pair spelling.** `Rule.write_named_clearance_rules` emits a diagonal
+   cell as `(type smd)`, while the reader also accepts `smd_smd`, `smd-smd` and
+   `"smd"_smd` (dsn-board-semantics.md §7.3). All normalise to the unordered
+   pair `("smd","smd")`. The disambiguation is *quoting*: `IdentifierType`
+   treats `_` and `-` as reserved, so `(type "board_edge")` is one class while
+   bare `(type a_b)` is a pair. The JSON schema removes the ambiguity entirely
+   by carrying an explicit two-element `classes` array.
+2. **Clearance-matrix off-diagonal.** `write_non_default_clearance_rules` is
+   commented out in the release revision (`parser/Rule.java:185`), so the dump
+   carries only the diagonal plus `(default,default)`. Off-diagonal cells are
+   projected away on both sides and counted in the report. Off-diagonal parity
+   is gated by **G1.2a** (`java -drc`), not here — do not "fix" G1.1 by trusting
+   an oracle that cannot see the field.
+3. **Float formatting.** Java prints doubles with `String.valueOf`. Every number
+   is quantised to `--float-decimals` (6) decimals and `-0.0` folds to `0.0`.
+   A pair that survives quantisation but lands within one quantum is reported
+   as a `float-noise` note, not a difference — a gate must not depend on which
+   side of a rounding boundary a decimal fell.
+4. **Ordering.** Collections whose DSN order is Java-internal iteration order
+   (`UndoableObjects` traversal, library insertion order) are compared as
+   multisets or name-keyed maps. Order is kept only where it is semantic: the
+   layer list.
+5. **Design name and provenance.** `(pcb <name>)` is the `-do` file stem; the
+   `(parser …)` scope is host metadata. Recorded, never compared.
+6. **Area geometry reduction.** Board outline, structure keepouts, planes and
+   image outlines are compared as `(kind, layer, net, clearance class, corner
+   count, bounding box)`. Padstack shapes — small, and what clearance is
+   computed against — are compared corner-exact.
+7. **Pre-normalisation trace splitting.** Wiring is counted by
+   `(kind, fixed state)`, not matched record by record: upstream re-imports
+   traces with `insert_trace_without_cleaning` and normalises afterwards
+   (§10.4), so the split of a net's copper into `(wire …)` records is an
+   artefact of insertion order.
+
+## Why the dump text is canonicalised before parsing
+
+`check_ses.tokenize` ends a quoted atom at the first `"` followed by whitespace,
+a paren or EOF — right for KiCad *input* files, which contain unescaped inch
+marks. It is wrong for a Java-written dump: `-` is a reserved character, so
+`Net.write_pin` emits pin references as `"COMP"-"PIN"`, a closing quote followed
+by `-`, and the tolerant scan runs past it and swallows the rest of the file.
+Five of the 43 dumps contain such references (`Issue219-LogicBoard_smt` has 166).
+
+Rather than fork the tokenizer, `canonicalise_dump_text` runs first. Because
+`IdentifierType.write` strips the string-quote character out of every name, in a
+dump quotes strictly alternate, so each quoted region can be rewritten as a
+marker-prefixed bare atom with its delimiter-significant characters escaped.
+After that the text contains no `"` at all, the tolerant path is exact, and the
+marker is what later tells a quoted class name from a class *pair*. If
+`check_ses` ever gains a strict mode, delete the pre-pass — do not keep two
+lexers. `test_tolerant_tokenizer_alone_mangles_the_same_input` pins the reason.
+
+## Validation status
+
+2026-08-28, `bench/golden/dumps/` (43 dumps, 46 fixtures in the manifest):
+
+* `--all` self-comparison: **43/43 clean**, 0 differences, ~1.7 s.
+* `--self-test`: 91 tests, including a shuffle/jitter/spelling property triple
+  (the comparator must be blind to the three lossy axes) and its converse
+  (a real change in each compared field must be caught).
+* Cross-checked against an independent, section-scoped line counter: components,
+  padstacks, images, nets, net classes, via infos, via rules, wiring wires,
+  wiring vias, structure areas, boundaries, placement pins and net pin
+  references all agree on all 43 boards — the sweep is not passing by returning
+  empty documents.
+* Aggregate extracted: 96 layers, 616 clearance cells, 733 padstacks, 586
+  images, 3104 placements, 20 276 placement pins, 6699 nets, 19 546 net pin
+  references, 17 244 wiring items, 1231 via-rule records.
+
+**Three fixtures have no dump** — Java hangs on import after
+`Opening '<name>.rules'…` and never reaches `DsnWriter`, so no oracle exists and
+G1.1 covers 43, not 46:
+
+| fixture | last Java log line |
+|---|---|
+| `Issue029-hw48na` | `Opening 'Issue029-hw48na.rules'...` |
+| `Issue107-freq_teiler_200kHz_kicad` | `Opening 'Issue107-freq_teiler_200kHz_kicad.rules'...` |
+| `Issue107-freq_teiler_200kHz_kicad_bad` | `Opening 'Issue107-freq_teiler_200kHz_kicad_bad.rules'...` |
+
+`--all` prints them under the table on every run, so the gap can never silently
+turn into "46/46".
+
+## Caveats
+
+- The comparator is exactly as strong as the oracle. A field the release writer
+  does not emit (every off-diagonal clearance cell; resolved absolute pin
+  centres; the search tree) cannot be gated here no matter how the schema grows.
+- `--ours` accepts a DSN dump as well as schema JSON, which is convenient but
+  re-introduces the class-pair spelling ambiguity for any writer that does not
+  quote reserved characters the way `IdentifierType` does. Emit JSON from the
+  Rust side; the DSN path is for A/B-ing two Java dumps.
+- Self-comparison proves the parser and the comparator, not the importer. It
+  goes green on day one and must stay green; it is a harness gate (G1.0), and
+  only `--ours-dir` output moves G1.1.
