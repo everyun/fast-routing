@@ -11,6 +11,7 @@
 //!   `complete_neighbour_rooms` / `remove_complete_expansion_room`
 //!   (`autoroute/AutorouteEngine.java:394-568`) — the lifecycle around it.
 
+use fr_board::shape::TileShape;
 use fr_geometry::planar::{IntBox, Line, LineSegment, Side, Simplex};
 
 use crate::engine::{AutorouteEngine, Obstacle};
@@ -70,11 +71,25 @@ impl AutorouteEngine<'_> {
         // is upstream's single tree walk (`:578-595`). Obstacles that only
         // touch the *initial* bound and not a later, smaller one are simply
         // no-ops in the carve loop below.
+        //
+        // The query goes in as an `IntBox`, not as `bounding.to_simplex()`:
+        // upstream's walk here filters leaves by `curr_node.bounding_shape
+        // .intersects(bounding_shape)` (`:585`) — a *regular* shape test — and
+        // never runs a shape-exact test at this stage; the exact one is the
+        // `intersection.dimension() == 2` gate below (`:617-620`). Handing the
+        // tree a simplex made `TileShape::intersects` take its simplex arm and
+        // run a full exact `Simplex::intersection` per candidate leaf, which
+        // the Issue034 profile put at 52% of the whole run.
+        //
+        // The box query returns a *superset* of the simplex query's answer —
+        // `IntBox::intersects` is inclusive, and any non-empty shape overlap
+        // implies a bounds overlap — and every extra entry is provably a no-op:
+        // it fails either the `bounding_box().intersects(&bounding)` guard or
+        // the `dimension() == 2` gate, and `own_net` is unused here.
         let mut obstacles = Vec::new();
         let mut own_net = Vec::new();
-        let query = bounding.to_simplex();
-        self.overlapping_obstacles(
-            &query,
+        self.overlapping_obstacles_tile(
+            &TileShape::Box(bounding),
             Some(layer),
             self.ctrl.net_no,
             &mut obstacles,

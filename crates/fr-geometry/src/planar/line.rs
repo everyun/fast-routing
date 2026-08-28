@@ -381,8 +381,15 @@ impl Line {
     }
 
     /// Checks if this line and `other` define the same geometric line (same or opposite direction).
+    ///
+    /// `Line.java:441-444` answers this by collinearity, *not* by anchor
+    /// identity: both defining points of `other` must lie on this line. Two
+    /// lines that carry the same geometric line but are anchored at different
+    /// points — a box's right border versus the abutting box's left border, the
+    /// case `TileShape.java:645` depends on — therefore answer `true`.
+    /// Evaluated exactly through [`Line::side_of`]; no float is involved.
     pub fn is_equal_or_opposite(&self, other: &Line) -> bool {
-        (self.a == other.a && self.b == other.b) || (self.a == other.b && self.b == other.a)
+        self.side_of(&other.a) == Side::Collinear && self.side_of(&other.b) == Side::Collinear
     }
 
     /// Returns `Side::OnTheLeft` if this line is on the left of the intersection of `p1` and `p2`,
@@ -552,6 +559,53 @@ mod tests {
         let d = Line::new_from_coords(0, 0, 10, 10);
         let h = Line::new_from_coords(0, 15, 100, 15);
         assert_eq!(d.intersection(&h), Point::Int(IntPoint::new(15, 15)));
+    }
+
+    #[test]
+    fn equal_or_opposite_is_collinearity_not_anchor_identity() {
+        // The right border of the box [0,0,100,100] and the left border of the
+        // box [100,0,200,100]: the same geometric line x = 100, opposite
+        // directions, anchored at different corners. `Line.java:441-444` must
+        // answer true — `TileShape.touching_sides` depends on it.
+        let right_border = Line::new_from_coords(100, 0, 100, 100);
+        let abutting_left_border = Line::new_from_coords(100, 100, 100, 0);
+        assert!(right_border.is_equal_or_opposite(&abutting_left_border));
+        assert!(abutting_left_border.is_equal_or_opposite(&right_border));
+
+        // Same line, same direction, different anchors and different lengths.
+        let shifted = Line::new_from_coords(100, -50, 100, 7);
+        assert!(right_border.is_equal_or_opposite(&shifted));
+
+        // Anchor identity would have said false for both of the above.
+        assert!(!right_border.fast_equals(&abutting_left_border));
+        assert!(!right_border.fast_equals(&shifted));
+    }
+
+    #[test]
+    fn equal_or_opposite_rejects_parallel_and_crossing_lines() {
+        let line = Line::new_from_coords(100, 0, 100, 100);
+        // Parallel but one unit away.
+        assert!(!line.is_equal_or_opposite(&Line::new_from_coords(101, 0, 101, 100)));
+        // Crossing: shares one point only.
+        assert!(!line.is_equal_or_opposite(&Line::new_from_coords(0, 50, 200, 50)));
+        // Shares the anchor `a` but not the direction.
+        assert!(!line.is_equal_or_opposite(&Line::new_from_coords(100, 0, 200, 100)));
+    }
+
+    #[test]
+    fn equal_or_opposite_is_exact_far_outside_the_float_envelope() {
+        // A diagonal through the origin with a huge slope denominator: the
+        // point (1_000_000_003, 999_999_999) is *not* on y = x, but a f64
+        // determinant on coordinates of this size still resolves it. Assert
+        // the exact predicate separates the two.
+        let diagonal = Line::new_from_coords(0, 0, 1_000_000_000, 1_000_000_000);
+        assert!(diagonal.is_equal_or_opposite(&Line::new_from_coords(7, 7, -3, -3)));
+        assert!(!diagonal.is_equal_or_opposite(&Line::new_from_coords(
+            1_000_000_003,
+            999_999_999,
+            2,
+            2
+        )));
     }
 
     #[test]

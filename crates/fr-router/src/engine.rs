@@ -273,9 +273,31 @@ impl<'b> AutorouteEngine<'b> {
         obstacles: &mut Vec<Obstacle>,
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
+        let query_tile = fr_board::shape::TileShape::Simplex(query.clone());
+        self.overlapping_obstacles_tile(&query_tile, layer, net_no, obstacles, own_net);
+    }
+
+    /// [`overlapping_obstacles`](Self::overlapping_obstacles) with the query in
+    /// its *natural* tile flavor.
+    ///
+    /// A caller whose query is an axis-parallel box must use this and pass
+    /// `TileShape::Box`, not a `Simplex` built from the box: the tree's
+    /// per-leaf filter is `TileShape::intersects`, and the simplex arm of that
+    /// predicate runs a full exact `Simplex::intersection` — sort, then
+    /// `remove_redundant_lines`, which is `O(edges²)` in `side_of_intersection`
+    /// — where the box arm is four integer comparisons. On Issue034 that one
+    /// dispatch was 52% of the router's run time (`/usr/bin/sample`, 45195
+    /// samples: `TileShape::intersects` 23412 inclusive).
+    pub fn overlapping_obstacles_tile(
+        &mut self,
+        query_tile: &fr_board::shape::TileShape,
+        layer: Option<i32>,
+        net_no: i32,
+        obstacles: &mut Vec<Obstacle>,
+        own_net: &mut Vec<(ItemId, u16)>,
+    ) {
         obstacles.clear();
         own_net.clear();
-        let query_tile = fr_board::shape::TileShape::Simplex(query.clone());
         fr_metrics::counters::bump::tree_queries(1);
 
         let tree = self
@@ -285,7 +307,7 @@ impl<'b> AutorouteEngine<'b> {
             .unwrap_or_else(|| self.board.default_tree());
         tree.overlapping_tree_entries(
             self.board.store(),
-            &query_tile,
+            query_tile,
             layer,
             &[],
             &mut self.item_stack,
@@ -321,7 +343,14 @@ impl<'b> AutorouteEngine<'b> {
                 room.alive
                     && room.kind == RoomKind::CompleteFree
                     && layer.map(|l| l == room.layer).unwrap_or(true)
-                    && room.shape.intersects(query)
+                    && match query_tile {
+                        // Each arm is `room.shape.intersects(<query as a
+                        // simplex>)`, so the room set is the same whichever
+                        // flavor the caller handed in.
+                        fr_board::shape::TileShape::Simplex(s) => room.shape.intersects(s),
+                        fr_board::shape::TileShape::Box(b) => room.shape.intersects_box(b),
+                        fr_board::shape::TileShape::Oct(o) => room.shape.intersects_octagon(o),
+                    }
             })
             .collect();
         room_hits.sort_unstable();

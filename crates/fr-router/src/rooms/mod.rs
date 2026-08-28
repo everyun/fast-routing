@@ -36,6 +36,7 @@ use crate::maze::nodes::{NodeArena, NodeIndex};
 
 pub mod complete;
 pub mod neighbours;
+pub mod neighbours45;
 
 /// Index of a room in [`RoomArena`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

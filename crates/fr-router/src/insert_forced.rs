@@ -1,5 +1,5 @@
 //! The board primitives `InsertFoundConnectionAlgo` calls, **with shove
-//! disabled** (M2a).
+//! enabled** (M2b).
 //!
 //! Transcribed from
 //! `/tmp/fr-java-release/src/main/java/app/freerouting/board/RoutingBoard.java`
@@ -9,45 +9,37 @@
 //! `ForcedViaAlgo.java` (`check` `:89`, `insert` `:165`) and
 //! `ChangedArea.java`.
 //!
-//! # What "shove disabled" means, precisely
+//! # Where the shove enters
 //!
-//! Every one of those entry points funnels its clearance question through
-//! `ShoveTraceAlgo.check` / `ForcedPadAlgo.check_forced_pad`. Both are written
-//! as *"collect the obstacles, then try to move them"*, and both take the same
-//! two early exits when the recursion budget is spent
-//! (`ShoveTraceAlgo.java:250-256`, `ForcedPadAlgo.java` `check_forced_pad`):
+//! Every clearance question here funnels through `ShoveTraceAlgo.check` /
+//! `ForcedPadAlgo.check_forced_pad`, which live in
+//! [`fr_board::shove`]. This module is the call site:
 //!
-//! ```text
-//! if (p_max_via_recursion_depth <= 0) -> NOT_DRILLABLE   // an obstacle via
-//! if (trace_piece_count == 0)         -> ok              // nothing to shove
-//! if (p_max_recursion_depth <= 0)     -> false           // an obstacle trace
-//! ```
+//! | §4.6 step | upstream | here |
+//! |---|---|---|
+//! | 3 | `spring_over_obstacles(polyline, …)` | [`ForcedInserter::insert_forced_trace_polyline`] |
+//! | 5 | `CalcFromSide(combined_polyline, i + 1, shape)` + instance `check` | [`ForcedInserter::check_trace_shape`] |
+//! | 5 | `ShoveTraceAlgo.insert(...)` | [`ForcedInserter::insert_trace_shape`] |
+//! | via | `ForcedViaAlgo.check` / `insert` | [`ForcedInserter::check_via`] / [`ForcedInserter::insert_forced_via`] |
 //!
-//! So at depth 0 the whole family collapses to one predicate: **is any
-//! overlapping item an obstacle to this net?** That is exactly
-//! `BasicBoard.check_trace_shape` with `contact_pins == null`
-//! (`:1166-1221`), which is what [`ForcedInserter::check_trace_shape`]
-//! transcribes. Consequences, both one-sided:
+//! # Rollback purity
 //!
-//! * a segment the release would have inserted by pushing a foreign trace aside
-//!   fails here. The caller sees a *partial* ok-point and the connection is
-//!   reported as not routed — never as routed-with-a-violation;
-//! * spring-over is likewise off: `spring_over_obstacles` is the identity, so
-//!   the polyline offered for insertion is the locator's, unmodified.
+//! Upstream's `insert` *"may damage the database"*, and
+//! `insert_forced_trace_polyline` reports that as a `null` ok-point which the
+//! caller decodes as "undo the whole connection". Here
+//! [`fr_board::ShoveInsert::insert_transaction`] rolls the cascade back itself,
+//! so a failed shove leaves the board bit-identical. The `null`/`None` return
+//! is still produced — `InsertFoundConnectionAlgo` branches on all three
+//! ok-point cases — it just no longer implies damage, and the adversarial
+//! rollback probes in `tests/` assert exactly that.
 //!
-//! Everything else in §4.6 — the picked-trace combine, the offset-shape walk,
-//! the resample-and-retry, the changed-area bookkeeping, the ok-point
-//! trichotomy — is ported in full, because the retry ladder above it hangs off
-//! those exact return values.
+//! # Budgets
 //!
-//! # M2b seams
-//!
-//! | seam | marker |
-//! |---|---|
-//! | `ShoveTraceAlgo.check`/`insert` | [`ForcedInserter::check_trace_shape`] |
-//! | `spring_over_obstacles` | [`ForcedInserter::insert_forced_trace_polyline`], step 3 |
-//! | keep-point pull-tight (`RoutingBoard.java:821-889`) | [`ForcedInserter::insert_forced_trace_polyline`], step 8 |
-//! | `MoveDrillItemAlgo` via shoving | [`ForcedInserter::check_forced_pad`] |
+//! [`AutorouteControl`] carries upstream's `max_shove_trace_recursion_depth`
+//! (20), `max_shove_via_recursion_depth` (5) and
+//! `max_spring_over_recursion_depth` (5); they are passed straight through, and
+//! the top-level `spring_over_obstacles` uses its own
+//! `c_max_spring_over_recursion_depth = 20` inside `fr-board`.
 
 use fr_board::board::Board;
 use fr_board::clearance::ClearanceSource;
@@ -55,6 +47,8 @@ use fr_board::item::{FixedState, ItemId, ItemKind, LayerRange, Via};
 use fr_board::net_nos::NetNos;
 use fr_board::search_tree::TreeEntry;
 use fr_board::shape::{AngleRestriction, Padstack as BoardPadstack, TileShape};
+use fr_board::shove::via::ViaLayerPad;
+use fr_board::shove::{ChangedAreaSink, CheckDrillResult, FromSide, ShoveCheck, ShoveInsert};
 use fr_datastructures::arena_shape_tree::QueryStack;
 use fr_geometry::planar::{
     Circle, FloatPoint, IntBox, IntOctagon, IntPoint, Point, Polyline, Simplex,
@@ -192,6 +186,20 @@ impl ChangedArea {
     }
 }
 
+/// The shove stack reports the geometry it inserted through this trait, which
+/// is how `ShoveTraceAlgo.insert` reaches `board.join_changed_area` and
+/// `board.changed_area.get_area(layer)` without `fr-board` owning the type.
+impl ChangedAreaSink for ChangedArea {
+    fn join_point(&mut self, point: FloatPoint, layer: i32) {
+        ChangedArea::join_point(self, point, layer);
+    }
+
+    fn area(&self, layer: i32) -> Option<IntOctagon> {
+        let area = ChangedArea::area(self, layer);
+        (!area.is_empty()).then_some(area)
+    }
+}
+
 /// The board-mutating half of the connection inserter.
 ///
 /// Owns the `&mut Board` for the whole insertion, so that the search-tree
@@ -239,121 +247,142 @@ impl<'b> ForcedInserter<'b> {
         NetNos::of(self.ctrl.net_no)
     }
 
-    // ---- the clearance oracle -------------------------------------------
+    // ---- the shove contexts ---------------------------------------------
 
-    /// `BasicBoard.check_trace_shape(shape, layer, nets, cl, null)`
-    /// (`:1166-1221`) — and, at shove depth 0, the whole of
-    /// `ShoveTraceAlgo.check` (see the module docs).
-    ///
-    /// `contact_pins` is always `null` here: the acid-trap rule
-    /// (*"any pin that is not an endpoint contact is an obstacle, even own
-    /// net"*) belongs to pull-tight, which passes the pin set; the insertion
-    /// path never does.
-    pub fn check_trace_shape(&mut self, shape: &Simplex, layer: i32) -> bool {
-        if !shape_is_contained_in(shape, &self.bounds) {
-            return false;
-        }
-        let net_no = self.ctrl.net_no;
-        let tree_class = self.ctrl.trace_clearance_class_no;
-        let ForcedInserter {
-            board,
-            scratch_entries,
-            scratch_stack,
-            ..
-        } = self;
-        let query = TileShape::Simplex(shape.clone());
-        fr_metrics::counters::bump::tree_queries(1);
-        let tree = board
-            .trees()
-            .compensated_tree(tree_class)
-            .unwrap_or_else(|| board.default_tree());
-        tree.overlapping_tree_entries(
-            board.store(),
-            &query,
-            Some(layer),
-            &[],
-            scratch_stack,
-            scratch_entries,
-        );
-        for entry in scratch_entries.iter() {
-            if board
-                .store()
-                .get(entry.item)
-                .is_some_and(|item| item.is_trace_obstacle(net_no))
-            {
-                return false;
-            }
-        }
-        true
+    /// A read-only [`ShoveCheck`] over the same board.
+    fn shove_check(&self) -> ShoveCheck<'_> {
+        ShoveCheck::new(self.board, self.bounds)
     }
 
-    /// `ForcedPadAlgo.check_forced_pad` at shove depth 0: the pad shape must
-    /// fit inside the board and meet no obstacle.
+    /// A mutating [`ShoveInsert`] over the same board, reporting into this
+    /// inserter's changed area.
+    fn shove_insert(&mut self) -> ShoveInsert<'_> {
+        let ForcedInserter {
+            board,
+            changed_area,
+            bounds,
+            ..
+        } = self;
+        ShoveInsert::new(board, *bounds, changed_area)
+    }
+
+    /// The three recursion budgets, straight from `AutorouteControl`.
+    fn budgets(&self) -> (i32, i32, i32) {
+        (
+            self.ctrl.max_shove_trace_recursion_depth,
+            self.ctrl.max_shove_via_recursion_depth,
+            self.ctrl.max_spring_over_recursion_depth,
+        )
+    }
+
+    // ---- the clearance oracle -------------------------------------------
+
+    /// The instance `ShoveTraceAlgo.check` (`ShoveTraceAlgo.java:166-292`):
+    /// can this trace shape go in, pushing whatever overlaps it aside?
     ///
-    /// Upstream's pad check additionally allows *own-net copper sharing* only
-    /// when `attach_smd_allowed` and the pin admits a drill
-    /// (`ShapeTraceEntries.store_items`, `p_is_pad_check = true`). That second
-    /// gate is kept: an own-net SMD pad under the via location is a violation
-    /// of the attach rule, not of a clearance, and dropping it would let M2a
-    /// place vias the release refuses.
+    /// `from_side` is upstream's `CalcFromSide(combined_polyline, i + 1,
+    /// shape)`; `p_dir` is `null` at the top level, because only the internal
+    /// substitute recursion needs the anti-bounce-back filter.
+    pub fn check_trace_shape_from(
+        &mut self,
+        shape: &Simplex,
+        from_side: Option<FromSide>,
+        layer: i32,
+    ) -> bool {
+        fr_metrics::counters::bump::shove_checks(1);
+        let (max_rec, max_via_rec, max_spring_over_rec) = self.budgets();
+        let nets = self.nets();
+        let cl_class = self.ctrl.trace_clearance_class_no;
+        let mut checker = self.shove_check();
+        checker.check(
+            shape,
+            from_side,
+            None,
+            layer,
+            &nets,
+            cl_class,
+            max_rec,
+            max_via_rec,
+            max_spring_over_rec,
+        )
+    }
+
+    /// [`Self::check_trace_shape_from`] with no from-side, which makes
+    /// `ShapeTraceEntries` derive one from its own-net entries
+    /// (`ShapeTraceEntries.search_from_side`, `:372-388`).
+    pub fn check_trace_shape(&mut self, shape: &Simplex, layer: i32) -> bool {
+        self.check_trace_shape_from(shape, None, layer)
+    }
+
+    /// `ShoveTraceAlgo.insert` (`:297-418`), as a transaction: on failure the
+    /// board is restored exactly, so the caller's rollback contract holds
+    /// without the caller owning an undo.
+    pub fn insert_trace_shape(
+        &mut self,
+        shape: &Simplex,
+        from_side: Option<FromSide>,
+        layer: i32,
+    ) -> bool {
+        let (max_rec, max_via_rec, max_spring_over_rec) = self.budgets();
+        let nets = self.nets();
+        let cl_class = self.ctrl.trace_clearance_class_no;
+        let mut inserter = self.shove_insert();
+        inserter.insert_transaction(
+            shape,
+            from_side,
+            layer,
+            &nets,
+            cl_class,
+            &[],
+            max_rec,
+            max_via_rec,
+            max_spring_over_rec,
+        )
+    }
+
+    /// `ForcedPadAlgo.check_forced_pad` (`ForcedPadAlgo.java:141-226`).
     ///
-    /// One approximation: upstream queries with the *pad's* clearance class
-    /// (`ForcedViaAlgo.java:118`), this queries the trace class's compensated
-    /// tree, because that is the only compensated tree the caller was asked to
-    /// build ([`crate::engine::AutorouteEngine::new`]). The two agree whenever
-    /// the via clearance class equals the trace clearance class, which is the
-    /// common case and the only one the fixtures exercise; where they differ
-    /// the answer is off by the class delta in whichever direction the classes
-    /// differ. Building the via class's tree is a one-line fix the moment a
-    /// board needs it.
+    /// One approximation is inherited from M2a and unchanged: the *tree* the
+    /// obstacle query runs against is chosen by
+    /// [`fr_board::shove::geom::overlapping_items_with_clearance`], which uses
+    /// the default (uncompensated) tree exactly as upstream's shove stack does
+    /// — `SearchTreeManager.clearance_compensation_used` is `false` in every
+    /// headless run (`SearchTreeManager.java:34`; only the GUI flips it).
     pub fn check_forced_pad(
         &mut self,
         shape: &Simplex,
         layer: i32,
         attach_smd_allowed: bool,
     ) -> bool {
-        if !shape_is_contained_in(shape, &self.bounds) {
-            return false;
-        }
-        let net_no = self.ctrl.net_no;
-        let tree_class = self.ctrl.trace_clearance_class_no;
-        let ForcedInserter {
-            board,
-            scratch_entries,
-            scratch_stack,
-            ..
-        } = self;
-        let query = TileShape::Simplex(shape.clone());
-        fr_metrics::counters::bump::tree_queries(1);
-        let tree = board
-            .trees()
-            .compensated_tree(tree_class)
-            .unwrap_or_else(|| board.default_tree());
-        tree.overlapping_tree_entries(
-            board.store(),
-            &query,
-            Some(layer),
+        self.check_forced_pad_with(shape, None, layer, attach_smd_allowed, self.ctrl.trace_clearance_class_no)
+            != CheckDrillResult::NotDrillable
+    }
+
+    /// [`Self::check_forced_pad`] with the pad's own from-side and clearance
+    /// class, which is what the forced-via path needs.
+    pub fn check_forced_pad_with(
+        &mut self,
+        shape: &Simplex,
+        from_side: Option<FromSide>,
+        layer: i32,
+        attach_smd_allowed: bool,
+        cl_class: i32,
+    ) -> CheckDrillResult {
+        let (max_rec, max_via_rec, _) = self.budgets();
+        let nets = self.nets();
+        let mut checker = self.shove_check();
+        checker.check_forced_pad(
+            shape,
+            from_side,
+            layer,
+            &nets,
+            cl_class,
+            attach_smd_allowed,
             &[],
-            scratch_stack,
-            scratch_entries,
-        );
-        for entry in scratch_entries.iter() {
-            let Some(item) = board.store().get(entry.item) else {
-                continue;
-            };
-            if item.is_trace_obstacle(net_no) {
-                return false;
-            }
-            // Own-net copper: a pad may only be dropped on it under the attach
-            // rule (`ShapeTraceEntries.store_items`, the `p_is_pad_check`
-            // branch).
-            if matches!(item.kind, ItemKind::Pin(_))
-                && !(attach_smd_allowed && item.drill_allowed())
-            {
-                return false;
-            }
-        }
-        true
+            max_rec,
+            max_via_rec,
+            false,
+        )
     }
 
     /// `RoutingBoard.check_trace_segment` (`:250-306`): the length along
@@ -489,9 +518,40 @@ impl<'b> ForcedInserter<'b> {
         // its geometry so the junction check shape has no dog ears.
         let picked_polyline = self.pick_combinable_trace(from_corner, layer, half_width);
 
-        // Step 3, `:641-643`: `spring_over_obstacles`. M2b seam — the identity
-        // here, which is upstream's answer when the polyline needs no detour.
-        let mut new_polyline = polyline.clone();
+        // `RoutingBoard.java:632`: `p_half_width +
+        // search_tree.clearance_compensation_value(cl, layer)` on the **default**
+        // tree, whose compensation is off in every headless run
+        // (`SearchTreeManager.java:34`) — so this is plain `half_width` there,
+        // and the clearance is added by the shove's own
+        // `overlapping_items_with_clearance`. Adding the compensation here as
+        // well would inflate every check shape by an extra half clearance.
+        let compensated_half_width = fr_board::shove::entries::compensated_half_width(
+            self.board,
+            half_width,
+            self.ctrl.trace_clearance_class_no,
+            layer,
+        );
+        let orthogonal_mode = self.board.angle_restriction() == AngleRestriction::Ninety;
+
+        // Step 3, `:641-643`: `spring_over_obstacles` on the *whole* polyline,
+        // with its own `c_max_spring_over_recursion_depth = 20`. `null` means
+        // "nothing inserted, board clean", which the caller reads as a
+        // first-corner ok-point.
+        let mut new_polyline = {
+            let nets = self.nets();
+            let cl_class = self.ctrl.trace_clearance_class_no;
+            let mut checker = self.shove_check();
+            match checker.spring_over_obstacles(
+                polyline,
+                compensated_half_width,
+                layer,
+                &nets,
+                cl_class,
+            ) {
+                Some(sprung) => sprung,
+                None => return Some(Point::Int(from_corner)),
+            }
+        };
 
         let mut combined_polyline = match picked_polyline.as_ref() {
             Some(picked) => new_polyline.combine(picked),
@@ -500,13 +560,6 @@ impl<'b> ForcedInserter<'b> {
         if combined_polyline.arr.len() < 3 {
             return Some(Point::Int(from_corner));
         }
-
-        let compensated_half_width = half_width
-            + self
-                .board
-                .clearances()
-                .compensation_value(self.ctrl.trace_clearance_class_no, layer);
-        let orthogonal_mode = self.board.angle_restriction() == AngleRestriction::Ninety;
 
         let start_shape_no = combined_polyline
             .arr
@@ -518,13 +571,22 @@ impl<'b> ForcedInserter<'b> {
             combined_polyline.arr.len() - 1,
         );
 
-        // Step 4, `:673-707`: check (and, upstream, shove-insert) every shape.
+        // Step 4, `:673-707`: check *and* shove-insert every shape, in order.
+        // A check failure stops the walk and hands the rest to the resampler;
+        // an insert failure is upstream's `null`.
         let mut last_shape_no = trace_shapes.len();
+        let corner_count = combined_polyline.corner_count();
         for (index, shape) in trace_shapes.iter().enumerate() {
             let shape = orthogonalize(shape, orthogonal_mode);
-            if !self.check_trace_shape(&shape, layer) {
+            let from_side_index = (corner_count + index)
+                .saturating_sub(trace_shapes.len() + 1);
+            let from_side = FromSide::from_polyline(&combined_polyline, from_side_index, &shape);
+            if !self.check_trace_shape_from(&shape, Some(from_side), layer) {
                 last_shape_no = index;
                 break;
+            }
+            if !self.insert_trace_shape(&shape, Some(from_side), layer) {
+                return None;
             }
         }
 
@@ -541,6 +603,8 @@ impl<'b> ForcedInserter<'b> {
                 return Some(Point::Int(from_corner));
             }
             let mut last_trace_shape = orthogonalize(&trace_shapes[last_shape_no], orthogonal_mode);
+            let mut shape_index = (combined_polyline.corner_count() + last_shape_no)
+                .saturating_sub(trace_shapes.len() + 1);
             if last_segment_length > sample_width as f64 {
                 new_polyline = new_polyline.shorten(
                     new_polyline
@@ -560,7 +624,7 @@ impl<'b> ForcedInserter<'b> {
                 if combined_polyline.arr.len() < 3 {
                     return Some(new_corner);
                 }
-                let shape_index = combined_polyline.arr.len() - 3;
+                shape_index = combined_polyline.arr.len() - 3;
                 let Some(shape) =
                     combined_polyline.offset_shape(compensated_half_width, shape_index)
                 else {
@@ -568,8 +632,13 @@ impl<'b> ForcedInserter<'b> {
                 };
                 last_trace_shape = orthogonalize(&shape, orthogonal_mode);
             }
-            if !self.check_trace_shape(&last_trace_shape, layer) {
+            let from_side =
+                FromSide::from_polyline(&combined_polyline, shape_index, &last_trace_shape);
+            if !self.check_trace_shape_from(&last_trace_shape, Some(from_side), layer) {
                 return Some(Point::Int(from_corner));
+            }
+            if !self.insert_trace_shape(&last_trace_shape, Some(from_side), layer) {
+                return None;
             }
         }
 
@@ -689,15 +758,43 @@ impl<'b> ForcedInserter<'b> {
     /// `insert_via` can pick the cheapest *checkable* mask before committing;
     /// [`Self::check_via`] is that half.
     pub fn insert_forced_via(&mut self, via_info: &ViaInfo, location: IntPoint) -> bool {
-        if !self.check_via(via_info, location) {
-            return false;
-        }
-        let padstack = via_info.padstack();
-        let from_layer = padstack.from_layer() as i32;
-        let to_layer = padstack.to_layer() as i32;
         let Some(padstack_no) = self.resolve_via_padstack(via_info) else {
             return false;
         };
+        let padstack = via_info.padstack();
+        let from_layer = padstack.from_layer() as i32;
+        let to_layer = padstack.to_layer() as i32;
+        let (pads, hole_shape) = self.via_layer_pads(via_info, location);
+        let (max_rec, max_via_rec, _) = self.budgets();
+        let nets = self.nets();
+        let attach = via_info.attach_smd_allowed();
+        let cl_class = self.ctrl.trace_clearance_class_no;
+
+        // `ForcedViaAlgo.insert` (`:165-232`), as a transaction: on failure the
+        // partially shoved board is restored, which is what upstream needs an
+        // external undo for.
+        let mark = self.board.begin();
+        let inserted = {
+            let mut inserter = self.shove_insert();
+            inserter
+                .forced_via_pads(
+                    &pads,
+                    location,
+                    &nets,
+                    attach,
+                    hole_shape.as_ref(),
+                    cl_class,
+                    max_rec,
+                    max_via_rec,
+                )
+                .is_ok()
+        };
+        if !inserted {
+            self.board.rollback_to(mark);
+            return false;
+        }
+        self.board.commit(mark);
+
         for layer in from_layer..=to_layer {
             self.changed_area.join_point(location.to_float(), layer);
         }
@@ -718,47 +815,75 @@ impl<'b> ForcedInserter<'b> {
         true
     }
 
-    /// `ForcedViaAlgo.check` (`:89-152`) at shove depth 0: every pad of the
-    /// padstack, plus the trace-start circle upstream also checks (`:139-150`),
-    /// must fit without meeting an obstacle.
+    /// `ForcedViaAlgo.check` (`:89-158`) — every padstack layer, the
+    /// hole-clearance probe of spec §13.2, and the start-trace circle of
+    /// conformance delta **B5**.
     pub fn check_via(&mut self, via_info: &ViaInfo, location: IntPoint) -> bool {
-        let padstack = via_info.padstack();
+        let (pads, hole_shape) = self.via_layer_pads(via_info, location);
+        let (max_rec, max_via_rec, _) = self.budgets();
+        let nets = self.nets();
         let attach = via_info.attach_smd_allowed();
-        let from_layer = padstack.from_layer();
-        let to_layer = padstack.to_layer();
+        let cl_class = self.ctrl.trace_clearance_class_no;
+        let mut checker = self.shove_check();
+        checker
+            .check_forced_via(
+                &pads,
+                location,
+                &nets,
+                attach,
+                hole_shape.as_ref(),
+                cl_class,
+                max_rec,
+                max_via_rec,
+            )
+            .is_ok()
+    }
+
+    /// The per-layer pad shapes of `via_info` translated to `location`, plus
+    /// the hole-clearance substitute shape (`ForcedViaAlgo.hole_check_shape`,
+    /// `:240-252`).
+    ///
+    /// A copper-less padstack layer contributes the hole shape at clearance
+    /// class **0** instead of being skipped, which is the §13.2 behaviour the
+    /// release ships.
+    fn via_layer_pads(
+        &self,
+        via_info: &ViaInfo,
+        location: IntPoint,
+    ) -> (Vec<ViaLayerPad>, Option<Simplex>) {
+        let padstack = via_info.padstack();
         let orthogonal = self.board.angle_restriction() == AngleRestriction::Ninety;
-        for layer in from_layer..=to_layer {
-            let Some(pad) = padstack.get_shape(layer) else {
-                // No copper on this layer. Upstream substitutes the drill-hole
-                // clearance shape; ours is covered by the pads above and below
-                // plus the tree's own hole obstacle
-                // (`search-tree-obstacles.md` §9.1).
-                continue;
+        let hole_shape = fr_board::shove::via::hole_check_shape(
+            location,
+            padstack.get_drill_radius(),
+            self.rules.get_hole_clearance(),
+            orthogonal,
+        );
+        let mut pads = Vec::new();
+        for layer in padstack.from_layer()..=padstack.to_layer() {
+            let (shape, clearance_class) = match padstack.get_shape(layer) {
+                Some(pad) => (
+                    pad_tile_shape(pad, location, orthogonal),
+                    via_info.clearance_class() as i32,
+                ),
+                None => match hole_shape.as_ref() {
+                    Some(hole) => (hole.clone(), 0),
+                    None => continue,
+                },
             };
-            let shape = pad_tile_shape(pad, location, orthogonal);
-            if !self.check_forced_pad(&shape, layer as i32, attach) {
-                return false;
-            }
-            // `:139-150`: the trace leaving the via may be wider than the pad.
-            let trace_half_width = self
-                .ctrl
-                .trace_half_width
-                .get(layer)
-                .copied()
-                .unwrap_or_default();
-            if trace_half_width > 0 {
-                let circle = Circle::new(location, trace_half_width);
-                let shape = if orthogonal {
-                    circle.bounding_box().to_simplex()
-                } else {
-                    circle.bounding_octagon().to_simplex()
-                };
-                if !self.check_forced_pad(&shape, layer as i32, true) {
-                    return false;
-                }
-            }
+            pads.push(ViaLayerPad {
+                layer: layer as i32,
+                shape,
+                clearance_class,
+                trace_pen_half_width: self
+                    .ctrl
+                    .trace_half_width
+                    .get(layer)
+                    .copied()
+                    .unwrap_or_default(),
+            });
         }
-        true
+        (pads, hole_shape)
     }
 
     /// The board padstack index carrying this via's geometry, appended to the
@@ -901,11 +1026,19 @@ impl<'b> ForcedInserter<'b> {
         layer: i32,
         half_width: i32,
     ) -> bool {
-        let compensated_half_width = half_width
-            + self
-                .board
-                .clearances()
-                .compensation_value(self.ctrl.trace_clearance_class_no, layer);
+        // `RoutingBoard.java:632`: `p_half_width +
+        // search_tree.clearance_compensation_value(cl, layer)` on the **default**
+        // tree, whose compensation is off in every headless run
+        // (`SearchTreeManager.java:34`) — so this is plain `half_width` there,
+        // and the clearance is added by the shove's own
+        // `overlapping_items_with_clearance`. Adding the compensation here as
+        // well would inflate every check shape by an extra half clearance.
+        let compensated_half_width = fr_board::shove::entries::compensated_half_width(
+            self.board,
+            half_width,
+            self.ctrl.trace_clearance_class_no,
+            layer,
+        );
         let orthogonal = self.board.angle_restriction() == AngleRestriction::Ninety;
         for shape in polyline.offset_shapes(compensated_half_width) {
             let shape = orthogonalize(&shape, orthogonal);
@@ -915,24 +1048,6 @@ impl<'b> ForcedInserter<'b> {
         }
         true
     }
-}
-
-/// `TileShape.is_contained_in(IntBox)`: for a convex shape, its bounding box
-/// fits inside the board's.
-fn shape_is_contained_in(shape: &Simplex, bounds: &IntBox) -> bool {
-    if shape.is_empty() {
-        // Upstream warns and answers "ok" for an empty check shape
-        // (`ShoveTraceAlgo.java:172-175`).
-        return true;
-    }
-    if !shape.is_bounded() {
-        return false;
-    }
-    let bb = shape.bounding_box();
-    bb.left_x() >= bounds.left_x()
-        && bb.bottom_y() >= bounds.bottom_y()
-        && bb.right_x() <= bounds.right_x()
-        && bb.top_y() <= bounds.top_y()
 }
 
 /// `if (orthogonal_mode) curr_trace_shape = curr_trace_shape.bounding_box()`
@@ -1073,11 +1188,11 @@ mod tests {
     #[test]
     fn containment_rejects_a_shape_over_the_board_edge() {
         let bounds = IntBox::new(0, 0, 100, 100);
-        assert!(shape_is_contained_in(
+        assert!(fr_board::shove::geom::simplex_contained_in(
             &IntBox::new(10, 10, 90, 90).to_simplex(),
             &bounds
         ));
-        assert!(!shape_is_contained_in(
+        assert!(!fr_board::shove::geom::simplex_contained_in(
             &IntBox::new(10, 10, 110, 90).to_simplex(),
             &bounds
         ));
@@ -1087,6 +1202,6 @@ mod tests {
             IntPoint::new(0, 10),
         ));
         assert!(!half_plane.is_empty());
-        assert!(!shape_is_contained_in(&half_plane, &bounds));
+        assert!(!fr_board::shove::geom::simplex_contained_in(&half_plane, &bounds));
     }
 }

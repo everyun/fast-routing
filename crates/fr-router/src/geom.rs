@@ -121,10 +121,9 @@ pub fn touching_sides(shape: &Simplex, other: &Simplex) -> Option<(usize, usize)
     for _ in 0..max_ind {
         let compare = dir2.cmp_direction(&dir1);
         if compare == 0
-            && lines_are_equal_or_opposite(
-                &shape.border_line(side_no_1),
-                &other.border_line(side_no_2),
-            )
+            && shape
+                .border_line(side_no_1)
+                .is_equal_or_opposite(&other.border_line(side_no_2))
         {
             return Some((side_no_1, side_no_2));
         }
@@ -137,21 +136,6 @@ pub fn touching_sides(shape: &Simplex, other: &Simplex) -> Option<(usize, usize)
         }
     }
     None
-}
-
-/// `Line.is_equal_or_opposite` (`Line.java:441-444`): do the two lines describe
-/// the *same* geometric line, in either direction?
-///
-/// Upstream's predicate is `side_of(other.a) == COLLINEAR && side_of(other.b)
-/// == COLLINEAR`. `fr-geometry`'s `Line::is_equal_or_opposite` compares the two
-/// anchor points for identity instead, which is strictly stronger and answers
-/// `false` for two collinear lines anchored at different points — exactly the
-/// case [`touching_sides`] hits, because a box's right border and its
-/// neighbour's left border are anchored at different corners. The upstream
-/// predicate is therefore spelled out here.
-pub fn lines_are_equal_or_opposite(line: &Line, other: &Line) -> bool {
-    line.side_of_point(&Point::Int(other.a_int())) == Side::Collinear
-        && line.side_of_point(&Point::Int(other.b_int())) == Side::Collinear
 }
 
 /// `TileShape.distance_to_the_left` (`TileShape.java:671-690`): the minimal
@@ -453,10 +437,9 @@ mod tests {
         let left = unit_box(0, 0, 100, 100);
         let right = unit_box(100, 0, 200, 100);
         let sides = touching_sides(&left, &right).expect("abutting boxes touch");
-        assert!(lines_are_equal_or_opposite(
-            &left.border_line(sides.0),
-            &right.border_line(sides.1)
-        ));
+        assert!(left
+            .border_line(sides.0)
+            .is_equal_or_opposite(&right.border_line(sides.1)));
     }
 
     #[test]

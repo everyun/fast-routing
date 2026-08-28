@@ -28,6 +28,9 @@
 //! | [`result`] | the backtrack chain `LocateFoundConnectionAlgo` consumes |
 //! | [`batch`] | `BatchAutorouter` — work-list selection, one pass, tail cleanup |
 //! | [`fanout`] | `BatchFanout` + `RoutingBoard.fanout` — the SMD pin-escape stage |
+//! | [`maze::shove`] | `MazeShoveTraceAlgo` — the maze-time virtual shove |
+//! | [`pull_tight`] | `PullTightAlgo` + `opt_changed_area` — post-route trace optimization |
+//! | [`pull_tight45`] | `PullTightAlgo45` — the 45° local moves (the default board flavor) |
 //!
 //! # Typical use
 //!
@@ -57,23 +60,22 @@
 //! # }
 //! ```
 //!
-//! # M2a scope
+//! # Scope
 //!
-//! Shove is **not** in this wave. Every `MazeShoveTraceAlgo` integration point
-//! answers "the obstacle is hard", which routes the search down the
-//! delayed-ripup branch it already takes when the release's shove fails on both
-//! sides. The stubs are marked `M2a` in [`maze::search`] and are the only
-//! functions M2b has to replace. Consequences are one-sided: M2a finds a subset
-//! of the paths the release finds, never a superset.
+//! Shove **is** in ([`maze::shove`] for the maze-time virtual shove,
+//! [`fr_board::shove`] for the board-side stack, [`insert_forced`] for the
+//! insertion-time wiring). Two integration points are still M2a stand-ins and
+//! are flagged at their call sites in [`maze::search`]:
+//! `ForcedViaAlgo.check_layer` in the drill scan, and
+//! `check_forced_trace_polyline` for the thin-room target hookup.
 //!
 //! Two further approximations, each documented at its call site:
 //!
 //! * the 90°/45° `Sorted*RoomNeighbours` specializations are not ported; every
 //!   board uses the any-angle general case (`maze-engine.md` §13 prescribes
 //!   this porting order). The tiling is valid but not Java's;
-//! * `ForcedViaAlgo.check_layer`, `check_forced_trace_polyline`, pin trace-exit
-//!   geometry and pin neckdown all belong to the shove/locate waves; their M2a
-//!   stand-ins are the no-shove cases of the same predicates.
+//! * pin trace-exit geometry and pin neckdown belong to the locate wave; their
+//!   M2a stand-ins are the no-shove cases of the same predicates.
 //!
 //! # Determinism
 //!
@@ -104,6 +106,8 @@ pub mod insert_forced;
 pub mod locate;
 pub mod locate45;
 pub mod maze;
+pub mod pull_tight;
+pub mod pull_tight45;
 pub mod result;
 pub mod rooms;
 
@@ -115,4 +119,5 @@ pub use ctrl::AutorouteControl;
 pub use engine::AutorouteEngine;
 pub use fanout::{fanout_board, FanoutConfig, FanoutOutcome};
 pub use maze::search::{MazeSearch, SearchFailure, SettleRecord};
+pub use pull_tight::PullTightAlgo;
 pub use result::{BacktrackElement, BacktrackKind, FoundConnection, RippedItem};

@@ -400,11 +400,23 @@ impl<'b> ConnectionInserter<'b> {
             return Ok(());
         }
 
-        // `:108-109` / `:281`: upstream disables the pin-exit correction for
-        // the duration of the line-by-line insertion. Nothing in M2a reads
-        // `pin_edge_to_turn_dist` — its only consumer is the pull-tight
-        // swap/correct-connection-to-pin ladder — so the save/restore is a
-        // no-op and is left out rather than faked. **M2b must restore it.**
+        // `:108-109` / `:281`: upstream saves `rules.get_pin_edge_to_turn_dist()`,
+        // forces it to `-1` for the duration of the line-by-line insertion, and
+        // restores it afterwards.
+        //
+        // The knob gates exactly one thing — the `swap_connection_to_pin` /
+        // `correct_connection_to_pin` ladder at the tail of
+        // `PolylineTrace.pull_tight` (`PolylineTrace.java:855-873`, gated on
+        // `> 0`). That ladder is **not ported** (see [`crate::pull_tight`]), so
+        // the knob still has no reader and forcing it here would be theatre:
+        // `rules` is `&BoardRules` on this path, so faking the save/restore
+        // would mean widening the borrow of a value nothing consults.
+        //
+        // The contract is therefore satisfied vacuously, and the *invariant* it
+        // protects — that no pull-tight run inside an insertion may re-route a
+        // pin exit — holds because the ladder does not exist. Whoever ports the
+        // ladder must make this a real save/restore in the same commit; that is
+        // the only reason this comment is still here.
 
         let layer = trace.layer;
         let half_width = self.trace_half_width(layer);

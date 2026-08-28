@@ -50,7 +50,7 @@
 
 use std::collections::BTreeSet;
 
-use fr_geometry::planar::{IntOctagon, IntPoint, Point, Polyline};
+use fr_geometry::planar::{IntOctagon, IntPoint, IntVector, Point, Polyline};
 
 use crate::clearance::{ClearanceSource, ClearanceTable};
 use crate::connectivity::{self, Connectivity};
@@ -488,6 +488,35 @@ impl Board {
             if let ItemKind::Trace(trace) = &mut item.kind {
                 trace.polyline = polyline;
             }
+        });
+        self.index_in_trees(id);
+        self.mark_nets_dirty(id);
+        true
+    }
+
+    /// Translates a via or pin in place, keeping its identity — upstream's
+    /// `DrillItem.move_by(Vector)` (`Item.java`), which is how the shove engine
+    /// pushes a via out of the way ([`shove::drill`](crate::shove::drill)).
+    ///
+    /// Same mandatory order as the trace-polyline replacement: out of the
+    /// trees, mutate, back in. Returns false for anything that is not a drill
+    /// item, or for a translation that would leave the integer coordinate
+    /// range.
+    pub fn translate_drill_item(&mut self, id: ItemId, vector: &IntVector) -> bool {
+        let Some(item) = self.store.get(id) else {
+            return false;
+        };
+        let new_center = match &item.kind {
+            ItemKind::Via(via) => via.center.translate_by_int(vector),
+            ItemKind::Pin(pin) => pin.center.translate_by_int(vector),
+            _ => return false,
+        };
+        self.note_touched(id);
+        self.unindex_from_trees(id);
+        self.store.mutate(id, move |item| match &mut item.kind {
+            ItemKind::Via(via) => via.center = new_center,
+            ItemKind::Pin(pin) => pin.center = new_center,
+            _ => {}
         });
         self.index_in_trees(id);
         self.mark_nets_dirty(id);

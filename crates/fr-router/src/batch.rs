@@ -29,8 +29,11 @@
 //! * **Ripped connections are requeued inside the pass.** Upstream re-derives
 //!   the work list next pass instead; with `max_passes = 1` there is no next
 //!   pass. Declared in `docs/PARITY-DIVERGENCES.md`.
-//! * The per-connection pull-tight (`opt_changed_area`, `:1327-1333`) is M2b;
-//!   [`crate::insert::InsertOutcome::changed_area`] already carries its input.
+//! * The per-connection pull-tight (`opt_changed_area`, `:1327-1333`) runs, over
+//!   [`crate::insert::InsertOutcome::changed_area`] — see [`crate::pull_tight`]
+//!   for what of the family is ported and what is not. The one argument that is
+//!   deliberately not upstream's is the stall guard: a wall clock there would
+//!   make the routed board depend on machine load.
 //!
 //! # The routing sequence, per connection
 //!
@@ -60,6 +63,7 @@ use fr_rules::router_settings::RouterSettings;
 use crate::ctrl::AutorouteControl;
 use crate::engine::AutorouteEngine;
 use crate::maze::search::MazeSearch;
+use crate::pull_tight::PullTightAlgo;
 
 /// `Item.PROTECT_FANOUT_LENGTH` (`Item.java:39`): a contact trace longer than
 /// this many half widths does not make its via a fanout via.
@@ -648,8 +652,38 @@ pub fn route_with_control(
 
     match crate::insert::insert_connection(board, rules, &ctrl, &located, bounds) {
         Ok(insert) => {
-            // M2b: `board.opt_changed_area(insert.changed_area, …)` — the
-            // pull-tight pass upstream runs on every ROUTED result (`:1327-1333`).
+            // `BatchAutorouter.autoroute_item` (`:1327-1333`): every ROUTED
+            // result is followed by a pull-tight over the region the insertion
+            // touched.
+            //
+            // The three arguments upstream passes here are easy to get wrong:
+            //
+            // * `new int[0]` for the net filter — **all** nets in the region are
+            //   optimized, not just the one just routed. Neighbours the new
+            //   trace shoved aside get to relax too;
+            // * `null` for the clip shape — the changed area is the only
+            //   restriction;
+            // * `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` (1000 ms) as the stall
+            //   guard — the one argument deliberately **not** copied. A
+            //   wall-clock cutoff makes the routed board depend on machine load
+            //   (measured: `Issue034` finished with 34 incomplete connections on
+            //   an idle machine and 56 on a busy one, same binary), and this
+            //   crate promises reproducible output. `None` here arms
+            //   `PullTightAlgo`'s deterministic round budget instead; see
+            //   [`crate::pull_tight::DEFAULT_ROUND_BUDGET`].
+            let mut changed_area = insert.changed_area;
+            let mut algo = PullTightAlgo::new(
+                board,
+                rules,
+                &[],
+                None,
+                ctrl.pull_tight_accuracy,
+                None,
+                None,
+                0,
+            );
+            algo.opt_changed_area(&mut changed_area);
+
             outcome.changed_nets = insert.requeue_nets;
             outcome.ripped_connections = insert.ripped_connections;
             outcome.state = Some(AttemptState::Routed);

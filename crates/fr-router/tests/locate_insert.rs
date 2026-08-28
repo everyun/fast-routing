@@ -331,13 +331,35 @@ fn a_ripped_item_and_its_connection_are_deleted_in_the_same_transaction() {
 // 2. the failure path rolls back
 // ---------------------------------------------------------------------------
 
+/// Re-inserts the fixture's foreign trace at the same geometry but
+/// **user-fixed**, which is `Item.isShoveFixed()` and therefore the one thing
+/// `ShapeTraceEntries.store_items` refuses outright
+/// (`ShapeTraceEntries.java:143-146`).
+fn make_the_foreign_trace_unshovable(fixture: &mut TestFixture) {
+    let trace = fixture.trace_id();
+    fixture.board.remove_item(trace);
+    fixture
+        .board
+        .insert_trace_points(
+            &[IntPoint::new(0, -1500), IntPoint::new(0, 1500)],
+            0,
+            TEST_HALF_WIDTH,
+            NetNos::of(2),
+            1,
+            FixedState::UserFixed,
+            None,
+        )
+        .expect("the fixed obstacle inserts");
+}
+
 #[test]
 fn a_refused_insertion_rolls_the_board_back_exactly() {
-    // The foreign trace runs the full height of the board on layer 0, so a
-    // straight layer-0 connection through it is impossible. With shove off the
-    // per-segment check refuses it (`insert_forced` module docs), and the whole
-    // transaction is rolled back.
+    // The foreign trace runs the full height of the board on layer 0 and is
+    // user-fixed, so it can be neither shoved nor sprung over: the wrap would
+    // have to leave the outline. The per-shape check refuses the straight
+    // layer-0 run and the whole transaction is rolled back.
     let mut fixture = TestFixture::with_foreign_trace();
+    make_the_foreign_trace_unshovable(&mut fixture);
     let pads = fixture.pad_ids();
     let centers = fixture.pad_centers();
     let ctrl = fixture.control();
@@ -367,7 +389,7 @@ fn a_refused_insertion_rolls_the_board_back_exactly() {
         &connection,
         bounds,
     )
-    .expect_err("the foreign trace blocks the straight run and shove is off");
+    .expect_err("a user-fixed foreign trace blocks the straight run");
     assert!(
         matches!(error, InsertError::TraceBlocked { layer: 0, .. }),
         "expected a blocked trace segment, got {error:?}"

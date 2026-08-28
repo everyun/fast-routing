@@ -5,22 +5,27 @@
 //! conformance appendix's §5 port-from table makes this one file the single
 //! source for §4, §5, §6, §7.3, §8.1 and §8.3 of `maze-engine.md`).
 //!
-//! # M2a scope: shove is stubbed
+//! # Shove (M2b)
 //!
-//! Every `MazeShoveTraceAlgo` integration point returns "blocked". Concretely
-//! [`MazeSearch::shove_trace_room`] returns `false` unconditionally, which is
-//! the same answer the release gives when `check_shove_trace_line` fails on
-//! both sides: the element is re-queued at `+ripup_costs` with
-//! `already_checked = true` and the section is left unoccupied (the
-//! delayed-occupation protocol, `MazeSearchAlgo.java:446-470`), or, when no
-//! ripup is possible, the expansion stops there. So M2a explores strictly fewer
-//! paths than the release, never more, and every path it does find is one the
-//! release could also have found. M2b replaces the one function.
+//! [`MazeSearch::shove_trace_room`] is the real `MazeSearchAlgo.shove_trace_room`
+//! (`:1484-1546`): it tries both sides through
+//! [`crate::maze::shove::check_shove_trace_line`] and expands whatever door
+//! sections come back. When **neither** side finds anything it still returns
+//! `false`, which keeps the delayed-occupation protocol
+//! (`MazeSearchAlgo.java:446-470`) reachable at exactly the place upstream
+//! falls through to it: the element is re-queued at `+ripup_costs` with
+//! `already_checked = true` and the section is left unoccupied, so another door
+//! section may still shove the room before it is ripped.
 //!
-//! `ForcedViaAlgo.check_layer` is likewise M2a-conservative: with no shove
-//! engine, a drill layer counts as drillable only when the via pad fits in the
-//! free room and meets nothing that is not drillable for the net. See
-//! [`MazeSearch::check_layer_with_any_matching_via`].
+//! Two integration points are still the M2a stand-ins, both flagged at their
+//! call sites:
+//!
+//! * `ForcedViaAlgo.check_layer` — the shove-aware version now exists as
+//!   [`fr_board::ShoveCheck::check_via_layer`] (with conformance deltas B3/B4),
+//!   but the drill scan here still uses
+//!   [`MazeSearch::check_layer_with_any_matching_via`];
+//! * `check_forced_trace_polyline` for the thin-room target hookup
+//!   (`shove.md` §10.3) — still the straight-segment predicate.
 
 use fr_board::item::{ItemClass, ItemId, ItemKind};
 use fr_geometry::planar::{FloatLine, FloatPoint, IntBox, Point, Simplex};
@@ -94,6 +99,10 @@ pub struct MazeSearch<'e, 'b> {
     record_settles: bool,
     /// Scratch buffer for door section segments.
     section_scratch: Vec<FloatLine>,
+    /// Reusable buffer for the door sections one maze-time shove reaches. The
+    /// cascade must not allocate per level (`shove.md` §15, "Arena the shove
+    /// transaction").
+    shove_section_scratch: Vec<crate::maze::shove::DoorSection>,
     /// Scratch buffer for overlapping drill pages.
     page_scratch: Vec<PageId>,
     /// Cap on settled elements; `None` = unbounded. Stands in for upstream's
@@ -129,6 +138,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             settles: Vec::new(),
             record_settles: false,
             section_scratch: Vec::new(),
+            shove_section_scratch: Vec::new(),
             page_scratch: Vec::new(),
             expansion_limit: None,
             expansions: 0,
@@ -944,17 +954,72 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         );
     }
 
-    /// `MazeSearchAlgo.shove_trace_room` (`:1484-1535`) — **M2a stub**.
+    /// `MazeSearchAlgo.shove_trace_room` (`:1484-1535`).
     ///
-    /// Returns `false` unconditionally: "the obstacle is hard". The caller
-    /// therefore takes the delayed-ripup branch, which is exactly what the
-    /// release does when `MazeShoveTraceAlgo.check_shove_trace_line` fails on
-    /// both sides. M2b replaces this body with the real shove and must also
-    /// start producing [`Adjustment::Left`] / [`Adjustment::Right`] elements
-    /// (everything downstream already carries them).
-    fn shove_trace_room(&mut self, _element: &FrontierElement, _obstacle_room: RoomId) -> bool {
-        fr_metrics::counters::bump::shove_checks(1);
-        false
+    /// Tries to shove the obstacle room's trace right (`p_shove_to_the_left =
+    /// false`) and left, each direction only when the element does not already
+    /// carry the opposite [`Adjustment`] — an element that came through a
+    /// shoved link door keeps shoving the same way and cannot flip sides.
+    /// Returns false when **neither** direction found anything, which is what
+    /// puts the caller on the delayed-ripup branch.
+    ///
+    /// Note the naming inversion upstream ships and this keeps: the *first*
+    /// block passes `shove_to_the_left = false` and tags its link doors
+    /// [`Adjustment::Left`]; the pairing, not the word, is what the side-flip
+    /// guard reads.
+    fn shove_trace_room(&mut self, element: &FrontierElement, obstacle_room: RoomId) -> bool {
+        // Inner sections of a door are not shoved, so the occupation need not
+        // be delayed for them (`:1485-1492`).
+        let section_count = self.section_count(element.payload.door);
+        if element.payload.section_no_of_door != 0
+            && (section_count == 0 || element.payload.section_no_of_door != section_count - 1)
+        {
+            return true;
+        }
+        let mut result = false;
+        let mut sections = std::mem::take(&mut self.shove_section_scratch);
+        for shove_to_the_left in [false, true] {
+            let blocked_by = if shove_to_the_left {
+                Adjustment::Left
+            } else {
+                Adjustment::Right
+            };
+            if element.payload.adjustment == blocked_by {
+                continue;
+            }
+            sections.clear();
+            if crate::maze::shove::check_shove_trace_line(
+                self.engine,
+                element,
+                obstacle_room,
+                shove_to_the_left,
+                &mut sections,
+            ) {
+                result = true;
+            }
+            for section in sections.iter() {
+                self.expand_to_door_section(
+                    ExpandableRef::Door(section.door),
+                    section.section_no,
+                    section.section_line,
+                    element,
+                    obstacle_room,
+                    0,
+                    section.adjustment,
+                );
+            }
+        }
+        sections.clear();
+        self.shove_section_scratch = sections;
+        result
+    }
+
+    /// `ExpandableObject.maze_search_element_count()`.
+    fn section_count(&self, object: ExpandableRef) -> u16 {
+        match object {
+            ExpandableRef::Door(door) => self.engine.rooms.door(door).section_count(),
+            _ => 1,
+        }
     }
 
     /// `MazeSearchAlgo.check_neck_down_at_dest_pin` (`:1542-1550`) — M2a

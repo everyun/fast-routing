@@ -92,6 +92,7 @@ pub mod legacy;
 pub mod net_nos;
 pub mod search_tree;
 pub mod shape;
+pub mod shove;
 pub mod store;
 pub mod trace_ops;
 
@@ -106,6 +107,10 @@ pub use journal::{Journal, Mark};
 pub use net_nos::NetNos;
 pub use search_tree::{SearchTree, SearchTreeManager, TreeEntry};
 pub use shape::{AngleRestriction, Padstack, PadstackTable, TileShape};
+pub use shove::{
+    ChangedAreaSink, CheckDrillResult, FromSide, NoChangedArea, ShoveBudget, ShoveCheck,
+    ShoveInsert, FULL_SHOVE,
+};
 pub use store::{ItemStore, SlotIndex, StoreDelta};
 
 // The pre-rewrite model. See the `legacy` module docs; these names shadow the

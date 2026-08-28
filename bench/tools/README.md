@@ -34,16 +34,20 @@ FR_SETTLE_TRACE=/tmp/ours.log target/release/fr-cli \
     -de /tmp/freerouting-upstream/fixtures/Issue026-J2_reference.dsn \
     -do /tmp/ours.ses -mp 3
 
-# 3. Per-pass totals, and the diff
+# 3. Per-pass totals, the aggregate comparison, and the positional diff
 python3 bench/tools/frlab_parse.py summary /tmp/java.log
-python3 bench/tools/frlab_parse.py diff /tmp/ours.log /tmp/java.log --window 5
+python3 bench/tools/frlab_parse.py stats  /tmp/ours.log /tmp/java.log
+python3 bench/tools/frlab_parse.py diff   /tmp/ours.log /tmp/java.log --window 5
 
-python3 bench/tools/frlab_parse.py --self-test    # 16 tests, no fixtures needed
+# …and, once a door-id mapping exists, the opt-in topology comparison:
+python3 bench/tools/frlab_parse.py diff /tmp/ours.log /tmp/java.log --door-map doors.json
+
+python3 bench/tools/frlab_parse.py --self-test    # 31 tests, no fixtures needed
 ```
 
 `diff` exits **0** when the sequences agree and **1** when they diverge, so it
-drops straight into a gate script. `--json` on either subcommand emits one JSON
-object per log / one for the diff.
+drops straight into a gate script. `--json` on any subcommand emits one JSON
+object per log / one for the diff or the stats.
 
 ---
 
@@ -100,10 +104,11 @@ and before the element is marked occupied. Fields:
 | `g` | `list_element.expansion_value` | Java `double`, printed by `Double.toString` |
 | `f` | `list_element.sorting_value` | Java `double`, the frontier's primary sort key |
 
-`(door_id, section_no)` is the **topological identity** of the settle and is what
-the gate compares. `g`/`f` are f64 and are compared with a tolerance —
-per `docs/ARCHITECTURE.md`, f64 never decides topology, so a g/f drift with an
-intact order is a weaker (though still reportable) finding than an order swap.
+`(door_id, section_no)` is the **topological identity** of the settle *within one
+run*. It is **not comparable across runs**, and the diff does not compare it
+unless you supply a mapping — see [Why the diff is positional](#why-the-diff-is-positional).
+`g`/`f` are f64 and are compared with a stated tolerance; per
+`docs/ARCHITECTURE.md`, f64 never decides topology.
 
 > **Porting constraint discovered here:** on `Issue026-J2_reference`, 1853 of
 > 8718 door ids are negative (range `-2139373184 … 2136325847`, all inside
@@ -217,27 +222,74 @@ the summary table means the trace is truncated, or `--limit` was used, or
 expansions happened outside a pass window (the fanout stage runs maze searches
 too) — investigate before trusting a diff.
 
+### Why the diff is positional
+
+A door id is a dense counter handed out in door-creation order, and door
+creation order follows the room tiling. Ours is our counter, upstream's is
+theirs. **An id-keyed diff therefore answers `kind=topology
+first_divergence=0` on every pair of logs**, bit-identical searches included —
+which is exactly what M2a hit, and it carries no information.
+
+So `diff_settles` compares **settle *k* of one run against settle *k* of the
+other, on the cost pair `(g, f)`**, under a tolerance that the report always
+states. Costs are in the same board units on both sides, and they are the
+quantity the frontier order is derived from, so they *are* comparable.
+
+`(door_id, section)` is compared only when you opt in with `--door-map FILE`,
+which translates our ids into the reference's space first. The file is either a
+JSON object (`{"doors": {"97": 1086}}`, or the bare `{"97": 1086}`) or
+`<ours> <reference>` lines with `#` comments. Ids missing from the map are left
+untranslated and counted in a warning, so a partial map still diffs what it
+covers.
+
 ### Divergence kinds
 
 `diff_settles` reports the **most severe** applicable kind, in this order:
 
 | kind | meaning | M2 gate |
 |---|---|---|
-| `topology` | different `(door_id, section)` at `first_divergence` — the routers took different paths from there | **fail**: this is search drift |
-| `length` | keys agree over the whole shorter run, then one run stops | investigate: a stop rule, time limit or truncated trace |
-| `value` | same order, `g`/`f` beyond tolerance at `first_divergence` | report: numeric precision, not routing behaviour |
-| `identical` | same keys, `g`/`f` within tolerance | pass |
+| `topology` | **`--door-map` only.** Different `(door_id, section)` at `first_divergence` | **fail**: search drift, given a trusted mapping |
+| `value` | `g` or `f` beyond tolerance at position `first_divergence` — from there the two frontiers hold different costs | **fail**: the orders cannot be expected to agree past this point |
+| `length` | `(g, f)` agrees over the whole shorter run, then one run stops | investigate: a stop rule, time limit or truncated trace |
+| `identical` | same length, `(g, f)` within tolerance at every position | pass |
 
-`render()` prints a context window of `--window` records either side of the
+### Aggregates
+
+Every `diff` also prints — and `stats <left> <right>` prints on its own — the
+metrics that survive a renumbering: settles, `expansions_pass` per pass,
+distinct doors, distinct `(door, section)` keys, and the `g`/`f` distributions
+(`min/p50/p90/p99/max/mean`, nearest-rank, non-finite values counted separately
+rather than folded into the tail). The `ratio` column is left/right.
+
+These are what actually separate *"we search more"* from *"we search the same
+thing more slowly"*. On `Issue034-Green14SegLED` at `-mp 1`:
+
+```
+metric                      ours      lab jar    ratio
+settles                    88412        41680    2.121
+distinct doors              8242        17721    0.465
+distinct (door,sec)        15365        24867    0.618
+  g p50                   267604       214603    1.247
+  f p50                   468818       429633    1.091
+  f min                    23273        23273    1.000
+```
+
+Identical `f min`, near-identical distributions, but 2.1× the settles and *half*
+the distinct doors: the cost function agrees and the tiling is coarser, so the
+extra work is re-expansion, not a different cost model. Pass `--no-aggregates`
+to suppress the block.
+
+`render()` also prints a context window of `--window` records either side of the
 divergence, from both runs, with `>` on the diverging row:
 
 ```
-kind=topology matched_prefix=4999 first_divergence=4999
-ours settled (3986, 0), java settled (3985, 0)
+compared: g/f by sequence position, tolerance=1e-09 (rel and abs)
+kind=value matched_prefix=4999 first_divergence=4999
+g/f drift at position 4999: ours g=163000.0 f=407093.0, java g=163000.0 f=407094.5
 
      idx     ours                                    java
     4998     door=404849 sec=0 g=179829 f=407066     door=404849 sec=0 g=179829 f=407066
-    4999  >  door=3986 sec=0 g=163000 f=407093       door=3985 sec=0 g=163000 f=407093
+    4999  >  door=3986 sec=0 g=163000 f=407093       door=3985 sec=0 g=163000 f=407094
     5000     door=404818 sec=0 g=180813 f=408499     door=404818 sec=0 g=180813 f=408499
 ```
 
