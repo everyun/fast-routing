@@ -43,7 +43,7 @@
 //! | gap | effect |
 //! |---|---|
 //! | `RoutingBoard.reduceNetsOfRouteItems` — the post-load pass that trims a multi-net trace or via down to the nets its contacts actually carry — is **not** run. It is an `fr-board` method upstream (`RoutingBoard.java:1284`), called by the manager after load, and it needs an in-place net-array mutation the `Board` API does not expose; doing it here through remove + re-insert would renumber items. Call it from [`build`] once `fr-board` grows it. | multi-subnet wiring items keep every subnet of their net name, which is also where the `readViaScope` divergence shows up |
-//! | Areas with `(window …)` holes keep only the border; the holes are dropped with a warning. `fr-geometry` has no area-with-holes type and no polygon `split_to_convex` yet (`fr-board/search_tree.rs` §3.5 note). | keepout/pour geometry is *larger* than upstream's, never smaller |
+//! | Areas with `(window …)` holes keep only the border; the holes are dropped with a warning. `fr-geometry` has no area-with-holes type — it does have [`split_to_convex`], so the *border* is decomposed exactly, but a hole inside it cannot be subtracted. | keepout/pour geometry is *larger* than upstream's, never smaller |
 //! | A circular keepout or pour is stored as its bounding octagon, because `fr_board::AreaShape` has no circle variant. | slightly larger obstacle |
 //! | `Wiring.tryCorrectNet` (adopt a contact's net when a wire imported with none) is not implemented. | Mentor "turret" traces stay net-less |
 //! | `(part_library …)` logical parts / gate-and-pin swap are parsed as an unknown scope and skipped. | interactive-only upstream; `Network.insertLogicalParts`'s return value is ignored there too |
@@ -99,6 +99,11 @@ pub use ses_read::{
     SesReadOptions, SesTarget,
 };
 pub use ses_write::{write_session, write_session_verbose, SesInput, SesOutput};
+// `PolygonShape.split_to_convex` is a geometry operation and lives in `fr-geometry`, where
+// `fr-board`'s search tree can reach it too — an area stores its original polygon and splits on
+// demand, exactly as upstream's `ObstacleArea` does. Re-exported here because the importer's own
+// hole detection (`Structure.separateHoles`) is one of its callers.
+pub use fr_geometry::planar::split_to_convex;
 pub use transform::{derive_scale_factor, CoordinateTransform, ScaleFactor};
 
 /// `DsnFile.CLASS_CLEARANCE_SEPARATOR` — the character `(type …)` lists are split on. `-`, not

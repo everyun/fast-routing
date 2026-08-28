@@ -75,7 +75,7 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
 - [ ] Fix `run_bench.py` stage-regex bug (per-stage keys currently unaggregatable); wire
       fr-check placeholder judging; delete the fabricated README tables (done in this commit).
 
-## M1 — Correct foundations
+## M1 — Correct foundations (DONE — six waves, gates below)
 
 Order (reordered after review — board+checker land before the full DSN trap list, because the
 import/checker gates are what measure the trap list):
@@ -99,13 +99,28 @@ import/checker gates are what measure the trap list):
 5. **[DONE — wave 3, fr-rules side]** Rules wiring (exact ClearanceMatrix semantics verified
    against the release source; name algebra; RouterSettings with board-derived cost prep) —
    ClearanceMatrix everywhere; delete every hard-coded 250/300/150.
-6. **DSN/SES to spec** — raw-spelling lexer, the KiCad trap list, `calcFixed` route→USER_FIXED,
+6. **[DONE — waves 4-6]** DSN/SES to spec — raw-spelling lexer, the KiCad trap list, `calcFixed` route→USER_FIXED,
    board-derived cost prep (`applyBoardSpecificOptimizations`), board_edge class synthesis,
    keepouts/planes, wiring re-import; SES writer with snapping + reserved chars.
 7. **[DONE — wave 2]** Profiling/counter infrastructure (fr-metrics: compile-out proven at asm
    level; FRLAB settle-diff parser validated on a real lab-jar trace) (from perf-forensics §8: alloc-stats feature, expansion/
    query/shove counters, stage timers) + the settle-order differential harness parser (consumes
    lab-jar `FRLAB settle` lines) — built NOW, used throughout M2.
+
+Gate results (2026-08-28):
+- G1.0 ✅ 43 golden dumps generated; importer loads 45/46 fixtures (Issue006 is an OLE file, not DSN)
+- G1.1 ✅ **39/41 clean** on all field groups (2 ORACLE-FAILED boards excluded by evidence;
+  2 residual mismatches are documented divergences: Issue110 = upstream mangles non-Latin-1
+  image names, we deliberately keep them; Issue179 = empty class name unrepresentable in the
+  dump + 2-corner-simplex corner emit follow-up)
+- G1.2a ✅ **44/45 exact, 1 close, 0 far — flagless** (anchors Issue190 1372/1372,
+  Issue027 1138/1138; Issue178 close = 4 records off by 1e-4 mm, fr-check rounding follow-up)
+- G1.2b ✅ internal-consistency property tests; G1.2c ✅ round-trip fixed point incl. Referee
+  judgement equality
+- G1.3 ✅ workspace fully green (600 passed / 0 failed; the ≥140 assert is manifest-driven now);
+  clippy clean except legacy crates slated for M2 deletion
+- Pipeline switched: fr-cli default = import → check → SES passthrough (exit 3 until M2);
+  fr-drc retired behind the legacy feature
 
 Gates (all executable without a router):
 - **G1.0** golden-dump harness runs: our importer loads all 46 fixtures and emits a comparable

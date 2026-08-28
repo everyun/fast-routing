@@ -76,10 +76,8 @@ dependencies = [
  "fr-board",
  "fr-core",
  "fr-datastructures",
- "fr-drc",
  "fr-geometry",
  "fr-io",
- "fr-rules",
  "rayon",
 ]
 
@@ -89,6 +87,7 @@ version = "0.1.0"
 dependencies = [
  "fr-autoroute",
  "fr-board",
+ "fr-check",
  "fr-drc",
  "fr-geometry",
  "fr-io",

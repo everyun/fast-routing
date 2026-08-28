@@ -36,6 +36,39 @@ impl Simplex {
         s.remove_redundant_lines()
     }
 
+    /// Upstream `TileShape.get_instance(Point[] p_convex_polygon)` (`TileShape.java:29-36`): the
+    /// edges of a **convex** corner list, closed, as half-planes.
+    ///
+    /// # The two-corner form is not empty
+    ///
+    /// With two corners the construction yields `Line(a, b)` and `Line(b, a)` — the same geometric
+    /// line traversed both ways — and [`Simplex::remove_redundant_lines`] keeps both, because
+    /// neither half-plane contains the other. The result is a legal, **unbounded**, one-dimensional
+    /// simplex, and upstream depends on it: a `(polygon …)` with two corners inside a padstack
+    /// reaches `Library.read_padstack_scope` through `PolygonShape.split_to_convex`, comes out as
+    /// this shape, fails the `dimension() < 2` test, and is rescued by `offset(1)` into an infinite
+    /// **strip** one unit wide. Its `corner_approx` values are `(i32::MAX, i32::MAX)` — two
+    /// parallel border lines have no intersection — which is exactly what upstream's DSN dump
+    /// writes out as `Integer.MAX_VALUE / scale` (Issue179's `(polygon 1 0.01 0 -3.5 0 3.5)`).
+    /// Collapsing the two-corner case to [`Simplex::EMPTY`] instead drops the pad.
+    ///
+    /// Fewer than two corners is [`Simplex::EMPTY`]. Upstream builds `Line(p, p)` for a single
+    /// corner, whose direction is the zero vector; no half-plane means that, and every consumer of
+    /// the result — `corner_is_bounded`, `dimension`, `offset` — reads the direction. A point is
+    /// not representable as an intersection of half-planes, so the empty shape is the honest
+    /// answer and the only one that cannot produce a zero-direction [`Line`].
+    pub fn from_convex_polygon(corners: &[IntPoint]) -> Simplex {
+        if corners.len() < 2 {
+            return Simplex::EMPTY;
+        }
+        let mut lines = Vec::with_capacity(corners.len());
+        for index in 0..corners.len() {
+            let next = (index + 1) % corners.len();
+            lines.push(Line::new(corners[index], corners[next]));
+        }
+        Simplex::get_instance(&lines)
+    }
+
     /// Returns true if this simplex is empty.
     pub fn is_empty(&self) -> bool {
         self.arr.is_empty()
@@ -1333,5 +1366,72 @@ mod tests {
             .to_int_octagon()
             .expect("octagon simplex converts back to an octagon");
         assert_eq!(round_tripped, oct);
+    }
+
+    // ---- the degenerate two-corner form (Issue179) -----------------------------------------
+
+    /// Issue179's padstack shape, in board units: `(polygon 1 0.01 0 -3.5 0 3.5)` on a board whose
+    /// scale factor turns 3.5 into 3500.
+    fn issue179_pad() -> [IntPoint; 2] {
+        [IntPoint::new(0, -3500), IntPoint::new(0, 3500)]
+    }
+
+    #[test]
+    fn a_two_corner_polygon_is_an_unbounded_one_dimensional_simplex() {
+        let simplex = Simplex::from_convex_polygon(&issue179_pad());
+
+        // Both half-planes survive: neither contains the other.
+        assert_eq!(simplex.border_line_count(), 2);
+        assert!(!simplex.is_empty());
+        assert!(!simplex.is_bounded());
+        assert_eq!(simplex.dimension(), 1);
+        // The two border lines are the same geometric line, traversed both ways.
+        assert!(simplex.arr[0].overlaps(&simplex.arr[1]));
+        assert_ne!(simplex.arr[0].direction(), simplex.arr[1].direction());
+    }
+
+    #[test]
+    fn the_corners_of_the_two_corner_form_are_the_int_max_upstream_dumps() {
+        let simplex = Simplex::from_convex_polygon(&issue179_pad());
+        // `Simplex.corner_approx` on parallel border lines: this is the value upstream's DSN
+        // writer divides by the scale factor and emits.
+        for index in 0..simplex.border_line_count() {
+            let corner = simplex.corner_approx(index);
+            assert_eq!(corner.x, i32::MAX as f64, "corner {index}");
+            assert_eq!(corner.y, i32::MAX as f64, "corner {index}");
+            assert!(!simplex.corner_is_defined(index));
+        }
+    }
+
+    #[test]
+    fn offsetting_the_two_corner_form_by_one_unit_makes_it_an_area() {
+        // Upstream's `Library.read_padstack_scope` rescue: `dimension() < 2` ⇒ `offset(1)`.
+        let strip = Simplex::from_convex_polygon(&issue179_pad()).offset(1.0);
+        assert_eq!(strip.border_line_count(), 2);
+        assert_eq!(strip.dimension(), 2);
+        // A vertical strip one unit either side of x = 0, unbounded in y.
+        assert!(strip.contains(&Point::Int(IntPoint::new(0, 0))));
+        assert!(strip.contains(&Point::Int(IntPoint::new(0, 1_000_000))));
+        assert!(!strip.contains(&Point::Int(IntPoint::new(2, 0))));
+        assert!(!strip.contains(&Point::Int(IntPoint::new(-2, 0))));
+        assert!(!strip.is_bounded());
+    }
+
+    #[test]
+    fn a_three_corner_polygon_still_takes_the_ordinary_path() {
+        let triangle = Simplex::from_convex_polygon(&[
+            IntPoint::new(0, 0),
+            IntPoint::new(100, 0),
+            IntPoint::new(0, 100),
+        ]);
+        assert_eq!(triangle.border_line_count(), 3);
+        assert!(triangle.is_bounded());
+        assert_eq!(triangle.dimension(), 2);
+    }
+
+    #[test]
+    fn fewer_than_two_corners_is_the_empty_simplex() {
+        assert!(Simplex::from_convex_polygon(&[]).is_empty());
+        assert!(Simplex::from_convex_polygon(&[IntPoint::new(7, 9)]).is_empty());
     }
 }

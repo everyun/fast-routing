@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "source": "Issue269-caniot-tiny-arm.dsn",
+  "generator": "fr-check drc_report",
+  "violations": [
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [GND] and Pin [GND] (expected: 0.0500 mm, actual: 0.0000 mm)", "layer": 0, "expected_mm": 0.05, "actual_mm": 0.0, "items": [{"description": "Pin [GND]", "pos": {"x": 106.42505, "y": -80.47494999999999}, "uuid": "867"}, {"description": "Pin [GND]", "pos": {"x": 108.10005, "y": -81.99995}, "uuid": "869"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [GND] and Pin [GND] (expected: 0.0500 mm, actual: 0.0000 mm)", "layer": 0, "expected_mm": 0.05, "actual_mm": 0.0, "items": [{"description": "Pin [GND]", "pos": {"x": 106.42505, "y": -83.52495}, "uuid": "868"}, {"description": "Pin [GND]", "pos": {"x": 108.10005, "y": -81.99995}, "uuid": "869"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [GND] and Pin [GND] (expected: 0.0500 mm, actual: 0.0000 mm)", "layer": 0, "expected_mm": 0.05, "actual_mm": 0.0, "items": [{"description": "Pin [GND]", "pos": {"x": 108.10005, "y": -81.99995}, "uuid": "869"}, {"description": "Pin [GND]", "pos": {"x": 109.77505000000001, "y": -80.47494999999999}, "uuid": "870"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [GND] and Pin [GND] (expected: 0.0500 mm, actual: 0.0000 mm)", "layer": 0, "expected_mm": 0.05, "actual_mm": 0.0, "items": [{"description": "Pin [GND]", "pos": {"x": 108.10005, "y": -81.99995}, "uuid": "869"}, {"description": "Pin [GND]", "pos": {"x": 109.77505000000001, "y": -83.52495}, "uuid": "871"}]}
+  ]
+}

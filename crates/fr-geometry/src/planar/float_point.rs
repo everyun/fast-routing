@@ -5,6 +5,7 @@ use crate::planar::{
     direction::Direction, float_line::FloatLine, int_box::IntBox, int_octagon::IntOctagon,
     int_point::IntPoint, line::Line, side::Side,
 };
+use crate::util::{jrint, jround_i32};
 
 /// A point in the plane with `f64` coordinates.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -98,8 +99,12 @@ impl FloatPoint {
     }
 
     /// Rounds coordinates to an `IntPoint`.
+    ///
+    /// `(int) Math.round` per coordinate — **round half up**, not `f64::round`'s round half away
+    /// from zero. See [`crate::util`]; the difference is one board unit on every exact negative
+    /// half, and this is the entry point most of the importer's coordinates arrive through.
     pub fn round(&self) -> IntPoint {
-        IntPoint::new(self.x.round() as i32, self.y.round() as i32)
+        IntPoint::new(jround_i32(self.x), jround_i32(self.y))
     }
 
     /// Rounds this point so that if it is on the right side of a line with
@@ -111,7 +116,7 @@ impl FloatPoint {
         } else if direction_vector.y < 0.0 {
             self.x.floor() as i32
         } else {
-            self.x.round() as i32
+            jround_i32(self.x)
         };
 
         let rounded_y = if direction_vector.x > 0.0 {
@@ -119,21 +124,27 @@ impl FloatPoint {
         } else if direction_vector.x < 0.0 {
             self.y.ceil() as i32
         } else {
-            self.y.round() as i32
+            jround_i32(self.y)
         };
 
         IntPoint::new(rounded_x, rounded_y)
     }
 
     /// Rounds coordinates to the given integer grid.
+    ///
+    /// The grid step is applied with `Math.rint` — round half to **even** — and the product is
+    /// then *truncated* by the `(int)` cast, not rounded again (`FloatPoint.java:145-156`). Both
+    /// halves matter: `rint` is a different tie rule from [`FloatPoint::round`]'s, and the
+    /// truncation is what makes a negative off-grid coordinate land on the grid multiple towards
+    /// zero.
     pub fn round_to_grid(&self, horizontal_grid: i32, vertical_grid: i32) -> IntPoint {
         let rounded_x = if horizontal_grid > 0 {
-            (self.x / horizontal_grid as f64).round() * horizontal_grid as f64
+            jrint(self.x / horizontal_grid as f64) * horizontal_grid as f64
         } else {
             self.x
         };
         let rounded_y = if vertical_grid > 0 {
-            (self.y / vertical_grid as f64).round() * vertical_grid as f64
+            jrint(self.y / vertical_grid as f64) * vertical_grid as f64
         } else {
             self.y
         };
@@ -148,7 +159,7 @@ impl FloatPoint {
         } else if direction_vector.y < 0.0 {
             self.x.ceil() as i32
         } else {
-            self.x.round() as i32
+            jround_i32(self.x)
         };
 
         let rounded_y = if direction_vector.x > 0.0 {
@@ -156,7 +167,7 @@ impl FloatPoint {
         } else if direction_vector.x < 0.0 {
             self.y.floor() as i32
         } else {
-            self.y.round() as i32
+            jround_i32(self.y)
         };
 
         IntPoint::new(rounded_x, rounded_y)

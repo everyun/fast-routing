@@ -40,9 +40,11 @@
 //!   the router.
 //! * the `ConductionArea` branch (trace contacting the same plane at both ends
 //!   ⇒ remove outright), for the same reason: it is cycle removal.
-//! * collinear *overlap* between two segments (upstream's two-line intersection
-//!   result). Splitting an overlap has no single split point; upstream's
-//!   corner-equality tests reject it too.
+//! * collinear *overlap* between two segments — upstream's **two**-line
+//!   intersection result, which it splits at the first and the last common
+//!   point (`PolylineTrace.split`'s Javadoc says so outright). A collinear
+//!   contact at a *single* point is not this case and is handled; see
+//!   `Board::split_against_trace`.
 //!
 //! Each of those is a strictly *additional* split opportunity, so what is here
 //! never splits where upstream would not.
@@ -429,8 +431,6 @@ impl Board {
                             &segment,
                             candidate,
                             &other_polyline,
-                            &first_corner,
-                            &last_corner,
                         ) {
                             return step;
                         }
@@ -470,7 +470,45 @@ impl Board {
     /// only then the own trace — and after splitting the found trace the
     /// overlapping-entry list is stale, so this reports [`SplitStep::Foreign`]
     /// and lets the caller re-query (§11.4).
-    #[allow(clippy::too_many_arguments)]
+    ///
+    /// # The split line is the one `LineSegment.intersection` hands back
+    ///
+    /// Upstream splits the found trace with `foundSegment.intersection(currSegment)[j]` and the
+    /// own trace with `currSegment.intersection(foundSegment)[j]` (`PolylineTrace.java:504` and
+    /// `:541`), and `LineSegment.intersection` has two branches that return *different kinds* of
+    /// line (`LineSegment.java:247-295`):
+    ///
+    /// | branch | result | which line |
+    /// |---|---|---|
+    /// | the two segments cross | 1 line | the **other** segment's middle line — so the two calls differ |
+    /// | collinear, touching at one point | 1 line | the shared endpoint's **cap** line — the same for both calls, since the branch is symmetric in the two segments |
+    /// | collinear, overlapping | 2 lines | the caps at the first and last common point |
+    ///
+    /// Substituting `segment.get_line()` / `other_segment.get_line()` for the whole thing is right
+    /// for the crossing branch and wrong for the collinear one, where the two middle lines are the
+    /// *same* line: `Polyline::split` bails out on its `is_parallel` guard and the collinear
+    /// junction is never examined at all. The board came out the same, because a trace touching an
+    /// interior corner is also seen from the *other* arm of that corner, which is not collinear —
+    /// so the junction was reached one segment index later. Relying on that is relying on an
+    /// accident; the split line here is now the one upstream uses.
+    ///
+    /// # Which collinear contacts split, and which must not
+    ///
+    /// With the cap line in hand, `Polyline::split`'s own guard decides, and it is *positional*:
+    /// it refuses only when the split point is the polyline's **first** corner and the split is on
+    /// line 1, or its **last** corner and the split is on the last line
+    /// (`Polyline.java:861-866`). So for a same-net pair meeting **end to end**, collinear or not,
+    /// both traces are refused — which is what keeps `normalize` from splitting a chain apart just
+    /// for `combine` to weld it back together on the next pass, and it is the reason a two-corner
+    /// trace is safe: its only line is both line 1 and the last line, so *both* halves of the
+    /// guard apply to it. A corner of the other trace landing *strictly inside* our segment, or on
+    /// an **interior** corner of it, does split.
+    ///
+    /// Reproducing that guard here as an unqualified
+    /// `split_point == first_corner || == last_corner` test — as this used to — is a *different*
+    /// predicate: it fires at every line index, so it also suppresses a split whose point happens
+    /// to coincide with an endpoint reached from the middle of the polyline. Letting
+    /// `Polyline::split` be the only authority is both shorter and upstream's actual condition.
     fn split_against_trace(
         &mut self,
         id: ItemId,
@@ -478,47 +516,35 @@ impl Board {
         segment: &LineSegment,
         other_id: ItemId,
         other_polyline: &Polyline,
-        first_corner: &Point,
-        last_corner: &Point,
     ) -> Option<SplitStep> {
         for other_index in 1..other_polyline.arr.len().saturating_sub(1) {
             let Some(other_segment) = LineSegment::from_polyline(other_polyline, other_index) else {
                 continue;
             };
             let crossing = segment.intersection(&other_segment);
-            // Exactly one line means a proper crossing (or a T-junction, where
-            // the other trace merely ends on this one). Two lines is a collinear
-            // overlap, which has no single split point — see the module docs.
+            // Exactly one line means a proper crossing, a T-junction, or a collinear contact at a
+            // single point. Two lines is a collinear overlap — see the module docs.
             if crossing.len() != 1 {
                 continue;
             }
+            // One call, both of upstream's: the collinear branch is symmetric, so its single cap
+            // line serves both traces, and only the crossing branch needs the two middle lines.
+            let (found_end_line, own_end_line) =
+                if segment.get_line().is_parallel(&other_segment.get_line()) {
+                    (crossing[0], crossing[0])
+                } else {
+                    (segment.get_line(), other_segment.get_line())
+                };
 
-            // Split the found trace first, at this segment's line.
-            let own_line = segment.get_line();
-            let other_split_point = other_polyline.arr[other_index].intersection(&own_line);
-            if other_split_point != other_polyline.first_corner()
-                && other_split_point != other_polyline.last_corner()
-                && self
-                    .split_trace_at_line(other_id, other_index, &own_line)
-                    .is_some()
+            // Split the found trace first. `split_trace_at_line` mutates nothing unless it
+            // succeeds, so `segment` and `line_index` stay valid for the own split below.
+            if self
+                .split_trace_at_line(other_id, other_index, &found_end_line)
+                .is_some()
             {
                 return Some(SplitStep::Foreign);
             }
-
-            // Then the own trace, at the found trace's line.
-            let other_line = other_segment.get_line();
-            let own_split_point = self
-                .store()
-                .get(id)
-                .and_then(|item| match &item.kind {
-                    ItemKind::Trace(trace) => trace.polyline.arr.get(line_index).copied(),
-                    _ => None,
-                })
-                .map(|line| line.intersection(&other_line))?;
-            if own_split_point == *first_corner || own_split_point == *last_corner {
-                continue;
-            }
-            if let Some(pieces) = self.split_trace_at_line(id, line_index, &other_line) {
+            if let Some(pieces) = self.split_trace_at_line(id, line_index, &own_end_line) {
                 return Some(SplitStep::Own(pieces));
             }
         }
@@ -1146,6 +1172,206 @@ mod tests {
         // The junction at (20, 0) is inside the pad and not at its centre, so
         // upstream's guard forbids the split — but the trace ending there is
         // itself a permitted reason, and that is the precedence bug's domain.
+        board.assert_consistent();
+    }
+
+    // ---- the split/combine churn regressions (Issue187) ---------------------------------
+
+    fn trace_count(board: &Board) -> usize {
+        board
+            .store()
+            .iter()
+            .filter(|(_, item)| matches!(item.kind, ItemKind::Trace(_)))
+            .count()
+    }
+
+    /// The corner multiset of every trace on the board, sorted — upstream's
+    /// `normalizeAllTraces()` leaves the wire shapes of an already-normal board
+    /// *byte-identical*, so this is the strongest statement of "nothing moved".
+    fn wire_shapes(board: &Board) -> Vec<Vec<Point>> {
+        let mut shapes: Vec<Vec<Point>> = board
+            .store()
+            .iter()
+            .filter_map(|(_, item)| match &item.kind {
+                ItemKind::Trace(trace) => Some(trace.polyline.corner_arr()),
+                _ => None,
+            })
+            .collect();
+        shapes.sort_by_key(|corners| format!("{corners:?}"));
+        shapes
+    }
+
+    #[test]
+    fn an_end_to_end_collinear_pair_does_not_split_then_recombine() {
+        // The churn shape: two same-net traces meeting end to end on one straight line. Splitting
+        // either at the shared corner and letting `combine` weld it back is a no-op that reports
+        // "changed", which is what makes `normalize_traces` spin. Upstream refuses the split —
+        // `Polyline.split`'s guard fires on both, because for a two-corner trace the only line is
+        // both line 1 and the last line.
+        let mut board = board();
+        let left = trace(
+            &mut board,
+            1,
+            &[IntPoint::new(0, 0), IntPoint::new(1000, 0)],
+        );
+        let right = trace(
+            &mut board,
+            1,
+            &[IntPoint::new(1000, 0), IntPoint::new(2000, 0)],
+        );
+
+        assert_eq!(
+            board.split_trace(left, None),
+            vec![left],
+            "the left trace must come back whole"
+        );
+        assert_eq!(
+            board.split_trace(right, None),
+            vec![right],
+            "and so must the right one"
+        );
+        assert_eq!(trace_count(&board), 2, "no piece was created");
+        board.assert_consistent();
+    }
+
+    #[test]
+    fn an_end_to_end_collinear_pair_is_combined_exactly_once() {
+        // The other half of the pair: `combine` *does* weld them, once, and then the board is
+        // normal — a second pass must report no change and leave the wire shape alone. A split
+        // that reopened the seam would show up here as a `normalize_traces` that never returns
+        // `false`.
+        let mut board = board();
+        trace(
+            &mut board,
+            1,
+            &[IntPoint::new(0, 0), IntPoint::new(1000, 0)],
+        );
+        trace(
+            &mut board,
+            1,
+            &[IntPoint::new(1000, 0), IntPoint::new(2000, 0)],
+        );
+
+        assert!(board.normalize_traces(1), "the two are welded into one");
+        assert_eq!(trace_count(&board), 1);
+        let welded = wire_shapes(&board);
+        assert_eq!(
+            welded[0],
+            vec![
+                Point::Int(IntPoint::new(0, 0)),
+                Point::Int(IntPoint::new(2000, 0))
+            ],
+            "the weld keeps both original endpoints, to the unit"
+        );
+
+        assert!(
+            !board.normalize_traces(1),
+            "an already-normal board is a fixed point"
+        );
+        assert_eq!(trace_count(&board), 1);
+        assert_eq!(wire_shapes(&board), welded, "and nothing moved");
+        board.assert_consistent();
+    }
+
+    #[test]
+    fn normalize_is_idempotent_at_count_level_on_the_issue187_shape() {
+        // Issue187's churn pattern, in miniature: a net of collinear end-to-end runs on a spine,
+        // a branch that ends *on* the spine (a real T, which must split once), and a second
+        // collinear chain hanging off the branch. Upstream's `normalize_all_traces()` reaches a
+        // fixed point on this and leaves the wire-shape multiset alone; the defect this guards
+        // against is a second pass that keeps finding "changes" — 340 097 successful combines on
+        // the real board for a net loss of 105 traces.
+        let mut board = board();
+        // A spine, cut into three collinear pieces that meet end to end.
+        for x in [0, 1000, 2000] {
+            trace(
+                &mut board,
+                1,
+                &[IntPoint::new(x, 0), IntPoint::new(x + 1000, 0)],
+            );
+        }
+        // A branch ending on the spine's interior — the one junction that is a genuine split.
+        trace(
+            &mut board,
+            1,
+            &[IntPoint::new(1500, 0), IntPoint::new(1500, 1000)],
+        );
+        // And a collinear chain hanging off the branch's far end.
+        trace(
+            &mut board,
+            1,
+            &[IntPoint::new(1500, 1000), IntPoint::new(1500, 2000)],
+        );
+
+        assert!(board.normalize_traces(1), "the first pass has work to do");
+        let settled_count = trace_count(&board);
+        let settled_shapes = wire_shapes(&board);
+        // Spine left of the T, spine right of the T, and the branch welded into one run.
+        assert_eq!(settled_count, 3);
+
+        for pass in 0..4 {
+            assert!(
+                !board.normalize_traces(1),
+                "pass {pass} after settling must report no change"
+            );
+            assert_eq!(trace_count(&board), settled_count, "pass {pass}");
+            assert_eq!(wire_shapes(&board), settled_shapes, "pass {pass}");
+        }
+        board.assert_consistent();
+    }
+
+    #[test]
+    fn a_collinear_contact_on_an_interior_bend_splits_on_the_bend_exactly() {
+        // The configuration that exercises the collinear branch of
+        // [`Board::split_against_trace`]: the spine bends at (1000, 0) and a third trace runs
+        // *collinear with the spine's first arm*, ending on that bend. The junction is a genuine
+        // T — three traces meet there and `combine` can weld none of them — so upstream splits,
+        // and the split point is the bend itself, to the unit. A split line taken from anywhere
+        // but the intersection would land a corner off by one and leave a seam for the next pass
+        // to re-split, which is the churn shape.
+        let mut board = board();
+        let spine = trace(
+            &mut board,
+            1,
+            &[
+                IntPoint::new(0, 0),
+                IntPoint::new(1000, 0),
+                IntPoint::new(1000, 1000),
+            ],
+        );
+        trace(
+            &mut board,
+            1,
+            &[IntPoint::new(2000, 0), IntPoint::new(1000, 0)],
+        );
+
+        let pieces = board.split_trace(spine, None);
+        assert_eq!(pieces.len(), 2, "the bend is a T and must split");
+        assert_eq!(trace_count(&board), 3);
+        assert_eq!(
+            wire_shapes(&board),
+            vec![
+                vec![
+                    Point::Int(IntPoint::new(0, 0)),
+                    Point::Int(IntPoint::new(1000, 0))
+                ],
+                vec![
+                    Point::Int(IntPoint::new(1000, 0)),
+                    Point::Int(IntPoint::new(1000, 1000))
+                ],
+                vec![
+                    Point::Int(IntPoint::new(2000, 0)),
+                    Point::Int(IntPoint::new(1000, 0))
+                ],
+            ],
+            "the two arms come back exactly, with no one-unit drift at the bend"
+        );
+
+        // And it settles: a full normalize pass afterwards finds nothing more.
+        board.normalize_traces(1);
+        let settled = wire_shapes(&board);
+        assert!(!board.normalize_traces(1));
+        assert_eq!(wire_shapes(&board), settled);
         board.assert_consistent();
     }
 }

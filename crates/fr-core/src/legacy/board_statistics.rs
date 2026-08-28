@@ -1,4 +1,8 @@
 //! Board statistics and objective scoring calculation.
+//!
+//! **Superseded by [`fr_check::BoardStats`] and [`fr_check::score()`]**, whose weights are the
+//! release jar's. The invented penalties below are not comparable with any Freerouting number
+//! and must not be quoted as one; see [`crate::legacy`].
 
 use fr_board::BasicBoard;
 

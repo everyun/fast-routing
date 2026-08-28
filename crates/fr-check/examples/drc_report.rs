@@ -60,19 +60,14 @@
 use std::fmt::Write as _;
 
 use fr_board::item::{Item, ItemKind};
-use fr_check::adapter::{
-    centre_of_gravity, convert_shape, item_bounding_box, shape_store, violation_type,
-};
-use fr_check::view::{ItemShape, ShapeStore};
+use fr_check::adapter::{centre_of_gravity, item_bounding_box, shape_store, violation_type};
 use fr_check::{check_clearance, StoreView, Violation};
-use fr_geometry::planar::{IntBox, IntVector, Vector};
 use fr_io::specctra::{self, ImportOptions, ImportedDesign, Unit};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let mut positional: Vec<&str> = Vec::new();
     let mut unit_name = "mm".to_string();
-    let mut pin_frame_fix = false;
     let mut router_overrides = false;
     let mut index = 0;
     while index < args.len() {
@@ -84,7 +79,12 @@ fn main() {
                     None => fail("--unit needs a value"),
                 }
             }
-            "--pin-frame-fix" => pin_frame_fix = true,
+            "--pin-frame-fix" => {
+                eprintln!(
+                    "drc_report: --pin-frame-fix is a no-op and is deprecated; the importer now \
+                     places pads in the pin frame itself (fr-io specctra::build::placed_pad_shapes)"
+                );
+            }
             "--router-overrides" => router_overrides = true,
             other => positional.push(other),
         }
@@ -92,8 +92,8 @@ fn main() {
     }
     if positional.len() != 2 {
         eprintln!(
-            "usage: drc_report [--unit mm|mil|inch|um] [--pin-frame-fix] [--router-overrides] \
-             <in.dsn> <out.json>"
+            "usage: drc_report [--unit mm|mil|inch|um] [--pin-frame-fix (deprecated, no-op)] \
+             [--router-overrides] <in.dsn> <out.json>"
         );
         std::process::exit(2);
     }
@@ -125,7 +125,7 @@ fn main() {
         emit_boxes(&design);
     }
 
-    let json = report(&design, &source, report_unit, &unit_name, pin_frame_fix);
+    let json = report(&design, &source, report_unit, &unit_name);
     if let Err(error) = std::fs::write(positional[1], json) {
         fail(&format!("write {}: {error}", positional[1]));
     }
@@ -138,7 +138,6 @@ fn main() {
 /// localises to geometry, and an agreement localises to the predicate.
 fn emit_boxes(design: &ImportedDesign) {
     let board = &design.board;
-    let offsets = donor_offsets(design);
     for (id, item) in board.store().iter_ascending() {
         let bounds = item_bounding_box(board, item);
         let shapes = board
@@ -158,11 +157,8 @@ fn emit_boxes(design: &ImportedDesign) {
             bounds.ur.y,
             match &item.kind {
                 ItemKind::Pin(pin) => format!(
-                    "centre={},{} comp={} baked_offset={:?}",
-                    pin.center.x,
-                    pin.center.y,
-                    item.component_no,
-                    offsets.get(&id.raw()).map(|o| (o.x, o.y))
+                    "centre={},{} comp={}",
+                    pin.center.x, pin.center.y, item.component_no
                 ),
                 ItemKind::Via(via) => format!("centre={},{}", via.center.x, via.center.y),
                 _ => String::new(),
@@ -205,19 +201,9 @@ fn fail(message: &str) -> ! {
 // the report
 // ---------------------------------------------------------------------------
 
-fn report(
-    design: &ImportedDesign,
-    source: &str,
-    report_unit: Unit,
-    unit_name: &str,
-    pin_frame_fix: bool,
-) -> String {
+fn report(design: &ImportedDesign, source: &str, report_unit: Unit, unit_name: &str) -> String {
     let board = &design.board;
-    let offsets = pin_frame_fix.then(|| donor_offsets(design));
-    let shapes = match &offsets {
-        Some(offsets) => shape_store_in_pin_frame(design, offsets),
-        None => shape_store(board),
-    };
+    let shapes = shape_store(board);
     let view = StoreView::new(
         board.store(),
         &shapes,
@@ -248,14 +234,7 @@ fn report(
             out.push(',');
         }
         out.push_str("\n    ");
-        write_violation(
-            &mut out,
-            design,
-            violation,
-            &convert,
-            unit_name,
-            offsets.as_ref(),
-        );
+        write_violation(&mut out, design, violation, &convert, unit_name);
     }
     out.push_str(if violations.is_empty() {
         "]\n}\n"
@@ -271,7 +250,6 @@ fn write_violation(
     violation: &Violation,
     convert: &impl Fn(f64) -> f64,
     unit_name: &str,
-    offsets: Option<&HashMap<u32, IntVector>>,
 ) {
     let board = &design.board;
     let first = board.store().get(violation.a).expect("violation item a");
@@ -305,7 +283,7 @@ fn write_violation(
         if index > 0 {
             out.push_str(", ");
         }
-        let centre = centre_of_gravity(&bounding_box(design, item, offsets));
+        let centre = centre_of_gravity(&item_bounding_box(&design.board, item));
         let _ = write!(
             out,
             "{{\"description\": {}, \"pos\": {{\"x\": {}, \"y\": {}}}, \"uuid\": {}}}",
@@ -381,184 +359,22 @@ fn number(value: f64) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// `--pin-frame-fix`: an experiment, not a fix
+// `--pin-frame-fix`: retired
 // ---------------------------------------------------------------------------
 //
-// **This measures a bug that lives in another crate.** `fr_board::Padstack`'s
-// contract is that pad shapes are **pin-relative**: `search_tree::drill_shapes`
-// translates them by `Pin::center`, and `Padstack::round` builds them centred on
-// the origin. `fr_io::specctra::build::placed_pad_shapes` promises the same
-// frame in its doc comment ("relative to the **pin centre**") but its step 3
-// translates the pad by the pin's `rel_location` and never takes it back — the
-// frame upstream actually uses, because `Pin.get_shape` finishes with
-// `translate_by(component.get_location().difference_by(Point.ZERO))`
-// (`Pin.java:194-235`), not with the pin centre.
+// The flag used to undo an importer defect from this side of the fence.
+// `fr_board::Padstack`'s contract is that pad shapes are **pin-relative** —
+// `search_tree::drill_shapes` translates them by `Pin::center` — and
+// `fr_io::specctra::build::placed_pad_shapes` used to leave the pin's
+// package-relative location baked into them. Since `PadstackKey` does not carry
+// that location (a pin-relative padstack must not depend on it), the first pin
+// interned under a key donated its offset to every later pin sharing the key,
+// so most pins carried a *foreign* pin's displacement. The flag replayed the
+// interning order to recover each pin's donor and translated the donor's offset
+// back out, which measured the damage without repairing it.
 //
-// Two consequences, and the second is the bigger one:
-//
-// 1. every pin's copper sits `placed_rel_location` away from its own pad, and
-// 2. `PadstackKey` deliberately omits `rel_location` — correct for a pin-relative
-//    padstack, fatal for this one — so the **first** pin interned under a given
-//    `(padstack, pin rotation, component rotation, mirror, flip, side)` key
-//    donates its offset to every later pin that shares the key. Most pins
-//    therefore carry a *foreign* pin's offset, which is why the displacement is
-//    not simply undoable per item.
-//
-// So the experiment replays the interning order to recover each pin's donor and
-// translates that donor's offset back out. It is not a repair: the repair is one
-// line in `placed_pad_shapes` (drop step 3 — rotating the centred pad about the
-// origin is already rotating it about the pin centre, and the `PadstackKey` then
-// becomes honest). It exists so the gate can report how much of the G1.2a gap
-// this one bug owns.
-
-use std::collections::HashMap;
-
-use fr_geometry::planar::FloatPoint;
-use fr_io::specctra::JavaRound;
-
-/// The key `build::PadstackKey` interns by, minus the pin offset it forgets.
-#[derive(PartialEq, Eq, Hash)]
-struct DonorKey {
-    padstack_index: usize,
-    pin_rotation_bits: u64,
-    component_rotation_bits: u64,
-    mirror_on_y_axis: bool,
-    flip_after_rotate: bool,
-    on_front: bool,
-}
-
-/// `build::rotate_vector`.
-fn rotate_vector(vector: IntVector, rotation_deg: f64) -> IntVector {
-    if rotation_deg % 90.0 == 0.0 {
-        let factor = (rotation_deg as i32) / 90;
-        if factor == 0 {
-            vector
-        } else {
-            vector.turn_90_degree_int(factor)
-        }
-    } else {
-        let rotated = vector
-            .to_float()
-            .rotate(rotation_deg.to_radians(), &FloatPoint::new(0.0, 0.0))
-            .jround();
-        IntVector::new(rotated.x, rotated.y)
-    }
-}
-
-/// The vector `placed_pad_shapes` bakes into the pad: `rel_location` carried
-/// through the same mirror / rotate / flip chain the pin centre is.
-fn placed_rel(
-    relative_location: IntVector,
-    component_rotation: f64,
-    mirror_on_y_axis: bool,
-    flip_after_rotate: bool,
-) -> IntVector {
-    let mut rel = relative_location;
-    if mirror_on_y_axis {
-        rel = rel.mirror_at_y_axis_int();
-    }
-    rel = rotate_vector(rel, component_rotation);
-    if flip_after_rotate {
-        rel = rel.mirror_at_y_axis_int();
-    }
-    rel
-}
-
-/// `ItemId.raw()` → the offset baked into that pin's interned padstack.
-///
-/// Built by walking components and their pins in importer order, which is the
-/// order `intern_padstack` sees them in, so the first hit on a key is the donor.
-fn donor_offsets(design: &ImportedDesign) -> HashMap<u32, IntVector> {
-    let mut donors: HashMap<DonorKey, IntVector> = HashMap::new();
-    let mut per_pin: HashMap<(i32, u32), IntVector> = HashMap::new();
-    for (index, component) in design.components.iter().enumerate() {
-        let component_no = index as i32 + 1;
-        let Some(package) = design.packages.get(component.package_index) else {
-            continue;
-        };
-        let mirror_on_y_axis = !component.is_front && !design.flip_style_rotate_first;
-        let flip_after_rotate = !component.is_front && design.flip_style_rotate_first;
-        for (pin_index, pin) in package.pins.iter().enumerate() {
-            let key = DonorKey {
-                padstack_index: pin.padstack_index,
-                pin_rotation_bits: pin.rotation.to_bits(),
-                component_rotation_bits: component.rotation.to_bits(),
-                mirror_on_y_axis,
-                flip_after_rotate,
-                on_front: component.is_front,
-            };
-            let rel = placed_rel(
-                pin.relative_location,
-                component.rotation,
-                mirror_on_y_axis,
-                flip_after_rotate,
-            );
-            // An unplaced component contributes no items, but it does not reach
-            // `intern_padstack` either, so it cannot be a donor.
-            if component.location.is_none() {
-                continue;
-            }
-            let donor = *donors.entry(key).or_insert(rel);
-            per_pin.insert((component_no, pin_index as u32), donor);
-        }
-    }
-
-    let mut out = HashMap::new();
-    for (id, item) in design.board.store().iter_ascending() {
-        if let ItemKind::Pin(pin) = &item.kind {
-            if let Some(offset) = per_pin.get(&(item.component_no, pin.pin_no)) {
-                out.insert(id.raw(), *offset);
-            }
-        }
-    }
-    out
-}
-
-fn shape_store_in_pin_frame(
-    design: &ImportedDesign,
-    offsets: &HashMap<u32, IntVector>,
-) -> ShapeStore {
-    let board = &design.board;
-    let tree = board.default_tree();
-    let mut store = ShapeStore::new();
-    for (id, _item) in board.store().iter_ascending() {
-        let Some(slot) = board.store().slot_of(id) else {
-            continue;
-        };
-        let delta = offsets.get(&id.raw()).map(|o| IntVector::new(-o.x, -o.y));
-        let shapes = tree
-            .item_shapes(slot, id)
-            .iter()
-            .filter_map(|entry| {
-                let shape = entry.shape.as_ref()?;
-                let shape = match delta {
-                    Some(delta) => shape.translate_by(&Vector::Int(delta)),
-                    None => shape.clone(),
-                };
-                Some(ItemShape {
-                    shape: convert_shape(&shape),
-                    layer: entry.layer,
-                })
-            })
-            .collect::<Vec<_>>();
-        store.set(id, shapes);
-    }
-    store
-}
-
-fn bounding_box(
-    design: &ImportedDesign,
-    item: &Item,
-    offsets: Option<&HashMap<u32, IntVector>>,
-) -> IntBox {
-    let bounds = item_bounding_box(&design.board, item);
-    match offsets.and_then(|o| o.get(&item.id.raw())) {
-        Some(offset) if !bounds.is_empty() => IntBox::new(
-            bounds.ll.x - offset.x,
-            bounds.ll.y - offset.y,
-            bounds.ur.x - offset.x,
-            bounds.ur.y - offset.y,
-        ),
-        _ => bounds,
-    }
-}
+// The importer now subtracts the pin's own placed offset (`placed_pad_shapes`,
+// "the frame"), so there is nothing left to undo: the flag is accepted, warns,
+// and does nothing. Its numbers are the ones the default path now produces —
+// G1.2a went from 2/45 exact without it and 39/45 with it to 44/45 with no
+// flags at all.

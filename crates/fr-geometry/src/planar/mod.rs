@@ -23,6 +23,7 @@ pub mod rational_vector;
 pub mod shape;
 pub mod side;
 pub mod simplex;
+pub mod split_convex;
 pub mod vector;
 
 pub use area::Area;
@@ -48,4 +49,5 @@ pub use rational_vector::RationalVector;
 pub use shape::Shape;
 pub use side::Side;
 pub use simplex::Simplex;
+pub use split_convex::split_to_convex;
 pub use vector::Vector;

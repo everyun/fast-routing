@@ -26,8 +26,8 @@ use fr_board::item::{
 };
 use fr_board::{AreaShape, Board, NetNos};
 use fr_geometry::planar::{
-    Circle, FloatPoint, IntBox, IntOctagon, IntPoint, IntVector, Line, Point, Polyline, Simplex,
-    Vector,
+    split_to_convex, Circle, FloatPoint, IntBox, IntOctagon, IntPoint, IntVector, Line, Point,
+    Polyline, Simplex, Vector,
 };
 use fr_rules::clearance_class_names::{
     contains_wire_clearance_pair, net_class_item_clearance_class_name, network_class_pair,
@@ -523,6 +523,11 @@ struct PadstackKey {
     mirror_on_y_axis: bool,
     flip_after_rotate: bool,
     on_front: bool,
+    /// The pin's package-relative location, and `None` whenever the placed pad provably does not
+    /// depend on it — see `placed_pad_shapes`. Keeping it out of the key in the right-angle case
+    /// is what lets one entry serve a whole footprint; keeping it *in* at an oblique rotation is
+    /// what stops one pin's rounding from being handed to its neighbours.
+    pin_offset: Option<IntVector>,
 }
 
 /// Imports a parsed DSN file.
@@ -2212,10 +2217,16 @@ impl<'a> Builder<'a> {
                 mirror_on_y_axis,
                 flip_after_rotate,
                 on_front,
-                &pin.relative_location,
+                pin.relative_location,
+                rel_location,
             );
+            // `Pin.get_center` (`Pin.java:86-118`): a pad that does not cover the nominal centre
+            // moves the centre onto its own centre of gravity. The shapes are pin-relative now, so
+            // the test runs against the placed copy — `first_shape + centre` is the absolute shape
+            // `Pin.get_shape` would have returned.
             if let Some(first_shape) = placed.shapes.iter().flatten().next() {
-                let absolute = first_shape.translate_by(&Vector::Int(translation));
+                let absolute = first_shape
+                    .translate_by(&Vector::Int(center.difference_by_int(&IntPoint::ZERO)));
                 if !absolute.contains_inside(&center) {
                     center = absolute.centre_of_gravity().jround();
                 }
@@ -2327,12 +2338,7 @@ impl<'a> Builder<'a> {
                 component
                     .keepout_clearance_classes
                     .push(kind_index, clearance_class);
-                let placed_area = PlacedArea {
-                    relative_area: board_shape_to_area_shape(&keepout.area),
-                    translation,
-                    rotation_deg: rotation,
-                    side_changed: !on_front,
-                };
+                let placed_area = placed_area(&keepout.area, translation, rotation, !on_front);
                 if layer >= 0 {
                     self.push_placed_obstacle(
                         placed_area,
@@ -2363,12 +2369,7 @@ impl<'a> Builder<'a> {
         let package = self.packages[package_index].clone();
         for (index, outline) in package.outlines.iter().enumerate() {
             let Some(shape) = outline else { continue };
-            let placed_area = PlacedArea {
-                relative_area: board_shape_to_area_shape(shape),
-                translation,
-                rotation_deg: rotation,
-                side_changed: !on_front,
-            };
+            let placed_area = placed_area(shape, translation, rotation, !on_front);
             let _ = index;
             self.items.push(Pending::Plain(
                 Item::new(
@@ -2418,6 +2419,38 @@ impl<'a> Builder<'a> {
 
     /// §9.2.2 and §9.2.3: the pad shapes of one placed pin, relative to the **pin centre**, plus
     /// the resolved board layer span.
+    ///
+    /// # The frame, and the wave-5 pin-offset defect
+    ///
+    /// `Pin.get_shape` (`Pin.java:163-239`) builds an *absolute* shape: rotate the pad by the pin
+    /// rotation, mirror it, translate it by the package-relative pin location, rotate by the
+    /// component rotation, flip, and finally translate by the component location. `fr_board::Pin`
+    /// stores no placement — `search_tree::drill_shapes` translates the padstack by `Pin::center`
+    /// — so what belongs in the table is upstream's absolute shape minus the pin centre:
+    ///
+    /// ```text
+    ///   centre = location + F(R(M(rel)))                     `Pin.relative_location`
+    ///   shape  = location + F(R(M(pad) + rel))               `Pin.get_shape`
+    ///   stored = shape - centre = F(R(M(pad) + rel)) - F(R(M(rel)))
+    /// ```
+    ///
+    /// which is what `placed_relative_location` — the caller's already-computed `F(R(M(rel)))` —
+    /// is for. Leaving that subtraction out was the defect: [`PadstackKey`] does not carry the pin
+    /// offset, so the **first** pin interned under a key donated its own package offset to every
+    /// later pin sharing the key, and most pins' copper landed a *foreign* pin's offset away from
+    /// their own centre. Issue027's `R2` is the clean witness — two pins at opposite
+    /// `rel_location`s, one baked offset.
+    ///
+    /// # Why the offset is in the key when the rotation is oblique
+    ///
+    /// At a right-angle component rotation `F ∘ R` is exact integer arithmetic and therefore
+    /// linear, so `F(R(M(pad) + rel)) - F(R(M(rel))) = F(R(M(pad)))`: the result does not depend on
+    /// `rel` at all and one interned entry serves every pin of the footprint. At any other angle
+    /// `rotate_approx` rounds each corner, and rounding does not distribute over the sum — a pad
+    /// translated to two different package positions comes back with corners up to one board unit
+    /// apart. Upstream recomputes per pin and so must we, so `PadstackKey::pin_offset` carries
+    /// `rel` in exactly that case, which is the only case where two pins of a footprint can
+    /// legitimately want different table entries.
     #[allow(clippy::too_many_arguments)]
     fn placed_pad_shapes(
         &self,
@@ -2427,7 +2460,8 @@ impl<'a> Builder<'a> {
         mirror_on_y_axis: bool,
         flip_after_rotate: bool,
         on_front: bool,
-        relative_location: &IntVector,
+        relative_location: IntVector,
+        placed_relative_location: IntVector,
     ) -> PlacedPadstack {
         let padstack = &self.padstacks[padstack_index];
         let from_layer = padstack.from_layer();
@@ -2442,7 +2476,7 @@ impl<'a> Builder<'a> {
         let rel_location = if mirror_on_y_axis {
             relative_location.mirror_at_y_axis_int()
         } else {
-            *relative_location
+            relative_location
         };
         let mut shapes = Vec::with_capacity(to_layer - from_layer + 1);
         for shape_index in 0..=(to_layer - from_layer) {
@@ -2489,6 +2523,16 @@ impl<'a> Builder<'a> {
             if flip_after_rotate {
                 shape = shape.mirror_vertical(&IntPoint::new(0, 0));
             }
+            // 6. out of the component frame and into the pin frame, which is where a padstack the
+            // search tree translates by `Pin::center` has to live. Steps 3 and 6 cancel exactly at
+            // a right-angle rotation and do not at any other, which is the whole reason step 3
+            // survives at all.
+            if placed_relative_location.x != 0 || placed_relative_location.y != 0 {
+                shape = shape.translate_by(&Vector::Int(IntVector::new(
+                    -placed_relative_location.x,
+                    -placed_relative_location.y,
+                )));
+            }
             // Belt and braces: a shape that escaped the coordinate envelope would overflow the
             // search tree's `to_flavor`. Upstream's `int` arithmetic wraps silently instead;
             // dropping the pad is the direction that keeps the board loadable.
@@ -2512,6 +2556,7 @@ impl<'a> Builder<'a> {
                 mirror_on_y_axis,
                 flip_after_rotate,
                 on_front,
+                pin_offset: (component_rotation % 90.0 != 0.0).then_some(relative_location),
             },
             first_layer: first_layer as i32,
             last_layer: last_layer as i32,
@@ -2533,8 +2578,6 @@ impl<'a> Builder<'a> {
         if let Some(index) = self.padstack_cache.get(&placed.key) {
             return *index;
         }
-        // Shapes are stored relative to the pin centre; the pin's own `rel_location` translation
-        // is already inside them, so subtract it back out via the shape's own frame.
         let board_padstack = fr_board::Padstack {
             from_layer: placed.first_layer,
             to_layer: placed.last_layer,
@@ -2805,7 +2848,8 @@ impl<'a> Builder<'a> {
             false,
             false,
             true,
-            &IntVector::new(0, 0),
+            IntVector::new(0, 0),
+            IntVector::new(0, 0),
         );
         let board_padstack_no = self.intern_padstack(placed);
         self.items.push(Pending::Via {
@@ -3173,16 +3217,96 @@ fn convex_pieces(shape: &BoardShape) -> Vec<Simplex> {
         BoardShape::Octagon(o) => vec![o.to_simplex()],
         BoardShape::Simplex(s) => vec![s.clone()],
         BoardShape::Circle(c) => vec![c.bounding_octagon().to_simplex()],
-        // A non-convex polygon cannot be split yet (`fr-geometry` has no `split_to_convex`), so
-        // its convex hull's tile is used. That is conservative in the containment test: a hole is
-        // detected slightly more eagerly than upstream for a non-convex outer contour.
-        BoardShape::Polygon(corners) => {
+        // `split_to_convex` is upstream's own decomposition. When it fails — a corner list that is
+        // not a simple polygon — the convex hull's tile stands in, which is conservative in the
+        // containment test: a hole is detected slightly more eagerly than upstream.
+        BoardShape::Polygon(corners) => split_to_convex(corners).unwrap_or_else(|| {
             let hull = convex_hull(corners);
             if hull.len() < 3 {
                 Vec::new()
             } else {
                 vec![bounding_tile(&hull)]
             }
+        }),
+    }
+}
+
+/// One placed area item: `ObstacleArea`'s `relativeArea` / `translation` / `rotationInDegree` /
+/// `sideChanged` quartet, with the part of the rotation the board cannot realize already applied.
+///
+/// `PlacedArea::rotation_deg` is read by `search_tree::placed_area_pieces`, which turns a
+/// right-angle rotation exactly and **widens any other one to the bounding octagon of the piece's
+/// circumscribed circle about the component origin** — never a missed obstacle, which is what the
+/// router needs, and ruinous for a DRC. Issue054 is the witness: `SW33` is placed at 330°, so each
+/// of its 0.34 mm pad keepouts became a 16 mm blob centred on the component and overlapped every
+/// trace in reach. 44 of the 45 records in that fixture's G1.2a gap were that one widening.
+///
+/// Upstream has no such restriction — `ObstacleArea.get_area` (`ObstacleArea.java:84-91`) rotates
+/// the area with `rotate_approx`, which rounds each corner onto the grid and moves a circle's
+/// centre — so the oblique rotation is applied here instead and the board is handed an area it
+/// can place exactly. Right-angle rotations stay symbolic: the board realizes those exactly, and
+/// leaving them alone keeps the common case free of rounding.
+fn placed_area(
+    shape: &BoardShape,
+    translation: IntVector,
+    rotation_deg: f64,
+    side_changed: bool,
+) -> PlacedArea {
+    if rotation_deg % 90.0 == 0.0 {
+        return PlacedArea {
+            relative_area: board_shape_to_area_shape(shape),
+            translation,
+            rotation_deg,
+            side_changed,
+        };
+    }
+    PlacedArea {
+        relative_area: board_shape_to_area_shape(&rotate_board_shape_approx(shape, rotation_deg)),
+        translation,
+        rotation_deg: 0.0,
+        side_changed,
+    }
+}
+
+/// `Shape.rotate_approx(angle, FloatPoint.ZERO)`: every corner rotated and rounded onto the grid,
+/// except a circle, which upstream rotates by moving its centre and keeping its radius
+/// (`Circle.java:193-196`).
+///
+/// A rotated tile is returned as a corner list rather than as a tile, because rounding can make a
+/// convex corner very slightly concave, and the [`split_to_convex`] the search tree runs on the
+/// stored polygon handles that where `TileShape.get_instance` would quietly cut the corner off.
+/// That is also the order the two have to compose in: rotate, then split. Splitting first and
+/// rotating the pieces would round each piece independently and let them drift apart.
+fn rotate_board_shape_approx(shape: &BoardShape, rotation_deg: f64) -> BoardShape {
+    let angle = rotation_deg.to_radians();
+    let pole = FloatPoint::new(0.0, 0.0);
+    let rotate = |point: FloatPoint| point.rotate(angle, &pole).jround();
+    match shape {
+        BoardShape::Circle(circle) => {
+            BoardShape::Circle(Circle::new(rotate(circle.center.to_float()), circle.radius))
+        }
+        BoardShape::Box(b) => BoardShape::Polygon(
+            (0..4)
+                .map(|index| rotate(b.corner(index).to_float()))
+                .collect(),
+        ),
+        BoardShape::Octagon(octagon) => BoardShape::Polygon(
+            octagon
+                .to_simplex()
+                .corner_approx_arr()
+                .into_iter()
+                .map(rotate)
+                .collect(),
+        ),
+        BoardShape::Simplex(simplex) => BoardShape::Polygon(
+            simplex
+                .corner_approx_arr()
+                .into_iter()
+                .map(rotate)
+                .collect(),
+        ),
+        BoardShape::Polygon(corners) => {
+            BoardShape::Polygon(corners.iter().map(|c| rotate(c.to_float())).collect())
         }
     }
 }
@@ -3195,6 +3319,12 @@ fn board_shape_to_area_shape(shape: &BoardShape) -> AreaShape {
         // No `Circle` variant in the board's area model; a circular keepout is indexed by its
         // bounding octagon, the same approximation `fr_board::Padstack::round` makes.
         BoardShape::Circle(c) => AreaShape::Octagon(c.bounding_octagon()),
+        // The **original** corner list, as `ObstacleArea` stores it (`ObstacleArea.java:37-56`:
+        // the constructor keeps `p_area` and nothing else). The convex decomposition upstream's
+        // consumers want is `Area.split_to_convex()`, computed on demand — `fr-board`'s search
+        // tree calls it through [`fr_geometry::planar::Polygon::split_to_convex`] — and is
+        // deliberately *not* baked in here: `DsnWriter` writes the stored area's own corners, so
+        // an importer that stored a decomposition instead would have no corners left to write.
         BoardShape::Polygon(corners) => AreaShape::Polygon(fr_geometry::planar::Polygon::new(
             &corners.iter().map(|p| Point::Int(*p)).collect::<Vec<_>>(),
         )),

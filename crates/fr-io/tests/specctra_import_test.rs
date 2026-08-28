@@ -8,8 +8,8 @@
 //! The fixture-driven cases need `bench/fetch_fixtures.sh`; they fail loudly rather than skipping
 //! (gate G1.3).
 
-use fr_board::{FixedState, ItemClass as BoardItemClass, ItemKind};
-use fr_geometry::planar::IntPoint;
+use fr_board::{AreaShape, FixedState, ItemClass as BoardItemClass, ItemKind};
+use fr_geometry::planar::{IntPoint, Point};
 use fr_io::specctra::{import, import_with_options, ImportOptions, ImportedDesign};
 use fr_rules::ItemClass;
 
@@ -1080,4 +1080,341 @@ fn smd_to_turn_gap_falls_back_to_the_min_trace_half_width() {
     );
     let design = synthetic(&src);
     assert_eq!(design.rules.get_pin_edge_to_turn_dist(), 330.0);
+}
+
+// =================================================================================================
+// The pin frame — §9.2.2, and the padstack table's pin-relative contract
+// =================================================================================================
+
+/// Two pins of one footprint at **opposite** offsets, sharing one padstack. Issue027's `R2` in
+/// miniature: `(resolution um 10)` and a 10000-unit outline keep the scale factor at 10, so the
+/// pins sit 1270 board units above and below the component location `(50000, 50000)` and the pad
+/// is a 1000×1000 square around each.
+fn two_pin_board(rotation: &str) -> String {
+    format!(
+        r#"(pcb pinframe
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (rect pcb 0 0 10000 10000))
+    (rule (width 250) (clearance 200))
+  )
+  (placement
+    (component RES
+      (place R2 5000 5000 front {rotation})
+    )
+  )
+  (library
+    (image RES (pin PAD 1 0 127) (pin PAD 2 0 -127))
+    (padstack PAD (shape (rect F.Cu -50 -50 50 50)) (attach off))
+  )
+  (network
+    (net N1 (pins R2-1))
+    (net N2 (pins R2-2))
+  )
+  (wiring)
+)"#
+    )
+}
+
+/// The padstack the board stores is **pin-relative**: `search_tree::drill_shapes` translates it by
+/// `Pin::center`, so the pad of a pin 1270 units up and the pad of a pin 1270 units down are the
+/// same square around the origin, and each pin's copper lands on its own centre.
+///
+/// This is the wave-5 pin-offset defect's regression test. `placed_pad_shapes` used to leave the
+/// package-relative translation inside the shape, and `PadstackKey` does not carry that offset, so
+/// both pins were interned under one key and the **second** pin's copper sat 2540 units away from
+/// it — on top of the first pin.
+#[test]
+fn both_pins_of_a_footprint_carry_their_own_pad() {
+    let design = synthetic(&two_pin_board("0"));
+    assert_eq!(
+        pin_center(&design, "R2", "1"),
+        IntPoint::new(50_000, 51_270)
+    );
+    assert_eq!(
+        pin_center(&design, "R2", "2"),
+        IntPoint::new(50_000, 48_730)
+    );
+
+    for (_, item) in design.board.store().iter() {
+        let ItemKind::Pin(pin) = &item.kind else {
+            continue;
+        };
+        let padstack = design
+            .board
+            .padstacks()
+            .get(pin.padstack_no)
+            .expect("every pin interns a padstack");
+        let pad = padstack
+            .shape_on_layer(0)
+            .expect("the pad is on the front layer")
+            .bounding_box();
+        assert_eq!(
+            (pad.ll.x, pad.ll.y, pad.ur.x, pad.ur.y),
+            (-500, -500, 500, 500),
+            "the stored pad is centred on the pin, not on the component"
+        );
+    }
+}
+
+/// At a right-angle rotation the pad is independent of where the pin sits in the package, so one
+/// table entry serves the whole footprint — the dedup `PadstackKey` exists for.
+#[test]
+fn a_right_angle_rotation_interns_one_padstack_for_both_pins() {
+    let design = synthetic(&two_pin_board("90"));
+    // turn90(1) maps (x, y) → (-y, x), so (0, 1270) → (-1270, 0).
+    assert_eq!(
+        pin_center(&design, "R2", "1"),
+        IntPoint::new(48_730, 50_000)
+    );
+    assert_eq!(
+        pin_center(&design, "R2", "2"),
+        IntPoint::new(51_270, 50_000)
+    );
+
+    let padstack_nos: Vec<u32> = design
+        .board
+        .store()
+        .iter()
+        .filter_map(|(_, item)| match &item.kind {
+            ItemKind::Pin(pin) => Some(pin.padstack_no),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(padstack_nos.len(), 2);
+    assert_eq!(padstack_nos[0], padstack_nos[1]);
+}
+
+/// At any other angle `rotate_approx` rounds each corner, and rounding does not distribute over
+/// the package translation: upstream rotates `pad + rel` and this crate has to subtract the
+/// rounded `rel` back out, which leaves a per-pin residue of at most one board unit. The entries
+/// are therefore keyed per pin offset, and every pin's copper still sits on its own centre.
+#[test]
+fn an_oblique_rotation_keys_the_padstack_per_pin() {
+    let design = synthetic(&two_pin_board("30"));
+    let mut padstack_nos = Vec::new();
+    for (_, item) in design.board.store().iter() {
+        let ItemKind::Pin(pin) = &item.kind else {
+            continue;
+        };
+        padstack_nos.push(pin.padstack_no);
+        let pad = design
+            .board
+            .padstacks()
+            .get(pin.padstack_no)
+            .expect("every pin interns a padstack")
+            .shape_on_layer(0)
+            .expect("the pad is on the front layer")
+            .bounding_box();
+        assert!(
+            (pad.ll.x + pad.ur.x).abs() <= 2 && (pad.ll.y + pad.ur.y).abs() <= 2,
+            "the rotated pad stays centred on its own pin, off by at most a unit: {pad:?}"
+        );
+    }
+    assert_eq!(padstack_nos.len(), 2);
+    assert_ne!(
+        padstack_nos[0], padstack_nos[1],
+        "the two pins round differently, so they cannot share one entry"
+    );
+}
+
+// =================================================================================================
+// Area placement — §9.2.5, and the search tree's convex-piece contract
+// =================================================================================================
+
+/// A keepout 3000 board units off the component origin on a component placed at 330°.
+///
+/// Issue054's `SW33` in miniature. `PlacedArea::rotation_deg` reaches
+/// `search_tree::placed_area_pieces`, which realizes only right-angle rotations and widens any
+/// other one to the octagon of the disc the piece stays inside **for every rotation** — a disc
+/// centred on the component origin, so a 200-unit keepout 3000 units out became a 3200-unit blob
+/// over the middle of the footprint. The importer applies the oblique rotation itself
+/// (`ObstacleArea.get_area`'s `rotate_approx` branch) so the board only ever sees an angle it can
+/// place exactly.
+#[test]
+fn an_obliquely_placed_keepout_lands_where_it_was_rotated_to() {
+    let src = r#"(pcb areaframe
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (rect pcb 0 0 10000 10000))
+    (rule (width 250) (clearance 200))
+  )
+  (placement
+    (component SW
+      (place SW33 5000 5000 front 330)
+    )
+  )
+  (library
+    (image SW (pin PAD 1 0 0) (keepout "" (circle F.Cu 40 300 0)))
+    (padstack PAD (shape (rect F.Cu -50 -50 50 50)) (attach off))
+  )
+  (network (net N1 (pins SW33-1)))
+  (wiring)
+)"#;
+    let design = synthetic(src);
+    let boxes: Vec<_> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| item.class() == BoardItemClass::Keepout)
+        .map(|(id, item)| {
+            // The rotation is *baked into the stored corners*, so the board is handed an angle it
+            // realizes exactly and never takes `placed_area_pieces`'s widening branch. It also
+            // means the convex split downstream runs on the already-rotated shape, which is the
+            // only order in which the two are composable: rounding each rotated corner onto the
+            // grid can make a convex corner slightly concave, and the split absorbs that, whereas
+            // rotating a decomposition would drift its pieces apart.
+            let ItemKind::ObstacleArea(obstacle) = &item.kind else {
+                panic!("a keepout is an ObstacleArea");
+            };
+            assert_eq!(
+                obstacle.area.rotation_deg, 0.0,
+                "an oblique placement rotation is applied at import, not left for the board"
+            );
+            let slot = design.board.store().slot_of(id).expect("a stored item");
+            let mut bounds = fr_geometry::planar::IntBox::EMPTY;
+            for entry in design.board.default_tree().item_shapes(slot, id) {
+                if let Some(shape) = &entry.shape {
+                    bounds = bounds.union(&shape.bounding_box());
+                }
+            }
+            bounds
+        })
+        .collect();
+    assert_eq!(boxes.len(), 1, "one keepout on one named layer");
+    let bounds = boxes[0];
+    // cos(-30°) · 3000 = 2598, sin(-30°) · 3000 = -1500, plus the component location.
+    let centre_x = (bounds.ll.x + bounds.ur.x) / 2;
+    let centre_y = (bounds.ll.y + bounds.ur.y) / 2;
+    assert!(
+        (centre_x - 52_598).abs() <= 2 && (centre_y - 48_500).abs() <= 2,
+        "the keepout is at the rotated offset, not at the component origin: {bounds:?}"
+    );
+    // The bounding octagon of a 200-unit-radius circle, not of the 3200-unit disc that contains
+    // every rotation of it.
+    assert!(
+        bounds.ur.x - bounds.ll.x < 600,
+        "the keepout keeps its own size: {bounds:?}"
+    );
+}
+
+/// The two halves of the area contract, on one L-shaped keepout: the board **stores the original
+/// polygon**, and the search tree **derives a real convex decomposition** from it.
+///
+/// Both halves have been broken, in opposite directions, and each break is invisible to the test
+/// for the other:
+///
+/// * storing `AreaShape::Polygon` and letting the tree fall back to the shape's **bounding
+///   octagon** fills the notch with copper. Issue022, Issue029 and Issue054 each reported
+///   clearance violations against traces sitting in exactly such a notch (G1.2a);
+/// * storing `AreaShape::Convex(split_to_convex(…))` instead fixes the notch and destroys the
+///   corner list, because a decomposition has no border to write back out. `golden_dump` emits
+///   such an area as `null` and 13 fixtures regressed on the comparator's `structure_areas` group
+///   (G1.1).
+///
+/// Upstream does neither: `ObstacleArea` (`ObstacleArea.java:37-56`) stores the area it was
+/// constructed with, and `splitToConvex()` is computed on demand by whoever indexes it. So the
+/// polygon must survive import *and* the tree must still see tiles.
+#[test]
+fn a_concave_keepout_is_stored_as_a_polygon_and_split_for_the_tree() {
+    let src = r#"(pcb notch
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (rect pcb 0 0 10000 10000))
+    (keepout "" (polygon F.Cu 0  1000 1000  5000 1000  5000 2000  2000 2000  2000 5000  1000 5000))
+    (rule (width 250) (clearance 200))
+  )
+  (placement)
+  (library
+    (padstack PAD (shape (rect F.Cu -50 -50 50 50)) (attach off))
+  )
+  (network)
+  (wiring)
+)"#;
+    let design = synthetic(src);
+    let (id, item) = design
+        .board
+        .store()
+        .iter()
+        .find(|(_, item)| item.class() == BoardItemClass::Keepout)
+        .expect("the structure keepout");
+    let ItemKind::ObstacleArea(obstacle) = &item.kind else {
+        panic!("a keepout is an ObstacleArea");
+    };
+
+    // 1. The stored shape is the original polygon, corner for corner. Scale factor 10, so every
+    //    DSN coordinate is multiplied by 10 and nothing else happens to it.
+    let AreaShape::Polygon(polygon) = &obstacle.area.relative_area else {
+        panic!(
+            "a polygon keepout is stored as its polygon, not as a decomposition: {:?}",
+            obstacle.area.relative_area
+        );
+    };
+    let corners: Vec<(i32, i32)> = polygon
+        .corner_array()
+        .iter()
+        .map(|point| match point {
+            Point::Int(p) => (p.x, p.y),
+            Point::Rational(_) => panic!("a DSN corner is integral"),
+        })
+        .collect();
+    assert_eq!(
+        corners,
+        vec![
+            (10_000, 10_000),
+            (50_000, 10_000),
+            (50_000, 20_000),
+            (20_000, 20_000),
+            (20_000, 50_000),
+            (10_000, 50_000),
+        ],
+        "the corner list golden_dump has to write back out"
+    );
+
+    // 2. The tree pieces are a true convex decomposition of it: every corner of the polygon is
+    //    covered, the notch is not, and no piece is the bounding octagon that used to stand in.
+    let slot = design.board.store().slot_of(id).expect("a stored item");
+    let shapes = design.board.default_tree().item_shapes(slot, id);
+    let pieces: Vec<_> = shapes.iter().filter_map(|entry| entry.shape.as_ref()).collect();
+    assert!(pieces.len() > 1, "an L cannot be one convex tile");
+    let covers = |x: i32, y: i32| {
+        let point = Point::Int(IntPoint::new(x, y));
+        pieces.iter().any(|shape| shape.contains(&point))
+    };
+    for (x, y) in &corners {
+        assert!(
+            covers(*x, *y),
+            "the pieces cover every corner of the polygon; ({x}, {y}) is uncovered"
+        );
+    }
+    assert!(covers(15_000, 15_000), "the corner of the L is copper");
+    assert!(covers(45_000, 15_000), "the foot of the L is copper");
+    assert!(covers(15_000, 45_000), "the stem of the L is copper");
+    assert!(
+        !covers(45_000, 45_000),
+        "the notch is not copper — it was, when the tree saw a bounding octagon"
+    );
+    // No piece is the bounding octagon the tree used to fall back to. That octagon contains the
+    // whole bounding box, and the box's fourth corner — max x, max y — is the outer corner of the
+    // notch, which no piece of a correct decomposition may reach.
+    let notch_corner = IntPoint::new(
+        corners.iter().map(|(x, _)| *x).max().unwrap(),
+        corners.iter().map(|(_, y)| *y).max().unwrap(),
+    );
+    assert_eq!(notch_corner, IntPoint::new(50_000, 50_000));
+    for piece in &pieces {
+        assert!(
+            !piece.contains(&Point::Int(notch_corner)),
+            "no piece is the bounding octagon of the polygon: {piece:?}"
+        );
+    }
 }

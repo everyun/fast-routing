@@ -8,6 +8,7 @@
 use crate::planar::{
     int_point::IntPoint, int_vector::IntVector, point::Point, side::Side, vector::Vector,
 };
+use crate::util::jround_i32;
 use fr_datastructures::{BigIntAux, Signum};
 
 /// An exact direction represented as a normalized integer vector `(x, y)`
@@ -90,8 +91,8 @@ impl Direction {
     /// Creates a `Direction` whose angle with the x-axis is nearly equal to `angle`.
     pub fn from_angle_approx(angle: f64) -> Self {
         const SCALE_FACTOR: f64 = 10_000.0;
-        let x = (angle.cos() * SCALE_FACTOR).round() as i32;
-        let y = (angle.sin() * SCALE_FACTOR).round() as i32;
+        let x = jround_i32(angle.cos() * SCALE_FACTOR);
+        let y = jround_i32(angle.sin() * SCALE_FACTOR);
         IntVector::new(x, y).to_normalized_direction()
     }
 
@@ -167,7 +168,7 @@ impl Direction {
         let x = v1.x / l1 + v2.x / l2;
         let y = v1.y / l1 + v2.y / l2;
         const SCALE_FACTOR: f64 = 1000.0;
-        let vm = IntVector::new((x * SCALE_FACTOR).round() as i32, (y * SCALE_FACTOR).round() as i32);
+        let vm = IntVector::new(jround_i32(x * SCALE_FACTOR), jround_i32(y * SCALE_FACTOR));
         vm.to_normalized_direction()
     }
 

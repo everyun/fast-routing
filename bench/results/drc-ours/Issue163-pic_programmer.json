@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schemas.kicad.org/drc.v1.json",
+  "coordinate_units": "mm",
+  "source": "Issue163-pic_programmer.dsn",
+  "generator": "fr-check drc_report",
+  "violations": [
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [VCC] and Pin [/pic_sockets/VCC_PIC] (expected: 0.2802 mm, actual: 0.0000 mm)", "layer": 1, "expected_mm": 0.2802, "actual_mm": 0.0, "items": [{"description": "Pin [VCC]", "pos": {"x": 147.607, "y": -97.79}, "uuid": "27"}, {"description": "Pin [/pic_sockets/VCC_PIC]", "pos": {"x": 148.732, "y": -97.79}, "uuid": "28"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [VCC] and Trace [/pic_sockets/VCC_PIC] (expected: 0.2802 mm, actual: 0.2501 mm)", "layer": 1, "expected_mm": 0.2802, "actual_mm": 0.2500961151123047, "items": [{"description": "Pin [VCC]", "pos": {"x": 147.607, "y": -97.79}, "uuid": "27"}, {"description": "Trace [/pic_sockets/VCC_PIC]", "pos": {"x": 148.807, "y": -98.216}, "uuid": "1457"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [VCC] and Trace [/pic_sockets/VCC_PIC] (expected: 0.2802 mm, actual: 0.2501 mm)", "layer": 1, "expected_mm": 0.2802, "actual_mm": 0.2500961151123047, "items": [{"description": "Pin [VCC]", "pos": {"x": 147.607, "y": -97.79}, "uuid": "27"}, {"description": "Trace [/pic_sockets/VCC_PIC]", "pos": {"x": 148.807, "y": -98.507}, "uuid": "1459"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [Net-(D4-Pad2)] and Trace [/CTS] (expected: 0.2502 mm, actual: 0.2501 mm)", "layer": 1, "expected_mm": 0.2502, "actual_mm": 0.2500969207763672, "items": [{"description": "Pin [Net-(D4-Pad2)]", "pos": {"x": 100.33, "y": -111.887}, "uuid": "989"}, {"description": "Trace [/CTS]", "pos": {"x": 100.33, "y": -113.187}, "uuid": "1284"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [VCC] and Trace [/CTS] (expected: 0.2802 mm, actual: 0.2801 mm)", "layer": 1, "expected_mm": 0.2802, "actual_mm": 0.28009738769531245, "items": [{"description": "Pin [VCC]", "pos": {"x": 107.95, "y": -111.887}, "uuid": "990"}, {"description": "Trace [/CTS]", "pos": {"x": 107.95, "y": -113.217}, "uuid": "1279"}]},
+    {"type": "hole_clearance", "severity": "error", "description": "Hole clearance violation between Pin [GND] and Trace [/pic_sockets/VCC_PIC] (expected: 0.2802 mm, actual: 0.2801 mm)", "layer": 1, "expected_mm": 0.2802, "actual_mm": 0.28009738769531245, "items": [{"description": "Pin [GND]", "pos": {"x": 207.899, "y": -118.11}, "uuid": "1098"}, {"description": "Trace [/pic_sockets/VCC_PIC]", "pos": {"x": 207.4595, "y": -119.385}, "uuid": "1415"}]}
+  ]
+}

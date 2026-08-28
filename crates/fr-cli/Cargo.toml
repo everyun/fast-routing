@@ -6,13 +6,49 @@ license.workspace = true
 default-run = "fr-cli"
 description = "Command-line interface (drop-in replacement for freerouting headless) for the freerouting Rust port."
 
+# `fr-cli` itself needs none of this: the M1 pipeline is `fr-core` + `fr-io` and nothing else.
+# The `legacy` feature exists only for the two measurement binaries that still drive the
+# pre-rewrite router; M2 deletes them with it.
+[features]
+default = ["legacy"]
+legacy = [
+    "fr-core/legacy",
+    "dep:fr-autoroute",
+    "dep:fr-board",
+    "dep:fr-datastructures",
+    "dep:fr-geometry",
+    "dep:rayon",
+]
+
 [dependencies]
-fr-datastructures = { path = "../fr-datastructures" }
-fr-geometry = { path = "../fr-geometry" }
-fr-board = { path = "../fr-board" }
-fr-rules = { path = "../fr-rules" }
 fr-io = { path = "../fr-io" }
-fr-autoroute = { path = "../fr-autoroute" }
-fr-drc = { path = "../fr-drc" }
-fr-core = { path = "../fr-core" }
-rayon.workspace = true
+# `default-features = false` so that `cargo build -p fr-cli --no-default-features` really does
+# drop `fr-autoroute` and `fr-drc` from the graph — turning off *our* `legacy` feature would
+# otherwise still pull `fr-core`'s default one.
+fr-core = { path = "../fr-core", default-features = false }
+fr-autoroute = { path = "../fr-autoroute", optional = true }
+fr-board = { path = "../fr-board", optional = true }
+fr-datastructures = { path = "../fr-datastructures", optional = true }
+fr-geometry = { path = "../fr-geometry", optional = true }
+rayon = { workspace = true, optional = true }
+
+[[bin]]
+name = "fr-cli"
+path = "src/main.rs"
+
+# Drives `fr_core::legacy::RoutingJob` over the fixture corpus.
+[[bin]]
+name = "benchmark"
+path = "src/bin/benchmark.rs"
+required-features = ["legacy"]
+
+# Generates synthetic boards for `fr_autoroute::BatchAutorouter`.
+[[bin]]
+name = "stress_benchmark"
+path = "src/bin/stress_benchmark.rs"
+required-features = ["legacy"]
+
+# Shells out to both binaries; no Rust dependency on either stack.
+[[bin]]
+name = "java_rust_compare"
+path = "src/bin/java_rust_compare.rs"

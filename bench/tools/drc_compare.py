@@ -52,14 +52,19 @@ Java's `%.4f` round-half-up agreeing on a tie.
     python3 bench/tools/drc_compare.py --fixture Issue190-processor.Z80 \\
         [--ours-dir DIR] [--explain 5]
     python3 bench/tools/drc_compare.py --all [--ours-dir DIR] [--json]
-    python3 bench/tools/drc_compare.py --all --bridge-arg --pin-frame-fix \\
-        --ours-dir bench/results/drc-ours-pinfix
+    python3 bench/tools/drc_compare.py --all --bridge-arg=--router-overrides \\
+        --ours-dir bench/results/drc-ours-router
     python3 bench/tools/drc_compare.py --self-test
 
 The tool builds and runs the Rust bridge itself, caching each report in
 `--ours-dir` (default `bench/results/drc-ours`); `--no-build` reuses that cache.
-`--bridge-arg` forwards a flag to the bridge, which is how the `--pin-frame-fix`
-experiment (see the bridge's module docs) is measured against the same gate.
+`--bridge-arg` forwards a flag to the bridge, which is how a bridge-side
+variation is measured against the same gate.
+
+**The gate takes no flags.** `--pin-frame-fix` used to be required to reach 39/45
+because the importer baked one pin's package offset into every pin sharing its
+padstack; the importer places pads in the pin frame itself now, the flag is a
+deprecated no-op, and the default path is the one that is measured.
 
 Exit codes: 0 = every compared fixture is an exact multiset match, 1 = at least
 one mismatch, 2 = usage / IO error.
@@ -499,7 +504,8 @@ def main(argv: list[str]) -> int:
         action="append",
         default=[],
         metavar="FLAG",
-        help="extra flag for the Rust bridge, repeatable (e.g. --bridge-arg --pin-frame-fix)",
+        help="extra flag for the Rust bridge, repeatable "
+        "(e.g. --bridge-arg=--router-overrides); the gate itself needs none",
     )
     parser.add_argument("--explain", type=int, default=0, metavar="N",
                         help="print the N most common unmatched keys per side")

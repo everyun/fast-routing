@@ -7,6 +7,7 @@ use crate::planar::{
     int_box::IntBox, int_octagon::IntOctagon, int_point::IntPoint, int_vector::IntVector,
     line::Line, point::Point, shape::Shape, simplex::Simplex, vector::Vector,
 };
+use crate::util::jround_i32;
 
 /// A circle in the plane defined by center point and integer radius.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -211,13 +212,13 @@ impl Circle {
 
     /// Offsets circle radius by `offset`.
     pub fn offset(&self, offset: f64) -> Circle {
-        let new_radius = (self.radius as f64 + offset).round() as i32;
+        let new_radius = jround_i32(self.radius as f64 + offset);
         Circle::new(self.center, new_radius.max(0))
     }
 
     /// Shrinks circle radius by `offset` (minimum radius 1).
     pub fn shrink(&self, offset: f64) -> Circle {
-        let new_radius = (self.radius as f64 - offset).round() as i32;
+        let new_radius = jround_i32(self.radius as f64 - offset);
         Circle::new(self.center, new_radius.max(1))
     }
 
@@ -226,7 +227,7 @@ impl Circle {
         if offset == 0.0 {
             return *self;
         }
-        let new_radius = self.radius + offset.round() as i32;
+        let new_radius = self.radius + jround_i32(offset);
         Circle::new(self.center, new_radius.max(0))
     }
 

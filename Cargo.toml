@@ -6,6 +6,11 @@ members = [
     "crates/fr-board",
     "crates/fr-rules",
     "crates/fr-io",
+    # `fr-autoroute` and `fr-drc` are the pre-rewrite router and checker. They are superseded
+    # by M2 and by `fr-check` respectively, are optional dependencies of `fr-core` behind its
+    # default-on `legacy` feature, and reach the build only through `fr_core::legacy`. They
+    # stay members because a path dependency of a member is a member either way; the real
+    # removal is deleting the directories, which M2 does.
     "crates/fr-autoroute",
     "crates/fr-drc",
     "crates/fr-check",

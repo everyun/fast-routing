@@ -1,10 +1,14 @@
 //! DAC2020 PCB Benchmark Suite parity verification tests.
+//! Compiled only with the default-on `legacy` feature; `fr_core::legacy` explains why the
+//! pre-rewrite pipeline is still here and when it goes.
+#![cfg(feature = "legacy")]
 
 use fr_autoroute::BatchRouterSettings;
-use fr_core::RoutingJob;
+use fr_core::legacy::RoutingJob;
 use rayon::prelude::*;
 use std::fs;
-use std::path::Path;
+
+mod support;
 
 #[test]
 fn test_dac2020_benchmarks_all_pass() {
@@ -21,12 +25,12 @@ fn test_dac2020_benchmarks_all_pass() {
         "Issue508-DAC2020/DAC2020_bm11/DAC2020_bm11.unrouted.dsn",
     ];
 
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let base_dir = manifest_dir.parent().unwrap().parent().unwrap().join("upstream-freerouting/fixtures");
-    if !base_dir.exists() {
-        eprintln!("Fixtures directory not found, skipping");
+    // The DAC2020 boards are not part of `bench/fetch_fixtures.sh`'s corpus; when they are
+    // absent every row below skips and this test is a no-op, which is why it must never be
+    // quoted as evidence of anything.
+    let Some(base_dir) = support::fixtures_dir() else {
         return;
-    }
+    };
 
     println!("\n=== DAC2020 PCB Benchmark Parity Results ===");
     benchmarks.par_iter().for_each(|bm_rel| {

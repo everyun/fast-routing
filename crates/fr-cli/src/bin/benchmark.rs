@@ -1,11 +1,15 @@
-//! High-precision benchmarking tool for Fast-Routing PCB Autorouter.
+//! High-precision benchmarking tool for the **pre-rewrite** autorouter.
+//!
+//! Drives `fr_core::legacy` and is therefore behind the `legacy` cargo feature; M2 deletes
+//! both. The M1 numbers a caller wants — import time, item counts, violations, score — come
+//! out of `fr-cli --import-only` instead.
 //!
 //! Measures:
 //! 1. End-to-end routing performance across real-world PCB benchmark designs.
 //! 2. Multi-core scaling speedup (1 thread vs 2 vs 4 vs 8 vs Max threads).
 //! 3. Sub-system microbenchmarks (DSN parser, BVH spatial queries, Delaunay MST, DRC checking).
 
-use fr_core::RoutingJob;
+use fr_core::legacy::RoutingJob;
 use fr_datastructures::{BoundingBox2D, MinAreaTree, PlanarDelaunayTriangulation, Point2D};
 use fr_geometry::planar::Line;
 use fr_io::parse_dsn;
@@ -13,6 +17,10 @@ use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
+/// Five of these fields are collected and never printed — the summary table shows only the
+/// timing columns. They are kept because dropping them would also drop the measurements, and
+/// this whole binary is scheduled for deletion with `fr_core::legacy` in M2.
+#[allow(dead_code)]
 struct BenchmarkResult {
     name: String,
     pins: usize,

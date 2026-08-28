@@ -211,12 +211,18 @@ impl LayerRange {
 ///
 /// Upstream areas hold a `geometry.planar.Area`, an interface whose
 /// implementations range from a single `IntBox` to a `PolylineArea` with holes,
-/// and derive their tree shapes through `splitToConvex()`. `fr-geometry` has no
-/// area-with-holes type yet, so this enum carries the concrete shapes it does
-/// have plus a [`Convex`](AreaShape::Convex) escape hatch holding a
-/// decomposition supplied by the importer. When `fr-geometry` grows the
-/// with-holes type, a variant is added here and the importer stops
-/// pre-decomposing; nothing else changes.
+/// and derive their tree shapes through `splitToConvex()` — *derive*, not store:
+/// `ObstacleArea` keeps the area it was constructed with, and the decomposition
+/// is recomputed by whoever needs it. This enum works the same way, so
+/// [`Polygon`](AreaShape::Polygon) holds the original corner list and
+/// [`search_tree::placed_area_pieces`](crate::search_tree::placed_area_pieces)
+/// splits it on demand; anything that has to write the area back out still has
+/// its corners.
+///
+/// `fr-geometry` has no area-with-holes type yet, which is the one shape here
+/// that cannot be spelled: an area with `(window …)` holes keeps only its
+/// border. [`Convex`](AreaShape::Convex) is the escape hatch for a caller that
+/// already holds a decomposition and has no polygon to go back to.
 #[derive(Debug, Clone, PartialEq)]
 pub enum AreaShape {
     /// Axis-parallel rectangle.

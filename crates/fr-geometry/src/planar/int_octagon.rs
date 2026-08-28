@@ -8,6 +8,7 @@ use crate::planar::{
     area::Area, float_point::FloatPoint, int_box::IntBox, int_point::IntPoint, limits::Limits,
     line::Line, point::Point, vector::Vector,
 };
+use crate::util::jround_i32;
 
 /// An octagon with integer coordinates and 45-degree angle constraints.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -188,8 +189,8 @@ impl IntOctagon {
         if dist == 0.0 || self.is_empty() {
             return *self;
         }
-        let rounded_dist = dist.round() as i32;
-        let diagonal_dist = (dist * Limits::SQRT2).round() as i32;
+        let rounded_dist = jround_i32(dist);
+        let diagonal_dist = jround_i32(dist * Limits::SQRT2);
         IntOctagon::new(
             self.left_x - rounded_dist,
             self.bottom_y - rounded_dist,

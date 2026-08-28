@@ -1,4 +1,7 @@
 //! Full board routing completion convergence test on v3-route-free.dsn.
+//! Compiled only with the default-on `legacy` feature; `fr_core::legacy` explains why the
+//! pre-rewrite pipeline is still here and when it goes.
+#![cfg(feature = "legacy")]
 
 use fr_autoroute::{analyze_net_connectivity, BatchAutorouter, BatchRouterSettings, MazeSearchSettings};
 use fr_io::parse_dsn;
@@ -16,7 +19,7 @@ fn test_converge_all_489_nets() {
     let content = fs::read_to_string(&file_path).expect("failed to read dsn");
     let doc = parse_dsn(&content).expect("failed to parse dsn");
 
-    let job = fr_core::RoutingJob::new(&content);
+    let job = fr_core::legacy::RoutingJob::new(&content);
     let mut board = job.build_board_from_dsn(&doc);
 
     let net_ids: Vec<i32> = (1..=doc.nets.len() as i32).collect();

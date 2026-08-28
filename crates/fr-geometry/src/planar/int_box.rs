@@ -5,6 +5,7 @@ use crate::planar::{
     int_octagon::IntOctagon, int_point::IntPoint, limits::Limits, line::Line, point::Point,
     shape::Shape, side::Side, simplex::Simplex, vector::Vector,
 };
+use crate::util::jround_i32;
 
 /// An orthogonal rectangle in the plane with integer coordinates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -260,7 +261,7 @@ impl IntBox {
         if dist == 0.0 || self.is_empty() {
             return *self;
         }
-        let rounded = dist.round() as i32;
+        let rounded = jround_i32(dist);
         let lower_left = IntPoint::new(self.ll.x - rounded, self.ll.y - rounded);
         let upper_right = IntPoint::new(self.ur.x + rounded, self.ur.y + rounded);
         IntBox::new_from_points(lower_left, upper_right)
@@ -271,7 +272,7 @@ impl IntBox {
         if dist == 0.0 || self.is_empty() {
             return *self;
         }
-        let rounded = dist.round() as i32;
+        let rounded = jround_i32(dist);
         let lower_left = IntPoint::new(self.ll.x - rounded, self.ll.y);
         let upper_right = IntPoint::new(self.ur.x + rounded, self.ur.y);
         IntBox::new_from_points(lower_left, upper_right)
@@ -282,7 +283,7 @@ impl IntBox {
         if dist == 0.0 || self.is_empty() {
             return *self;
         }
-        let rounded = dist.round() as i32;
+        let rounded = jround_i32(dist);
         let lower_left = IntPoint::new(self.ll.x, self.ll.y - rounded);
         let upper_right = IntPoint::new(self.ur.x, self.ur.y + rounded);
         IntBox::new_from_points(lower_left, upper_right)

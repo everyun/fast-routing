@@ -1,4 +1,7 @@
 //! Test parsing and routing on user file v3-route-free.dsn.
+//! Compiled only with the default-on `legacy` feature; `fr_core::legacy` explains why the
+//! pre-rewrite pipeline is still here and when it goes.
+#![cfg(feature = "legacy")]
 
 use fr_autoroute::{analyze_net_connectivity, BatchAutorouter, BatchRouterSettings};
 use fr_io::parse_dsn;
@@ -37,7 +40,7 @@ fn test_v3_route_free_stats() {
     assert_eq!(doc.wires.len(), 1669, "Must parse all 1669 pre-existing wires");
     assert_eq!(doc.vias.len(), 47, "Must parse all 47 pre-existing vias");
 
-    let job = fr_core::RoutingJob::new(&content);
+    let job = fr_core::legacy::RoutingJob::new(&content);
     let mut board = job.build_board_from_dsn(&doc);
     println!("BasicBoard Pins: {}", board.pins.len());
     println!("BasicBoard Layer Count: {}", board.layer_count);

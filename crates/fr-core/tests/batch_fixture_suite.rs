@@ -1,17 +1,19 @@
 //! Batch verification suite against upstream Freerouting .dsn fixtures.
+//! Compiled only with the default-on `legacy` feature; `fr_core::legacy` explains why the
+//! pre-rewrite pipeline is still here and when it goes.
+#![cfg(feature = "legacy")]
 
 use fr_autoroute::BatchRouterSettings;
-use fr_core::RoutingJob;
+use fr_core::legacy::RoutingJob;
 use std::fs;
-use std::path::Path;
+
+mod support;
 
 #[test]
 fn test_batch_sample_fixtures() {
-    let fixture_dir = Path::new("../../upstream-freerouting/fixtures");
-    if !fixture_dir.exists() {
-        eprintln!("Fixture dir not found, skipping");
+    let Some(fixture_dir) = support::fixtures_dir() else {
         return;
-    }
+    };
 
     let sample_fixtures = [
         "Issue026-J2_reference.dsn",

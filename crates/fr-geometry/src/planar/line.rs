@@ -13,6 +13,7 @@ use crate::planar::{
     side::Side,
     vector::Vector,
 };
+use crate::util::jround_i32;
 use fr_datastructures::Signum;
 
 /// A directed line in the plane defined by two points `a` and `b`.
@@ -245,10 +246,10 @@ impl Line {
         let vyvy = (v.y as f64) * (v.y as f64);
         let length = (vxvx + vyvy).sqrt();
         let new_a = if vxvx <= vyvy {
-            let rel_x = ((dist * length) / v.y as f64).round() as i32;
+            let rel_x = jround_i32((dist * length) / v.y as f64);
             IntPoint::new(self.a.x - rel_x, self.a.y)
         } else {
-            let rel_y = ((dist * length) / v.x as f64).round() as i32;
+            let rel_y = jround_i32((dist * length) / v.x as f64);
             IntPoint::new(self.a.x, self.a.y + rel_y)
         };
         Line::new_from_point_and_dir(new_a, &self.direction())

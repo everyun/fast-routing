@@ -1,4 +1,7 @@
 //! Diagnostic test for Net 7.
+//! Compiled only with the default-on `legacy` feature; `fr_core::legacy` explains why the
+//! pre-rewrite pipeline is still here and when it goes.
+#![cfg(feature = "legacy")]
 
 use fr_autoroute::{analyze_net_connectivity, LayerSpatialGrid, MazeSearchAlgo, MazeSearchSettings};
 use fr_io::parse_dsn;
@@ -16,7 +19,7 @@ fn test_debug_net_7() {
     let content = fs::read_to_string(&file_path).expect("failed to read dsn");
     let doc = parse_dsn(&content).expect("failed to parse dsn");
 
-    let job = fr_core::RoutingJob::new(&content);
+    let job = fr_core::legacy::RoutingJob::new(&content);
     let board = job.build_board_from_dsn(&doc);
 
     let net_id = 7;

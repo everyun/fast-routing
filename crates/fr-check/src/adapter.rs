@@ -28,20 +28,27 @@
 //!
 //! So each kind is transcribed from its own `bounding_box()` override.
 //!
-//! # The one place this cannot be exact
+//! # Area geometry, and where its two over-approximations went
 //!
-//! Area geometry is deliberately over-approximated one layer down and this
-//! module inherits it: [`fr_board::search_tree::placed_area_pieces`] turns an
-//! `AreaShape::Polygon` into its bounding octagon and — for a placement rotation
-//! that is not a multiple of 90° — replaces every piece with the octagon of the
-//! disc that *any* rotation of it stays inside, because `fr-geometry` has no
-//! rotated-polygon type yet. Both are safe for a router (never a missed
-//! obstacle) and both are visible to the referee, which does not want "safe", it
-//! wants "identical". A 1 mm keepout on a component placed at 330° becomes a
-//! 16 mm disc, and that is the entire ObstacleArea residue of gate G1.2a
+//! Area geometry used to be over-approximated one layer down and this module
+//! inherited it: [`fr_board::search_tree::placed_area_pieces`] turned an
+//! `AreaShape::Polygon` into its bounding octagon, filling in every concave
+//! notch with copper, and — for a placement rotation that is not a multiple of
+//! 90° — replaced every piece with the octagon of the disc that *any* rotation
+//! of it stays inside. Both were safe for a router (never a missed obstacle) and
+//! both were visible to the referee, which does not want "safe", it wants
+//! "identical": a 1 mm keepout on a component placed at 330° became a 16 mm
+//! disc, and the two together were the entire ObstacleArea residue of gate G1.2a
 //! (Issue054 +44, Issue022 +4, Issue029 +4 records against an oracle that has
-//! exactly **one** ObstacleArea record in the whole 45-board corpus). The fix
-//! belongs to `fr-geometry`/`fr-board`, not here.
+//! exactly **one** ObstacleArea record in the whole 45-board corpus).
+//!
+//! Both are gone, and neither was fixed here. The notch is
+//! [`fr_geometry::planar::split_to_convex`], which the search tree now calls on
+//! demand — upstream's own `Area.splitToConvex()`. The oblique rotation is baked
+//! into the stored corners by the importer, so the board is handed a shape it
+//! can place exactly. What is left is a corner list that is not a simple
+//! polygon, where the bounding octagon still stands in and upstream's own
+//! division-point search would also have failed.
 
 use fr_board::item::{Item, ItemKind};
 use fr_board::search_tree::placed_area_pieces;

@@ -43,7 +43,7 @@
 //! | 3.1 | trace = `Polyline.offset_shape` per segment, dog-ear cuts, octagon clip | identical (`fr_geometry::planar::Polyline::offset_shapes`) |
 //! | 3.4 | pad per layer, flavor per angle restriction, then `enlarge(comp)` | identical, from the board's [`PadstackTable`] |
 //! | 9.1 | missing pad ⇒ `Circle(center, ceil(drill_radius))` + `drillHoleClearanceDelta` | the circle's **bounding octagon**; the extra hole-clearance delta is not modelled |
-//! | 3.5 | `area.split_to_convex()` per piece, `enlarge`, `divide_into_sections(50000)` | identical for pre-decomposed areas; a raw [`AreaShape::Polygon`] is indexed by its bounding octagon until `fr-geometry` grows `split_to_convex` |
+//! | 3.5 | `area.split_to_convex()` per piece, `enlarge`, `divide_into_sections(50000)` | identical — [`AreaShape::Polygon`] is split by [`fr_geometry::planar::split_to_convex`] on demand; only a corner list that is not a simple polygon (where upstream fails too) falls back to a bounding octagon |
 //! | 3.6 | outline ring: one `offset_shape(BoardOutline.HALF_WIDTH + comp, 0)` per border line per layer | identical, driven off the stored border polylines; the `keepout_outside_outline_generated()` branch is **not** modelled (the generated keepout area has no field on [`crate::item::BoardOutline`] yet) |
 //! | 6 | `change_entries` / `merge_entries_*` / `reuse_entries_after_cutout` reuse leaves in place | plain remove + insert; the fast paths are an optimization of the same result |
 //! | 2.2 | `overlapping_tree_entries_with_clearance` for uncompensated trees | not here — it belongs to the checker, which is not this crate |
@@ -751,17 +751,26 @@ fn area_shapes(
 /// The convex decomposition of a placed area, in board coordinates.
 ///
 /// Upstream materializes `relativeArea` through `translation` / `rotation` /
-/// `sideChanged` and calls `Area.splitToConvex()`. `fr-geometry` has no
-/// area-with-holes type yet, so:
+/// `sideChanged` and calls `Area.splitToConvex()`. The decomposition is derived
+/// here, on demand, for the same reason it is derived there: `ObstacleArea`
+/// stores the *original* area and nothing else, so anything that has to write
+/// the area back out (`DsnWriter`, the golden dump) still has its corners.
 ///
-/// * [`AreaShape::Convex`] is the decomposition (what the importer should
-///   supply, and what [`AreaShape`]'s own docs call for);
-/// * [`AreaShape::Polygon`] falls back to its **bounding octagon** — a
-///   conservative over-approximation, never a missed obstacle;
+/// * [`AreaShape::Polygon`] is split by
+///   [`Polygon::split_to_convex`](fr_geometry::planar::Polygon::split_to_convex),
+///   which is `PolygonShape.split_to_convex` itself. Only a corner list that is
+///   not a simple polygon — where upstream's own division-point search also
+///   fails — falls back to the **bounding octagon**, a conservative
+///   over-approximation that is never a missed obstacle;
+/// * [`AreaShape::Convex`] is a decomposition already in hand and is used as is;
 /// * rotation is applied for multiples of 90° only; any other angle is placement
 ///   input this crate cannot realize exactly, and using the unrotated shape
 ///   would be wrong in the *unsafe* direction, so the bounding octagon of the
-///   unrotated piece is used instead.
+///   unrotated piece is used instead. The importer keeps that path unreachable
+///   for the boards it loads by baking an oblique rotation into the stored
+///   corners and handing the board `rotation_deg == 0` (`specctra::build`'s
+///   `placed_area`, and Issue054); it stays here because [`PlacedArea`] is a
+///   public type any caller can build.
 pub fn placed_area_pieces(area: &PlacedArea) -> Vec<TileShape> {
     let base: Vec<TileShape> = match &area.relative_area {
         AreaShape::Box(b) => vec![TileShape::Box(*b)],
@@ -777,7 +786,10 @@ pub fn placed_area_pieces(area: &PlacedArea) -> Vec<TileShape> {
             if corners.len() < 3 {
                 Vec::new()
             } else {
-                vec![octagon_hull(corners)]
+                match polygon.split_to_convex() {
+                    Some(pieces) => pieces.into_iter().map(TileShape::Simplex).collect(),
+                    None => vec![octagon_hull(corners)],
+                }
             }
         }
     };
@@ -830,7 +842,8 @@ fn widen_to_rotation_hull(shape: &TileShape) -> TileShape {
 }
 
 /// The smallest octagon containing `corners` — the conservative stand-in for a
-/// convex decomposition of a non-convex polygon.
+/// polygon [`split_to_convex`](fr_geometry::planar::split_to_convex) could not
+/// decompose, i.e. one whose border crosses itself.
 fn octagon_hull(corners: &[Point]) -> TileShape {
     let mut lx = i32::MAX;
     let mut ly = i32::MAX;

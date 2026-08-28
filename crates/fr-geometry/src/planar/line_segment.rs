@@ -6,6 +6,7 @@ use crate::planar::{
     int_point::IntPoint, int_vector::IntVector, line::Line, point::Point, polyline::Polyline,
     side::Side, simplex::Simplex,
 };
+use crate::util::jround_i32;
 use fr_datastructures::Signum;
 
 /// A line segment defined by 3 lines: starts at intersection of `start` and `middle`,
@@ -299,7 +300,7 @@ impl LineSegment {
         let function_of_x = abs_dx >= abs_dy;
 
         let stair_width = if function_of_x {
-            let mut sw = ((width * abs_dx as f64) / abs_dy as f64).round() as i32;
+            let mut sw = jround_i32((width * abs_dx as f64) / abs_dy as f64);
             if sw == 0 {
                 sw = 1;
             }
@@ -309,7 +310,7 @@ impl LineSegment {
                 sw
             }
         } else {
-            let mut sw = ((width * abs_dy as f64) / abs_dx as f64).round() as i32;
+            let mut sw = jround_i32((width * abs_dy as f64) / abs_dx as f64);
             if sw == 0 {
                 sw = 1;
             }
@@ -337,11 +338,11 @@ impl LineSegment {
         for i in 1..stair_count {
             let (curr_line_point_x, curr_line_point_y) = if function_of_x {
                 let cx = start_point.x + (i as i32) * stair_width;
-                let cy = self.get_line().function_value_approx(cx as f64).round() as i32;
+                let cy = jround_i32(self.get_line().function_value_approx(cx as f64));
                 (cx, cy)
             } else {
                 let cy = start_point.y + (i as i32) * stair_width;
-                let cx = self.get_line().function_in_y_value_approx(cy as f64).round() as i32;
+                let cx = jround_i32(self.get_line().function_in_y_value_approx(cy as f64));
                 (cx, cy)
             };
             if change_x_first {
@@ -379,7 +380,7 @@ impl LineSegment {
         let det = (delta.x as f64) * (delta.y as f64);
 
         let stair_width = if function_of_x {
-            let mut sw = ((width * abs_delta.x as f64) / abs_delta.y as f64).round() as i32;
+            let mut sw = jround_i32((width * abs_delta.x as f64) / abs_delta.y as f64);
             if sw == 0 {
                 sw = 1;
             }
@@ -389,7 +390,7 @@ impl LineSegment {
                 sw
             }
         } else {
-            let mut sw = ((width * abs_delta.y as f64) / abs_delta.x as f64).round() as i32;
+            let mut sw = jround_i32((width * abs_delta.y as f64) / abs_delta.x as f64);
             if sw == 0 {
                 sw = 1;
             }
@@ -416,11 +417,11 @@ impl LineSegment {
             } else {
                 let (cx, cy) = if function_of_x {
                     let x = start_point.x + (i as i32) * stair_width;
-                    let y = self.get_line().function_value_approx(x as f64).round() as i32;
+                    let y = jround_i32(self.get_line().function_value_approx(x as f64));
                     (x, y)
                 } else {
                     let y = start_point.y + (i as i32) * stair_width;
-                    let x = self.get_line().function_in_y_value_approx(y as f64).round() as i32;
+                    let x = jround_i32(self.get_line().function_in_y_value_approx(y as f64));
                     (x, y)
                 };
                 IntPoint::new(cx, cy)

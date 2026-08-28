@@ -1,6 +1,9 @@
 //! End-to-end routing job orchestrator and Specctra pipeline manager.
+//!
+//! **Superseded by [`crate::pipeline`]**, which is what `fr-cli` runs. See [`crate::legacy`]
+//! for why this file is still compiled.
 
-use crate::board_statistics::BoardStatistics;
+use super::board_statistics::BoardStatistics;
 use fr_autoroute::batch_autorouter::NetRoutingRule;
 use fr_autoroute::{BatchAutorouter, BatchRouterSettings};
 use fr_board::{BasicBoard, FixedState, Pin, PolylineTrace, Via};
@@ -133,13 +136,14 @@ impl RoutingJob {
             // Snap start corner to contacted Pin center
             if let Some(first) = corner_points.first_mut() {
                 for pin in &board.pins {
-                    if pin.header.net_no_arr.contains(&((net_idx + 1) as i32)) {
-                        if trace.layer >= pin.first_layer && trace.layer <= pin.last_layer {
-                            let threshold = pin.pad_bounding_box.width().max(pin.pad_bounding_box.height()) / 2 + trace.half_width + 50;
-                            if first.is_contained_in(&pin.pad_bounding_box) || (first.x - pin.center.x).abs().max((first.y - pin.center.y).abs()) <= threshold {
-                                *first = pin.center;
-                                break;
-                            }
+                    if pin.header.net_no_arr.contains(&((net_idx + 1) as i32))
+                        && trace.layer >= pin.first_layer
+                        && trace.layer <= pin.last_layer
+                    {
+                        let threshold = pin.pad_bounding_box.width().max(pin.pad_bounding_box.height()) / 2 + trace.half_width + 50;
+                        if first.is_contained_in(&pin.pad_bounding_box) || (first.x - pin.center.x).abs().max((first.y - pin.center.y).abs()) <= threshold {
+                            *first = pin.center;
+                            break;
                         }
                     }
                 }
@@ -148,13 +152,14 @@ impl RoutingJob {
             // Snap end corner to contacted Pin center
             if let Some(last) = corner_points.last_mut() {
                 for pin in &board.pins {
-                    if pin.header.net_no_arr.contains(&((net_idx + 1) as i32)) {
-                        if trace.layer >= pin.first_layer && trace.layer <= pin.last_layer {
-                            let threshold = pin.pad_bounding_box.width().max(pin.pad_bounding_box.height()) / 2 + trace.half_width + 50;
-                            if last.is_contained_in(&pin.pad_bounding_box) || (last.x - pin.center.x).abs().max((last.y - pin.center.y).abs()) <= threshold {
-                                *last = pin.center;
-                                break;
-                            }
+                    if pin.header.net_no_arr.contains(&((net_idx + 1) as i32))
+                        && trace.layer >= pin.first_layer
+                        && trace.layer <= pin.last_layer
+                    {
+                        let threshold = pin.pad_bounding_box.width().max(pin.pad_bounding_box.height()) / 2 + trace.half_width + 50;
+                        if last.is_contained_in(&pin.pad_bounding_box) || (last.x - pin.center.x).abs().max((last.y - pin.center.y).abs()) <= threshold {
+                            *last = pin.center;
+                            break;
                         }
                     }
                 }
