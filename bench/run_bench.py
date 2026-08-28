@@ -292,7 +292,8 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
     ses_path = os.path.join(ses_dir, f"{stem}.{tool}.ses")
 
     if tool == "java":
-        cmd = [args.java, "-jar", args.jar,
+        cmd = [args.java, "-Djava.awt.headless=true",  # never steal macOS focus
+               "-jar", args.jar,
                "-de", fixture, "-do", ses_path,
                "-mp", str(args.passes), "-l", "en"]
         ok_exit_codes = {0}
