@@ -183,7 +183,10 @@ mod tests {
             panic!("a box enlarges into an octagon");
         };
         // round(10) == 10, round(sqrt(2) * 10) == round(14.142) == 14
-        assert_eq!((o.left_x, o.bottom_y, o.right_x, o.top_y), (-10, -10, 20, 20));
+        assert_eq!(
+            (o.left_x, o.bottom_y, o.right_x, o.top_y),
+            (-10, -10, 20, 20)
+        );
         assert_eq!(o.upper_left_diagonal_x, -10 - 14);
         assert_eq!(o.lower_right_diagonal_x, 10 + 14);
         assert_eq!(o.lower_left_diagonal_x, 0 - 14);

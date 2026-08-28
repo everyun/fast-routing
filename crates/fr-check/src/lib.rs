@@ -57,6 +57,7 @@
 
 #![deny(missing_docs)]
 
+pub mod adapter;
 pub mod anchors;
 pub mod clearance;
 pub mod connectivity;
@@ -64,6 +65,7 @@ pub mod score;
 pub mod shape;
 pub mod view;
 
+pub use adapter::{centre_of_gravity, item_bounding_box, shape_store};
 pub use anchors::{Anchor, AnchorIndex, AnchorKind};
 pub use clearance::{
     actual_clearance, check_clearance, check_clearance_with, clearance_between_shapes, Violation,

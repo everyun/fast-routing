@@ -26,6 +26,7 @@ import json
 import os
 import random
 import sys
+import tempfile
 import unittest
 
 _TOOLS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -736,6 +737,65 @@ class ComparatorExclusionTests(unittest.TestCase):
         right["producer"] = "fr-cli"
         self._clean(right, "provenance must not be compared")
 
+    def test_component_rotation_is_compared_at_the_writers_precision(self):
+        # `Component.write_scope` writes `(int) Math.round(rotation)`, so the oracle cannot see a
+        # fractional degree. Half rounds *up*, towards positive infinity, like `Math.round`.
+        right = copy.deepcopy(self.left)
+        for comp in right["components"]:
+            if comp.get("rotation") is not None:
+                comp["rotation"] = comp["rotation"] + 0.5 - 0.001
+        self._clean(right, "a sub-degree rotation delta must not be a difference")
+
+    def test_a_whole_degree_rotation_change_is_still_caught(self):
+        right = copy.deepcopy(self.left)
+        placed = next(c for c in right["components"] if c.get("rotation") is not None)
+        placed["rotation"] = placed["rotation"] + 1
+        self.assertFalse(gc.compare(self.left, right).ok)
+
+    def test_java_round_is_half_up_not_half_even(self):
+        self.assertEqual(gc._java_round(2.5), 3)
+        self.assertEqual(gc._java_round(-2.5), -2)  # Python's round() answers -2 too, by luck
+        self.assertEqual(gc._java_round(0.5), 1)  # ...but round(0.5) is 0
+        self.assertEqual(gc._java_round(1.5), 2)
+        self.assertEqual(gc._java_round(-0.5), 0)
+        self.assertEqual(gc._java_round(352.5), 353)
+
+    def test_conduction_area_fixed_state_is_folded_away(self):
+        # `write_conduction_area_scope` never writes `(type …)`, so a plane inserted SYSTEM_FIXED
+        # reads back UNFIXED. Both sides collapse into one bucket.
+        right = copy.deepcopy(self.left)
+        right["wiring"]["by_kind_fixed"] = [
+            {"kind": "conduction_area", "fixed": "system_fixed", "count": 2},
+        ]
+        left = copy.deepcopy(self.left)
+        left["wiring"]["by_kind_fixed"] = [
+            {"kind": "conduction_area", "fixed": "unfixed", "count": 2},
+        ]
+        result = gc.compare(left, right, fixture="mini")
+        self.assertTrue(result.ok, gc.render_report(result, verbose=True))
+
+    def test_conduction_area_counts_are_still_compared(self):
+        right = copy.deepcopy(self.left)
+        right["wiring"]["by_kind_fixed"] = [
+            {"kind": "conduction_area", "fixed": "system_fixed", "count": 3},
+        ]
+        left = copy.deepcopy(self.left)
+        left["wiring"]["by_kind_fixed"] = [
+            {"kind": "conduction_area", "fixed": "unfixed", "count": 2},
+        ]
+        self.assertFalse(gc.compare(left, right).ok)
+
+    def test_trace_fixed_state_is_not_folded(self):
+        right = copy.deepcopy(self.left)
+        right["wiring"]["by_kind_fixed"] = [
+            {"kind": "trace", "fixed": "system_fixed", "count": 2},
+        ]
+        left = copy.deepcopy(self.left)
+        left["wiring"]["by_kind_fixed"] = [
+            {"kind": "trace", "fixed": "unfixed", "count": 2},
+        ]
+        self.assertFalse(gc.compare(left, right).ok)
+
     def test_gate_only_drops_the_extra_groups(self):
         right = copy.deepcopy(self.left)
         right["images"][0]["side"] = "back"
@@ -877,6 +937,28 @@ class GoldenDumpSweepTests(unittest.TestCase):
         self.assertGreaterEqual(totals["net_pins"], 18500)
         self.assertGreaterEqual(totals["wiring"], 16300)
         self.assertGreaterEqual(totals["via_rules"], 1150)
+
+    def test_oracle_read_failures_are_detected_from_the_sibling_log(self):
+        """The two fixtures whose own Java run did not finish, and only those."""
+        failed = {
+            gc.fixture_name(p): gc.oracle_read_failure(p)
+            for p in self.paths
+            if gc.oracle_read_failure(p)
+        }
+        self.assertEqual(
+            set(failed),
+            {"Issue006-LPC18XX_43XX_SCH", "Issue229-display-8-digit-hc595"},
+            "the ORACLE-FAILED set changed; re-read the logs before touching the markers",
+        )
+        for marker in failed.values():
+            self.assertIn(marker, gc.ORACLE_READ_FAILURE_MARKERS)
+
+    def test_a_dump_without_a_log_is_not_reported_as_failed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "Nolog.import.dsn")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(MINI_DUMP)
+            self.assertIsNone(gc.oracle_read_failure(path))
 
     def test_every_board_declares_layers_and_a_default_clearance(self):
         for name, doc in self.docs.items():

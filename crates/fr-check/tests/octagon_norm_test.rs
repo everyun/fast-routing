@@ -38,7 +38,11 @@ fn traces_at_exactly_the_required_clearance_touch_legally() {
 
     // The metric, directly.
     let inter = a_shape.enlarge(10.0).intersection(&b_shape.enlarge(10.0));
-    assert_eq!(inter.dimension(), 1, "enlarged shapes touch, they do not overlap");
+    assert_eq!(
+        inter.dimension(),
+        1,
+        "enlarged shapes touch, they do not overlap"
+    );
 
     // And through the checker.
     let rules = UniformClearance(20);
@@ -66,7 +70,10 @@ fn one_unit_closer_is_a_violation() {
     let id_b = board.insert_one(b, b_shape.clone(), 0);
 
     assert_eq!(
-        a_shape.enlarge(10.0).intersection(&b_shape.enlarge(10.0)).dimension(),
+        a_shape
+            .enlarge(10.0)
+            .intersection(&b_shape.enlarge(10.0))
+            .dimension(),
         2
     );
 
@@ -141,7 +148,10 @@ fn octagon_norm_and_euclid_disagree_off_axis() {
     assert!(euclid > 102.0, "Euclid would call this legal: {euclid}");
 
     assert_eq!(
-        a_shape.enlarge(51.0).intersection(&b_shape.enlarge(51.0)).dimension(),
+        a_shape
+            .enlarge(51.0)
+            .intersection(&b_shape.enlarge(51.0))
+            .dimension(),
         2,
         "the octagon norm calls it a violation"
     );
@@ -212,15 +222,11 @@ fn violations_are_counted_per_layer_and_deduplicated_within_one() {
     let pad = IntBox::new(0, 0, 100, 100);
     let id_a = board.insert(
         pin_item(&[1], IntPoint::new(50, 50), LayerRange::new(0, 2)),
-        (0..3)
-            .map(|l| fr_check::ItemShape::new(pad, l))
-            .collect(),
+        (0..3).map(|l| fr_check::ItemShape::new(pad, l)).collect(),
     );
     let id_b = board.insert(
         pin_item(&[2], IntPoint::new(50, 50), LayerRange::new(0, 2)),
-        (0..3)
-            .map(|l| fr_check::ItemShape::new(pad, l))
-            .collect(),
+        (0..3).map(|l| fr_check::ItemShape::new(pad, l)).collect(),
     );
     let rules = UniformClearance(10);
     let violations = check_clearance(&board.view(&rules));

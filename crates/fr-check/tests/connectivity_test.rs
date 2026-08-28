@@ -8,9 +8,7 @@ mod support;
 
 use fr_board::item::{ItemKind, LayerRange, ObstacleKind};
 use fr_board::NetNos;
-use fr_check::{
-    board_connectivity, check_clearance, connectivity, ContactGraph, UniformClearance,
-};
+use fr_check::{board_connectivity, check_clearance, connectivity, ContactGraph, UniformClearance};
 use fr_geometry::planar::{IntBox, IntPoint};
 use support::{keepout_item, pin_item, pour_item, straight_trace, via_item, Scaffold};
 
@@ -30,10 +28,8 @@ fn a_multi_net_tie_pin_exempts_the_two_traces_that_meet_on_it() {
             IntBox::new(-20, -20, 20, 20),
             0,
         );
-        let (a, a_shape) =
-            straight_trace(&[1], 0, IntPoint::new(0, 0), IntPoint::new(100, 0), 10);
-        let (b, b_shape) =
-            straight_trace(&[2], 0, IntPoint::new(0, 0), IntPoint::new(0, 100), 10);
+        let (a, a_shape) = straight_trace(&[1], 0, IntPoint::new(0, 0), IntPoint::new(100, 0), 10);
+        let (b, b_shape) = straight_trace(&[2], 0, IntPoint::new(0, 0), IntPoint::new(0, 100), 10);
         let id_a = board.insert_one(a, a_shape, 0);
         let id_b = board.insert_one(b, b_shape, 0);
         let rules = UniformClearance(20);
@@ -66,10 +62,8 @@ fn the_tie_pin_exemption_needs_the_traces_to_end_on_the_pin() {
         0,
     );
     // B runs past A's midpoint; neither trace ends where the other one does.
-    let (a, a_shape) =
-        straight_trace(&[1], 0, IntPoint::new(0, 0), IntPoint::new(100, 0), 10);
-    let (b, b_shape) =
-        straight_trace(&[2], 0, IntPoint::new(50, -50), IntPoint::new(50, 50), 10);
+    let (a, a_shape) = straight_trace(&[1], 0, IntPoint::new(0, 0), IntPoint::new(100, 0), 10);
+    let (b, b_shape) = straight_trace(&[2], 0, IntPoint::new(50, -50), IntPoint::new(50, 50), 10);
     let id_a = board.insert_one(a, a_shape, 0);
     let id_b = board.insert_one(b, b_shape, 0);
 
@@ -297,7 +291,10 @@ fn a_via_between_two_same_layer_traces_is_a_tail_yet_still_conducts() {
     );
 
     let net = connectivity(&view, 1);
-    assert_eq!(net.components, 1, "the closure runs through the filtered via");
+    assert_eq!(
+        net.components, 1,
+        "the closure runs through the filtered via"
+    );
     assert_eq!(net.node_components, 1);
     assert_eq!(net.incompletes, 0);
     assert!(net.airlines.is_empty());
@@ -396,11 +393,7 @@ fn keepouts_are_not_connectable() {
     );
     let rules = UniformClearance(0);
     let view = board.view(&rules);
-    assert!(!view
-        .store()
-        .get(keepout)
-        .unwrap()
-        .is_connectable());
+    assert!(!view.store().get(keepout).unwrap().is_connectable());
     let net = connectivity(&view, 1);
     assert_eq!(net.max_connections, 0);
     assert_eq!(net.node_components, 1);

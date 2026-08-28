@@ -939,3 +939,145 @@ fn every_fixture_imports_or_reports_a_typed_error() {
         paths.len()
     );
 }
+
+// =================================================================================================
+// `Packages.get` — the `::N` variant fallback, and the resolved keepout clearance classes
+// =================================================================================================
+
+/// Two images with the *same* base name and different pin orders, so `Library.readScope`'s dedup
+/// probe keeps both: `dup` and `dup::1`. Both are declared front-side. Two components reference
+/// `dup::1`, one on each side.
+///
+/// `(resolution um 10)` with a 10000-unit outline pins the scale factor at 10.
+const VARIANT_BOARD: &str = r#"(pcb variants
+  (parser (string_quote "))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path signal 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (rule (width 250) (clearance 200))
+  )
+  (placement
+    (component dup::1
+      (place FRONT 5000 -5000 front 0)
+      (place BACK 6000 -5000 back 0)
+    )
+  )
+  (library
+    (image dup
+      (pin Round[A]Pad_600_um 1 -100 0)
+      (pin Round[A]Pad_600_um 2 100 0)
+      (keepout K1 (rect F.Cu -50 -50 50 50))
+    )
+    (image dup::1
+      (pin Round[A]Pad_600_um 2 100 0)
+      (pin Round[A]Pad_600_um 1 -100 0)
+      (keepout K1 (rect F.Cu -50 -50 50 50))
+    )
+    (padstack Round[A]Pad_600_um (shape (circle F.Cu 600)) (shape (circle B.Cu 600)) (attach off))
+  )
+  (network (class default (rule (width 250))))
+  (wiring)
+)"#;
+
+#[test]
+fn back_side_placement_falls_back_to_the_base_package_variant() {
+    let design = synthetic(VARIANT_BOARD);
+    let names: Vec<&str> = design.packages.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(
+        names,
+        vec!["dup", "dup::1"],
+        "the pin orders differ, so the `::N` dedup probe must keep both images"
+    );
+
+    // `Network.insertComponent` (`Network.java:806-807`) resolves the image name once per side and
+    // `Component.getPackage()` picks by the placement side. `Packages.get("dup::1", true)` hits the
+    // literal name on the first pass; `Packages.get("dup::1", false)` finds no back-side package,
+    // records `dup::1` as the other-side candidate, then **overwrites** it with `dup` on the
+    // base-name pass and returns that. So a back-placed component lands on the base variant.
+    let front = design
+        .components
+        .iter()
+        .find(|c| c.name == "FRONT")
+        .expect("FRONT is placed");
+    let back = design
+        .components
+        .iter()
+        .find(|c| c.name == "BACK")
+        .expect("BACK is placed");
+    assert_eq!(design.packages[front.package_index].name, "dup::1");
+    assert_eq!(design.packages[back.package_index].name, "dup");
+
+    // The two images disagree on pin order, so the fallback is observable in the pin names too.
+    assert_eq!(
+        design.packages[front.package_index].pins[0].name, "2",
+        "the `::1` image lists pin 2 first"
+    );
+    assert_eq!(design.packages[back.package_index].pins[0].name, "1");
+}
+
+#[test]
+fn component_keepouts_record_their_resolved_clearance_class() {
+    let design = synthetic(VARIANT_BOARD);
+    // One keepout per component, on the single layer named by the `(rect F.Cu …)`.
+    assert_eq!(count_kind(&design, BoardItemClass::Keepout), 2);
+
+    let area_class = design
+        .rules
+        .get_default_net_class()
+        .default_item_clearance_classes
+        .get(ItemClass::Area);
+    for component in &design.components {
+        // The list is parallel to the package's `keepouts`, which is what
+        // `Component.writeKeepoutInfos` walks; with no `(keepout … (clearance_class …))` in the
+        // placement the resolution is the net class's AREA default.
+        assert_eq!(
+            component.keepout_clearance_classes.of_kind(0),
+            &[area_class],
+            "{}",
+            component.name
+        );
+        assert!(component.keepout_clearance_classes.of_kind(1).is_empty());
+        assert!(component.keepout_clearance_classes.of_kind(2).is_empty());
+    }
+}
+
+#[test]
+fn an_unplaced_component_records_no_keepout_classes() {
+    // `Component.writeKeepoutInfos` returns immediately for an unplaced component, and the board
+    // gets no items for it either, so the parallel list must stay empty rather than be padded.
+    let src = VARIANT_BOARD.replace("(place BACK 6000 -5000 back 0)", "(place BACK)");
+    let design = synthetic(&src);
+    let back = design
+        .components
+        .iter()
+        .find(|c| c.name == "BACK")
+        .expect("an unplaced component still exists");
+    assert!(back.location.is_none());
+    assert!(back.keepout_clearance_classes.of_kind(0).is_empty());
+    assert_eq!(count_kind(&design, BoardItemClass::Keepout), 1);
+}
+
+#[test]
+fn smd_to_turn_gap_falls_back_to_the_min_trace_half_width() {
+    // `Structure.updateBoardRules` (`Structure.java:606`): with no
+    // `(clearance … (type smd_to_turn_gap))` in the file, `pin_edge_to_turn_dist` becomes
+    // `BoardRules.getMinTraceHalfWidth()` — and that aggregate is seeded only by
+    // `setDefaultTraceHalfWidth[s]`, never by `createDefaultNetClass`'s 1500-unit placeholder
+    // (`BoardRules.java:238-244`). `VARIANT_BOARD` declares `(width 250)` at `(resolution um 10)`,
+    // so the half width is 1250 board units and the gap must follow it *down*.
+    assert!(!VARIANT_BOARD.contains("smd_to_turn_gap"));
+    let design = synthetic(VARIANT_BOARD);
+    assert_eq!(design.rules.get_min_trace_half_width(), 1250);
+    assert_eq!(design.rules.get_pin_edge_to_turn_dist(), 1250.0);
+
+    // A file that *does* declare the gap keeps its own value, untouched by the width.
+    let src = VARIANT_BOARD.replace(
+        "(rule (width 250) (clearance 200))",
+        "(rule (width 250) (clearance 200) (clearance 33 (type smd_to_turn_gap)))",
+    );
+    let design = synthetic(&src);
+    assert_eq!(design.rules.get_pin_edge_to_turn_dist(), 330.0);
+}

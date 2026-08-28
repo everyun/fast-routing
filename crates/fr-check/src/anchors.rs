@@ -138,7 +138,9 @@ impl AnchorIndex {
         let lo = Point::Int(IntPoint::new(min_x, 0));
         let hi = Point::Int(IntPoint::new(max_x, 0));
         let start = self.anchors.partition_point(|a| a.point.compare_x(&lo) < 0);
-        let end = self.anchors.partition_point(|a| a.point.compare_x(&hi) <= 0);
+        let end = self
+            .anchors
+            .partition_point(|a| a.point.compare_x(&hi) <= 0);
         &self.anchors[start..end.max(start)]
     }
 

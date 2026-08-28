@@ -145,15 +145,21 @@ impl BoardRules {
     }
 
     /// Creates the initial default net class if net classes are empty.
+    ///
+    /// `BoardRules.createDefaultNetClass` (`rules/BoardRules.java:238-244`) sets the class's own
+    /// half width and clearance class and **nothing else**: `min_trace_half_width` stays at the
+    /// constructor's `100000` sentinel until a `set_default_trace_half_width[s]` call lowers it.
+    /// Seeding the aggregate from the placeholder 1500 here would pin the minimum below every
+    /// real width in the file, and `Structure.updateBoardRules` uses that minimum as the
+    /// `smd_to_turn_gap` fallback (`Structure.java:606`) — so on a board with no explicit
+    /// `smd_to_turn_gap` rule it would silently halve the pin-edge-to-turn distance. Caught by
+    /// the G1.1 golden gate on seven fixtures.
     pub fn create_default_net_class(&mut self) {
         if self.net_classes.is_empty() {
             let idx = self.net_classes.append("default", &self.layer_structure, false);
             let default_nc = self.net_classes.get_mut(idx).unwrap();
-            let default_trace_half_width = 1500;
-            default_nc.set_trace_half_width(default_trace_half_width);
+            default_nc.set_trace_half_width(1500);
             default_nc.set_trace_clearance_class(1);
-            self.min_trace_half_width = default_trace_half_width;
-            self.max_trace_half_width = default_trace_half_width;
         }
     }
 

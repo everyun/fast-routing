@@ -60,10 +60,7 @@ impl Rng {
 const LAYERS: usize = 2;
 
 fn matrix() -> ClearanceMatrix {
-    let layers = LayerStructure::new(vec![
-        Layer::new("front", true),
-        Layer::new("back", true),
-    ]);
+    let layers = LayerStructure::new(vec![Layer::new("front", true), Layer::new("back", true)]);
     let mut m = ClearanceMatrix::new(3, layers, &["null", "default", "wide"]);
     m.set_value_symmetric(1, 1, 20);
     m.set_value_symmetric(1, 2, 40);
@@ -274,11 +271,8 @@ fn brute_force<V: BoardView + ?Sized>(view: &V) -> Vec<Record> {
                         if found.contains_key(&key) {
                             continue;
                         }
-                        let cl = view.clearance(
-                            other.clearance_class,
-                            this.clearance_class,
-                            sa.layer,
-                        );
+                        let cl =
+                            view.clearance(other.clearance_class, this.clearance_class, sa.layer);
                         let c1 = (0.5 * cl as f64).round() as i32;
                         let c2 = cl - c1;
                         let e1 = if c1 > 0 {
@@ -301,7 +295,9 @@ fn brute_force<V: BoardView + ?Sized>(view: &V) -> Vec<Record> {
     }
 
     let mut out: Vec<_> = found.into_values().collect();
-    out.sort_unstable_by_key(|(a, b, layer, _)| (a.raw().min(b.raw()), a.raw().max(b.raw()), *layer));
+    out.sort_unstable_by_key(|(a, b, layer, _)| {
+        (a.raw().min(b.raw()), a.raw().max(b.raw()), *layer)
+    });
     out
 }
 

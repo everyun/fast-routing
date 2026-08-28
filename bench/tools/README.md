@@ -7,7 +7,7 @@ normative definition; anything that emits or parses them must match it.
 |---|---|---|---|
 | `FRLAB …` | the instrumented **lab jar**, `/tmp/fr-lab-release/freerouting-lab.jar` | `frlab_parse.py` | M2a–c settle order |
 | `FRMETRIC …` | our router, via the **`fr-metrics`** crate | `frlab_parse.py`, `run_bench.py` | M2/M3 counters |
-| **golden-dump JSON** (`fast-routing.golden-dump/1`) | `fr-cli` (future) and the Java-dump adapter | `golden_compare.py` | **G1.0 / G1.1 import parity** |
+| **golden-dump JSON** (`fast-routing.golden-dump/1`) | `fr_io::golden_dump` (CLI: the `golden_emit` example) and the Java-dump adapter | `golden_compare.py` | **G1.0 / G1.1 import parity** |
 
 `frlab_parse.py` parses both and diffs the settle sequences against each other.
 That diff is the M2 oracle: it answers *"did our maze engine visit the same
@@ -337,7 +337,7 @@ python3 bench/tools/golden_compare.py --all [--ours-dir target/golden]
 python3 bench/tools/golden_compare.py --emit <dump> > /tmp/java.json
 
 python3 bench/tools/golden_compare.py --exclusions   # the lossy axes, verbatim
-python3 bench/tools/golden_compare.py --self-test    # 91 tests
+python3 bench/tools/golden_compare.py --self-test    # 99 tests
 ```
 
 Useful flags: `--gate-only` (compare only the G1.1 groups), `--float-decimals N`
@@ -346,9 +346,12 @@ Useful flags: `--gate-only` (compare only the G1.1 groups), `--float-decimals N`
 ## The exchange format — `fast-routing.golden-dump/1`
 
 Both sides produce this document; the comparator only ever sees the document,
-never a board. The Rust side will emit it from `fr-cli`; the Java side gets it
-from the adapter built into this file, which is what makes the Java-vs-Java
-self-comparison a real test of the parser *and* the comparator.
+never a board. The Rust side emits it from **`fr_io::golden_dump::emit`** — the
+CLI is `cargo run -p fr-io --release --example golden_emit -- in.dsn out.json`,
+and `crates/fr-io/tests/golden_gate_test.rs` calls the same function in-process
+for a five-board subset. The Java side gets it from the adapter built into this
+file, which is what makes the Java-vs-Java self-comparison a real test of the
+parser *and* the comparator.
 
 Everything is JSON. Numbers are JSON numbers (never strings). `null` means "the
 model has no value here", which is distinct from `0`.
@@ -524,11 +527,58 @@ source. Summarised:
    image outlines are compared as `(kind, layer, net, clearance class, corner
    count, bounding box)`. Padstack shapes — small, and what clearance is
    computed against — are compared corner-exact.
-7. **Pre-normalisation trace splitting.** Wiring is counted by
+7. **Component rotation.** `Component.write_scope` writes the placement angle as
+   `(int) Math.round(getRotationInDegree())` (`parser/Component.java:67`) — an
+   *integer* degree, while the board model holds a `double`. A footprint at
+   352.5° is written `353`. Both sides go through the same half-up rounding
+   before comparison, so sub-degree placement parity is not observable here
+   (`Issue157-TeamAdapt-LinePCB` has 36 such placements, `Issue214-freerouting`
+   12).
+8. **Conduction-area fixed state.** `Wiring.write_conduction_area_scope`
+   (`parser/Wiring.java:148-180`) never calls `write_fixed_state`, so every
+   conduction area reads back `unfixed` even though `Structure.java:967` inserts
+   planes `SYSTEM_FIXED`. The `wiring` group folds `conduction_area` into one
+   `unfixed` bucket on both sides. The *scope* split is not lossy and is **not**
+   folded: `Wiring.write_scope` writes only the conduction areas on **signal**
+   layers and `Structure.write_conduction_areas` writes the power-layer ones as
+   `(plane …)`, so an emitter must split them the same way or it shows a phantom
+   `conduction_area` and a missing `plane`.
+9. **Pre-normalisation trace splitting.** Wiring is counted by
    `(kind, fixed state)`, not matched record by record: upstream re-imports
    traces with `insert_trace_without_cleaning` and normalises afterwards
    (§10.4), so the split of a net's copper into `(wire …)` records is an
    artefact of insertion order.
+
+Two further losses are **not** normalised away, because they are model
+differences the report should keep showing:
+
+- **Empty identifiers vanish.** `IdentifierType.write("")` emits nothing at all,
+  so a net class named `""` (`Issue179` has a literal `(class  (circuit …))`)
+  writes as `(via_rule\n   "via0-"\n)` — the rule name disappears and the first
+  via name slides into its place. The dump cannot represent the model here.
+- **Non-ANSI characters in unquoted identifiers.** The shipped scanner drops
+  every code point above `U+00FF` from an unquoted token, with a
+  `Non-ansi character '…' found at position …` warning
+  (`SpecctraDsnStreamReader.java:1277`, action `case 2`), so
+  `Issue110-RelayModule`'s `(image Предохранители:Цилиндр_5х20` becomes `:`.
+  Quoted strings are unaffected — the same file's `"Соединители:KF301-2P"`
+  round-trips. Our importer keeps the name; see the "Deliberate divergences"
+  section of `crates/fr-io/src/specctra/mod.rs`.
+
+## When the oracle itself failed
+
+A dump whose Java run did not finish reading the fixture is not a resolved board
+model, and diffing against it measures the failure. `--all --ours-dir` therefore
+reads the sibling `<fixture>.log` and marks the row **`ORACLE-FAILED`** — not
+compared, not counted in the denominator, listed under the table with the log
+line that proves it. The markers are in `ORACLE_READ_FAILURE_MARKERS`; nothing is
+hard-coded per fixture, so a re-run of the jar that succeeds silently re-enables
+the board.
+
+| fixture | marker | what happened |
+|---|---|---|
+| `Issue006-LPC18XX_43XX_SCH` | `parse error while reading board file` | the file is an OLE2 compound document, not DSN (the manifest files it under `coverage/not_specctra_dsn`); the dump beside that log does not describe it |
+| `Issue229-display-8-digit-hc595` | `read_place_scope` | a `'` inside `(PN …)` opens a string the scanner never closes, so the placement scope dies mid-scan and `placement`, `library`, `network` and `wiring` all come out empty |
 
 ## Why the dump text is canonicalised before parsing
 
@@ -553,7 +603,7 @@ lexers. `test_tolerant_tokenizer_alone_mangles_the_same_input` pins the reason.
 2026-08-28, `bench/golden/dumps/` (43 dumps, 46 fixtures in the manifest):
 
 * `--all` self-comparison: **43/43 clean**, 0 differences, ~1.7 s.
-* `--self-test`: 91 tests, including a shuffle/jitter/spelling property triple
+* `--self-test`: 99 tests, including a shuffle/jitter/spelling property triple
   (the comparator must be blind to the three lossy axes) and its converse
   (a real change in each compared field must be caught).
 * Cross-checked against an independent, section-scoped line counter: components,
@@ -577,6 +627,38 @@ G1.1 covers 43, not 46:
 
 `--all` prints them under the table on every run, so the gap can never silently
 turn into "46/46".
+
+### G1.1 — the importer against the oracle
+
+2026-08-28, `--all --ours-dir target/golden` with `fr_io::golden_dump`:
+**37/41 clean**, 41 comparable boards (43 dumps − 2 `ORACLE-FAILED`). Per group:
+
+| group | gate | clean | remaining diffs |
+|---|---|---|---|
+| `resolution` | G1.1 | 41/41 | — |
+| `layers` | G1.1 | 41/41 | — |
+| `clearance_matrix` | G1.1 | 40/41 | 2 (Issue179) |
+| `padstacks` | G1.1 | 40/41 | 1 (Issue179) |
+| `components` | G1.1 | 40/41 | 3 (Issue110-RelayModule) |
+| `nets` | G1.1 | 41/41 | — |
+| `wiring` | G1.1 | 39/41 | 4 (Issue103-Board-Routed, Issue187) |
+| `via_rules` | G1.1 | 40/41 | 2 (Issue179) |
+| `images` | extra | 40/41 | 4 (Issue110-RelayModule) |
+| `net_classes` | extra | 40/41 | 2 (Issue179) |
+| `rules_misc` | extra | 41/41 | — |
+| `boundary` | extra | 41/41 | — |
+| `structure_areas` | extra | 41/41 | — |
+
+The four dirty boards and why:
+
+| fixture | group(s) | cause |
+|---|---|---|
+| `Issue110-RelayModule` | components, images | the scanner's non-ANSI drop, above — every value matches, only the names differ |
+| `Issue179-Autorouter_PCB1_2023-3-24` | clearance_matrix, padstacks, via_rules, net_classes | the empty-identifier loss, above, plus one padstack whose DSN shape is a 2-corner `(polygon 1 0.01 0 -3.5 0 3.5)`: upstream keeps it as an unbounded simplex and writes its corners as `Integer.MAX_VALUE / scale`, we drop the shape |
+| `Issue103-Board-Routed`, `Issue187-processor.Z80` | wiring | `fr-board`'s `normalize_traces`, not the importer — the importer inserts exactly the file's 2326 / 2026 traces and the release jar's `normalize_all_traces()` leaves the wire-shape multiset **byte-identical to the input**, while ours combines 61 / 105 traces away after a split/combine oscillation (340 097 successful combines on Issue187 for a net loss of 105) |
+
+`cargo test -p fr-io --release --test golden_gate_test -- --ignored` runs the
+same comparison in-process over five boards in ~0.5 s.
 
 ## Caveats
 

@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import glob
 import json
+import math
 import os
 import re
 import sys
@@ -143,6 +144,27 @@ EXCLUSIONS: list[tuple[str, str]] = [
         "their exact corner *set* is an input echo, while their extent is the "
         "thing the router sees. Padstack shapes, which are small and decide "
         "clearance, are compared exactly.",
+    ),
+    (
+        "component rotation",
+        "`Component.write_scope` writes the placement angle as "
+        "`(int) Math.round(p_component.get_rotation_in_degree())` "
+        "(`parser/Component.java:67`) — an *integer* degree, while the board model "
+        "holds a double. A footprint placed at 352.5deg is written as `353`, so "
+        "the oracle cannot see anything below one degree. Both sides are put "
+        "through the same `Math.round` before comparison; sub-degree placement "
+        "parity is not observable here.",
+    ),
+    (
+        "conduction-area fixed state",
+        "`Wiring.write_conduction_area_scope` (`parser/Wiring.java:148-180`) never "
+        "calls `write_fixed_state`, so every conduction area reads back as "
+        "`unfixed` no matter what it was inserted with -- and planes are inserted "
+        "`SYSTEM_FIXED` (`Structure.java:967`). The `wiring` group therefore folds "
+        "`conduction_area` to a single `unfixed` bucket on both sides. Conduction "
+        "areas on *power* layers are not in the wiring scope at all: "
+        "`Wiring.write_scope` skips them and `Structure.write_conduction_areas` "
+        "emits them as `(plane ...)`, where `structure_areas` picks them up.",
     ),
     (
         "pre-normalisation trace splitting",
@@ -1127,16 +1149,33 @@ def _padstack_map(doc: dict) -> dict[str, Any]:
     return out
 
 
+def _java_round(value: float) -> int:
+    """`java.lang.Math.round(double)` — round half *up*, towards positive infinity.
+
+    Not Python's `round` (half to even) and not `math.floor(x + 0.5)` (wrong for
+    `0.49999999999999994`, whose sum with a half rounds up to exactly 1.0).
+    """
+    floor = math.floor(value)
+    return int(floor + 1 if value - floor >= 0.5 else floor)
+
+
 def _component_map(doc: dict) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for entry in doc.get("components", []) or []:
+        # `Component.write_scope` writes the placement angle as
+        # `(int) Math.round(get_rotation_in_degree())` (`Component.java:67`), so the dump
+        # cannot carry a fractional rotation and the oracle is blind below one degree. Both
+        # sides are put through the same rounding — see the `component rotation` exclusion.
+        rotation = entry.get("rotation")
+        if isinstance(rotation, (int, float)) and not isinstance(rotation, bool):
+            rotation = _java_round(float(rotation))
         out[entry.get("name", "")] = {
             "image": entry.get("image"),
             "placed": entry.get("placed"),
             "x": entry.get("x"),
             "y": entry.get("y"),
             "side": entry.get("side"),
-            "rotation": entry.get("rotation"),
+            "rotation": rotation,
             "position_fixed": entry.get("position_fixed"),
             "pin": {
                 str(p.get("name")): p.get("clearance_class")
@@ -1234,7 +1273,13 @@ def _via_rule_items(doc: dict) -> list[Any]:
 def _wiring_map(doc: dict) -> dict[str, int]:
     out: dict[str, int] = {}
     for entry in doc.get("wiring", {}).get("by_kind_fixed", []) or []:
-        out[f"{entry.get('kind')}/{entry.get('fixed')}"] = entry.get("count")
+        kind = entry.get("kind")
+        # `Wiring.write_conduction_area_scope` writes no `(type ...)`, so the dump's conduction
+        # areas are always `unfixed` while the model's plane-derived ones are `SYSTEM_FIXED`.
+        # Fold the fixed state away for that kind only — see the exclusion of the same name.
+        fixed = "unfixed" if kind == "conduction_area" else entry.get("fixed")
+        key = f"{kind}/{fixed}"
+        out[key] = out.get(key, 0) + (entry.get("count") or 0)
     return out
 
 
@@ -1608,7 +1653,56 @@ _TABLE_COLUMNS = [
 ]
 
 
-def render_sweep(rows: list[dict], absent: list[str], gate_only: bool) -> str:
+# A dump whose own Java run failed part-way is not a resolved board model, and
+# comparing against it measures the failure, not our importer. The two markers
+# below are the release jar's *own* words for "I did not finish reading this
+# board"; both are read out of the sibling `<fixture>.log` written by the same
+# run, so this is evidence per run, never a hard-coded fixture list.
+#
+#   `parse error while reading board file` — `DsnFile.read` rejected the header
+#       outright (`Issue006-LPC18XX_43XX_SCH` is an OLE2 compound document, and
+#       the manifest files it under `coverage/not_specctra_dsn`). The dump next
+#       to that log does not describe the fixture at all.
+#   `Component.read_place_scope: ) expected` / `read_string_scope: closing
+#       bracket expected` — the placement scope died mid-scan
+#       (`Issue229-display-8-digit-hc595` has a `'` inside a `(PN …)`, which the
+#       scanner takes as a string quote). Every later scope — placement,
+#       library, network, wiring — comes out empty.
+#
+# Each marker must name a site that *aborts*. `Component.read_place_scope` has
+# four `FRLogger.warn` sites (`parser/Component.java:185,195,204,246`) and three
+# of them `return null`, but `:195` ("Keyword.FRONT expected") only defaults the
+# side to front and reads on — a board that trips it still yields a complete,
+# comparable dump. Matching the bare method name would silently drop such a board
+# out of the gate's denominator, so the aborting message is spelled out in full.
+ORACLE_READ_FAILURE_MARKERS = (
+    "parse error while reading board file",
+    "Component.read_place_scope: ) expected",
+    "Component.read_place_scope: number expected",
+    "Component.read_place_scope: Double was expected",
+    "read_string_scope: closing bracket expected",
+)
+
+
+def oracle_read_failure(dump_path: str) -> str | None:
+    """The marker proving the release jar did not finish reading this fixture, if any."""
+    log_path = dump_path[: -len(".import.dsn")] + ".log" if dump_path.endswith(".import.dsn") else ""
+    if not log_path or not os.path.exists(log_path):
+        return None
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as handle:
+            text = handle.read()
+    except OSError:
+        return None
+    return next((m for m in ORACLE_READ_FAILURE_MARKERS if m in text), None)
+
+
+def render_sweep(
+    rows: list[dict],
+    absent: list[str],
+    gate_only: bool,
+    failed_oracles: Sequence[tuple[str, str]] = (),
+) -> str:
     lines: list[str] = []
     header = f"{'fixture':<46}" + "".join(f"{name:>{width}}" for name, width in _TABLE_COLUMNS)
     header += f"{'diffs':>7}  result"
@@ -1621,11 +1715,20 @@ def render_sweep(rows: list[dict], absent: list[str], gate_only: bool) -> str:
         line += f"{row.get('differences', 0):>7}  {row['result']}"
         lines.append(line)
     lines.append("-" * len(header))
-    clean = sum(1 for row in rows if row["result"] == "OK")
+    comparable = [row for row in rows if row["result"] != "ORACLE-FAILED"]
+    clean = sum(1 for row in comparable if row["result"] == "OK")
     lines.append(
-        f"{clean}/{len(rows)} clean"
+        f"{clean}/{len(comparable)} clean"
         + ("  (G1.1 groups only)" if gate_only else "  (G1.1 + extra groups)")
     )
+    if failed_oracles:
+        lines.append("")
+        lines.append(
+            f"unusable oracles ({len(failed_oracles)}) — the release jar's own read of the "
+            "fixture failed, so its dump is not a resolved board model and is not compared:"
+        )
+        for name, marker in failed_oracles:
+            lines.append(f"  - {name}: log says {marker!r}")
     if absent:
         lines.append("")
         lines.append(
@@ -1654,9 +1757,20 @@ def _sweep(args: argparse.Namespace) -> int:
     rows: list[dict] = []
     exit_code = 0
     json_results: list[dict] = []
+    failed_oracles: list[tuple[str, str]] = []
     for path in paths:
         fixture = fixture_name(path)
         row: dict[str, Any] = {"fixture": fixture}
+        # Only meaningful when there is a `--ours-dir`: the self-comparison is a
+        # harness test of the parser and stays green even on a truncated dump.
+        marker = oracle_read_failure(path) if args.ours_dir else None
+        if marker is not None:
+            failed_oracles.append((fixture, marker))
+            row["result"] = "ORACLE-FAILED"
+            row["differences"] = 0
+            row["oracle_failure"] = marker
+            rows.append(row)
+            continue
         try:
             left = parse_java_dump(path)
         except Exception as exc:  # noqa: BLE001 — one bad dump must not stop the sweep
@@ -1719,6 +1833,9 @@ def _sweep(args: argparse.Namespace) -> int:
                 {
                     "dump_dir": dump_dir,
                     "absent": absent,
+                    "failed_oracles": [
+                        {"fixture": name, "marker": marker} for name, marker in failed_oracles
+                    ],
                     "rows": rows,
                     "results": json_results,
                 },
@@ -1727,7 +1844,7 @@ def _sweep(args: argparse.Namespace) -> int:
             )
         )
     else:
-        print(render_sweep(rows, absent, args.gate_only))
+        print(render_sweep(rows, absent, args.gate_only, failed_oracles))
     return exit_code
 
 

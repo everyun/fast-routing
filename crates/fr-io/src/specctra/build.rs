@@ -36,6 +36,7 @@ use fr_rules::clearance_class_names::{
 use fr_rules::{BoardRules, ClearanceMatrix, ItemClass, Nets, PadShape, ViaInfo, ViaRule};
 
 use super::ast::*;
+use super::jround::JavaRound;
 use super::transform::{derive_scale_factor, CoordinateTransform, ScaleFactor};
 
 /// Post-load overrides `HeadlessBoardManager` applies right after the board is constructed.
@@ -96,7 +97,7 @@ impl PadGeometry {
             PadGeometry::Octagon(o) => PadGeometry::Octagon(o.offset(width)),
             PadGeometry::Simplex(s) => PadGeometry::Simplex(s.offset(width)),
             PadGeometry::Circle(c) => {
-                PadGeometry::Circle(Circle::new(c.center, c.radius + width.round() as i32))
+                PadGeometry::Circle(Circle::new(c.center, c.radius + width.jround() as i32))
             }
         }
     }
@@ -129,7 +130,7 @@ impl PadGeometry {
         }
         match self {
             PadGeometry::Circle(c) => {
-                let center = c.center.to_float().rotate(angle_rad, pole).round();
+                let center = c.center.to_float().rotate(angle_rad, pole).jround();
                 PadGeometry::Circle(Circle::new(center, c.radius))
             }
             other => {
@@ -137,7 +138,7 @@ impl PadGeometry {
                 let corners: Vec<IntPoint> = simplex
                     .corner_approx_arr()
                     .iter()
-                    .map(|corner| corner.rotate(angle_rad, pole).round())
+                    .map(|corner| corner.rotate(angle_rad, pole).jround())
                     .collect();
                 let normalized = normalize_polygon_corners(&corners);
                 if normalized.len() < 3 {
@@ -173,7 +174,7 @@ impl PadGeometry {
             PadGeometry::Circle(c) => {
                 let center = match Point::Int(c.center).translate_by(vector) {
                     Point::Int(p) => p,
-                    Point::Rational(r) => r.to_float().round(),
+                    Point::Rational(r) => r.to_float().jround(),
                 };
                 PadGeometry::Circle(Circle::new(center, c.radius))
             }
@@ -377,6 +378,46 @@ pub struct ImportedComponent {
     pub pin_centers: Vec<IntPoint>,
     /// The clearance class index resolved for every pin, in package pin order.
     pub pin_clearance_classes: Vec<i32>,
+    /// The clearance class index resolved for every package keepout, in
+    /// [`ImportedPackage::keepouts`] order, then [`ImportedPackage::via_keepouts`], then
+    /// [`ImportedPackage::place_keepouts`] — the order `Component.writeKeepoutInfos` walks.
+    ///
+    /// Upstream keeps this only on the inserted `ObstacleArea` and recovers it by scanning the
+    /// whole item list for the area whose `(component_no, name)` matches
+    /// (`Component.java:110-163`). Our board items carry no name, so the resolution is recorded
+    /// here instead, in the same shape as `pin_clearance_classes`. Empty for an unplaced
+    /// component, which is where upstream returns early.
+    pub keepout_clearance_classes: KeepoutClearanceClasses,
+}
+
+/// The resolved clearance class of every component keepout, by keepout kind.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct KeepoutClearanceClasses {
+    /// Parallel to [`ImportedPackage::keepouts`].
+    pub keepouts: Vec<i32>,
+    /// Parallel to [`ImportedPackage::via_keepouts`].
+    pub via_keepouts: Vec<i32>,
+    /// Parallel to [`ImportedPackage::place_keepouts`].
+    pub place_keepouts: Vec<i32>,
+}
+
+impl KeepoutClearanceClasses {
+    /// The list for one of the three kinds, in `Component.writeKeepoutInfos`'s `j` order.
+    pub fn of_kind(&self, kind_index: usize) -> &[i32] {
+        match kind_index {
+            0 => &self.keepouts,
+            1 => &self.via_keepouts,
+            _ => &self.place_keepouts,
+        }
+    }
+
+    fn push(&mut self, kind_index: usize, class: i32) {
+        match kind_index {
+            0 => self.keepouts.push(class),
+            1 => self.via_keepouts.push(class),
+            _ => self.place_keepouts.push(class),
+        }
+    }
 }
 
 /// Everything the importer produces.
@@ -548,10 +589,10 @@ impl<'a> Builder<'a> {
 
         let lower_left = transform
             .dsn_to_board_point(bounding_box_dsn[0], bounding_box_dsn[1])
-            .round();
+            .jround();
         let upper_right = transform
             .dsn_to_board_point(bounding_box_dsn[2], bounding_box_dsn[3])
-            .round();
+            .jround();
         // §6.2 step 5: the board box is inflated by 1000 board units on every side, which is the
         // margin that lets the router shove traces slightly outside the nominal outline.
         let bounds = IntBox::new(
@@ -644,11 +685,11 @@ impl<'a> Builder<'a> {
                     let lower_left = self
                         .transform
                         .dsn_to_board_point(bounding_box_dsn[0], bounding_box_dsn[1])
-                        .round();
+                        .jround();
                     let upper_right = self
                         .transform
                         .dsn_to_board_point(bounding_box_dsn[2], bounding_box_dsn[3])
-                        .round();
+                        .jround();
                     Some(BoardShape::Box(IntBox::new(
                         lower_left.x.min(upper_right.x),
                         lower_left.y.min(upper_right.y),
@@ -683,7 +724,7 @@ impl<'a> Builder<'a> {
                 // §3.4: the PCB-level rounding is round(dsnToBoard(w) / 2) — halve in *board*
                 // units. The net-class-level rule halves in DSN units first; the two differ by
                 // one board unit for odd widths at low resolution and both ship.
-                let half_width = (self.transform.dsn_to_board(*width) / 2.0).round() as i32;
+                let half_width = (self.transform.dsn_to_board(*width) / 2.0).jround() as i32;
                 self.rules.set_default_trace_half_widths(half_width);
             }
         }
@@ -698,7 +739,7 @@ impl<'a> Builder<'a> {
                     match rule {
                         DsnRule::Width(width) => {
                             let half_width =
-                                (self.transform.dsn_to_board(*width) / 2.0).round() as i32;
+                                (self.transform.dsn_to_board(*width) / 2.0).jround() as i32;
                             self.rules
                                 .set_default_trace_half_width(layer_index as usize, half_width);
                         }
@@ -719,7 +760,7 @@ impl<'a> Builder<'a> {
     /// §7.3 `Structure.setClearanceRule`. Returns true when `smd_to_turn_gap` was seen.
     fn set_clearance_rule(&mut self, value: f64, class_pairs: &[String], layer_index: i32) -> bool {
         let mut found = false;
-        let clearance = self.transform.dsn_to_board(value).round() as i32;
+        let clearance = self.transform.dsn_to_board(value).jround() as i32;
         if class_pairs.is_empty() {
             if layer_index < 0 {
                 self.rules.clearance_matrix.set_default_value(clearance);
@@ -887,7 +928,7 @@ impl<'a> Builder<'a> {
             Unit::Um,
             self.ast.unit,
         )
-        .round() as i32;
+        .jround() as i32;
         let board_edge_class = match self.rules.clearance_matrix.get_no("board_edge") {
             Some(index) => index,
             None => {
@@ -946,7 +987,7 @@ impl<'a> Builder<'a> {
             Unit::Um,
             self.ast.unit,
         )
-        .round() as i32;
+        .jround() as i32;
         self.rules.set_hole_clearance(configured_units);
     }
 
@@ -1250,8 +1291,8 @@ impl<'a> Builder<'a> {
                 name: pin.pin_name.clone(),
                 padstack_index,
                 relative_location: IntVector::new(
-                    self.transform.dsn_to_board(pin.rel_coor[0]).round() as i32,
-                    self.transform.dsn_to_board(pin.rel_coor[1]).round() as i32,
+                    self.transform.dsn_to_board(pin.rel_coor[0]).jround() as i32,
+                    self.transform.dsn_to_board(pin.rel_coor[1]).jround() as i32,
                 ),
                 rotation: pin.rotation,
             });
@@ -1437,7 +1478,7 @@ impl<'a> Builder<'a> {
                 self.warn("Network.read_net_scope: rule not yet implemented");
                 continue;
             };
-            let half_width = (self.transform.dsn_to_board(*width) / 2.0).round() as i32;
+            let half_width = (self.transform.dsn_to_board(*width) / 2.0).jround() as i32;
             let default_clearance = self
                 .rules
                 .get_default_net_class()
@@ -1688,7 +1729,7 @@ impl<'a> Builder<'a> {
             match rule {
                 DsnRule::Width(width) => {
                     // §3.4: the net-class rounding halves in **DSN** units first.
-                    let half_width = self.transform.dsn_to_board(width / 2.0).round() as i32;
+                    let half_width = self.transform.dsn_to_board(width / 2.0).jround() as i32;
                     if let Some(net_class) = self.rules.net_classes.get_mut(class_index) {
                         net_class.set_trace_half_width(half_width);
                     }
@@ -1712,7 +1753,7 @@ impl<'a> Builder<'a> {
                     match rule {
                         DsnRule::Width(width) => {
                             let half_width =
-                                self.transform.dsn_to_board(width / 2.0).round() as i32;
+                                self.transform.dsn_to_board(width / 2.0).jround() as i32;
                             if let Some(net_class) = self.rules.net_classes.get_mut(class_index) {
                                 net_class.set_trace_half_width_on_layer(layer_index, half_width);
                             }
@@ -1765,7 +1806,7 @@ impl<'a> Builder<'a> {
         class_pairs: &[String],
         layer_index: i32,
     ) {
-        let clearance = self.transform.dsn_to_board(value).round() as i32;
+        let clearance = self.transform.dsn_to_board(value).jround() as i32;
         let class_name = self
             .rules
             .net_classes
@@ -2017,7 +2058,7 @@ impl<'a> Builder<'a> {
         class_pairs: &[String],
         layer_index: i32,
     ) {
-        let clearance = self.transform.dsn_to_board(value).round() as i32;
+        let clearance = self.transform.dsn_to_board(value).jround() as i32;
         let first_name = self
             .rules
             .net_classes
@@ -2081,14 +2122,30 @@ impl<'a> Builder<'a> {
     }
 
     fn insert_component(&mut self, lib_key: &str, location: &ComponentLocation) {
-        let Some(package_index) = self
-            .packages_get(lib_key, true)
-            .or_else(|| self.packages_get(lib_key, false))
-        else {
+        // `Network.insertComponent` (`Network.java:804-822`) resolves the image name **twice**,
+        // once per side, requires both to hit, and hands both to `Component`, which then answers
+        // `getPackage()` with the one matching the placement side (`board/Component.java:240`).
+        //
+        // The two lookups are not interchangeable, and that is the whole point: `Packages.get`
+        // returns a same-side hit immediately but keeps overwriting `other_side_package` as it
+        // scans, first over the literal name and then over the name with a trailing `::<digits>`
+        // stripped. So `get("Foo::1", false)` on a library whose `Foo` and `Foo::1` are both
+        // front-side packages answers **`Foo`** — the `::1` hit is recorded as the other-side
+        // candidate and then replaced by the base-name one. A back-placed component therefore
+        // silently lands on the base variant, which is exactly what the release dump shows
+        // (Issue066: `C3`, `C10`, `C12` are placed against `…::1` and written under `…`).
+        let front = self.packages_get(lib_key, true);
+        let back = self.packages_get(lib_key, false);
+        let (Some(front_index), Some(back_index)) = (front, back) else {
             self.warn(format!(
                 "Network.insert_component: component package not found at '{lib_key}'"
             ));
             return;
+        };
+        let package_index = if location.is_front {
+            front_index
+        } else {
+            back_index
         };
         let component_no = self.next_component_no;
         self.next_component_no += 1;
@@ -2102,7 +2159,7 @@ impl<'a> Builder<'a> {
         }
         let board_location = location
             .coor
-            .map(|coor| self.transform.dsn_to_board_point(coor[0], coor[1]).round());
+            .map(|coor| self.transform.dsn_to_board_point(coor[0], coor[1]).jround());
         let mut component = ImportedComponent {
             name: location.name.clone(),
             location: board_location,
@@ -2113,6 +2170,7 @@ impl<'a> Builder<'a> {
             part_number: location.part_number.clone(),
             pin_centers: Vec::new(),
             pin_clearance_classes: Vec::new(),
+            keepout_clearance_classes: KeepoutClearanceClasses::default(),
         };
         let Some(board_location) = board_location else {
             // An unplaced component exists but contributes no board items.
@@ -2159,7 +2217,7 @@ impl<'a> Builder<'a> {
             if let Some(first_shape) = placed.shapes.iter().flatten().next() {
                 let absolute = first_shape.translate_by(&Vector::Int(translation));
                 if !absolute.contains_inside(&center) {
-                    center = absolute.centre_of_gravity().round();
+                    center = absolute.centre_of_gravity().jround();
                 }
             }
 
@@ -2242,6 +2300,9 @@ impl<'a> Builder<'a> {
                 let mut layer = keepout.layer;
                 if layer >= self.layer_count as i32 {
                     self.warn("Network.insert_component: keepout layer is too big");
+                    // No area reaches the board, so `Component.writeKeepoutInfos`'s lookup finds
+                    // nothing; class 0 is its "skip" sentinel.
+                    component.keepout_clearance_classes.push(kind_index, 0);
                     continue;
                 }
                 if layer >= 0 && !on_front {
@@ -2263,6 +2324,9 @@ impl<'a> Builder<'a> {
                         }
                     }
                 }
+                component
+                    .keepout_clearance_classes
+                    .push(kind_index, clearance_class);
                 let placed_area = PlacedArea {
                     relative_area: board_shape_to_area_shape(&keepout.area),
                     translation,
@@ -2455,7 +2519,7 @@ impl<'a> Builder<'a> {
             drill_radius: self.padstacks[padstack_index]
                 .to_rules_padstack(padstack_index)
                 .get_drill_radius()
-                .round() as i32,
+                .jround() as i32,
         }
     }
 
@@ -2540,7 +2604,7 @@ impl<'a> Builder<'a> {
         let (layer_index, half_width) = match (&wire.path, &wire.border_shape) {
             (Some(path), _) => (
                 path.layer().no,
-                (self.transform.dsn_to_board(path.path_width() / 2.0)).round() as i32,
+                (self.transform.dsn_to_board(path.path_width() / 2.0)).jround() as i32,
             ),
             (None, Some(border)) => (border.layer().no, 0),
             (None, None) => return,
@@ -2605,7 +2669,7 @@ impl<'a> Builder<'a> {
                         ));
                         return;
                     }
-                    corners.push(point.round());
+                    corners.push(point.jround());
                 }
                 let polygon = fr_geometry::planar::Polygon::new(
                     &corners.iter().map(|p| Point::Int(*p)).collect::<Vec<_>>(),
@@ -2638,11 +2702,11 @@ impl<'a> Builder<'a> {
                     let a = self
                         .transform
                         .dsn_to_board_point(group[0], group[1])
-                        .round();
+                        .jround();
                     let b = self
                         .transform
                         .dsn_to_board_point(group[2], group[3])
-                        .round();
+                        .jround();
                     lines.push(Line { a, b });
                 }
                 if lines.len() < 3 {
@@ -2709,7 +2773,7 @@ impl<'a> Builder<'a> {
         let center = self
             .transform
             .dsn_to_board_point(via.location[0], via.location[1])
-            .round();
+            .jround();
         let padstack = &self.padstacks[padstack_index];
         let first_layer = padstack.from_layer() as i32;
         let last_layer = padstack.to_layer() as i32;
@@ -3209,7 +3273,7 @@ fn rotate_vector(vector: IntVector, rotation_deg: f64) -> IntVector {
         let rotated = vector
             .to_float()
             .rotate(rotation_deg.to_radians(), &FloatPoint::new(0.0, 0.0))
-            .round();
+            .jround();
         IntVector::new(rotated.x, rotated.y)
     }
 }

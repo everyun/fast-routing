@@ -16,6 +16,7 @@ use fr_geometry::planar::{
     Circle, IntBox, IntOctagon, IntPoint, Line, Point, Polygon, Simplex, Vector,
 };
 
+use super::jround::JavaRound;
 use super::transform::CoordinateTransform;
 
 // ---------------------------------------------------------------------------------------------
@@ -496,10 +497,10 @@ pub fn transform_to_board(shape: &DsnShape, transform: &CoordinateTransform) -> 
         DsnShape::Rect { coor, .. } => {
             let lower_left = transform
                 .dsn_to_board_point(coor[0].min(coor[2]), coor[1].min(coor[3]))
-                .round();
+                .jround();
             let upper_right = transform
                 .dsn_to_board_point(coor[0].max(coor[2]), coor[1].max(coor[3]))
-                .round();
+                .jround();
             Some(BoardShape::Box(IntBox::new(
                 lower_left.x,
                 lower_left.y,
@@ -508,8 +509,8 @@ pub fn transform_to_board(shape: &DsnShape, transform: &CoordinateTransform) -> 
             )))
         }
         DsnShape::Circle { coor, .. } => {
-            let center = transform.dsn_to_board_point(coor[1], coor[2]).round();
-            let radius = (transform.dsn_to_board(coor[0]) / 2.0).round() as i32;
+            let center = transform.dsn_to_board_point(coor[1], coor[2]).jround();
+            let radius = (transform.dsn_to_board(coor[0]) / 2.0).jround() as i32;
             Some(BoardShape::Circle(Circle::new(center, radius)))
         }
         DsnShape::Polygon { coor, .. } => {
@@ -535,7 +536,7 @@ pub fn transform_to_board_rel(
         DsnShape::Rect { coor, .. } => {
             let values: Vec<i32> = coor
                 .iter()
-                .map(|v| transform.dsn_to_board(*v).round() as i32)
+                .map(|v| transform.dsn_to_board(*v).jround() as i32)
                 .collect();
             // Upstream orders by the y coordinates only, so a rectangle given as
             // (upper-left, lower-right) is repaired but an x-inverted one is not.
@@ -547,10 +548,10 @@ pub fn transform_to_board_rel(
             Some(BoardShape::Box(result))
         }
         DsnShape::Circle { coor, .. } => {
-            let radius = (transform.dsn_to_board(coor[0]) / 2.0).round() as i32;
+            let radius = (transform.dsn_to_board(coor[0]) / 2.0).jround() as i32;
             let center = IntPoint::new(
-                transform.dsn_to_board(coor[1]).round() as i32,
-                transform.dsn_to_board(coor[2]).round() as i32,
+                transform.dsn_to_board(coor[1]).jround() as i32,
+                transform.dsn_to_board(coor[2]).jround() as i32,
             );
             Some(BoardShape::Circle(Circle::new(center, radius)))
         }
@@ -603,7 +604,7 @@ fn path_to_board(
         let octagon = fr_geometry::planar::FloatPoint::bounding_octagon(&corners);
         return BoardShape::Octagon(octagon.offset(offset));
     }
-    let rounded: Vec<IntPoint> = corners.iter().map(|p| p.round()).collect();
+    let rounded: Vec<IntPoint> = corners.iter().map(|p| p.jround()).collect();
     let normalized = normalize_polygon_corners(&rounded);
     if offset > 0.0 {
         BoardShape::Simplex(bounding_tile(&normalized).enlarge(offset))
@@ -617,7 +618,7 @@ where
     F: Fn(f64, f64) -> fr_geometry::planar::FloatPoint,
 {
     coor.chunks_exact(2)
-        .map(|pair| map(pair[0], pair[1]).round())
+        .map(|pair| map(pair[0], pair[1]).jround())
         .collect()
 }
 
@@ -631,7 +632,7 @@ pub fn translate_board_shape(shape: &BoardShape, vector: &Vector) -> BoardShape 
             let moved = Point::Int(c.center).translate_by(vector);
             let center = match moved {
                 Point::Int(p) => p,
-                Point::Rational(r) => r.to_float().round(),
+                Point::Rational(r) => r.to_float().jround(),
             };
             BoardShape::Circle(Circle::new(center, c.radius))
         }
@@ -640,7 +641,7 @@ pub fn translate_board_shape(shape: &BoardShape, vector: &Vector) -> BoardShape 
                 .iter()
                 .map(|p| match p.translate_by(vector) {
                     Point::Int(q) => q,
-                    Point::Rational(r) => r.to_float().round(),
+                    Point::Rational(r) => r.to_float().jround(),
                 })
                 .collect(),
         ),

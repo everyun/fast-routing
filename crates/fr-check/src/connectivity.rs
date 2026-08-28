@@ -154,7 +154,10 @@ impl ContactGraph {
                     if a.item == b.item {
                         continue;
                     }
-                    let (ia, ib) = (view.item(ids[a.item as usize]), view.item(ids[b.item as usize]));
+                    let (ia, ib) = (
+                        view.item(ids[a.item as usize]),
+                        view.item(ids[b.item as usize]),
+                    );
                     if !ia.shares_net(ib) || !shares_layer(ia, ib) {
                         continue;
                     }

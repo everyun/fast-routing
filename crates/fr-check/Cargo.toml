@@ -9,3 +9,10 @@ description = "The referee for the freerouting Rust port: octagon-norm clearance
 fr-board = { path = "../fr-board" }
 fr-geometry = { path = "../fr-geometry" }
 fr-rules = { path = "../fr-rules" }
+
+# The referee must not depend on file formats: a board it judges may come from
+# the importer, from a hand-written test or from a re-imported SES. `fr-io` is
+# therefore a *dev*-dependency, reached only by the G1.2a bridge in
+# `examples/drc_report.rs`.
+[dev-dependencies]
+fr-io = { path = "../fr-io" }

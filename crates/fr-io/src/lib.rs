@@ -17,8 +17,13 @@
 //! pre-rewrite path, kept only until `fr-core` moves over. They parse into a loose
 //! [`DsnDocument`] and are **not** conformant — their tokenizer loses numeric identifiers, among
 //! other things. No new code should call [`parse_dsn`].
+//!
+//! [`golden_dump`] serialises an [`specctra::ImportedDesign`] into the
+//! `fast-routing.golden-dump/1` exchange document that `bench/tools/golden_compare.py` diffs
+//! against the release jar's own dump — the G1.1 import-parity gate.
 
 pub mod dsn_reader;
+pub mod golden_dump;
 pub mod keyword;
 pub mod lexer;
 pub mod parser;

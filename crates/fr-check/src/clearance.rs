@@ -396,11 +396,7 @@ fn evaluate<V: BoardView + ?Sized>(
     let s1 = &view.shapes(this_id)[this.shape as usize].shape;
     let s2 = &view.shapes(other_id)[other.shape as usize].shape;
 
-    let cl = view.clearance(
-        other_item.clearance_class,
-        this_item.clearance_class,
-        layer,
-    );
+    let cl = view.clearance(other_item.clearance_class, this_item.clearance_class, layer);
     let c1 = half(cl);
     let c2 = cl - c1;
     // Upstream's `c > 0 ? shape.enlarge(c) : shape` — the zero case must not
@@ -494,7 +490,10 @@ fn is_escape_via_exempt(this: &Item, other: &Item, layer: i32) -> bool {
     let ItemKind::Via(v) = &this.kind else {
         return false;
     };
-    v.is_escape_via && v.escape_via_smd_layer >= 0 && v.escape_via_smd_layer == layer && other.shares_net(this)
+    v.is_escape_via
+        && v.escape_via_smd_layer >= 0
+        && v.escape_via_smd_layer == layer
+        && other.shares_net(this)
 }
 
 /// `Item.sharesLayer` — `max(firstLayer) <= min(lastLayer)`.

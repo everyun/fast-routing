@@ -64,6 +64,7 @@ version = "0.1.0"
 dependencies = [
  "fr-board",
  "fr-geometry",
+ "fr-io",
  "fr-rules",
 ]
 
