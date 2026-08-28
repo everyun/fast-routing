@@ -37,10 +37,12 @@
 //!   (`PolylineTrace.java:856`), which is M2b. The save/restore is noted at its
 //!   call site so the seam is visible;
 //! * post-insert is `normalize_traces(net)` plus the recorded
-//!   [`crate::insert_forced::ChangedArea`]. Upstream also runs
-//!   pull-tight twice — once inside `insert_forced_trace_polyline` with a keep
-//!   point, once as `opt_changed_area` over the region — both M2b. The changed
-//!   area this returns is exactly the input the second one needs.
+//!   [`crate::insert_forced::ChangedArea`]. Upstream runs pull-tight twice —
+//!   once inside `insert_forced_trace_polyline` with a keep point, once as
+//!   `opt_changed_area` over the region — and so does this port: the first is
+//!   step 8 of [`crate::insert_forced::ForcedInserter::insert_forced_trace_polyline`]
+//!   (see [`crate::insert_forced::INSERT_PULL_TIGHT_DEFAULT`] for the A/B), the
+//!   second is the batch driver's, over the changed area this returns.
 
 use std::collections::{BTreeMap, BTreeSet};
 

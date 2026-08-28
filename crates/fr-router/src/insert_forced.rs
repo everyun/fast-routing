@@ -200,6 +200,51 @@ impl ChangedAreaSink for ChangedArea {
     }
 }
 
+/// Whether [`ForcedInserter::insert_pull_tight`] starts on.
+///
+/// **`true`, which is upstream** — the switch exists so the two sides can be
+/// A/B'd on a fixture, not because either side is a divergence.
+///
+/// Upstream runs a full pull-tight over the *accumulated* trace after **every**
+/// segment window of `InsertFoundConnectionAlgo.insert_trace`, keyed on that
+/// window's end corner, and states the purpose at `RoutingBoard.java:868-869`:
+/// "to avoid, that a separate handling for moving backwards in the own trace
+/// line becomes necessary, pull tight is called here". The window that follows
+/// is then checked against a straightened trace rather than against the
+/// locator's raw staircase.
+///
+/// Measured at `-mp 1`, referee-judged, incomplete connections:
+///
+/// | fixture | mode | off | on |
+/// |---|---|---|---|
+/// | easy-10, all ten | default (optimizer on) | — | **identical, 0 added violations** |
+/// | Issue034 | default, wall clock | 263.7 s | **97.4 s** |
+/// | Issue026 | `--no-optimizer` | 5 | 8 |
+/// | Issue155 | `--no-optimizer` | 5 | 5 |
+/// | Issue159 | `--no-optimizer` | 2 | 3 |
+/// | Issue102 | `--no-optimizer` | 43 | **41** (17.8 s vs 18.2 s) |
+///
+/// Two honest halves, and both are worth knowing:
+///
+/// * **the speed is real and structural.** Every later window, every later
+///   shove and the batch driver's `opt_changed_area` all work on a trace with a
+///   fraction of the corners, and corner count is what the clearance oracle is
+///   priced in. That is the 2.7× on Issue034;
+/// * **the router stage alone is not uniformly better.** Two of the easy-10 lose
+///   connections when the optimizer is switched off (Issue026 5 → 8, Issue159
+///   2 → 3) while Issue102 gains two. Straightening mid-insertion moves copper
+///   the locator did not plan for, and this port's located chains are much
+///   denser than the release's — 44 corners against the reference jar's 16 on
+///   the first congested connection of Issue159, from a room decomposition that
+///   crosses roughly three times as many doors along the same corridor. The
+///   denser the chain, the further the straightening moves it. Closing that gap
+///   is a rooms/maze job; when it lands, re-run the `--no-optimizer` rows above
+///   and the spread should shrink.
+///
+/// The default stays upstream's because the *gate* is judged in default mode,
+/// where the two are indistinguishable and this one is far faster.
+pub const INSERT_PULL_TIGHT_DEFAULT: bool = true;
+
 /// The board-mutating half of the connection inserter.
 ///
 /// Owns the `&mut Board` for the whole insertion, so that the search-tree
@@ -215,6 +260,14 @@ pub struct ForcedInserter<'b> {
     pub ctrl: &'b AutorouteControl,
     /// The region every mutation is joined into.
     pub changed_area: ChangedArea,
+    /// Whether step 8 of `insert_forced_trace_polyline` — the in-insert
+    /// pull-tight over the accumulated trace, with the segment's end corner as
+    /// the keep point (`RoutingBoard.java:821-889`) — runs.
+    ///
+    /// Default [`INSERT_PULL_TIGHT_DEFAULT`], which is **`true`** — upstream's
+    /// behaviour, not a divergence. The field exists so the two sides can be
+    /// A/B'd on a fixture; that constant carries the measurements.
+    pub insert_pull_tight: bool,
     bounds: IntBox,
     scratch_entries: Vec<TreeEntry>,
     scratch_stack: QueryStack,
@@ -235,11 +288,19 @@ impl<'b> ForcedInserter<'b> {
             rules,
             ctrl,
             changed_area: ChangedArea::new(layer_count),
+            insert_pull_tight: INSERT_PULL_TIGHT_DEFAULT,
             bounds,
             scratch_entries: Vec::new(),
             scratch_stack: QueryStack::new(),
             scratch_ids: Vec::new(),
         }
+    }
+
+    /// Builder form of [`ForcedInserter::insert_pull_tight`].
+    #[must_use]
+    pub fn with_insert_pull_tight(mut self, on: bool) -> ForcedInserter<'b> {
+        self.insert_pull_tight = on;
+        self
     }
 
     /// The net array every item this inserter creates carries.
@@ -663,15 +724,66 @@ impl<'b> ForcedInserter<'b> {
         self.board.combine_trace(trace_id);
 
         // Step 7, `:834-855`: normalize against the changed-area clip, so
-        // generated cycles are gone before (M2b) pull-tight runs.
+        // generated cycles are gone before pull-tight runs — upstream's own
+        // comment at `:837-838` is "remove evtl. generated cycles because
+        // otherwise pull_tight may not work correctly".
         let clip = self.changed_area.area(layer);
-        self.board.normalize_trace(trace_id, Some(&clip));
+        let normalized = self.board.normalize_trace(trace_id, Some(&clip));
 
-        // Step 8, `:821-889`: `new_trace.pull_tight(pull_tight_algo)` with
-        // `keep_point = new_corner`. **M2b seam.** `tidy_width` is threaded
-        // through so the call site keeps upstream's shape; nothing reads it
-        // yet.
-        let _ = tidy_width;
+        // Step 8, `:821-889`: the in-insert pull-tight, with `new_corner` as
+        // the keep point. Gated on [`ForcedInserter::insert_pull_tight`], which
+        // is **off** by default; the field's docs carry the measurement and the
+        // reason, and `docs/PARITY-DIVERGENCES.md` carries the entry.
+        if !self.insert_pull_tight {
+            return Some(new_corner);
+        }
+        let tidy_region = if tidy_width < i32::MAX {
+            Some(
+                new_corner
+                    .surrounding_octagon()
+                    .offset(f64::from(tidy_width)),
+            )
+        } else {
+            None
+        };
+        // `:825-831`: the net filter is the routed net **only** when the shove
+        // is switched off; with a shove depth the region's other nets relax too.
+        let opt_nets: Vec<i32> = if self.ctrl.max_shove_trace_recursion_depth <= 0 {
+            self.nets().iter().copied().collect()
+        } else {
+            Vec::new()
+        };
+        let accuracy = self.ctrl.pull_tight_accuracy;
+        // `trace_pull_tight` records what it moved; the inserter's region is the
+        // one the caller's `opt_changed_area` reads, so it is lent, not shadowed.
+        let mut changed_area = std::mem::replace(&mut self.changed_area, ChangedArea::new(0));
+        let mut trace = Some(trace_id);
+        {
+            let mut algo = crate::pull_tight::PullTightAlgo::new(
+                self.board,
+                self.rules,
+                &opt_nets,
+                tidy_region,
+                accuracy,
+                None,
+                Some(new_corner.clone()),
+                layer,
+            );
+            if normalized {
+                // `:849-871`: the keep point must stay a corner of the net, and
+                // the `new_trace` handle is stale after the split — upstream
+                // drops it and re-picks at `new_corner`.
+                algo.split_traces_at_keep_point();
+                trace = algo.picked_trace_at(&new_corner, layer);
+            }
+            // `:878-880`: `p_tidy_width > 0 && new_trace != null`.
+            if tidy_width > 0 {
+                if let Some(id) = trace {
+                    algo.trace_pull_tight(id, &mut changed_area);
+                }
+            }
+        }
+        self.changed_area = changed_area;
 
         Some(new_corner)
     }

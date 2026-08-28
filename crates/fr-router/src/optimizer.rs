@@ -169,13 +169,11 @@ impl ItemRerouter for MazeRerouter {
         router.remove_unconnected_vias = true;
         // Upstream re-derives the work list on the next of its ≤ 6 passes
         // instead of re-queueing inside one, so the requeue divergence — which
-        // exists to cover a *one*-pass run — does not apply here. It stays on
-        // regardless: `BatchRouter` resolves `requeue_policy` only inside
-        // `run`, and there is no setter for the resolved flag. Harmless (a
-        // requeue can only add attempts, never keep a worse board — the
-        // improvement rule still has the last word) but not upstream; see the
-        // request in this wave's hand-off notes.
+        // exists to cover a *one*-pass run — does not apply here. `run` is what
+        // resolves the policy into the flag the pass reads, and this path does
+        // not go through it, so the flag is set directly.
         router.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
+        router.set_requeue_active(false);
         for pass_no in 1..=request.max_passes {
             // `:156-161` — stop as soon as a pass finds nothing left to route.
             if router.autoroute_pass(board, pass_no).board_complete {
@@ -792,6 +790,32 @@ mod tests {
         optimizer.use_increased_ripup_costs = false;
         assert_eq!(optimizer.item_ripup_costs(false), 100);
         assert_eq!(optimizer.item_ripup_costs(true), 60);
+    }
+
+    /// The optimizer's direct-drive path must not requeue: upstream's
+    /// `autoroute_passes_for_optimizing_item` re-derives the work list on the
+    /// next pass instead (`BatchAutorouter.java:156-161`).
+    #[test]
+    fn the_optimizers_rerouter_turns_the_requeue_off() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let rules = fixture.rules.clone();
+        let settings = fixture.settings.clone();
+
+        // A plain router at `-mp 1` requeues; the seam has to be reachable.
+        let mut plain = BatchRouter::new(&rules, &settings);
+        plain.autoroute_pass(&mut fixture.board.clone(), 1);
+        assert!(plain.requeue_active(), "the default is upstream's -mp 1 rule");
+
+        // ... and what `MazeRerouter` builds does not.
+        let mut router = BatchRouter::new(&rules, &settings);
+        router.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
+        router.set_requeue_active(false);
+        assert!(!router.requeue_active());
+        router.autoroute_pass(&mut fixture.board, 1);
+        assert!(
+            !router.requeue_active(),
+            "a direct `autoroute_pass` must not re-resolve the flag"
+        );
     }
 
     #[test]

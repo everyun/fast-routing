@@ -14,7 +14,7 @@
 //! better, `restore_count <= max_restores` selects, `max_score` floors at `0`
 //! and answers `0` for an empty store.
 //!
-//! # Storage, and the seam this leaves open
+//! # Storage
 //!
 //! Upstream stores `board.serialize(false)` byte arrays and materialises one
 //! with Java deserialization. `ARCHITECTURE.md` specifies the replacement:
@@ -23,24 +23,29 @@
 //! >    ~ms; restore must also restore tree state and preserves the room DB
 //! >    interaction (restore invalidates per-item room caches — budgeted)
 //!
-//! [`fr_board::history::BoardHistory`] is that mechanism — pooled
-//! [`ItemStore`](fr_board::store::ItemStore) buffers plus a [`StoreDelta`]
-//! invalidation callback — but it is a LIFO stack over a bare `ItemStore`, and a
-//! [`Board`] exposes no `&mut ItemStore`. A score-ranked store needs
-//! random-access restore *without* discarding the newer entries, so this module
-//! holds [`Board`] clones instead and computes the same [`StoreDelta`] with
-//! [`ItemStore::diff_into`](fr_board::store::ItemStore::diff_into) so the invalidation callback —
-//! [`BoardSnapshotStore::restore`]'s `on_restore` — is the same seam with the
-//! same payload. Swapping the storage for pooled arena snapshots is then a
-//! change to this file alone; see the crate-level caveat.
+//! That is what this is. An entry is a pooled
+//! [`ItemStore`] — the items and nothing else — and
+//! a restore is [`Board::swap_store`], which reconciles the search trees and the
+//! connectivity index from the [`StoreDelta`] rather than rebuilding them. The
+//! displaced store comes back out through the same buffer and goes straight back
+//! into the pool, so a full thirty-deep history costs thirty *item* arenas whose
+//! per-item allocations — every polyline `Vec<Line>` — are recycled across
+//! snapshots, instead of thirty whole [`Board`] clones each carrying its own
+//! copy of every search tree.
 //!
-//! A [`Board`] clone carries its search trees and connectivity with it, so the
-//! restored board needs no rebuild — the callback exists for state *outside*
-//! the board: the autoroute room database and its per-item caches.
+//! [`fr_board::history::BoardHistory`] is the same mechanism as a LIFO stack;
+//! this module cannot use it because a score-ranked store needs random-access
+//! restore *without* discarding the newer entries, and because an entry here is
+//! handed out up to [`MAXIMUM_TRIES_ON_THE_SAME_BOARD`] + 1 times and therefore
+//! has to survive being restored.
+//!
+//! The callback [`BoardSnapshotStore::restore`] takes is the invalidation seam
+//! for state *outside* the board: the autoroute room database and its per-item
+//! caches. Everything inside the board is already reconciled when it runs.
 
 use fr_board::board::Board;
 use fr_board::item::ItemKind;
-use fr_board::store::StoreDelta;
+use fr_board::store::{ItemStore, StoreDelta};
 
 /// `BoardHistory.MAX_HISTORY_SIZE` (`:29`) *(jar-verified)*.
 pub const MAX_HISTORY_SIZE: usize = 30;
@@ -133,9 +138,12 @@ fn kind_tag(kind: &ItemKind) -> u64 {
 }
 
 /// One retained board — `BoardHistory.BoardHistoryEntry` (`:200-213`).
+///
+/// The items only: everything else a [`Board`] carries is derived from them and
+/// is reconciled by [`Board::swap_store`] on the way back in.
 #[derive(Debug, Clone)]
 struct Entry {
-    board: Board,
+    store: ItemStore,
     hash: u64,
     score: f64,
     restore_count: u32,
@@ -167,6 +175,8 @@ pub struct Restored {
 #[derive(Debug, Clone)]
 pub struct BoardSnapshotStore {
     entries: Vec<Entry>,
+    /// Retired snapshot buffers, kept for their allocations.
+    pool: Vec<ItemStore>,
     capacity: usize,
     delta: StoreDelta,
 }
@@ -188,6 +198,7 @@ impl BoardSnapshotStore {
     pub fn with_capacity(capacity: usize) -> BoardSnapshotStore {
         BoardSnapshotStore {
             entries: Vec::new(),
+            pool: Vec::new(),
             capacity: capacity.max(1),
             delta: StoreDelta::new(),
         }
@@ -209,8 +220,17 @@ impl BoardSnapshotStore {
     }
 
     /// Drops every retained board — `BoardHistory.clear` (`:82-84`).
+    ///
+    /// The buffers stay pooled: a batch loop clears the history at the top of
+    /// every run and would otherwise pay for the arenas twice.
     pub fn clear(&mut self) {
-        self.entries.clear();
+        self.pool
+            .extend(self.entries.drain(..).map(|entry| entry.store));
+    }
+
+    /// Releases the pooled buffers. Only useful when the store is done with.
+    pub fn shrink(&mut self) {
+        self.pool.clear();
     }
 
     /// The best retained score, **floored at 0** and `0` for an empty store
@@ -262,10 +282,14 @@ impl BoardSnapshotStore {
             if score <= worst_score {
                 return false;
             }
-            self.entries.remove(worst_index);
+            self.pool.push(self.entries.remove(worst_index).store);
         }
+        let mut store = self.pool.pop().unwrap_or_default();
+        // O(board), reusing the retired buffer's allocations down to the
+        // individual polyline `Vec<Line>` (`ItemStore::copy_from`).
+        store.copy_from(board.store());
         self.entries.push(Entry {
-            board: board.clone(),
+            store,
             hash,
             score,
             restore_count: 0,
@@ -307,16 +331,25 @@ impl BoardSnapshotStore {
             .iter()
             .position(|entry| entry.restore_count <= allowed)?;
 
-        let entry = &mut self.entries[index];
-        entry.restore_count += 1;
-        let restored = Restored {
-            rank: index + 1,
-            score: entry.score,
-            restore_count: entry.restore_count,
+        let restored = {
+            let entry = &mut self.entries[index];
+            entry.restore_count += 1;
+            Restored {
+                rank: index + 1,
+                score: entry.score,
+                restore_count: entry.restore_count,
+            }
         };
 
-        board.store().diff_into(entry.board.store(), &mut self.delta);
-        board.clone_from(&entry.board);
+        // The entry must survive being restored — it is handed out up to
+        // `MAXIMUM_TRIES_ON_THE_SAME_BOARD + 1` times — so the *copy* is what
+        // goes into the board, and the buffer it displaces is what comes back
+        // for the next snapshot to fill.
+        let mut buffer = self.pool.pop().unwrap_or_default();
+        buffer.copy_from(&self.entries[index].store);
+        board.swap_store(&mut buffer, &mut self.delta);
+        self.pool.push(buffer);
+
         on_restore(board, &self.delta);
         Some(restored)
     }
@@ -341,7 +374,7 @@ impl BoardSnapshotStore {
 mod tests {
     use super::*;
     use crate::test_support::TestFixture;
-    use fr_board::item::FixedState;
+    use fr_board::item::{FixedState, ItemId};
     use fr_board::net_nos::NetNos;
     use fr_geometry::planar::IntPoint;
 
@@ -467,4 +500,124 @@ mod tests {
         assert_eq!(fixture.board.store().len(), best_items);
     }
 
+    // ---- the pooled-store storage ---------------------------------------
+
+    /// The items (id and rendered content), the tree's leaf count, what a
+    /// whole-board tree query answers, and each net's component count.
+    type Observable = (Vec<(u32, String)>, usize, Vec<ItemId>, Vec<usize>);
+
+    /// The whole board's observable state, for the equivalence test: the items,
+    /// what the search trees answer, and what the connectivity index answers.
+    fn observable(board: &mut Board) -> Observable {
+        let items = board
+            .store()
+            .iter_ascending()
+            .map(|(id, item)| (id.raw(), format!("{item:?}")))
+            .collect();
+        let leaves = board.default_tree().leaf_count();
+        let mut hits = Vec::new();
+        board.overlapping_items(
+            &fr_board::shape::TileShape::Box(fr_geometry::planar::IntBox::new(
+                -100_000, -100_000, 100_000, 100_000,
+            )),
+            None,
+            &[],
+            &mut hits,
+        );
+        hits.sort_unstable();
+        let nets: Vec<i32> = board.store().nets().map(|(net, _)| net).collect();
+        let components = nets
+            .into_iter()
+            .map(|net| board.net_component_count(net))
+            .collect();
+        (items, leaves, hits, components)
+    }
+
+    /// The property the storage change has to preserve: restoring through
+    /// [`Board::swap_store`] must land on the same board a whole-board clone
+    /// would have, trees and connectivity included.
+    #[test]
+    fn a_pooled_restore_equals_a_whole_board_clone_swap() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        stub_trace(&mut fixture.board, 100);
+        // The reference: what upstream's deserialize — and this module's
+        // previous `Board::clone_from` — would put back.
+        let reference = fixture.board.clone();
+
+        let mut history = BoardSnapshotStore::new();
+        assert!(history.add(&fixture.board, 100.0));
+
+        // Move the board away from the snapshot in all three directions the
+        // delta distinguishes: add, remove, and mutate in place.
+        let doomed = fixture
+            .board
+            .store()
+            .iter()
+            .find(|(_, item)| matches!(item.kind, ItemKind::Trace(_)))
+            .map(|(id, _)| id)
+            .expect("the stub is a trace");
+        stub_trace(&mut fixture.board, 200);
+        stub_trace(&mut fixture.board, 300);
+        fixture.board.remove_item(doomed);
+
+        let mut seen = StoreDelta::new();
+        history
+            .restore(&mut fixture.board, 3, |_, delta| seen = delta.clone())
+            .expect("one entry");
+        fixture.board.assert_consistent();
+
+        let mut clone_swapped = fixture.board.clone();
+        clone_swapped.clone_from(&reference);
+
+        assert_eq!(
+            observable(&mut fixture.board),
+            observable(&mut clone_swapped),
+            "the pooled restore diverged from the clone swap: {seen:?}"
+        );
+        assert!(seen.added.contains(&doomed), "{seen:?}");
+        assert_eq!(seen.removed.len(), 2, "the two new stubs go away: {seen:?}");
+    }
+
+    /// An entry survives being restored, so the same board can come back four
+    /// times — the pooled buffer must be a copy, not the entry itself.
+    #[test]
+    fn a_restored_entry_is_still_restorable() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let items_before = fixture.board.store().len();
+        let mut history = BoardSnapshotStore::new();
+        history.add(&fixture.board, 100.0);
+
+        for _ in 0..4 {
+            stub_trace(&mut fixture.board, 100);
+            assert_eq!(fixture.board.store().len(), items_before + 1);
+            history
+                .restore(&mut fixture.board, MAXIMUM_TRIES_ON_THE_SAME_BOARD, |_, _| {})
+                .expect("tries left");
+            assert_eq!(fixture.board.store().len(), items_before);
+            fixture.board.assert_consistent();
+        }
+    }
+
+    /// The point of the storage change: a retained pass is one item arena, and
+    /// the buffers are recycled rather than reallocated.
+    #[test]
+    fn evicted_and_cleared_buffers_are_pooled() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let mut history = BoardSnapshotStore::with_capacity(2);
+        for (index, score) in [10.0, 30.0].iter().enumerate() {
+            stub_trace(&mut fixture.board, 100 * (index as i32 + 1));
+            assert!(history.add(&fixture.board, *score));
+        }
+        assert_eq!(history.pool.len(), 0);
+
+        stub_trace(&mut fixture.board, 900);
+        assert!(history.add(&fixture.board, 20.0), "beats the worst");
+        assert_eq!(history.pool.len(), 0, "the evicted buffer was refilled");
+
+        history.clear();
+        assert!(history.is_empty());
+        assert_eq!(history.pool.len(), 2, "clearing keeps the arenas");
+        history.shrink();
+        assert_eq!(history.pool.len(), 0);
+    }
 }

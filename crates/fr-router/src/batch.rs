@@ -41,8 +41,9 @@
 //!   for what of the family is ported and what is not. The one argument that is
 //!   deliberately not upstream's is the stall guard: a wall clock there would
 //!   make the routed board depend on machine load.
-//! * The per-connection budget ([`budget`]) is armed around every connection and
-//!   accounted for; see that module for what binds today and what does not.
+//! * The per-connection budget ([`budget`]) is armed around every connection,
+//!   handed to the engine the maze polls, and accounted for in
+//!   [`PassOutcome`]; see that module.
 //!
 //! # The routing sequence, per connection
 //!
@@ -80,7 +81,7 @@ pub mod history;
 pub mod schedule;
 pub mod scoring;
 
-use crate::batch::budget::BudgetPolicy;
+use crate::batch::budget::{BudgetPolicy, ConnectionClock};
 use crate::batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
 use crate::batch::scoring::CheckScorer;
 
@@ -566,6 +567,10 @@ pub fn incomplete_count(board: &mut Board) -> usize {
 ///
 /// `ripup_costs` is the pass's `start_ripup_costs * pass_no`; the caller owns
 /// the escalation (conformance D5 — `AutorouteControl`'s own default is dead).
+///
+/// `clock` is this connection's allowance — upstream's `TimeLimit`, built at
+/// `:1311-1313` and handed to `board.init_autoroute` at `:1315-1318`. `None`
+/// routes unbounded, which is upstream's `null`.
 #[allow(clippy::too_many_arguments)]
 pub fn autoroute_item(
     board: &mut Board,
@@ -575,6 +580,7 @@ pub fn autoroute_item(
     net_no: i32,
     ripup_costs: i32,
     remove_unconnected_vias: bool,
+    clock: Option<&mut ConnectionClock>,
     scratch: &mut ContactScratch,
 ) -> AttemptOutcome {
     let contains_plane = rules
@@ -614,7 +620,7 @@ pub fn autoroute_item(
     ctrl.ripup_costs = ripup_costs;
     ctrl.remove_unconnected_vias = remove_unconnected_vias;
 
-    route_with_control(board, rules, ctrl, &start, &destination)
+    route_with_control(board, rules, ctrl, &start, &destination, clock)
 }
 
 /// The engine → locate → insert half of one connection, with the control
@@ -626,16 +632,26 @@ pub fn autoroute_item(
 /// ripped connections travel inside the located connection and are deleted by
 /// [`crate::insert::insert_connection`] in the same board transaction, so a
 /// failed insert leaves the ripped copper in place (`:213-246`).
+///
+/// `clock` is the connection's allowance; it is armed on the engine, which is
+/// where `RoutingBoard.init_autoroute` puts it (`AutorouteEngine.java:119`) and
+/// where the maze loop polls it (`MazeSearchAlgo.java:258`). It stays borrowed
+/// so the caller — the pass — can read the usage back after the search, insert
+/// and pull-tight it also covers.
 pub fn route_with_control(
     board: &mut Board,
     rules: &BoardRules,
     ctrl: AutorouteControl,
     start: &[ItemId],
     destination: &[ItemId],
+    clock: Option<&mut ConnectionClock>,
 ) -> AttemptOutcome {
     board.ensure_compensated_tree(ctrl.trace_clearance_class_no);
     let (located, bounds) = {
         let mut engine = AutorouteEngine::new(board, rules, ctrl.clone());
+        if let Some(clock) = clock {
+            engine.set_clock(clock);
+        }
         let bounds = engine.bounds();
         let connection = {
             let Ok(mut search) = MazeSearch::get_instance(&mut engine, start, destination) else {
@@ -900,6 +916,22 @@ impl<'r> BatchRouter<'r> {
         self.requeue_active
     }
 
+    /// Resolves the requeue for a caller that drives
+    /// [`autoroute_pass`](BatchRouter::autoroute_pass) itself.
+    ///
+    /// [`run`](BatchRouter::run) resolves [`requeue_policy`](BatchRouter::requeue_policy)
+    /// against the pass cap, because [`RequeuePolicy::SinglePassOnly`] is a
+    /// statement about the *run*. A direct-drive caller — the optimizer's
+    /// [`MazeRerouter`](crate::optimizer::MazeRerouter), which loops
+    /// `autoroute_pass` exactly as
+    /// `BatchAutorouter.autoroute_passes_for_optimizing_item` (`:156-161`) does
+    /// — never goes through `run` and so has to say which behaviour it wants.
+    /// Upstream re-derives the work list on the next of its passes instead of
+    /// requeueing inside one, so that caller wants `false`.
+    pub fn set_requeue_active(&mut self, active: bool) {
+        self.requeue_active = active;
+    }
+
     /// One pass — `BatchAutorouter.autoroute_pass` (`:431-694`).
     ///
     /// `pass_no` is 1-based and multiplies the ripup budget. Runs under the
@@ -948,9 +980,10 @@ impl<'r> BatchRouter<'r> {
                 break;
             }
             self.total_items_routed += 1;
-            // `:1315-1318` — the connection's allowance is armed here. It is
-            // accounted for rather than enforced; see `batch::budget`.
-            let clock = ctx.budget.start();
+            // `:1315-1318` — the connection's allowance is armed here and
+            // travels down to the engine, which the maze loop polls; see
+            // `batch::budget`.
+            let mut clock = ctx.budget.start();
             let attempt = autoroute_item(
                 board,
                 self.rules,
@@ -959,6 +992,7 @@ impl<'r> BatchRouter<'r> {
                 entry.net_no,
                 ctx.ripup_costs,
                 ctx.remove_unconnected_vias,
+                Some(&mut clock),
                 &mut self.scratch,
             );
             let usage = clock.finish();
@@ -1151,7 +1185,14 @@ mod tests {
         let pads = fixture.pad_ids();
         let ctrl = fixture.control();
         let rules = fixture.rules.clone();
-        let outcome = route_with_control(&mut fixture.board, &rules, ctrl, &pads[..1], &pads[1..2]);
+        let outcome = route_with_control(
+            &mut fixture.board,
+            &rules,
+            ctrl,
+            &pads[..1],
+            &pads[1..2],
+            None,
+        );
         assert_eq!(outcome.state(), AttemptState::Routed, "{outcome:?}");
         assert!(outcome.ripped.is_empty(), "an empty board rips nothing");
         assert_eq!(incomplete_count(&mut fixture.board), 0);
@@ -1181,6 +1222,38 @@ mod tests {
         assert_eq!(router.start_ripup_costs, START_RIPUP_COSTS);
         // Requeues never exceed the pass's own work-list length.
         assert!(pass.requeued <= pass.queued, "{pass:?}");
+    }
+
+    /// The whole budget chain, end to end: the pass arms the clock, the engine
+    /// carries it, the maze charges one unit per settled element and bails when
+    /// the allowance is gone, and the pass counts the connection as having hit
+    /// its budget rather than as a routing failure it cannot explain.
+    #[test]
+    fn a_binding_budget_stops_every_connection_and_the_pass_accounts_for_it() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let rules = fixture.rules.clone();
+        let settings = fixture.settings.clone();
+
+        // The same board routes under the default (never-binding) policy ...
+        let mut free = BatchRouter::new(&rules, &settings);
+        let free_pass = free.autoroute_pass(&mut fixture.board.clone(), 1);
+        assert!(free_pass.routed >= 1, "{free_pass:?}");
+        assert_eq!(free_pass.connections_hitting_budget, 0, "{free_pass:?}");
+        assert!(free_pass.effort_used > 0, "settles are charged: {free_pass:?}");
+
+        // ... and does not once one settled element is all a connection gets.
+        let mut router = BatchRouter::new(&rules, &settings)
+            .with_budget(BudgetPolicy::deterministic().with_effort_ceiling(Some(1)));
+        let pass = router.autoroute_pass(&mut fixture.board, 1);
+
+        assert_eq!(pass.routed, 0, "no connection can finish: {pass:?}");
+        assert_eq!(pass.not_routed, pass.queued, "{pass:?}");
+        assert_eq!(
+            pass.connections_hitting_budget, pass.queued,
+            "every connection reached its allowance: {pass:?}"
+        );
+        assert_eq!(pass.effort_used, pass.queued as u64, "one settle each");
+        assert_eq!(incomplete_count(&mut fixture.board), 1, "nothing was routed");
     }
 
     #[test]

@@ -27,23 +27,35 @@
 //! | effort ceiling | [`BudgetPolicy::effort_ceiling`] | `None` = unbounded |
 //! | virtual time | [`BudgetMode::Deterministic`] | off |
 //!
-//! # What binds today, and what does not
+//! # Where it binds
 //!
-//! [`ConnectionClock`] is armed by the batch pass around every connection and
-//! **accounts** for it: [`ConnectionUsage::time_used_ms`],
+//! [`ConnectionClock`] is armed by the batch pass around every connection
+//! ([`BatchRouter::autoroute_pass_with`](crate::batch::BatchRouter::autoroute_pass_with))
+//! and travels down to the [`AutorouteEngine`](crate::engine::AutorouteEngine),
+//! which is where upstream's `TimeLimit` lives (`AutorouteEngine.java:63`,
+//! `:119`). Two things then happen inside the maze:
+//!
+//! * every settled element charges one unit ([`ConnectionClock::charge`]) —
+//!   the maze's own unit of work, and the currency
+//!   [`BudgetMode::Deterministic`] buys virtual milliseconds with;
+//! * the top of `occupy_next_element`'s pop loop polls
+//!   `AutorouteEngine::is_stop_requested`, exactly where upstream polls it
+//!   (`MazeSearchAlgo.java:258`), and leaves with
+//!   [`SearchFailure::Stopped`](crate::maze::search::SearchFailure::Stopped) —
+//!   which the pass reports as `NOT_ROUTED`, upstream's outcome for the same
+//!   event.
+//!
+//! The allowance is also **accounted** for: [`ConnectionUsage::time_used_ms`],
 //! [`ConnectionUsage::effort_used`] and [`ConnectionUsage::hit_budget`] are
-//! summed into [`PassOutcome`](crate::batch::PassOutcome), which is what the
-//! bench numbers ARCHITECTURE asks for are read from.
+//! summed into [`PassOutcome`](crate::batch::PassOutcome), which is where the
+//! bench numbers ARCHITECTURE asks for are read from. The clock is armed around
+//! the *whole* attempt — search, insert and the per-connection pull-tight — and
+//! only the search polls it, which is upstream's arrangement too.
 //!
-//! It does not yet *interrupt* a running maze search: the search takes no
-//! deadline parameter, so the allowance can only be observed after the fact.
-//! [`ConnectionBudget`] is the value the search must eventually take —
-//! `is_exhausted` is written to be called from inside an expansion loop — and
-//! until it does, the accounting is the honest half of the contract. Because
-//! upstream's constant is 100 s per connection and no connection in the fixture
-//! suite comes close, the practical difference is zero; the difference that
-//! matters is that a pathological board is *reported* rather than silently
-//! costing an hour.
+//! Because the shipped constant is 100 s per connection and no connection in the
+//! fixture suite comes close, the enforcement never fires on a healthy board;
+//! what it buys is that a pathological one is stopped and *reported* rather than
+//! silently costing an hour.
 //!
 //! # Determinism
 //!

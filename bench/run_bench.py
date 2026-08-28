@@ -111,9 +111,17 @@ RE_RUST_COMPLETE = re.compile(
 # not. Without these the whole `--only-rust` sweep records `parse_ok = False`
 # and every row is classified CRASH.
 #
-#   Imported <name> in 36.35s: 2 layers, 1139 items (278 pins, 217 traces, 27 vias)
+#   Imported <name> in 0.42s: 2 layers, 1139 items (278 pins, 217 traces, 27 vias)
 #   Router: 1 passes, 392 routed, 20 failed, 275 ripped, 0 pins fanned out
+#   Router stopped on board complete (0 board restores)
+#   Optimizer: 3 passes, 41 of 220 items improved, score 823.12 -> 871.40, ...
 #   Referee: 0 clearance violations, 26 of 147 connections incomplete, score 823.12/1000
+#   Total 36.35s
+#
+# `Imported ... in Xs` used to carry the whole run's elapsed time and now carries
+# the import's alone; `Total` is the tool time. The old line stays as a fallback
+# so sweeps recorded before that split remain parseable.
+RE_RUST_TOTAL = re.compile(r"^Total ([\d.]+)s\s*$", re.M)
 RE_RUST_IMPORTED = re.compile(r"^Imported .* in ([\d.]+)s: ", re.M)
 RE_RUST_REFEREE = re.compile(
     r"^Referee: (\d+) clearance violations, (\d+) of (\d+) connections incomplete, "
@@ -237,12 +245,13 @@ def parse_rust_log(stdout: str) -> dict:
         return out
     out["violations"] = int(referee.group(1))
     out["unrouted"] = int(referee.group(2))
-    imported = RE_RUST_IMPORTED.search(stdout)
-    if imported:
-        # `Imported ... in Xs` is the whole run's elapsed time, printed after
-        # routing (`fr-cli/src/main.rs` `print_summary`), so it is the tool
-        # time in the same sense as Java's auto-routing stage total.
-        out["tool_time_s"] = float(imported.group(1))
+    # `Total Xs` is the whole run's elapsed time (`fr-cli/src/main.rs`
+    # `print_summary`), i.e. the tool time in the same sense as Java's
+    # auto-routing stage total. Before that line existed the `Imported` one
+    # carried it, so old stdout still parses.
+    total = RE_RUST_TOTAL.search(stdout) or RE_RUST_IMPORTED.search(stdout)
+    if total:
+        out["tool_time_s"] = float(total.group(1))
     vias = RE_RUST_VIAS.search(stdout)
     if vias:
         out["vias_reported"] = int(vias.group(1))

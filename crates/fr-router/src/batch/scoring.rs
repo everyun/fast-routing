@@ -7,6 +7,17 @@
 //! and [`CheckScorer`], the production implementation that assembles
 //! [`fr_check::BoardStats`] from a [`Board`] and hands it to the referee.
 //!
+//! It is also the **single home** of that assembly. The optimizer decides on the
+//! same number ([`BatchOptimizer::run_batch_loop`](crate::optimizer::BatchOptimizer::run_batch_loop)
+//! compares `getNormalizedScore` across passes) and on the same board
+//! measurements ([`board_key`](crate::optimizer::stats::board_key)), so
+//! [`optimizer::stats`](crate::optimizer::stats) delegates here rather than
+//! keeping a second transcription of `BoardStatistics` that could drift.
+//! [`trace_geometry`] is the shared per-item walk: one pass over the store for
+//! the four sums both callers need, including the
+//! [`TraceGeometry::weighted_trace_length`] only the optimizer reads and the raw
+//! [`TraceGeometry::via_count`] only it compares.
+//!
 //! Scoring through the referee rather than through a router-local
 //! approximation is deliberate: the loop's improvement and stagnation decisions
 //! must be made on the same number the gate is judged by, or the router can
@@ -24,14 +35,27 @@
 
 use fr_board::board::Board;
 use fr_board::item::ItemKind;
+use fr_board::ClearanceSource;
 use fr_check::{
-    board_connectivity, check_clearance, score, shape_store, BoardStats, ScoreWeights, StoreView,
+    board_connectivity, check_clearance, score, shape_store, BoardStats, Score, ScoreWeights,
+    StoreView,
 };
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::ScoringSettings;
 
+/// The verdict on a board with nothing to connect — `getNormalizedScore`'s
+/// `maximum <= 0` guard, which is defined to score `0` rather than `NaN`
+/// (`fr_check::score`, §7.15). [`BoardScore::default`]'s value.
+const NO_SCORE: Score = Score {
+    maximum: 0.0,
+    penalties: 0.0,
+    costs: 0.0,
+    raw: 0.0,
+    normalized: 0.0,
+};
+
 /// A scored board state.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BoardScore {
     /// `getNormalizedScore` — `max(0, raw / maximum) · 1000`, or `0` when the
     /// board has no connection to make.
@@ -42,6 +66,81 @@ pub struct BoardScore {
     pub violation_count: usize,
     /// `Σ_nets max(0, #(Pin | ConductionArea) − 1)`.
     pub max_connections: usize,
+    /// The referee's full verdict, for a caller that wants the terms apart.
+    pub score: Score,
+}
+
+impl Default for BoardScore {
+    fn default() -> BoardScore {
+        BoardScore {
+            normalized: 0.0,
+            incomplete_count: 0,
+            violation_count: 0,
+            max_connections: 0,
+            score: NO_SCORE,
+        }
+    }
+}
+
+/// The per-item sums of `core/scoring/BoardStatistics`, in **raw board units**.
+///
+/// One walk over the store for all four, because both consumers want more than
+/// one of them and the walk is the expensive part.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct TraceGeometry {
+    /// `bends.totalCount` — `Σ max(0, corner_count − 2)`; a two-corner trace is
+    /// straight and bends nowhere (`:252-268`).
+    pub bend_count: u64,
+    /// `items.viaCount` (`:137-143`).
+    pub via_count: u64,
+    /// `traces.totalLength` — every trace, whatever its fixed state (`:171-176`).
+    pub trace_length: f64,
+    /// `traces.totalWeightedLength` (`:222-241`):
+    ///
+    /// ```text
+    /// Σ over UNFIXED and SHOVE_FIXED traces of
+    ///     length * (half_width + clearance(traceClass, defaultClass, layer))
+    /// halved for SHOVE_FIXED, "to produce less violations with pin exit directions"
+    /// ```
+    ///
+    /// User-fixed and system-fixed copper is excluded outright: the optimizer
+    /// cannot move it, so counting it would only add a constant that hides the
+    /// change it can make.
+    pub weighted_trace_length: f64,
+}
+
+/// [`TraceGeometry`] of one board.
+pub fn trace_geometry(board: &Board) -> TraceGeometry {
+    let default_class = BoardRules::default_clearance_class() as i32;
+    let mut geometry = TraceGeometry::default();
+    for (_, item) in board.store().iter() {
+        match &item.kind {
+            ItemKind::Trace(trace) => {
+                let corners = trace.corner_count();
+                if corners >= 3 {
+                    geometry.bend_count += (corners - 2) as u64;
+                }
+                let length = trace.polyline.length_total();
+                geometry.trace_length += length;
+                if item.is_user_fixed() {
+                    continue;
+                }
+                let clearance =
+                    board
+                        .clearances()
+                        .value(item.clearance_class, default_class, trace.layer);
+                let mut weighted =
+                    length * (f64::from(trace.half_width) + f64::from(clearance));
+                if item.fixed_state.is_shove_fixed() {
+                    weighted /= 2.0;
+                }
+                geometry.weighted_trace_length += weighted;
+            }
+            ItemKind::Via(_) => geometry.via_count += 1,
+            _ => {}
+        }
+    }
+    geometry
 }
 
 /// What the batch loop needs from a board to decide whether it improved.
@@ -113,8 +212,28 @@ impl<'r> CheckScorer<'r> {
         self
     }
 
+    /// The weights this scorer judges with.
+    pub fn weights(&self) -> &ScoreWeights {
+        &self.weights
+    }
+
+    /// Micrometres per board unit — the inverse of what the caller passed.
+    fn um_per_board_unit(&self) -> f64 {
+        if self.board_units_per_mm > 0.0 {
+            1_000.0 / self.board_units_per_mm
+        } else {
+            1.0
+        }
+    }
+
     /// The score inputs, without scoring them.
     pub fn stats(&self, board: &Board) -> BoardStats {
+        self.stats_from(board, &trace_geometry(board))
+    }
+
+    /// [`stats`](CheckScorer::stats) for a caller that already walked the items
+    /// — the optimizer, which needs the raw sums for its improvement lattice.
+    pub fn stats_from(&self, board: &Board, geometry: &TraceGeometry) -> BoardStats {
         let shapes = shape_store(board);
         let view = StoreView::new(
             board.store(),
@@ -125,41 +244,28 @@ impl<'r> CheckScorer<'r> {
         let violations = check_clearance(&view);
         let connectivity = board_connectivity(&view);
 
-        let mut bend_count = 0u64;
-        let mut trace_length_board = 0.0f64;
-        let mut via_count = 0u64;
-        for (_, item) in board.store().iter() {
-            match &item.kind {
-                ItemKind::Trace(trace) => {
-                    // `BoardStatistics.java:252-268` — a two-corner trace is
-                    // straight and contributes no bend.
-                    let corners = trace.corner_count();
-                    if corners >= 3 {
-                        bend_count += (corners - 2) as u64;
-                    }
-                    trace_length_board += trace.polyline.length_total();
-                }
-                ItemKind::Via(_) => via_count += 1,
-                _ => {}
-            }
-        }
-
-        // Micrometres per board unit, the inverse of what the caller passes.
-        let um_per_board_unit = if self.board_units_per_mm > 0.0 {
-            1_000.0 / self.board_units_per_mm
-        } else {
-            1.0
-        };
         BoardStats {
             max_connections: connectivity.max_connections as u64,
             incomplete_count: connectivity.incomplete_count as u64,
             clearance_violation_count: violations.len() as u64,
-            bend_count,
-            trace_length_um: (trace_length_board * um_per_board_unit).round() as u64,
-            via_count,
+            bend_count: geometry.bend_count,
+            trace_length_um: (geometry.trace_length * self.um_per_board_unit()).round() as u64,
+            via_count: geometry.via_count,
             // Row 76: `planeViaCosts` is a *router* cost, never a scoring one —
             // upstream charges every via at `viaCosts` here.
             plane_via_count: 0,
+        }
+    }
+
+    /// The verdict for a set of inputs this scorer already assembled.
+    pub fn judge(&self, stats: &BoardStats) -> BoardScore {
+        let score = score(stats, &self.weights);
+        BoardScore {
+            normalized: score.normalized,
+            incomplete_count: stats.incomplete_count as usize,
+            violation_count: stats.clearance_violation_count as usize,
+            max_connections: stats.max_connections as usize,
+            score,
         }
     }
 }
@@ -167,12 +273,7 @@ impl<'r> CheckScorer<'r> {
 impl BoardScorer for CheckScorer<'_> {
     fn score(&mut self, board: &Board) -> BoardScore {
         let stats = self.stats(board);
-        BoardScore {
-            normalized: score(&stats, &self.weights).normalized,
-            incomplete_count: stats.incomplete_count as usize,
-            violation_count: stats.clearance_violation_count as usize,
-            max_connections: stats.max_connections as usize,
-        }
+        self.judge(&stats)
     }
 }
 

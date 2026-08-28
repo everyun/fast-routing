@@ -80,7 +80,14 @@ pub enum SearchFailure {
     NoStartDoor,
     /// The frontier was exhausted.
     Exhausted,
-    /// The caller's stop hook fired.
+    /// The connection ran out of its allowance, or the caller's expansion cap
+    /// fired — `AutorouteEngine.is_stop_requested()` at
+    /// `MazeSearchAlgo.java:258`.
+    ///
+    /// Upstream leaves `occupy_next_element` with a plain `false` there, so
+    /// `find_connection` answers `null` and `autoroute_connection` reports
+    /// `NOT_ROUTED`; the distinct variant is this port's, so a caller can tell
+    /// "no path exists" from "no path was looked for".
     Stopped,
 }
 
@@ -114,9 +121,10 @@ pub struct MazeSearch<'e, 'b> {
     /// Reusable buffer for the via-rule candidates of one drill layer check;
     /// the drill scan runs it per layer per drill.
     via_candidate_scratch: Vec<ViaCandidate>,
-    /// Cap on settled elements; `None` = unbounded. Stands in for upstream's
-    /// `TimeLimit` (`BatchAutorouter.java:1311-1313`), which belongs to the
-    /// batch wave.
+    /// Cap on settled elements; `None` = unbounded. A debugging knob, and the
+    /// one the differential harness pins a search with; the *shipped* budget is
+    /// the engine's [`ConnectionClock`](crate::batch::budget::ConnectionClock),
+    /// upstream's `TimeLimit` (`BatchAutorouter.java:1311-1313`).
     expansion_limit: Option<u64>,
     /// Settled elements so far.
     expansions: u64,
@@ -360,6 +368,11 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             return Ok(false);
         }
         let element = loop {
+            // `:258` — the stop poll is the first thing inside the pop loop,
+            // before the queue is even read.
+            if self.engine.is_stop_requested() {
+                return Err(SearchFailure::Stopped);
+            }
             if let Some(limit) = self.expansion_limit {
                 if self.expansions >= limit {
                     return Err(SearchFailure::Stopped);
@@ -391,6 +404,9 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             element.payload.adjustment,
         );
         self.expansions += 1;
+        // One effort unit per settled element: the maze's unit of work, and the
+        // currency `BudgetMode::Deterministic` buys virtual milliseconds with.
+        self.engine.charge(1);
         fr_metrics::counters::bump::expansions(1);
         self.emit_settle(&element);
 
@@ -1943,6 +1959,56 @@ mod tests {
         let search = MazeSearch::get_instance(&mut engine, &pads[..1], &pads[1..2])
             .expect("start and destination exist");
         assert!(search.frontier_stats().pushes >= 1);
+    }
+
+    /// `MazeSearchAlgo.java:258` — the allowance is polled at the top of the
+    /// pop loop, so the search bails as soon as it is gone. One effort unit per
+    /// settled element (`occupy_next_element`) means a ceiling of `n` buys
+    /// exactly `n` settles before the poll fires.
+    #[test]
+    fn an_exhausted_connection_clock_stops_the_search() {
+        use crate::batch::budget::BudgetPolicy;
+
+        let fixture = TestFixture::two_layer_with_pads();
+        let pads = fixture.pad_ids();
+
+        // The unbounded run first, so the ceiling below is known to bind.
+        let free_expansions = {
+            let mut engine = fixture.engine();
+            let mut search =
+                MazeSearch::get_instance(&mut engine, &pads[..1], &pads[1..2]).expect("instance");
+            search.find_connection().expect("the two pads connect");
+            search.expansions()
+        };
+        assert!(free_expansions > 1, "the fixture must take real work");
+
+        let mut clock = BudgetPolicy::default()
+            .with_effort_ceiling(Some(1))
+            .for_pass(1)
+            .start();
+        let mut engine = fixture.engine();
+        engine.set_clock(&mut clock);
+        let mut search =
+            MazeSearch::get_instance(&mut engine, &pads[..1], &pads[1..2]).expect("instance");
+        assert_eq!(search.find_connection().err(), Some(SearchFailure::Stopped));
+        assert_eq!(search.expansions(), 1, "one settle, then the poll fires");
+
+        let usage = clock.finish();
+        assert_eq!(usage.effort_used, 1, "one effort unit per settled element");
+        assert!(usage.hit_budget);
+    }
+
+    /// No clock is upstream's `null TimeLimit`: nothing is charged and nothing
+    /// stops.
+    #[test]
+    fn a_search_without_a_clock_is_unbounded() {
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        assert!(!engine.is_stop_requested());
+        let pads = fixture.pad_ids();
+        let mut search =
+            MazeSearch::get_instance(&mut engine, &pads[..1], &pads[1..2]).expect("instance");
+        assert!(search.find_connection().is_ok());
     }
 
     #[test]

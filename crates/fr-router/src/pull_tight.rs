@@ -17,7 +17,9 @@
 //! | [`PullTightAlgo::reposition_lines`] | base driver (`:175`) + base `reposition_line` (`:195`) |
 //! | [`PullTightAlgo::skip_segments_of_length_0`] | `:292` |
 //! | [`PullTightAlgo::trace_pull_tight`] | `PolylineTrace.pull_tight` (`:827-875`) |
+//! | `PullTightAlgo::pull_tight_flavor` | `get_instance`'s angle dispatch (`:71-85`) |
 //! | [`crate::pull_tight45`] | `PullTightAlgo45` — `reduce_corners`, `smoothen_corners` |
+//! | [`crate::pull_tight_any`] | `PullTightAlgoAnyAngle` — the `NONE`-mode rules |
 //!
 //! # Deliberate deltas from the Java text
 //!
@@ -46,9 +48,10 @@
 //!   improvement round). The driver's call site is present and returns `false`,
 //!   so the net-filtered wrapper semantics of conformance row **D2** are what
 //!   lands the day it is filled in.
-//! * **Any-angle mode (`PullTightAlgoAnyAngle`, §6.1) is not ported.** Boards in
-//!   any-angle mode get the 45° rules, which are sound for them (every move is
-//!   clearance-checked) but weaker. 90° boards likewise. See the crate docs.
+//! * **90° mode shares the 45° rules**, which is upstream's own dispatch:
+//!   `get_instance` returns `PullTightAlgo45` for `NINETY_DEGREE` as well as for
+//!   `FORTYFIVE_DEGREE` (`:71-85`), and the rules read the restriction back
+//!   where they need it. Any-angle mode has its own flavor, see the table above.
 
 use std::time::{Duration, Instant};
 
@@ -57,7 +60,7 @@ use fr_board::clearance::ClearanceSource;
 use fr_board::item::{FixedState, ItemId, ItemKind};
 use fr_board::net_nos::NetNos;
 use fr_board::search_tree::TreeEntry;
-use fr_board::shape::TileShape;
+use fr_board::shape::{AngleRestriction, TileShape};
 use fr_datastructures::arena_shape_tree::QueryStack;
 use fr_datastructures::signum::Signum;
 use fr_geometry::planar::{
@@ -389,7 +392,7 @@ impl<'b> PullTightAlgo<'b> {
             nets,
         } = prepared;
 
-        let new_polyline = self.pull_tight_polyline(&polyline, changed_area)?;
+        let new_polyline = self.pull_tight_flavor(&polyline, changed_area)?;
 
         // `change(new_polyline)` (`PolylineTrace.java:942-1009`): swap the
         // geometry, then normalize against the changed-area clip.
@@ -409,6 +412,31 @@ impl<'b> PullTightAlgo<'b> {
         let clip = changed_area.area(layer);
         self.board.normalize_trace(new_id, Some(&clip));
         Some(new_id)
+    }
+
+    /// `PullTightAlgo.get_instance`'s flavor dispatch (`:71-85`).
+    ///
+    /// | board angle restriction | upstream class | here |
+    /// |---|---|---|
+    /// | `NINETY_DEGREE` | `PullTightAlgo45` | [`crate::pull_tight45`] |
+    /// | `FORTYFIVE_DEGREE` | `PullTightAlgo45` | [`crate::pull_tight45`] |
+    /// | `NONE` | `PullTightAlgoAnyAngle` | [`crate::pull_tight_any`] |
+    ///
+    /// Upstream chooses the subclass once, in the constructor, from
+    /// `p_board.rules.get_trace_angle_restriction()`; the same value is read
+    /// here per trace because the flavor is a pure function of it and this port
+    /// has one struct rather than three.
+    pub(crate) fn pull_tight_flavor(
+        &mut self,
+        polyline: &Polyline,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        match self.board.angle_restriction() {
+            AngleRestriction::None => {
+                self.pull_tight_polyline_any_angle(polyline, changed_area)
+            }
+            _ => self.pull_tight_polyline(polyline, changed_area),
+        }
     }
 
     /// Runs `PolylineTrace.pull_tight`'s guards (`:832-851`) and installs the
@@ -579,6 +607,29 @@ impl<'b> PullTightAlgo<'b> {
             }
         }
         false
+    }
+
+    /// The trace `pick_items(point, layer, TRACES).iterator().next()` answers
+    /// (`RoutingBoard.java:857-871`).
+    ///
+    /// `pick_items` builds a `TreeSet<Item>` and `Item.compareTo` is
+    /// `other.id_no - this.id_no` (`Item.java:94-99`), so the set iterates
+    /// **descending by id** and upstream's `next()` is the *highest* id at the
+    /// point. That is the trace `insert_forced_trace_polyline` re-reads its
+    /// `new_trace` handle from after a split invalidated the old one, so the
+    /// tie-break is routing-visible and is reproduced exactly.
+    pub(crate) fn picked_trace_at(&mut self, point: &Point, layer: i32) -> Option<ItemId> {
+        let mut picked = Vec::new();
+        self.board.pick_items(point, Some(layer), &mut picked);
+        picked
+            .into_iter()
+            .filter(|id| {
+                self.board
+                    .store()
+                    .get(*id)
+                    .is_some_and(|item| matches!(item.kind, ItemKind::Trace(_)))
+            })
+            .max()
     }
 
     // ---- §5.3 the clearance oracle ---------------------------------------

@@ -40,6 +40,7 @@ use fr_datastructures::arena_shape_tree::{ArenaShapeTree, QueryStack};
 use fr_geometry::planar::{IntBox, IntOctagon, Simplex};
 use fr_rules::board_rules::BoardRules;
 
+use crate::batch::budget::ConnectionClock;
 use crate::ctrl::AutorouteControl;
 use crate::geom;
 use crate::maze::drills::{DrillArena, DrillPageArray};
@@ -95,6 +96,16 @@ pub struct AutorouteEngine<'b> {
     scratch_rooms: Vec<(fr_datastructures::arena_shape_tree::ArenaLeafId, RoomId)>,
     /// Guard against unbounded recursion in `restrain_shape`.
     restrain_depth: u32,
+    /// This connection's allowance, when the caller armed one.
+    ///
+    /// Upstream's `AutorouteEngine.time_limit` (`:63`), set by
+    /// `init_connection` (`:119`) from the `TimeLimit` the batch pass built
+    /// (`BatchAutorouter.java:1311-1318`) and read back by `is_stop_requested`
+    /// (`:266-270`), which is what the maze loop polls. Borrowed rather than
+    /// owned because the pass owns the clock: it arms it around the *whole*
+    /// attempt — search, insert and the per-connection pull-tight — and reads
+    /// the usage back out after the engine is gone.
+    clock: Option<&'b mut ConnectionClock>,
 }
 
 /// The recursion cap on `restrain_shape`'s split branch.
@@ -144,7 +155,45 @@ impl<'b> AutorouteEngine<'b> {
             scratch_entries: Vec::new(),
             scratch_rooms: Vec::new(),
             restrain_depth: 0,
+            clock: None,
         }
+    }
+
+    /// Arms this connection's allowance — `AutorouteEngine.init_connection`'s
+    /// `p_time_limit` (`:93`, `:119`).
+    ///
+    /// Without one the search is unbounded, which is upstream's `null`
+    /// `TimeLimit`: every direct caller (the fanout stage, the tests) routes
+    /// that way, and only the batch pass has a budget to spend.
+    #[inline]
+    pub fn set_clock(&mut self, clock: &'b mut ConnectionClock) {
+        self.clock = Some(clock);
+    }
+
+    /// Charges `units` of effort against this connection's allowance, or does
+    /// nothing when none is armed.
+    ///
+    /// The maze loop charges one per settled element, which is what makes
+    /// [`BudgetMode::Deterministic`](crate::batch::budget::BudgetMode::Deterministic)
+    /// spend virtual milliseconds the machine cannot influence.
+    #[inline]
+    pub fn charge(&mut self, units: u64) {
+        if let Some(clock) = self.clock.as_deref_mut() {
+            clock.charge(units);
+        }
+    }
+
+    /// `AutorouteEngine.is_stop_requested()` (`:266-270`): whether this
+    /// connection's allowance is gone.
+    ///
+    /// `false` with no clock armed — upstream's `time_limit == null` plus a
+    /// `stoppable_thread` this port does not have (headless 2.3.0 never
+    /// interrupts a connection from outside; conformance #107).
+    #[inline]
+    pub fn is_stop_requested(&self) -> bool {
+        self.clock
+            .as_deref()
+            .is_some_and(ConnectionClock::is_exhausted)
     }
 
     /// The board bounding box (`complete_shape`'s `start_shape`).

@@ -674,8 +674,8 @@ mod tests {
             BoardScore {
                 normalized: stubs as f64 * self.score_per_stub,
                 incomplete_count: self.target_stubs.saturating_sub(stubs),
-                violation_count: 0,
                 max_connections: self.target_stubs,
+                ..BoardScore::default()
             }
         }
     }

@@ -600,8 +600,17 @@ pub fn fanout_pin(
         ))
     });
     if targets.len() <= 4 {
-        let first =
-            crate::batch::route_with_control(board, rules, ctrl.clone(), &connected, &targets[..1]);
+        // No allowance: `RoutingBoard.fanout` builds its engine with
+        // `init_autoroute(..., null TimeLimit, ...)` (`:1053-1055`), so an
+        // escape attempt is never time-limited.
+        let first = crate::batch::route_with_control(
+            board,
+            rules,
+            ctrl.clone(),
+            &connected,
+            &targets[..1],
+            None,
+        );
         if matches!(
             first.state(),
             AttemptState::Routed | AttemptState::AlreadyConnected
@@ -610,7 +619,7 @@ pub fn fanout_pin(
             return first;
         }
     }
-    crate::batch::route_with_control(board, rules, ctrl, &connected, &targets)
+    crate::batch::route_with_control(board, rules, ctrl, &connected, &targets, None)
 }
 
 /// The control one escape attempt runs under — `RoutingBoard.fanout:1018-1050`.

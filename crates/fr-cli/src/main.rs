@@ -3,8 +3,10 @@
 //! # What a plain run does
 //!
 //! `-de board.dsn -do board.ses` runs [`fr_core::RoutingJob`] v2 end to end: `fr_io::specctra`
-//! import → [`fr_board::Board`] + `fr_rules` → **`fr_router`, `-mp` passes of it** → `fr_check`
-//! referee → `fr_io` SES writer v2. The session carries our copper. The pre-rewrite
+//! import → [`fr_board::Board`] + `fr_rules` → **`fr_router`, `-mp` passes of it, then the
+//! optimization stage** → `fr_check` referee → `fr_io` SES writer v2. The optimizer is on by
+//! default, as it is upstream; `--no-optimizer` is the way off. The session carries our copper.
+//! The pre-rewrite
 //! `DsnDocument` → `BasicBoard` → `fr-autoroute` chain is not reachable from here at all; it
 //! survives as `fr_core::legacy` for its own tests until M2 deletes it.
 //!
@@ -84,6 +86,8 @@ ROUTING OPTIONS
                                 Must be >= 0; a negative value is an error (upstream runs it
                                 uncapped instead — see docs/PARITY-DIVERGENCES.md)
     --fanout                    Run the SMD pin-escape pre-pass first (off by default in M2a)
+    --no-optimizer              Skip the post-routing optimization stage (it is ON by default,
+                                as it is upstream: router.optimizer.enabled defaults to true)
     --deterministic             Never read the wall clock for budget decisions: the
                                 per-connection allowance is spent in effort-based virtual time
 
@@ -126,6 +130,7 @@ struct Args {
     max_passes: Option<usize>,
     threads: Option<usize>,
     fanout: bool,
+    no_optimizer: bool,
     deterministic: bool,
     settle_trace: Option<String>,
 }
@@ -206,6 +211,7 @@ fn main() {
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
             "-us" | "--threads" => args.threads = next!("-us").parse().ok(),
             "--fanout" => args.fanout = true,
+            "--no-optimizer" => args.no_optimizer = true,
             "--deterministic" => args.deterministic = true,
             "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
             "-v" | "--version" => {
@@ -257,6 +263,7 @@ fn main() {
         job.with_stage(RouterStage::Maze(
             MazeOptions::with_passes(passes)
                 .with_fanout(args.fanout)
+                .with_optimizer(!args.no_optimizer)
                 .with_deterministic(args.deterministic),
         ))
     };
@@ -326,11 +333,18 @@ fn describe(error: &JobError) -> String {
     }
 }
 
+/// The three-or-four line run summary.
+///
+/// `started` is the whole invocation's clock. It is reported on its own line
+/// and **not** on the "Imported" one, which says import and has to mean it: the
+/// pre-existing line printed the end-to-end elapsed time there, so every routed
+/// run claimed the importer had cost what the router did. `bench/run_bench.py`
+/// reads `Total` for the tool time and falls back to the old line.
 fn print_summary(report: &JobReport, started: Instant) {
     println!(
         "Imported {} in {:.2}s: {} layers, {} items ({} pins, {} traces, {} vias)",
         report.pcb_name,
-        started.elapsed().as_secs_f64(),
+        report.import_duration.as_secs_f64(),
         report.layer_count,
         report.census.total(),
         report.census.pins,
@@ -361,6 +375,17 @@ fn print_summary(report: &JobReport, started: Instant) {
                 String::new()
             },
         );
+        if let Some(optimizer) = &router.optimizer {
+            println!(
+                "Optimizer: {} passes, {} of {} items improved, score {:.2} -> {:.2}, stopped on {}",
+                optimizer.passes,
+                optimizer.items_improved,
+                optimizer.items_optimized,
+                optimizer.score_before,
+                optimizer.score_after,
+                optimizer.exit,
+            );
+        }
     }
     println!(
         "Referee: {} clearance violations, {} of {} connections incomplete, score {:.2}/1000",
@@ -369,6 +394,7 @@ fn print_summary(report: &JobReport, started: Instant) {
         report.stats.max_connections,
         report.score.normalized,
     );
+    println!("Total {:.2}s", started.elapsed().as_secs_f64());
 }
 
 /// `--golden-dump` and `--drc-report`.

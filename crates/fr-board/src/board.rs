@@ -59,7 +59,7 @@ use crate::journal::Mark;
 use crate::net_nos::NetNos;
 use crate::search_tree::{SearchTree, SearchTreeManager, ShapeContext, TreeEntry, MAX_TREE_SHAPE_WIDTH};
 use crate::shape::{AngleRestriction, PadstackTable, TileShape};
-use crate::store::ItemStore;
+use crate::store::{ItemStore, StoreDelta};
 
 /// Upstream `BasicBoard.maxTraceHalfWidth`'s initial value
 /// (`BasicBoard.java:106-109`) — deliberately *small*, so the first inserted
@@ -604,6 +604,96 @@ impl Board {
             *max_tree_shape_width,
         );
         trees.set_clearance_compensation_used(used, store, ctx);
+    }
+
+    // ---- snapshot adoption (state mechanism 2) ---------------------------
+
+    /// Replaces the board's items with `store`, reconciling the search trees and
+    /// the connectivity index from the difference — the [`Board`]-level form of
+    /// [`BoardHistory::restore_back`](crate::history::BoardHistory::restore_back).
+    ///
+    /// This is `ARCHITECTURE.md`'s state mechanism 2 as the batch loop needs it:
+    ///
+    /// > 2. board history = arena snapshot (memcpy of item+node Vecs), O(board)
+    /// >    but ~ms; restore must also restore tree state and preserves the room
+    /// >    DB interaction
+    ///
+    /// A caller that holds a pooled snapshot of the items — and *only* the items
+    /// — can put it back without cloning a whole [`Board`] per retained pass.
+    /// The returned [`StoreDelta`] is what the router's own dependent state
+    /// (the autoroute room database and its per-item caches) subscribes to; the
+    /// trees and the connectivity index are already reconciled when it lands.
+    ///
+    /// # Cost
+    ///
+    /// One merge walk over the two ordered indices plus a tile-shape rebuild for
+    /// the items that actually moved — *not* [`rebuild_trees`](Board::rebuild_trees),
+    /// which is O(board) in shape computation. On a pass that changed a hundred
+    /// traces on a twenty-thousand-item board that is a hundred rebuilds, not
+    /// twenty thousand.
+    ///
+    /// # What is *not* restored
+    ///
+    /// [`max_trace_half_width`](Board::max_trace_half_width) and its minimum
+    /// counterpart are high-water marks fed by every trace ever inserted, and
+    /// they stay at the live board's values rather than rewinding to the
+    /// snapshot's. Both only ever *widen* a tree query, so keeping the larger
+    /// envelope is the conservative direction; upstream never rewinds them
+    /// either, because its restore constructs a fresh board and recomputes them
+    /// from the restored items — which cannot be higher than what we keep.
+    ///
+    /// # Panics
+    ///
+    /// If a transaction is open on either store: the journal's pre-images would
+    /// outlive the state they describe (`history`, module docs).
+    pub fn adopt_store(&mut self, store: ItemStore) -> StoreDelta {
+        let mut incoming = store;
+        let mut delta = StoreDelta::new();
+        self.swap_store(&mut incoming, &mut delta);
+        delta
+    }
+
+    /// [`adopt_store`](Board::adopt_store) that hands the *displaced* store back
+    /// through the same reference and reuses the caller's [`StoreDelta`].
+    ///
+    /// The allocation-free form: a snapshot store scratch buffer goes in, the
+    /// board's previous items come out in it, and the caller pools the buffer
+    /// for the next snapshot. `delta` is cleared first.
+    pub fn swap_store(&mut self, store: &mut ItemStore, delta: &mut StoreDelta) {
+        assert_eq!(
+            self.store.transaction_depth(),
+            0,
+            "fr-board: cannot adopt a store while a transaction is open on the board"
+        );
+        assert_eq!(
+            store.transaction_depth(),
+            0,
+            "fr-board: cannot adopt a store that has an open transaction"
+        );
+        // Slot-aware, because the search trees are slot-indexed: see
+        // `ItemStore::diff_into_relocating`.
+        self.store.diff_into_relocating(store, delta);
+
+        // Detach everything that is about to move, while the *old* store still
+        // resolves its slot — the `remove_item` half of the mutation protocol.
+        for id in delta.removed.iter().chain(delta.changed.iter()).copied() {
+            self.mark_nets_dirty(id);
+            self.unindex_from_trees(id);
+        }
+
+        let (next_id, next_revision) = self.store.raw_counters();
+        std::mem::swap(&mut self.store, store);
+        // The adopted state carries the counters it was taken with; ids and
+        // revisions must never move backwards, or a search tree that outlived
+        // the swap would see two different items under one identity.
+        self.store.raise_counters(next_id, next_revision);
+        self.touched.clear();
+
+        // Re-index against the new store — the `insert_item` half.
+        for id in delta.added.iter().chain(delta.changed.iter()).copied() {
+            self.index_in_trees(id);
+            self.mark_nets_dirty(id);
+        }
     }
 
     // ---- transactions ----------------------------------------------------
@@ -1243,5 +1333,108 @@ mod tests {
 
         board.normal_contacts_at(a, &Point::Int(IntPoint::new(0, 0)), &mut contacts);
         assert!(contacts.is_empty());
+    }
+
+    // ---- adopt_store -----------------------------------------------------
+
+    /// Adopting a snapshot must put the board back exactly where a whole-board
+    /// clone would, trees included.
+    #[test]
+    fn adopting_a_snapshot_restores_the_items_and_the_trees() {
+        let mut board = board();
+        let kept = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
+        let doomed = straight(&mut board, 1, 1, IntPoint::new(0, 500), IntPoint::new(1000, 500));
+        let snapshot = board.store().clone();
+        let reference = board.clone();
+
+        board.remove_item(doomed);
+        let added = straight(&mut board, 2, 2, IntPoint::new(0, 900), IntPoint::new(900, 900));
+        assert_eq!(board.default_tree().leaf_count(), 2);
+
+        let delta = board.adopt_store(snapshot);
+        assert_eq!(delta.added, vec![doomed], "the removed trace comes back");
+        assert_eq!(delta.removed, vec![added], "the new trace goes away");
+        assert!(delta.changed.is_empty());
+
+        board.assert_consistent();
+        assert!(board.store().contains(kept));
+        assert!(board.store().contains(doomed));
+        assert!(!board.store().contains(added));
+        assert_eq!(
+            board.default_tree().leaf_count(),
+            reference.default_tree().leaf_count()
+        );
+        // The counters never rewind: the next id is past the one the discarded
+        // trace consumed.
+        assert!(board.store().next_id() > added);
+    }
+
+    /// The one case a revision-only diff misses: an item whose content did not
+    /// change but whose *slot* did, which a slot-indexed search tree still has
+    /// to move. A remove inside a transaction, rolled back, re-attaches through
+    /// the free list and can land elsewhere.
+    #[test]
+    fn adopting_a_snapshot_relocates_an_item_that_changed_slots() {
+        let mut board = board();
+        let a = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
+        let b = straight(&mut board, 1, 1, IntPoint::new(0, 500), IntPoint::new(1000, 500));
+        let snapshot = board.store().clone();
+        let slot_before = board.store().slot_of(b).expect("b is live");
+
+        // Free `a`'s slot, then roll the removals back so `b` is re-attached
+        // into whichever slot the free list hands out.
+        let mark = board.begin();
+        board.remove_item(a);
+        board.remove_item(b);
+        board.rollback_to(mark);
+        board.assert_consistent();
+
+        if board.store().slot_of(b) != Some(slot_before) {
+            assert!(
+                board.store().revision_of(b) == snapshot.revision_of(b),
+                "the rollback restored the content, so only the slot moved"
+            );
+            let delta = board.adopt_store(snapshot);
+            assert!(
+                delta.changed.contains(&b),
+                "a relocation must be reported so the trees follow it: {delta:?}"
+            );
+            board.assert_consistent();
+        } else {
+            // The free list handed the slot straight back; nothing to prove
+            // beyond the trees still agreeing.
+            board.adopt_store(snapshot);
+            board.assert_consistent();
+        }
+        assert!(board.store().contains(a) && board.store().contains(b));
+    }
+
+    /// The pooled form: the displaced items come back out through the same
+    /// buffer, which is what makes a thirty-deep history thirty stores and not
+    /// thirty boards.
+    #[test]
+    fn swapping_a_store_hands_the_old_one_back() {
+        let mut board = board();
+        let first = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
+        let mut buffer = board.store().clone();
+
+        let second = straight(&mut board, 1, 1, IntPoint::new(0, 500), IntPoint::new(1000, 500));
+        let mut delta = StoreDelta::new();
+        board.swap_store(&mut buffer, &mut delta);
+
+        assert_eq!(delta.removed, vec![second]);
+        assert!(buffer.contains(second), "the buffer holds the displaced board");
+        assert!(!board.store().contains(second));
+        assert!(board.store().contains(first));
+        board.assert_consistent();
+    }
+
+    #[test]
+    #[should_panic(expected = "while a transaction is open")]
+    fn adopting_inside_a_transaction_panics() {
+        let mut board = board();
+        let snapshot = board.store().clone();
+        let _mark = board.begin();
+        board.adopt_store(snapshot);
     }
 }

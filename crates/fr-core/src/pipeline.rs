@@ -7,8 +7,8 @@
 //! bytes ──▶ fr_io::specctra::import ──▶ Board + BoardRules      [`RoutingJob::import`]
 //!                                        │
 //!                                        ▼
-//!                         ┌── fr_router: fanout + maze passes ──┐  [`RouterStage`]
-//!                         └──────── or nothing at all ──────────┘
+//!                ┌── fr_router: fanout + maze passes + optimizer ──┐  [`RouterStage`]
+//!                └────────────── or nothing at all ────────────────┘
 //!                                        │
 //!                                        ▼
 //!                          fr_check: clearance + connectivity   [`Referee::judge`]
@@ -25,8 +25,11 @@
 //! can only ever be an importer or a checker bug — therefore still holds for every gate emitter,
 //! for `--import-only`, and for both `--*-report` modes.
 //!
-//! [`RouterStage::Maze`] is M2a: [`fr_router::fanout`] (optional) followed by
-//! [`fr_router::BatchRouter`], writing into the imported board in place. The pre-rewrite
+//! [`RouterStage::Maze`] is [`fr_router::fanout`] (optional), then
+//! [`fr_router::BatchRouter`], then [`fr_router::optimizer::run_optimization_stage`],
+//! writing into the imported board in place — the release's own sequencing
+//! (`management/RoutingJobSchedulerActionThread.thread_action`, `:96`, `:118`,
+//! `:179-189`). The pre-rewrite
 //! `fr-autoroute` toy is still not reachable from here — it is written against
 //! [`fr_board::BasicBoard`], a second item model the importer never produces, and its output has
 //! never been judged by [`fr_check`]. It stays behind [`crate::legacy`] and nowhere else.
@@ -60,6 +63,7 @@ use fr_io::specctra::{self, ImportError, ImportOptions, ImportedDesign, SesInput
 use fr_router::batch::budget::BudgetPolicy;
 use fr_router::batch::BatchRouter;
 use fr_router::fanout::{fanout_board, FanoutConfig};
+use fr_router::optimizer::{run_optimization_stage, LoopExit};
 use fr_router::StopReason;
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 
@@ -95,6 +99,16 @@ pub struct MazeOptions {
     /// routing decision can depend on machine load (`fr_router::batch::budget`, gate G2.2).
     /// `--deterministic` on the command line.
     pub deterministic: bool,
+    /// Run the post-routing optimization stage.
+    ///
+    /// **On by default, as the release is.** `getRunOptimizer()` reads
+    /// `optimizer.enabled` fail-closed, but every job's settings are merged onto
+    /// `DefaultSettings`, which sets it to `true` (conformance #6, #7), and the
+    /// headless entry point runs the stage right after the router
+    /// (`RoutingJobSchedulerActionThread:179-189`). `--no-optimizer` on the
+    /// command line is the only way to reach the off state, exactly as
+    /// `--router.optimizer.enabled=false` is upstream.
+    pub optimize: bool,
 }
 
 impl Default for MazeOptions {
@@ -103,6 +117,7 @@ impl Default for MazeOptions {
             max_passes: 1,
             fanout: false,
             deterministic: false,
+            optimize: true,
         }
     }
 }
@@ -127,10 +142,41 @@ impl MazeOptions {
         self.deterministic = deterministic;
         self
     }
+
+    /// Turns the post-routing optimization stage on or off. On by default.
+    pub fn with_optimizer(mut self, optimize: bool) -> MazeOptions {
+        self.optimize = optimize;
+        self
+    }
+}
+
+/// What the optimization stage did, `None` when it did not run.
+///
+/// `fr_router::optimizer::OptimizerOutcome` flattened to the numbers a summary
+/// line and a harness read.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct OptimizerReport {
+    /// Passes actually run — `BatchOptimizer.runBatchLoop`'s pass list.
+    pub passes: usize,
+    /// `totalItemsOptimized`: items the sweep handed out and the optimizer
+    /// attempted, over every pass.
+    pub items_optimized: usize,
+    /// Of those, the reroutes that strictly improved the board and were kept.
+    pub items_improved: usize,
+    /// `getNormalizedScore` before the first pass.
+    pub score_before: f64,
+    /// `getNormalizedScore` after the last one.
+    pub score_after: f64,
+    /// Ratsnest incompletes when the optimizer stopped.
+    pub incomplete_count: usize,
+    /// Why the loop stopped, as a short label.
+    pub exit: &'static str,
 }
 
 /// What the router stage did, `None` when it did not run.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+///
+/// Not [`Eq`]: the optimizer reports scores, and a score is an `f64`.
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct RouterReport {
     /// Passes actually run.
     pub passes: usize,
@@ -142,8 +188,9 @@ pub struct RouterReport {
     pub ripped: usize,
     /// SMD pins escaped by the fanout pre-pass.
     pub fanouted: usize,
-    /// Ratsnest incompletes when the router stopped, as the referee counts them —
-    /// the batch loop's stop rules read the referee's score, so this is the same number
+    /// Ratsnest incompletes when the **stage** stopped, as the referee counts them —
+    /// after the optimizer when it ran, after the batch loop when it did not. The
+    /// batch loop's stop rules read the referee's score, so this is the same number
     /// [`JobReport::stats`] carries and not a second opinion.
     pub incomplete_count: usize,
     /// Why the batch loop stopped (`fr_router::StopReason`), as a short label
@@ -156,6 +203,9 @@ pub struct RouterReport {
     /// Connections that reached their per-connection budget, summed over the
     /// passes — ARCHITECTURE "Budgets"'s `connections_hitting_budget`.
     pub connections_hitting_budget: usize,
+    /// The post-routing optimization stage; `None` when it was switched off or
+    /// skipped.
+    pub optimizer: Option<OptimizerReport>,
 }
 
 /// Millimetres to board units for this design.
@@ -232,7 +282,43 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
         .iter()
         .map(|pass| pass.connections_hitting_budget)
         .sum();
+
+    // `BatchAutorouter.autoroute_pass:496-505` — a router that stopped on
+    // `maxItems` calls `requestStop()` over *all* stages, so hitting the item
+    // cap also skips the optimizer (conformance #42). Nothing else about the
+    // routing result gates it.
+    let hit_the_item_cap =
+        settings.max_items > 0 && router.total_items_routed() >= settings.max_items;
+    if options.optimize && !hit_the_item_cap {
+        report.optimizer =
+            run_optimization_stage(&mut design.board, &design.rules, &settings, scale).map(
+                |outcome| OptimizerReport {
+                    passes: outcome.passes.len(),
+                    items_optimized: outcome.total_items_optimized.max(0) as usize,
+                    items_improved: outcome.items_improved(),
+                    score_before: outcome.score_before.normalized,
+                    score_after: outcome.score_after.normalized,
+                    incomplete_count: outcome.score_after.incomplete_count,
+                    exit: describe_optimizer_exit(outcome.exit),
+                },
+            );
+    }
+    // The stage the board actually left is the one the incomplete count has to
+    // describe; the referee re-derives it below and the two must agree.
+    if let Some(optimizer) = &report.optimizer {
+        report.incomplete_count = optimizer.incomplete_count;
+    }
     report
+}
+
+/// A short label for the optimizer loop's exit.
+fn describe_optimizer_exit(exit: LoopExit) -> &'static str {
+    match exit {
+        LoopExit::MaxPasses => "pass limit",
+        LoopExit::MaxItems => "item limit",
+        LoopExit::NearMaximumScore => "near-maximum score",
+        LoopExit::BelowImprovementThreshold => "below improvement threshold",
+    }
 }
 
 /// A short label for the batch loop's stop reason.
@@ -375,7 +461,9 @@ impl RoutingJob {
 
     /// The whole pipeline.
     pub fn run(&self) -> Result<JobReport, JobError> {
+        let import_started = std::time::Instant::now();
         let mut design = self.import()?;
+        let import_duration = import_started.elapsed();
         // The router stage. `ImportOnly` is a no-op *by construction*: its arm does not receive
         // `&mut design`, so no future edit to it can start mutating the board by accident.
         let router = match self.stage {
@@ -403,6 +491,7 @@ impl RoutingJob {
                 .collect(),
             routed,
             router,
+            import_duration,
             design,
         })
     }
@@ -435,6 +524,13 @@ pub struct JobReport {
     pub routed: bool,
     /// What the router stage did; `None` under [`RouterStage::ImportOnly`].
     pub router: Option<RouterReport>,
+    /// How long stage 1 — DSN bytes to board — took, and *only* that.
+    ///
+    /// Kept apart from the caller's own wall clock because the two are easy to
+    /// confuse and the difference is the whole router: `fr-cli` printed its
+    /// end-to-end elapsed time on a line that says "Imported … in", which made
+    /// every summary claim the import had cost what the run did.
+    pub import_duration: std::time::Duration,
     /// The imported design, kept so a caller can re-read the session against it or emit a
     /// golden dump without importing twice.
     pub design: ImportedDesign,
@@ -702,6 +798,60 @@ mod tests {
         assert_eq!(stats.trace_length_um, 5_000);
         assert_eq!(stats.via_count, 0);
         assert_eq!(stats.plane_via_count, 0);
+    }
+
+    /// The stage sequencing and the default the release ships: router, then
+    /// optimizer, and the optimizer is **on** unless asked otherwise.
+    #[test]
+    fn the_optimizer_stage_runs_after_the_router_and_is_on_by_default() {
+        assert!(MazeOptions::default().optimize);
+        assert!(MazeOptions::with_passes(3).optimize);
+
+        let on = job()
+            .with_stage(RouterStage::Maze(MazeOptions::with_passes(1)))
+            .run()
+            .expect("the board imports");
+        let router = on.router.clone().expect("the stage reports");
+        let optimizer = router.optimizer.expect("the optimizer ran");
+        // The fixture arrives already wired, so the router finds nothing and
+        // the optimizer's near-perfect early exit fires before its first pass
+        // (`BatchOptimizer.java:141-147`) — which is still the stage running.
+        assert_eq!(optimizer.exit, "near-maximum score", "{optimizer:?}");
+        assert_eq!(optimizer.items_optimized, 0, "{optimizer:?}");
+        assert!(optimizer.score_before > 999.0, "{optimizer:?}");
+        assert_eq!(optimizer.score_after, optimizer.score_before);
+        assert_eq!(optimizer.incomplete_count, 0);
+
+        let off = job()
+            .with_stage(RouterStage::Maze(
+                MazeOptions::with_passes(1).with_optimizer(false),
+            ))
+            .run()
+            .expect("the board imports");
+        assert!(off
+            .router
+            .clone()
+            .expect("the stage reports")
+            .optimizer
+            .is_none());
+        // Switching a stage that had nothing to do off changes no copper.
+        assert_eq!(on.census, off.census);
+    }
+
+    /// The import clock is the *import's*, not the run's — the whole point of
+    /// [`JobReport::import_duration`].
+    #[test]
+    fn the_import_duration_excludes_the_router() {
+        let import_only = job().run().expect("the board imports");
+        let routed = job()
+            .with_stage(RouterStage::Maze(MazeOptions::with_passes(1)))
+            .run()
+            .expect("the board imports");
+        // Not a timing assertion — a same-order-of-magnitude one. Both jobs
+        // import the same bytes; if the field were the run's elapsed time the
+        // routed one would carry the router's cost too.
+        assert!(routed.import_duration < std::time::Duration::from_secs(1));
+        assert!(import_only.import_duration < std::time::Duration::from_secs(1));
     }
 
     #[test]

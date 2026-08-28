@@ -10,16 +10,16 @@
 //! | [`board_key`] | the four numbers `opt_route_item` compares (`:315-321`) |
 //! | [`PassScore`] / [`pass_score`] | `getNormalizedScore` (`:552-586`) |
 //!
-//! # Why the scores live here and not in `fr-check`
+//! # Why the scores are not implemented here
 //!
-//! They do not: [`pass_score`] delegates the arithmetic to
-//! [`fr_check::score()`] and the two counts it cannot derive from the item list —
-//! `max_connections` and the clearance-violation total — to
-//! [`fr_check::board_connectivity`] and [`fr_check::check_clearance`]. The
-//! referee is the only thing in this workspace allowed to define what a
-//! violation is, and the optimizer's pass loop stops on a *score* delta
-//! (`BatchOptimizer.java:157-177`), so it has to ask the referee the same
-//! question the batch log asks.
+//! Because there must be exactly one of them. [`crate::batch::scoring`] is the
+//! home: [`CheckScorer`] assembles [`fr_check::BoardStats`] and hands it to
+//! [`fr_check::score()`], and [`trace_geometry`] is the one walk over the items
+//! that produces the four per-item sums. Everything in this module is a view of
+//! those two — the optimizer's pass loop stops on a *score* delta
+//! (`BatchOptimizer.java:157-177`), so it has to ask exactly the question the
+//! batch log asks, and a second transcription of `BoardStatistics` living here
+//! could only drift from it.
 //!
 //! # Cost
 //!
@@ -28,87 +28,39 @@
 //! the release calls `board.get_statistics()`. [`board_key`] is the per-*item*
 //! measurement and deliberately does **not** run the DRC: upstream's per-item
 //! statistics are built with `new BoardStatistics(routingBoard, null, false)`,
-//! clearance checks off (`BatchOptimizer.java:315`).
+//! clearance checks off (`BatchOptimizer.java:315`). It is one item walk, not
+//! the three the four sums used to cost.
 
 use fr_board::board::Board;
-use fr_board::item::ItemKind;
-use fr_board::ClearanceSource;
-use fr_check::{
-    board_connectivity, check_clearance, score, shape_store, BoardStats, Score, ScoreWeights,
-    StoreView,
-};
+use fr_check::{Score, ScoreWeights};
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::ScoringSettings;
+
+use crate::batch::scoring::{trace_geometry, CheckScorer};
 
 use super::improvement::BoardKey;
 
 /// `BoardStatistics.items.viaCount`.
 pub fn via_count(board: &Board) -> usize {
-    board
-        .store()
-        .iter()
-        .filter(|(_, item)| matches!(item.kind, ItemKind::Via(_)))
-        .count()
+    trace_geometry(board).via_count as usize
 }
 
 /// `BoardStatistics.traces.totalLength` — every trace, whatever its fixed
 /// state, summed in raw board units (`:171-176`).
 pub fn trace_length(board: &Board) -> f64 {
-    board
-        .store()
-        .iter()
-        .filter_map(|(_, item)| match &item.kind {
-            ItemKind::Trace(trace) => Some(trace.polyline.length_total()),
-            _ => None,
-        })
-        .sum()
+    trace_geometry(board).trace_length
 }
 
-/// `BoardStatistics.traces.totalWeightedLength` (`:222-241`):
-///
-/// ```text
-/// Σ over UNFIXED and SHOVE_FIXED traces of
-///     length * (half_width + clearance(traceClass, defaultClass, layer))
-/// halved for SHOVE_FIXED, "to produce less violations with pin exit directions"
-/// ```
-///
-/// User-fixed and system-fixed copper is excluded outright: the optimizer
-/// cannot move it, so counting it would only add a constant that hides the
-/// change it can make.
+/// `BoardStatistics.traces.totalWeightedLength` (`:222-241`) — see
+/// [`TraceGeometry::weighted_trace_length`](crate::batch::scoring::TraceGeometry::weighted_trace_length).
 pub fn weighted_trace_length(board: &Board) -> f64 {
-    let default_class = BoardRules::default_clearance_class() as i32;
-    let mut total = 0.0;
-    for (_, item) in board.store().iter() {
-        let ItemKind::Trace(trace) = &item.kind else {
-            continue;
-        };
-        if item.is_user_fixed() {
-            continue;
-        }
-        let clearance = board
-            .clearances()
-            .value(item.clearance_class, default_class, trace.layer);
-        let weight = f64::from(trace.half_width) + f64::from(clearance);
-        let mut weighted = trace.polyline.length_total() * weight;
-        if item.fixed_state.is_shove_fixed() {
-            weighted /= 2.0;
-        }
-        total += weighted;
-    }
-    total
+    trace_geometry(board).weighted_trace_length
 }
 
 /// `BoardStatistics.bends.totalCount` — `Σ max(0, corner_count - 2)`; a
 /// two-corner trace is straight and bends nowhere (`:252-268`).
 pub fn bend_count(board: &Board) -> usize {
-    board
-        .store()
-        .iter()
-        .filter_map(|(_, item)| match &item.kind {
-            ItemKind::Trace(trace) => Some(trace.corner_count().saturating_sub(2)),
-            _ => None,
-        })
-        .sum()
+    trace_geometry(board).bend_count as usize
 }
 
 /// The four numbers one item's reroute is judged by.
@@ -118,11 +70,12 @@ pub fn bend_count(board: &Board) -> usize {
 /// (`BatchOptimizer.java:459-463`); it needs `&mut Board` because the
 /// connectivity index is rebuilt lazily.
 pub fn board_key(board: &mut Board) -> BoardKey {
+    let geometry = trace_geometry(board);
     BoardKey {
         incomplete_count: crate::batch::incomplete_count(board),
-        via_count: via_count(board),
-        trace_length: trace_length(board),
-        weighted_trace_length: weighted_trace_length(board),
+        via_count: geometry.via_count as usize,
+        trace_length: geometry.trace_length,
+        weighted_trace_length: geometry.weighted_trace_length,
     }
 }
 
@@ -153,52 +106,27 @@ pub fn pass_score(
     scoring: &ScoringSettings,
     board_units_per_mm: f64,
 ) -> PassScore {
-    let layer_count = board.layers().len();
-    let shapes = shape_store(board);
-    let view = StoreView::new(board.store(), &shapes, &rules.clearance_matrix, layer_count);
-    let violations = check_clearance(&view);
-    let connectivity = board_connectivity(&view);
-
-    let scale = if board_units_per_mm > 0.0 {
-        1_000.0 / board_units_per_mm
-    } else {
-        1.0
-    };
-    let stats = BoardStats {
-        max_connections: connectivity.max_connections as u64,
-        incomplete_count: connectivity.incomplete_count as u64,
-        clearance_violation_count: violations.len() as u64,
-        bend_count: bend_count(board) as u64,
-        trace_length_um: (trace_length(board) * scale).round() as u64,
-        via_count: via_count(board) as u64,
-        // `BoardStatistics.calculateScore:566` charges every via at
-        // `viaCosts`; `planeViaCosts` is a *router* cost and never a scoring
-        // one (`batch-orchestration.md` §6.1, row 76).
-        plane_via_count: 0,
-    };
-    let weights = weights_from(scoring);
-    let score = score(&stats, &weights);
+    let scorer = CheckScorer::new(rules, board_units_per_mm).with_weights(weights_from(scoring));
+    // One item walk, reused for the score inputs — `board_key` runs the same
+    // walk, and upstream's `BoardStatistics` constructor is likewise one pass.
+    let stats = scorer.stats_from(board, &trace_geometry(board));
+    let verdict = scorer.judge(&stats);
     PassScore {
-        normalized: score.normalized,
-        incomplete_count: connectivity.incomplete_count,
-        violation_count: violations.len(),
-        score,
+        normalized: verdict.normalized,
+        incomplete_count: verdict.incomplete_count,
+        violation_count: verdict.violation_count,
+        score: verdict.score,
     }
 }
 
 /// The referee's weights, read off the job's own `router.scoring.*` block
 /// rather than hardcoded, because `-oit`-style overrides move them.
+///
+/// The batch loop's [`weights_from`](crate::batch::scoring::weights_from) is the
+/// same function over the same block; both stay so each stage's docs can name
+/// the one it reads.
 pub fn weights_from(scoring: &ScoringSettings) -> ScoreWeights {
-    ScoreWeights {
-        unrouted_net_penalty: f64::from(scoring.unrouted_net_penalty),
-        clearance_violation_penalty: f64::from(scoring.clearance_violation_penalty),
-        bend_penalty: f64::from(scoring.bend_penalty),
-        trace_cost_per_mm: scoring
-            .default_preferred_direction_trace_cost
-            .unwrap_or(1.0),
-        via_cost: f64::from(scoring.via_costs()),
-        plane_via_cost: f64::from(scoring.plane_via_costs()),
-    }
+    crate::batch::scoring::weights_from(scoring)
 }
 
 #[cfg(test)]
@@ -261,6 +189,43 @@ mod tests {
     fn a_straight_two_corner_trace_has_no_bends() {
         let fixture = board_with_trace(FixedState::Unfixed);
         assert_eq!(bend_count(&fixture.board), 0);
+    }
+
+    /// The dedup's contract: the optimizer's pass score is the batch loop's
+    /// score, to the bit. Two transcriptions of `getNormalizedScore` that agree
+    /// today can drift; one cannot.
+    #[test]
+    fn the_pass_score_is_the_batch_loops_score() {
+        use crate::batch::scoring::{BoardScorer, CheckScorer};
+
+        let mut fixture = board_with_trace(FixedState::Unfixed);
+        let rules = fixture.rules.clone();
+        let scoring = fixture.settings.scoring.clone();
+
+        let pass = pass_score(&mut fixture.board, &rules, &scoring, 10_000.0);
+        let mut scorer =
+            CheckScorer::new(&rules, 10_000.0).with_weights(weights_from(&scoring));
+        let batch = scorer.score(&fixture.board);
+
+        assert_eq!(pass.normalized, batch.normalized);
+        assert_eq!(pass.incomplete_count, batch.incomplete_count);
+        assert_eq!(pass.violation_count, batch.violation_count);
+        assert_eq!(pass.score, batch.score);
+    }
+
+    /// [`board_key`] and the score read the same item walk, so the numbers a
+    /// reroute is judged by are the ones the score was computed from.
+    #[test]
+    fn the_board_key_agrees_with_the_shared_item_walk() {
+        use crate::batch::scoring::trace_geometry;
+
+        let mut fixture = board_with_trace(FixedState::Unfixed);
+        let geometry = trace_geometry(&fixture.board);
+        let key = board_key(&mut fixture.board);
+        assert_eq!(key.via_count, geometry.via_count as usize);
+        assert_eq!(key.trace_length, geometry.trace_length);
+        assert_eq!(key.weighted_trace_length, geometry.weighted_trace_length);
+        assert_eq!(bend_count(&fixture.board), geometry.bend_count as usize);
     }
 
     #[test]

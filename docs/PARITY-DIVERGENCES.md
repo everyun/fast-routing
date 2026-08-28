@@ -57,6 +57,10 @@ ARCHITECTURE "Budgets".
   requeued in-pass). On `-mp >= 2` there is now **no divergence**: pass boundaries, work lists
   and ripup budgets are the release's. `RequeuePolicy::Always` keeps the old behaviour available
   for A/B measurement of the divergence itself; `tests/batch_multipass.rs` asserts the switch.
+  The optimizer's inner router (`optimizer::MazeRerouter`, upstream's
+  `autoroute_passes_for_optimizing_item`) drives `autoroute_pass` directly rather than through
+  `run`, so it resolves the flag itself with `BatchRouter::set_requeue_active(false)`: that loop
+  *has* the next pass upstream relies on, so the divergence has no reason to exist there either.
 
 - **A negative `-mp` is rejected instead of running uncapped** (`fr-cli`, `parse_max_passes`).
   *Upstream* accepts it, and it is a latent bug the conformance appendix flags as "the
@@ -76,6 +80,19 @@ ARCHITECTURE "Budgets".
   `fr_router::LoopConfig { max_passes: 0, .. }`, which is how the loop's own tests exercise it.
   Fanout-only is an explicit mode (`--fanout` with the router stage off), never a magic pass
   count, per `batch-orchestration.md` §11.1.
+
+- **Fork/end smoothing (`smoothen_start/end_corner_at_trace`) is not ported for either
+  pull-tight flavor** (`fr_router::pull_tight`, `fr_router::pull_tight_any`).
+  *Upstream* has it in `PullTightAlgo45` (`:415`, `:520`) and in `PullTightAlgoAnyAngle`
+  (`:717`, `:835`); it is `opt_changed_area`'s `else if` branch (`PullTightAlgo.java:128-131`).
+  *We* return `false` from that branch in both flavors. It needs the
+  `insert_trace_without_cleaning` + `split_traces` + `normalize_traces` triple per improvement
+  round, which is the one part of the family that has not been wired.
+  *Why symmetric*: porting it for one angle mode only would make the two flavors disagree for a
+  reason that has nothing to do with the angle mode, which is exactly the kind of drift the
+  differential harness cannot attribute.
+  *Effect*: traces that fork or end on another trace keep an acute angle upstream would chamfer.
+  One-sided — it can only leave a trace longer, never introduce a violation.
 
 ## Referee
 

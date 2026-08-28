@@ -710,6 +710,30 @@ impl ItemStore {
     ///
     /// `delta` is cleared first.
     pub fn diff_into(&self, other: &ItemStore, delta: &mut StoreDelta) {
+        self.diff_walk(other, delta, false);
+    }
+
+    /// [`diff_into`](ItemStore::diff_into) for a consumer whose derived state is
+    /// keyed by **arena slot** rather than by [`ItemId`] — the search trees.
+    ///
+    /// An id that is live in both states with the same content can still sit in
+    /// a *different* slot: [`rollback_to`](ItemStore::rollback_to) re-attaches a
+    /// removed item through [`alloc_slot`](ItemStore::alloc_slot), which hands
+    /// out whichever slot the free list happens to hold. Its content did not
+    /// change, so the revision stamps agree and
+    /// [`diff_into`](ItemStore::diff_into) — which answers "what changed" —
+    /// correctly says nothing did; but a slot-indexed table still has to move
+    /// it. Those ids are reported in [`StoreDelta::changed`], whose contract is
+    /// already "remove and reinsert".
+    ///
+    /// Used by [`Board::adopt_store`](crate::board::Board::adopt_store). Every
+    /// other caller wants [`diff_into`](ItemStore::diff_into): reporting a pure
+    /// relocation as a content change would make the delta lie about the board.
+    pub(crate) fn diff_into_relocating(&self, other: &ItemStore, delta: &mut StoreDelta) {
+        self.diff_walk(other, delta, true);
+    }
+
+    fn diff_walk(&self, other: &ItemStore, delta: &mut StoreDelta, relocations: bool) {
         delta.clear();
         let (a, b) = (&self.order, &other.order);
         let (mut i, mut j) = (0usize, 0usize);
@@ -721,6 +745,7 @@ impl ItemStore {
                         (true, true) => {
                             if self.slots[ea.slot as usize].revision
                                 != other.slots[eb.slot as usize].revision
+                                || (relocations && ea.slot != eb.slot)
                             {
                                 delta.changed.push(ea.id);
                             }
