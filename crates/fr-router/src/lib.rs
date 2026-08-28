@@ -120,7 +120,10 @@ pub mod test_support;
 
 pub use batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
 pub use batch::scoring::{BoardScore, BoardScorer, CheckScorer};
-pub use batch::{AttemptState, BatchRouter, PassOutcome, RunOutcome, StopReason};
+pub use batch::{
+    arm_job_deadline, job_budget_spent, job_stop_requested, request_job_stop, AttemptState,
+    BatchRouter, JobDeadline, PassOutcome, RunOutcome, StopCause, StopReason,
+};
 pub use ctrl::AutorouteControl;
 pub use engine::AutorouteEngine;
 pub use fanout::{fanout_board, FanoutConfig, FanoutOutcome};

@@ -85,7 +85,10 @@ use crate::batch::budget::{BudgetPolicy, ConnectionClock};
 use crate::batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
 use crate::batch::scoring::CheckScorer;
 
-pub use crate::batch::schedule::{RunOutcome, StopReason};
+pub use crate::batch::schedule::{
+    arm_job_deadline, job_budget_spent, job_stop_requested, request_job_stop, JobDeadline,
+    RunOutcome, StopCause, StopReason,
+};
 
 /// `Item.PROTECT_FANOUT_LENGTH` (`Item.java:39`): a contact trace longer than
 /// this many half widths does not make its via a fanout via.
@@ -719,11 +722,37 @@ pub fn route_with_control(
                 None,
                 0,
             );
+            // Unconditional, including for an insertion that placed nothing: the
+            // changed area also carries the region a *ripup* freed, and skipping
+            // the relaxation of that region would move copper, not just a label.
             algo.opt_changed_area(&mut changed_area);
 
+            // The ripup bookkeeping is done either way: a connection that tore
+            // copper out and put none back still owes those nets a retry.
             outcome.changed_nets = insert.requeue_nets;
             outcome.ripped_connections = insert.ripped_connections;
-            outcome.state = Some(AttemptState::Routed);
+            // **A connection that left no copper is not a route.** Upstream
+            // reports `ROUTED` for one anyway — `InsertFoundConnectionAlgo`
+            // accepts a located connection whose only item is a single corner
+            // (`:95-103`), and `connect_to_trace` returns `true` for a corner
+            // that already lies on the target trace (`RoutingBoard:1100-1105`),
+            // on the assumption that the following `normalize_traces` will
+            // split that trace at the point and make the contact. It cannot
+            // when the trace is `USER_FIXED`: the split is refused
+            // (`PolylineTrace.split:707-709`). `Issue229`, whose `(wiring)`
+            // scope is entirely `(type protect)`, is that board end to end —
+            // 39 connections, 39 `ROUTED`, and a session byte-identical in
+            // copper to the input.
+            //
+            // **A divergence in the report only** (`docs/PARITY-DIVERGENCES.md`).
+            // The board is bit-for-bit what upstream's rule would leave, because
+            // the branch that changes is the *label*: an insertion that left no
+            // item behind has by construction routed nothing.
+            outcome.state = Some(if insert.board_changed {
+                AttemptState::Routed
+            } else {
+                AttemptState::NotRouted
+            });
         }
         Err(_) => outcome.state = Some(AttemptState::InsertError),
     }
@@ -818,6 +847,13 @@ pub struct PassOutcome {
     /// this into a stop request over every stage, so the batch loop ends here
     /// and the optimizer never runs.
     pub hit_item_cap: bool,
+    /// `ROUTED` connections whose copper was gone by the end of the pass —
+    /// deleted by the tail cleanup, or ripped out by a later connection —
+    /// already moved out of [`routed`](PassOutcome::routed) and into
+    /// [`not_routed`](PassOutcome::not_routed). A pass with a large number here
+    /// is inserting copper that connects nothing; see
+    /// `BatchRouter::discount_routes_that_left_no_copper`.
+    pub routes_undone: usize,
     /// `autoroute_pass` returned false because the work list was empty — the
     /// board is complete (`:437-440`).
     pub board_complete: bool,
@@ -858,6 +894,11 @@ pub struct BatchRouter<'r> {
     requeue_active: bool,
     total_items_routed: i32,
     scratch: ContactScratch,
+    /// Copper the pass's `ROUTED` connections left on the board, one span per
+    /// connection in `routed_copper_spans`. Kept on the router so a pass
+    /// allocates nothing; see `discount_connections_the_cleanup_undid`.
+    routed_copper: Vec<ItemId>,
+    routed_copper_spans: Vec<(usize, usize)>,
 }
 
 impl<'r> BatchRouter<'r> {
@@ -882,6 +923,8 @@ impl<'r> BatchRouter<'r> {
             requeue_active: true,
             total_items_routed: 0,
             scratch: ContactScratch::new(),
+            routed_copper: Vec::new(),
+            routed_copper_spans: Vec::new(),
         }
     }
 
@@ -947,6 +990,41 @@ impl<'r> BatchRouter<'r> {
         self.autoroute_pass_with(board, &ctx)
     }
 
+    /// Moves every `ROUTED` connection whose copper is no longer on the board
+    /// when the pass ends into `not_routed`.
+    ///
+    /// **A declared divergence, in the report only**
+    /// (`docs/PARITY-DIVERGENCES.md`). Upstream counts a connection as routed
+    /// the moment the insertion returns and never looks again — so a pass that
+    /// inserts a stub, finds it dangling and deletes it in the end-of-pass
+    /// cleanup two lines later still reports it as a route, and so does a pass
+    /// whose copper a later connection ripped straight back out. Neither
+    /// connection is on the board, and the second is exactly the one the
+    /// requeue is about to attempt again, so counting it here counts it twice.
+    ///
+    /// `Issue229` is the extreme case. Its `(wiring)` scope is entirely
+    /// `(type protect)`, no `USER_FIXED` trace can be split at a junction
+    /// (`PolylineTrace.split:707-709`), so nothing the router inserts can ever
+    /// make a contact: every insertion is a tail, `remove_tails` deletes all of
+    /// it, and the pre-fix binary reported **648 routes** over 18 passes for a
+    /// session whose copper is byte-identical to the input's.
+    ///
+    /// The board is untouched by any of this — only the label changes.
+    fn discount_routes_that_left_no_copper(&self, board: &Board, outcome: &mut PassOutcome) {
+        let undone = self
+            .routed_copper_spans
+            .iter()
+            .filter(|(start, end)| {
+                !self.routed_copper[*start..*end]
+                    .iter()
+                    .any(|id| board.store().contains(*id))
+            })
+            .count();
+        outcome.routed = outcome.routed.saturating_sub(undone);
+        outcome.not_routed += undone;
+        outcome.routes_undone = undone;
+    }
+
     /// [`BatchRouter::autoroute_pass`] with the schedule's own context.
     pub fn autoroute_pass_with(&mut self, board: &mut Board, ctx: &PassContext) -> PassOutcome {
         let mut outcome = PassOutcome {
@@ -954,6 +1032,9 @@ impl<'r> BatchRouter<'r> {
             ripup_costs: ctx.ripup_costs,
             ..PassOutcome::default()
         };
+        // Reused across passes, so a run allocates these once.
+        self.routed_copper.clear();
+        self.routed_copper_spans.clear();
         let work = autoroute_items(board, self.rules, &mut self.scratch);
         outcome.queued = work.len();
         if work.is_empty() {
@@ -979,11 +1060,21 @@ impl<'r> BatchRouter<'r> {
                 outcome.hit_item_cap = true;
                 break;
             }
+            // The job's wall budget, polled **between connections** — the only
+            // place inside a pass where the board is in a consistent state and
+            // nothing is half-inserted. `schedule::BatchLoop` reads the same
+            // deadline after the pass returns and ends the run there.
+            if ctx.deadline.expired() {
+                break;
+            }
             self.total_items_routed += 1;
+            let first_new_id = board.store().next_id();
             // `:1315-1318` — the connection's allowance is armed here and
             // travels down to the engine, which the maze loop polls; see
-            // `batch::budget`.
-            let mut clock = ctx.budget.start();
+            // `batch::budget`. `connection_budget` is upstream's allowance
+            // clamped to what the job has left, so one connection cannot
+            // overrun the deadline by its own 100 s.
+            let mut clock = ctx.connection_budget().start();
             let attempt = autoroute_item(
                 board,
                 self.rules,
@@ -1002,7 +1093,21 @@ impl<'r> BatchRouter<'r> {
                 outcome.connections_hitting_budget += 1;
             }
             match attempt.state() {
-                AttemptState::Routed => outcome.routed += 1,
+                AttemptState::Routed => {
+                    outcome.routed += 1;
+                    // The copper this connection left behind, so the end of
+                    // the pass can be asked whether any of it survived; see
+                    // `discount_routes_that_left_no_copper`.
+                    let start = self.routed_copper.len();
+                    self.routed_copper.extend(
+                        board
+                            .store()
+                            .iter()
+                            .map(|(id, _)| id)
+                            .take_while(|id| *id >= first_new_id),
+                    );
+                    self.routed_copper_spans.push((start, self.routed_copper.len()));
+                }
                 state if state.is_skip() => outcome.skipped += 1,
                 _ => outcome.not_routed += 1,
             }
@@ -1030,6 +1135,7 @@ impl<'r> BatchRouter<'r> {
             StopConnection::FanoutVia
         };
         remove_tails(board, -1, stop, &mut self.scratch);
+        self.discount_routes_that_left_no_copper(board, &mut outcome);
 
         outcome.incomplete_count = incomplete_count(board);
         outcome.progressed = outcome.routed > 0 || outcome.not_routed > 0;
@@ -1055,6 +1161,7 @@ impl<'r> BatchRouter<'r> {
             remove_unconnected_vias: self.remove_unconnected_vias,
             history_limit: history::MAX_HISTORY_SIZE,
             budget: self.budget,
+            deadline: schedule::JobDeadline::ambient(),
         };
         // Copied out of `self` so the scorer's borrow of the rules is
         // independent of the `&mut self` the loop takes as its driver.

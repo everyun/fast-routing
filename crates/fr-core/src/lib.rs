@@ -31,8 +31,8 @@ pub mod pipeline;
 
 pub use drc_report::{report as drc_json_report, ReportOptions, DRC_IMPORT_OPTIONS};
 pub use pipeline::{
-    BoardCensus, JobError, JobReport, MazeOptions, OptimizerReport, Referee, RouterReport,
-    RouterStage, RoutingJob,
+    arm_job_deadline, job_budget_spent, request_job_stop, BoardCensus, JobError, JobReport,
+    MazeOptions, OptimizerReport, Referee, RouterReport, RouterStage, RoutingJob,
 };
 
 /// Returns the crate version.

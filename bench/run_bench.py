@@ -57,6 +57,11 @@ DEFAULT_RUST_BIN = os.path.join(REPO_ROOT, "target", "release", "fr-cli")
 DEFAULT_MANIFEST = fixture_manifest.DEFAULT_MANIFEST
 TIME_BIN = "/usr/bin/time"  # `-l` prints max RSS in BYTES on this macOS (verified)
 
+# How far under `--timeout` fr-cli's own `--job-timeout` is set. The gap has to
+# cover the referee pass and the session writer on the largest fixture in the
+# suite; ten seconds is roughly four times the worst measured pair.
+RUST_JOB_TIMEOUT_MARGIN_S = 10.0
+
 # results.json layout: {"meta": {...}, "records": [...]}. Bumped whenever the
 # meta block or a record field changes meaning; readers accept the pre-schema
 # bare-list form too (see manifest.load_results).
@@ -349,9 +354,19 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
     else:
         cmd = [args.rust_bin, "-de", fixture, "-do", ses_path,
                "-mp", str(args.passes)]
-        # fr-cli exits 2 when routing finished with incompletes/violations —
-        # that is a result, not a crash.
-        ok_exit_codes = {0, 2}
+        # Give fr-cli a job budget a little under our own cap so it stops
+        # itself, restores its best board, judges it and writes the session —
+        # instead of being SIGKILLed at the cap with nothing on disk, which is
+        # what turned 26 of the 46 boards in the first G2.1 read into "no
+        # session written". The margin covers the referee and the writer on the
+        # largest fixtures; the harness still kills at --timeout if the budget
+        # is somehow not honoured, and that is then a real failure.
+        job_budget = args.timeout - RUST_JOB_TIMEOUT_MARGIN_S
+        if job_budget > 0:
+            cmd += ["--job-timeout", f"{job_budget:g}"]
+        # fr-cli exits 2 when routing finished with incompletes/violations and
+        # 4 when the job budget ran out — both are results, not crashes.
+        ok_exit_codes = {0, 2, 4}
 
     full_cmd = [TIME_BIN, "-l"] + cmd
 

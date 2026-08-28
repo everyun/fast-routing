@@ -29,6 +29,20 @@
 //! 4 s); it is not asserted here because this crate's tests must not go red on
 //! a shove/insert regression they do not own. The run prints its numbers, and
 //! `bench/run_bench.py` is what judges them.
+//!
+//! # Where `-mp 3` loses this fixture, and where it does not
+//!
+//! The end-to-end `-mp 3` result on `Issue026` is 3 unrouted where `-mp 1` is 0,
+//! and it is worth recording that **the batch loop is not what regressed**. The
+//! router stage alone leaves 8 incomplete at `-mp 1` and 9 / 5 / 3 after passes
+//! 1 / 2 / 3, i.e. every extra pass improves it and the end-of-run restore
+//! correctly declines to fire (the final board outscores every retained one).
+//! What flips the sign is the *optimizer* stage that follows: on the `-mp 1`
+//! board it runs three passes and closes every connection (757.57 → 999.99), on
+//! the `-mp 3` board its first pass improves 53 of 57 items without moving the
+//! score at all and it exits on `LoopExit::BelowImprovementThreshold`
+//! (909.08 → 909.08). That is `optimizer::run_batch_loop`'s territory, not this
+//! module's, so these tests bound what the schedule owns and no more.
 
 use std::path::PathBuf;
 
@@ -184,6 +198,59 @@ fn more_passes_do_not_leave_more_incompletes_than_one() {
         eight_passes <= one_pass,
         "-mp 8 left {eight_passes} incomplete against -mp 1's {one_pass}"
     );
+}
+
+/// The contract, swept over the pass caps a short run actually uses.
+///
+/// Two things are checked at every cap, and the distinction between them is the
+/// whole point of this test:
+///
+/// * **`final_score >= best_history_score`** — the loop's one hard guarantee
+///   (`BatchAutorouter.java:1141-1159`). It is *not* gated on the pass count:
+///   upstream's end-of-run restore is a bare `bestHistoryScore >
+///   currentFinalScore` with no `STOP_AT_PASS_MINIMUM` in sight, so a cap of 2
+///   is as covered as a cap of 20. `schedule`'s
+///   `the_final_restore_is_not_gated_by_the_pass_minimum` proves the mechanism;
+///   this proves it on a real board, where the score is the referee's.
+/// * **no cap ends worse than a cap of one.** Note what is *not* asserted:
+///   `unrouted(K + 1) <= unrouted(K)` pass by pass. That is not upstream's
+///   contract and cannot be — a pass rips copper at a rising budget and may end
+///   worse than it started; the restore machinery, not the schedule, is what
+///   bounds the damage, and it bounds it against the best *retained* board, not
+///   against the previous cap.
+#[test]
+fn no_pass_cap_ends_below_its_best_retained_board_or_below_one_pass() {
+    let Some((_, one_pass, _)) = route("Issue026-J2_reference.dsn", 1) else {
+        return;
+    };
+    for cap in 1..=5 {
+        let Some((outcome, incompletes, score)) = route("Issue026-J2_reference.dsn", cap) else {
+            return;
+        };
+        eprintln!(
+            "Issue026 -mp {cap}: {} passes, stop {:?}, {} restores, best-board restore {}, \
+             score {score:.2}, {incompletes} incomplete (best retained {:.2})",
+            outcome.passes.len(),
+            outcome.stop_reason,
+            outcome.restores,
+            outcome.best_board_restored,
+            outcome.best_history_score,
+        );
+        assert!(
+            outcome.final_score + 1e-9 >= outcome.best_history_score,
+            "-mp {cap} ended at {} below its best retained board's {}",
+            outcome.final_score,
+            outcome.best_history_score
+        );
+        assert_eq!(
+            outcome.incomplete_count, incompletes,
+            "-mp {cap}: the loop's count must be the referee's"
+        );
+        assert!(
+            incompletes <= one_pass,
+            "-mp {cap} left {incompletes} incomplete against -mp 1's {one_pass}"
+        );
+    }
 }
 
 /// A pass cap of 1 keeps the M2a divergence (the in-pass requeue); anything

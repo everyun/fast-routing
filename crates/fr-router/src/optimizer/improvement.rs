@@ -23,22 +23,50 @@
 //! unit of length, so the "shorter trace length" branch fires almost
 //! unconditionally once incompletes and vias tie.
 //!
-//! [`LengthMetric::UpstreamMixed`] is that behaviour and is the default, because
-//! this crate's contract is release parity. [`LengthMetric::WeightedBoth`] is
-//! the fix the appendix recommends ("port the intent, not the code") and is what
-//! makes "improved ⇒ the board really got shorter" a provable statement; it is
-//! opt-in so that turning it on is a visible, reviewable decision.
+//! [`LengthMetric::UpstreamMixed`] is that behaviour. [`LengthMetric::WeightedBoth`]
+//! is the fix the appendix recommends ("port the intent, not the code") and is
+//! what makes "improved ⇒ the board really got shorter" a provable statement.
+//!
+//! # Why the default is the fixed metric (divergence)
+//!
+//! Because under the release's metric the length branch is not a comparison at
+//! all — it is a constant `true`, and the whole lattice degenerates to "keep
+//! unless incompletes or vias got worse". The floor and the measurement differ
+//! by the weight `half_width + clearance`, which on a real board is three or
+//! four orders of magnitude: on Issue102 the routed board's raw length is
+//! 19 331 380 units against a weighted 62 865 647 951, a ratio of 3 252. The
+//! raw `after` is therefore below the weighted floor for every reroute that ever
+//! happens, so every item whose incompletes and vias tie is "improved" and
+//! committed — including the ones that made the board longer, and including the
+//! ones that changed nothing.
+//!
+//! From outside that shows up as an accounting contradiction. On Issue026 at
+//! `-mp 3` the release metric reports **53 of 57 items improved** and leaves the
+//! score exactly where it found it, 909.08, with 3 connections still open. The
+//! same board under this metric reports **9 of 41 items improved** and finishes
+//! at 999.99 with none open, in half the wall clock: the items that are honestly
+//! rejected are rolled back instead of poisoning the ones after them, and
+//! [`PassExit::ConsecutiveFailures`] and the ripup-surcharge drop — both of
+//! which key off "did anything improve" — can finally fire.
+//!
+//! `UpstreamMixed` stays and stays tested, so the difference is measurable
+//! rather than remembered:
+//! `tests/optimizer_small_board.rs::the_release_metric_and_the_fixed_metric_agree_on_safety_and_may_differ_on_zeal`.
+//! Recorded in `docs/PARITY-DIVERGENCES.md`.
+//!
+//! [`PassExit::ConsecutiveFailures`]: super::PassExit
 
 /// Which length pair [`ItemRouteResult`] compares.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LengthMetric {
     /// Release parity: weighted `before` against **unweighted** `after`
-    /// (`BatchOptimizer.java:225, 390-393`; conformance #87). The default.
-    #[default]
+    /// (`BatchOptimizer.java:225, 390-393`; conformance #87). Not the default —
+    /// see the module docs.
     UpstreamMixed,
-    /// Weighted against weighted — the appendix's recommended fix. Under this
-    /// metric "improved" implies the board's `(incompletes, vias, weighted
-    /// length)` key strictly decreased.
+    /// Weighted against weighted — the appendix's recommended fix, and the
+    /// default. Under this metric "improved" implies the board's
+    /// `(incompletes, vias, weighted length)` key strictly decreased.
+    #[default]
     WeightedBoth,
 }
 

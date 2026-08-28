@@ -73,6 +73,30 @@ pub struct InsertOutcome {
     /// The nets those items belonged to, ascending. The batch driver requeues
     /// their connections.
     pub requeue_nets: Vec<i32>,
+    /// Whether the insertion left **live copper** on the board: at least one
+    /// item created during it — a trace, a via, a connect-to-trace line, a piece
+    /// of a normalization split — is still there when it returns.
+    ///
+    /// Allocating an item is not enough. The insertion deletes its own stubs
+    /// (`InsertFoundConnectionAlgo:256-272`) and `connect_to_trace` removes the
+    /// tails it exposes (`RoutingBoard.java:1128-1139`), so a degenerate
+    /// connection routinely inserts a trace and takes it out again before
+    /// returning; on `Issue229` that is 20 of 39 connections, every one of
+    /// which the pre-fix binary reported as `ROUTED`.
+    ///
+    /// **A successful insert that changed nothing is not a route**, and saying
+    /// so is the difference between a report and a fiction. It happens: a
+    /// located connection of a single corner is "already at the target"
+    /// (`InsertFoundConnectionAlgo.java:95-103`) and inserts nothing, and
+    /// `connect_to_trace` returns early when the corner is already on the
+    /// target trace's polyline (`RoutingBoard.java:1100-1105`) — which is only
+    /// a *connection* if the following `normalize_traces` can split that trace
+    /// at the point, and it cannot when the trace is `USER_FIXED`
+    /// (`PolylineTrace.split:707-709`). On `Issue229`, whose whole `(wiring)`
+    /// scope is `(type protect)`, that is every connection on the board: 39
+    /// attempts, 39 `ROUTED` results, and a session byte-identical in copper to
+    /// the input.
+    pub board_changed: bool,
 }
 
 /// Why an insertion failed. Every variant leaves the board untouched.
@@ -126,9 +150,19 @@ pub fn insert_connection(
     bounds: IntBox,
 ) -> Result<InsertOutcome, InsertError> {
     let mark = board.begin();
+    // Item ids are monotone and never reused (`fr_board::store`, `next_id`), so every item this
+    // insertion creates has an id at or above this one — and `ItemStore::iter` runs descending,
+    // so "did any of them survive" is the first live id it yields. Cheaper and less fragile
+    // than threading a counter through every insertion site, of which there are seven.
+    let first_free_id = board.store().next_id();
     let mut inserter = ConnectionInserter::new(board, rules, ctrl, bounds);
     match inserter.run(connection) {
-        Ok(outcome) => {
+        Ok(mut outcome) => {
+            outcome.board_changed = board
+                .store()
+                .iter()
+                .next()
+                .is_some_and(|(id, _)| id >= first_free_id);
             board.commit(mark);
             Ok(outcome)
         }
@@ -213,6 +247,9 @@ impl<'b> ConnectionInserter<'b> {
             changed_area: self.forced.changed_area.clone(),
             ripped_connections,
             requeue_nets,
+            // Filled in by `insert_connection`, which is the only thing that can see the
+            // board on both sides of this run.
+            board_changed: false,
         })
     }
 

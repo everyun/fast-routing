@@ -15,10 +15,28 @@
 //! | 0 | the requested work finished **and nothing is left unconnected** |
 //! | 1 | usage error, unreadable input, unwritable output, or an import failure |
 //! | 2 | the board was routed and the `.ses` written, but incompletes remain |
+//! | 4 | `--job-timeout` ran out, or a signal arrived — **the `.ses` was still written** |
 //!
 //! 2 is the pre-rewrite binary's contract ("routed, but not clean"), restored now that there is
 //! a router behind it. The M1-only exit 3 ("cannot route yet") is gone; `bench/run_bench.py`
 //! reads 2 as a routing-quality result and 1 as a tool failure.
+//!
+//! # Never leave the table empty
+//!
+//! 4 is the M2 addition, and the rule behind it is that **this binary must never be killed
+//! holding a routed board it did not write**. Two things enforce it:
+//!
+//! * `--job-timeout SECS` arms a wall budget for the whole job. The router polls it between
+//!   connections and between passes and, when it is gone, stops the way a stop rule stops it:
+//!   the best retained board is restored, the referee judges it, the session is written. A
+//!   harness with a hard cap should pass a budget a little under its own — `bench/run_bench.py`
+//!   uses `cap - 10 s` — so the process finishes by itself instead of being killed.
+//! * `SIGINT` / `SIGTERM` set the same flag from the handler, so the run unwinds through the
+//!   same path and still emits a session. A *second* signal is left to the default action, so a
+//!   caller can always insist.
+//!
+//! Both cases exit 4 whatever the board looks like: it says "this result is what the budget
+//! bought", which is the one thing a harness cannot work out for itself.
 //!
 //! `--import-only`, `--golden-dump` and `--drc-report` never route and always exit 0 on success:
 //! their contract is "this is what the *input* looks like", and the gates depend on it.
@@ -64,6 +82,62 @@ use fr_io::specctra::ImportOptions;
 const EXIT_INCOMPLETE: i32 = 2;
 /// Usage, IO and import failures.
 const EXIT_ERROR: i32 = 1;
+/// `--job-timeout` ran out or a signal arrived; the `.ses` was written anyway.
+const EXIT_DEADLINE: i32 = 4;
+
+/// `SIGINT`, on every unix.
+const SIGINT: i32 = 2;
+/// `SIGTERM`, on every unix.
+const SIGTERM: i32 = 15;
+/// `SIG_DFL`, the default disposition.
+const SIG_DFL: usize = 0;
+
+extern "C" {
+    /// `signal(2)`. Declared rather than pulled in with a crate: this
+    /// workspace has no third-party dependencies, and the two calls below are
+    /// the whole of what a `libc` dependency would buy.
+    fn signal(signum: i32, handler: usize) -> usize;
+}
+
+/// The handler. **Everything it does must be async-signal-safe**:
+/// [`fr_core::request_job_stop`] is one relaxed atomic store, and `signal` and
+/// `raise` are both on the POSIX safe list.
+///
+/// The first signal is a request: the router polls the flag between
+/// connections, stops, and the normal path judges the board and writes the
+/// session. The disposition is then reset, so a second signal does what the
+/// caller plainly meant — a run wedged somewhere that does not poll (a very
+/// long referee pass, say) must still be killable without `SIGKILL`.
+extern "C" fn request_stop_on_signal(signum: i32) {
+    fr_core::request_job_stop();
+    unsafe {
+        signal(signum, SIG_DFL);
+    }
+}
+
+/// Installs [`request_stop_on_signal`] for `SIGINT` and `SIGTERM`.
+fn install_signal_handlers() {
+    let handler = request_stop_on_signal as extern "C" fn(i32) as usize;
+    unsafe {
+        signal(SIGINT, handler);
+        signal(SIGTERM, handler);
+    }
+}
+
+/// `--job-timeout SECS`, in seconds. `0` is a budget that is already spent —
+/// documented, because "no timeout" would be the other plausible reading and
+/// the difference is a 300-second bench run.
+fn parse_job_timeout(value: &str) -> std::time::Duration {
+    match value.parse::<f64>() {
+        Ok(seconds) if seconds.is_finite() && seconds >= 0.0 => {
+            std::time::Duration::from_secs_f64(seconds)
+        }
+        _ => fail(&format!(
+            "--job-timeout {value}: expected a non-negative number of seconds \
+             (0 arms a budget that is already spent)"
+        )),
+    }
+}
 
 fn print_usage() {
     eprintln!(
@@ -90,6 +164,11 @@ ROUTING OPTIONS
                                 as it is upstream: router.optimizer.enabled defaults to true)
     --deterministic             Never read the wall clock for budget decisions: the
                                 per-connection allowance is spent in effort-based virtual time
+    --job-timeout <SECS>        Wall budget for the whole job (Default: none). When it runs out
+                                the router stops like a stop rule does — best board restored,
+                                referee run, .ses written — and the exit code is 4. 0 arms a
+                                budget that is already spent. Under a harness cap, pass a few
+                                seconds less than the cap.
 
 --drc-report OPTIONS
     --unit <mm|mil|inch|um>     Report unit (Default: mm, which is what the oracles use)
@@ -110,7 +189,7 @@ ACCEPTED BUT INERT (kept so existing harnesses keep parsing)
 
 EXIT CODES
     0  finished, nothing left unconnected   2  routed and written, incompletes remain
-    1  usage / IO / import failure
+    1  usage / IO / import failure          4  job timeout or signal; the .ses was still written
 "#,
         env!("CARGO_PKG_VERSION")
     );
@@ -132,6 +211,7 @@ struct Args {
     fanout: bool,
     no_optimizer: bool,
     deterministic: bool,
+    job_timeout: Option<std::time::Duration>,
     settle_trace: Option<String>,
 }
 
@@ -168,6 +248,12 @@ fn parse_max_passes(value: &str) -> usize {
 }
 
 fn main() {
+    // First thing of all, before a single argument is looked at: the promise is that this
+    // binary never dies holding work it did not write, and the only window where that cannot
+    // be honoured is the one before the handler exists. It is this short on purpose — an
+    // operator's Ctrl-C is the commonest way to lose a routed board.
+    install_signal_handlers();
+
     let argv: Vec<String> = env::args().collect();
     if argv.len() <= 1 {
         print_usage();
@@ -213,6 +299,7 @@ fn main() {
             "--fanout" => args.fanout = true,
             "--no-optimizer" => args.no_optimizer = true,
             "--deterministic" => args.deterministic = true,
+            "--job-timeout" => args.job_timeout = Some(parse_job_timeout(&next!("--job-timeout"))),
             "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
             "-v" | "--version" => {
                 println!("fast-routing v{}", env!("CARGO_PKG_VERSION"));
@@ -239,6 +326,12 @@ fn main() {
     // Must be set before anything asks the sink, which resolves the environment once.
     if let Some(path) = &args.settle_trace {
         env::set_var("FR_SETTLE_TRACE", path);
+    }
+    // Armed before the file is even read, so the budget covers the import too — on the large
+    // fixtures that is seconds, and a budget that only started at the router would overrun by
+    // exactly them.
+    if let Some(budget) = args.job_timeout {
+        fr_core::arm_job_deadline(budget);
     }
 
     let job = match RoutingJob::from_path(&input_path) {
@@ -305,15 +398,29 @@ fn main() {
     if args.import_only {
         return;
     }
-    // The old contract, now that there is a router behind it: 0 when the board came out fully
-    // connected, 2 when it did not. The referee's count is the one that decides, not the
-    // router's own — they are computed by different code over the same board, and disagreeing
-    // with the judge in our favour is the one failure mode a harness cannot detect.
     if report.stats.incomplete_count > 0 {
         eprintln!(
             "{} of {} connections still incomplete",
             report.stats.incomplete_count, report.stats.max_connections
         );
+    }
+    // 4 outranks 2, and is checked after the session is on disk: it says "the budget ran out,
+    // and *this* is the board it bought". The router's own stop reason is not what decides —
+    // the budget can also be spent in the import, the optimizer or the referee, and a caller
+    // that asked for one wants to know it was spent however the run ended.
+    if fr_core::job_budget_spent() {
+        eprintln!(
+            "job budget spent — the session above is the best board the run held \
+             ({} of {} connections incomplete)",
+            report.stats.incomplete_count, report.stats.max_connections
+        );
+        process::exit(EXIT_DEADLINE);
+    }
+    // The old contract, now that there is a router behind it: 0 when the board came out fully
+    // connected, 2 when it did not. The referee's count is the one that decides, not the
+    // router's own — they are computed by different code over the same board, and disagreeing
+    // with the judge in our favour is the one failure mode a harness cannot detect.
+    if report.stats.incomplete_count > 0 {
         process::exit(EXIT_INCOMPLETE);
     }
 }

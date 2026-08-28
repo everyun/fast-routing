@@ -508,7 +508,7 @@ fn a_pass_that_improved_items_but_lost_score_drops_the_surcharge_and_runs_again(
     //
     // Getting there needs a pass that improves items and still loses score,
     // which is precisely what the release's mixed weighted/unweighted length
-    // comparison produces (#87) — so this test runs the default metric.
+    // comparison produces (#87) — so this test asks for that metric by name.
     let mut bench = Bench::new(2);
     bench.join_through_two_vias(1);
     let mut settings = bench.settings.clone();
@@ -516,7 +516,7 @@ fn a_pass_that_improved_items_but_lost_score_drops_the_surcharge_and_runs_again(
 
     let rerouter = LengtheningRerouter::new(&bench, 1);
     let mut optimizer = BatchOptimizer::with_rerouter(&bench.rules, &settings, Box::new(rerouter));
-    assert_eq!(optimizer.length_metric, LengthMetric::UpstreamMixed);
+    optimizer.length_metric = LengthMetric::UpstreamMixed;
     let outcome = optimizer.run_batch_loop(&mut bench.board);
 
     assert!(outcome.passes.len() >= 2, "{:?}", outcome.exit);
@@ -546,6 +546,76 @@ fn a_board_already_at_the_maximum_score_is_left_alone() {
     assert_eq!(outcome.exit, LoopExit::NearMaximumScore);
     assert!(outcome.passes.is_empty(), "not a single item was touched");
     assert_eq!(optimizer.total_items_optimized(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// improvement accounting
+// ---------------------------------------------------------------------------
+
+/// `items_improved` is a claim about the board, and the board has to back it.
+///
+/// The reroute here puts back exactly the wire it ripped out — same corners,
+/// same layer, same width — so `(incompletes, vias, weighted length)` is
+/// unmoved and not one of the three items may be counted. This is the shape of
+/// the Issue026 report that opened the bug: "53 of 57 items improved" with the
+/// score sitting at 909.08 before and after.
+#[test]
+fn a_reroute_that_reproduced_the_copper_is_not_an_improvement() {
+    let mut bench = Bench::new(3);
+    for net in 1..=3 {
+        bench.join_straight(net);
+    }
+    let settings = bench.settings.clone();
+    let rerouter = StraightRerouter::new(&bench, &[1, 2, 3]);
+    let mut optimizer = BatchOptimizer::with_rerouter(&bench.rules, &settings, Box::new(rerouter));
+    assert_eq!(
+        optimizer.length_metric,
+        LengthMetric::WeightedBoth,
+        "the shipped default is the metric that can tell"
+    );
+
+    let pass = optimizer.opt_route_pass(&mut bench.board, 1, true);
+    assert_eq!(pass.items_attempted, 3);
+    assert_eq!(
+        pass.key_before, pass.key_after,
+        "the reroute reproduced the board"
+    );
+    assert_eq!(
+        pass.items_improved, 0,
+        "nothing fell, so nothing improved: {:?} -> {:?}",
+        pass.key_before, pass.key_after
+    );
+    // ... and with no item kept, the brake that keys off "did anything
+    // improve" can build: three rejections in a row are three towards
+    // `optimizer.maxConsecutiveFailures` (`:257-263`).
+    assert_eq!(pass.consecutive_failures, 3);
+}
+
+/// The same board, the same reroute, under the release's metric — every item
+/// "improved" and nothing about the board is different. Conformance #87, and
+/// the reason the default moved.
+#[test]
+fn the_release_metric_counts_a_reroute_that_changed_nothing_as_an_improvement() {
+    let mut bench = Bench::new(3);
+    for net in 1..=3 {
+        bench.join_straight(net);
+    }
+    let settings = bench.settings.clone();
+    let rerouter = StraightRerouter::new(&bench, &[1, 2, 3]);
+    let mut optimizer = BatchOptimizer::with_rerouter(&bench.rules, &settings, Box::new(rerouter));
+    optimizer.length_metric = LengthMetric::UpstreamMixed;
+
+    let pass = optimizer.opt_route_pass(&mut bench.board, 1, true);
+    assert_eq!(pass.key_before, pass.key_after, "still the same board");
+    assert_eq!(
+        pass.items_improved, 3,
+        "the weighted floor is compared against a raw length, so every tie wins"
+    );
+    // Which is exactly why the pass never stops early: the failure streak that
+    // `:257-263` counts is reset by every one of these phantom improvements, so
+    // the pass always runs every item the sweep has.
+    assert_eq!(pass.consecutive_failures, 0);
+    assert_eq!(pass.exit, PassExit::Exhausted);
 }
 
 // ---------------------------------------------------------------------------

@@ -265,6 +265,179 @@ fn an_unfinishable_board_exits_two_with_the_session_still_written() {
     assert!(ses.is_file(), "the session is written even when incomplete");
 }
 
+// =================================================================================================
+// --job-timeout and the signal path: never leave the table empty
+// =================================================================================================
+
+/// A budget of zero is already spent, so the router stops before its first pass — and the run
+/// still judges the board and writes the session. Exit 4, not 2: the caller has to be able to
+/// tell "this is as far as the budget got" from "this is as far as the router got".
+///
+/// Zero seconds is what makes this test deterministic. Every other value would be a race
+/// between the machine and the assertion.
+#[test]
+fn a_spent_job_budget_still_writes_the_session_and_exits_four() {
+    let workspace = Workspace::with_board("deadline", UNROUTED_BOARD);
+    let ses = workspace.path("deadline.ses");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "--job-timeout".as_ref(),
+        "0".as_ref(),
+    ]);
+
+    assert_eq!(code(&output), 4, "stdout: {}", stdout(&output));
+    let report = stdout(&output);
+    assert!(
+        report.contains("Router stopped on job deadline"),
+        "the stop reason names the budget: {report}"
+    );
+    assert!(
+        report.contains("0 passes"),
+        "a spent budget routes nothing: {report}"
+    );
+    assert!(
+        stderr(&output).contains("job budget spent"),
+        "stderr: {}",
+        stderr(&output)
+    );
+
+    // The session is on disk and is a real one — the *imported* board, which on this fixture
+    // is bare copper-free, but a session a caller can read all the same.
+    let session = std::fs::read_to_string(&ses).expect("the session was written");
+    assert!(session.starts_with("(session board.ses"), "{session}");
+    assert!(session.contains("(routes"), "{session}");
+}
+
+/// A budget nothing comes close to spending changes nothing at all: same exit code, same
+/// session as the run without one.
+#[test]
+fn a_job_budget_that_is_not_spent_changes_nothing() {
+    let workspace = Workspace::with_board("deadline-slack", UNROUTED_BOARD);
+    let with = workspace.path("with.ses");
+    let without = workspace.path("without.ses");
+    let budgeted = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        with.as_os_str(),
+        "--job-timeout".as_ref(),
+        "600".as_ref(),
+    ]);
+    let plain = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        without.as_os_str(),
+    ]);
+
+    assert_eq!(code(&budgeted), 0, "stderr: {}", stderr(&budgeted));
+    assert_eq!(code(&plain), 0, "stderr: {}", stderr(&plain));
+    assert_eq!(
+        std::fs::read_to_string(&with).expect("with"),
+        std::fs::read_to_string(&without).expect("without"),
+        "an unspent budget is not allowed to change the board"
+    );
+}
+
+/// A bad `--job-timeout` is refused rather than silently ignored, for the same reason `-mp tow`
+/// is: a typo in a long bench run must not look like a successful one.
+#[test]
+fn a_bad_job_timeout_is_a_usage_error() {
+    let workspace = Workspace::new("deadline-typo");
+    for bad in ["-5", "soon", ""] {
+        let output = run(&[
+            "-de".as_ref(),
+            workspace.design().as_os_str(),
+            "--job-timeout".as_ref(),
+            bad.as_ref(),
+        ]);
+        assert_eq!(code(&output), 1, "--job-timeout {bad}");
+        assert!(
+            stderr(&output).contains("--job-timeout"),
+            "the message names the flag: {}",
+            stderr(&output)
+        );
+    }
+    // And a missing value is the usual "needs a value", not a panic.
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "--job-timeout".as_ref(),
+    ]);
+    assert_eq!(code(&output), 1);
+    assert!(stderr(&output).contains("needs a value"));
+}
+
+/// **`SIGTERM` must never cost us the board.** The signal sets the same flag the deadline
+/// does, so the run leaves through the ordinary path: session written, exit code 4.
+///
+/// The one race that has to be excluded is the process's own start-up: a signal that arrives
+/// before `main` installs the handler is fatal in any program, and nothing this binary does can
+/// change that. `main` installs it on its first line, so the child's **first output** — the
+/// `-us` note, written during argument scanning — proves the handler is up, and that is what
+/// this test waits for. Whether the run is still going at that moment is left open on purpose:
+/// both outcomes satisfy the contract, and pinning the race would make the test flaky rather
+/// than stronger.
+#[test]
+fn a_sigterm_does_not_cost_us_the_session() {
+    use std::io::BufRead as _;
+
+    let workspace = Workspace::with_board("sigterm", UNROUTED_BOARD);
+    let ses = workspace.path("sigterm.ses");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_fr-cli"))
+        .args([
+            "-de".as_ref(),
+            workspace.design().as_os_str(),
+            "-do".as_ref(),
+            ses.as_os_str(),
+            "-mp".as_ref(),
+            "20".as_ref(),
+            // Only here to make the child talk before it starts working; see above.
+            "-us".as_ref(),
+            "4".as_ref(),
+        ])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .expect("fr-cli spawns");
+
+    let mut piped = std::io::BufReader::new(child.stderr.take().expect("stderr is piped"));
+    let mut first = String::new();
+    piped
+        .read_line(&mut first)
+        .expect("the child says something");
+    assert!(first.contains("-us 4 is accepted but inert"), "{first}");
+
+    // `kill(1)` rather than a `libc` dependency, for the same reason `main.rs` declares
+    // `signal` itself: this workspace has no third-party crates. A run that already finished
+    // makes this a no-op, which is fine — the assertions below do not depend on it landing.
+    let _ = Command::new("kill")
+        .args(["-TERM", &child.id().to_string()])
+        .status()
+        .expect("kill runs");
+
+    let status = child.wait().expect("fr-cli exits");
+    let mut rest = String::new();
+    let _ = std::io::Read::read_to_string(&mut piped, &mut rest);
+    let output = format!("{first}{rest}");
+    assert!(
+        status.code().is_some(),
+        "a first SIGTERM must be handled, not fatal: {status:?}"
+    );
+    assert!(
+        matches!(status.code(), Some(0 | 2 | 4)),
+        "exit {:?} — a handled signal is still a result: {output}",
+        status.code(),
+    );
+    assert!(
+        ses.is_file(),
+        "the session must exist however the run ended: {output}"
+    );
+}
+
 /// With no `-do`, the default path still writes `<input>.ses` next to the design — the
 /// pre-rewrite behaviour, preserved.
 #[test]

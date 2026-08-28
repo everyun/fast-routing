@@ -289,7 +289,14 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     // routing result gates it.
     let hit_the_item_cap =
         settings.max_items > 0 && router.total_items_routed() >= settings.max_items;
-    if options.optimize && !hit_the_item_cap {
+    // A spent job budget skips the stage outright. The optimizer's own
+    // per-item router polls the deadline too, so entering it would terminate —
+    // but only after a full sweep of every routed item, each one ripped,
+    // re-attempted against a zero allowance and rolled back. The budget exists
+    // to leave time for the referee and the session writer, and that sweep is
+    // exactly the work that would spend it.
+    let budget_spent = fr_router::job_budget_spent();
+    if options.optimize && !hit_the_item_cap && !budget_spent {
         report.optimizer =
             run_optimization_stage(&mut design.board, &design.rules, &settings, scale).map(
                 |outcome| OptimizerReport {
@@ -333,7 +340,43 @@ fn describe_stop(reason: Option<StopReason>) -> &'static str {
         Some(StopReason::RankLimit) => "board rank limit",
         Some(StopReason::PassLocalStagnation) => "stagnation (pass-local)",
         Some(StopReason::GlobalStagnation) => "stagnation (global)",
+        Some(StopReason::JobDeadline) => "job deadline",
+        Some(StopReason::Interrupted) => "interrupt",
     }
+}
+
+/// Arms the process's job budget: after `budget` the router stops the way a
+/// stop rule stops it, and the pipeline still judges and writes the board.
+///
+/// One-shot — a second call is ignored and returns `false`. Everything
+/// downstream reads it ambiently ([`fr_router::JobDeadline::ambient`]), so this
+/// is the *only* thing a caller has to do; the batch loop, the pass's
+/// between-connections poll and the optimizer's own per-item router all see it.
+///
+/// `Duration::ZERO` arms a budget that is already spent, which routes nothing
+/// and writes the imported board — the cheapest end-to-end check that the path
+/// works.
+pub fn arm_job_deadline(budget: std::time::Duration) -> bool {
+    fr_router::arm_job_deadline(budget)
+}
+
+/// Asks the run to stop at its next poll — the signal handler's entry point.
+///
+/// **Async-signal-safe**: a single relaxed atomic store, so `fr-cli` may call
+/// it from its `SIGTERM` / `SIGINT` handler.
+pub fn request_job_stop() {
+    fr_router::request_job_stop();
+}
+
+/// Whether the job budget is gone: the armed deadline passed, or
+/// [`request_job_stop`] was called.
+///
+/// This, and not the router's stop reason, is what `fr-cli` turns into its
+/// deadline exit code: the budget can also run out during the import, the
+/// optimizer or the referee, and a caller that asked for a budget wants to know
+/// it was spent however the run ended.
+pub fn job_budget_spent() -> bool {
+    fr_router::job_budget_spent()
 }
 
 /// Why a job could not produce a report.

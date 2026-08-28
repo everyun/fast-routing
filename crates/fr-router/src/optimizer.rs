@@ -153,6 +153,42 @@ pub trait ItemRerouter {
 /// board ever seen" both live in `runBatchLoop` and neither is reachable inside
 /// six passes. Running them here would also mean an arena snapshot/restore in
 /// the middle of the optimizer's own journal transaction.
+///
+/// # The escalation stops when it stops routing (divergence)
+///
+/// Upstream's loop guard is `still_unrouted_items`, and
+/// `autoroute_pass` computes that as `routed > 0 || not_routed > 0` (`:688`) —
+/// "did the pass attempt anything", not "did the pass achieve anything". On a
+/// board that carries even one connection the router could not close, the guard
+/// is permanently true, so **every** item pays all six passes, and each of those
+/// passes re-attempts the whole board's unroutable backlog at a ripup cost that
+/// grows with the pass number. That is not a corner case: it is where the
+/// optimizer's time goes.
+///
+/// Measured on Issue026 at `-mp 3`, one optimizer pass over 57 items:
+///
+/// | inner pass | wall | connections queued | routed |
+/// |---|---|---|---|
+/// | 1 | 22.8 s | 449 | 78 |
+/// | 2 | 21.2 s | 346 | 5 |
+/// | 3 | 22.2 s | 343 | 3 |
+/// | 4 | 22.0 s | 337 | 0 |
+/// | 5 | 21.4 s | 337 | 0 |
+/// | 6 | 21.0 s | 337 | 0 |
+///
+/// Passes 4-6 cost half the stage and routed nothing at all; the whole
+/// escalation past the first barren pass bought 8 connections out of 86 for
+/// 5/6 of the time. So this port stops the escalation at the first pass that
+/// routes nothing — the loop's own javadoc says it exists to "auto-route ripup
+/// passes **until the board is completed**", and a pass that completed nothing
+/// has not moved towards that. `board_complete` and upstream's `progressed` are
+/// both still honoured; `routed == 0` is the added rule.
+///
+/// The board this produces was byte-identical to the unmodified loop's on all
+/// **21** suite fixtures that finish at `-mp 1` under the shipped
+/// [`LengthMetric`], for 1.2x - 2.7x less wall clock — and on `Issue190` it is
+/// the difference between a 150 s timeout and a finished board. It is recorded
+/// in `docs/PARITY-DIVERGENCES.md`.
 #[derive(Debug, Default)]
 pub struct MazeRerouter;
 
@@ -175,12 +211,30 @@ impl ItemRerouter for MazeRerouter {
         router.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
         router.set_requeue_active(false);
         for pass_no in 1..=request.max_passes {
-            // `:156-161` — stop as soon as a pass finds nothing left to route.
-            if router.autoroute_pass(board, pass_no).board_complete {
+            let outcome = router.autoroute_pass(board, pass_no);
+            if !escalation_continues(&outcome) {
                 break;
             }
         }
     }
+}
+
+/// Whether the item's reroute is worth another, dearer pass — the `:156-161`
+/// loop guard, plus this port's rule (see [`MazeRerouter`]).
+///
+/// Upstream's two terms first, in its own order:
+///
+/// * `board_complete` — `autoroute_pass` found nothing to route (`:437-440`,
+///   upstream's early `return false`);
+/// * `progressed` — `routed > 0 || not_routed > 0` (`:688`), the value upstream
+///   assigns to `still_unrouted_items`.
+///
+/// Then the added one: `routed > 0`. A pass that routed nothing has not moved
+/// the board towards the completion this loop exists to reach, and the only
+/// thing the next pass changes is the price of ripping the copper that already
+/// refused to move.
+fn escalation_continues(outcome: &crate::batch::PassOutcome) -> bool {
+    !outcome.board_complete && outcome.progressed && outcome.routed > 0
 }
 
 // ---------------------------------------------------------------------------
@@ -282,8 +336,9 @@ pub struct BatchOptimizer<'r> {
     /// design knows the real value and should set it.
     pub board_units_per_mm: f64,
     /// Which length pair the improvement lattice compares. Defaults to
-    /// [`LengthMetric::UpstreamMixed`], the release's behaviour, bug included —
-    /// see [`improvement`].
+    /// [`LengthMetric::WeightedBoth`], the metric under which "improved" means
+    /// the board's key actually fell; [`LengthMetric::UpstreamMixed`] is the
+    /// release's behaviour, bug included. See [`improvement`].
     pub length_metric: LengthMetric,
     /// `use_increased_ripup_costs` (`:32`, `:99`): the first pass(es) pay the
     /// `additionalRipupCostFactorAtStart` surcharge, and two independent rules
@@ -816,6 +871,31 @@ mod tests {
             !router.requeue_active(),
             "a direct `autoroute_pass` must not re-resolve the flag"
         );
+    }
+
+    /// The reroute's escalation ladder, term by term — the guard that decides
+    /// whether an item pays for a dearer pass.
+    #[test]
+    fn the_escalation_stops_on_completion_stagnation_or_a_barren_pass() {
+        let pass = |routed: usize, not_routed: usize, complete: bool| crate::batch::PassOutcome {
+            routed,
+            not_routed,
+            board_complete: complete,
+            progressed: routed > 0 || not_routed > 0,
+            ..crate::batch::PassOutcome::default()
+        };
+
+        // A pass that routed something and left work behind earns the next one.
+        assert!(escalation_continues(&pass(1, 3, false)));
+        // `:437-440` — nothing left to route at all.
+        assert!(!escalation_continues(&pass(2, 0, true)));
+        // `:688` — upstream's own `still_unrouted_items == false`: every queued
+        // connection was skipped.
+        assert!(!escalation_continues(&pass(0, 0, false)));
+        // This port's rule: connections remain, none of them moved, so the only
+        // difference the next pass would make is a dearer ripup on the same
+        // copper that already refused.
+        assert!(!escalation_continues(&pass(0, 5, false)));
     }
 
     #[test]

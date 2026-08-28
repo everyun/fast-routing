@@ -19,10 +19,12 @@
 //! ```text
 //! score the starting board
 //! while continuing and not stopped:
+//!     job budget spent                       -> stop                     (ours)
 //!     pass > max_passes                      -> stop                     (:931)
 //!     history.add(pre-pass board)                                        (:944)
 //!     continuing = driver.run_pass(pass)                                 (:947)
 //!     score the board
+//!     job budget spent during the pass       -> stop                     (ours)
 //!     restore check, on passes >= 8 that are 0 mod 4                     (:953-995)
 //!     stagnation, on passes >= 8 while still routing                     (:1054-1130)
 //!         pass-local counter (reset by a restore)
@@ -48,15 +50,30 @@
 //!
 //! # Divergences
 //!
-//! One, and it is in `docs/PARITY-DIVERGENCES.md`: [`RequeuePolicy`], the
-//! in-pass re-attempt of a connection whose copper a later connection ripped.
-//! Upstream never retries inside a pass (§4.1); we do it only when there is no
-//! next pass to rely on, i.e. at `-mp 1`.
+//! Two, both in `docs/PARITY-DIVERGENCES.md`.
+//!
+//! [`RequeuePolicy`] is the in-pass re-attempt of a connection whose copper a
+//! later connection ripped. Upstream never retries inside a pass (§4.1); we do
+//! it only when there is no next pass to rely on, i.e. at `-mp 1`.
+//!
+//! [`JobDeadline`] is a wall budget for the whole job, off unless
+//! [`arm_job_deadline`] is called. It is checked between passes here and
+//! between connections in
+//! [`BatchRouter::autoroute_pass_with`](crate::batch::BatchRouter::autoroute_pass_with),
+//! and when it is gone the loop leaves through the *same* tail as every
+//! upstream stop rule — so the run still ends on the best board it ever held
+//! and the caller still gets a session. It exists because a harness cap that
+//! `SIGKILL`s the process produces nothing at all, which is strictly less than
+//! the board we were holding.
+
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use fr_board::board::Board;
 use fr_board::store::StoreDelta;
 
-use crate::batch::budget::{BudgetPolicy, ConnectionBudget};
+use crate::batch::budget::{BudgetMode, BudgetPolicy, ConnectionBudget};
 use crate::batch::history::{
     BoardSnapshotStore, BOARD_RANK_LIMIT, MAXIMUM_TRIES_ON_THE_SAME_BOARD,
 };
@@ -91,6 +108,166 @@ pub const STAGNATION_SCORE_THRESHOLD: f64 = 0.5;
 
 /// `settings.maxPasses`'s default (`DefaultSettings.java:95`) *(jar-verified)*.
 pub const DEFAULT_MAX_PASSES: i32 = 9_999;
+
+// ---------------------------------------------------------------------------
+// the job deadline
+// ---------------------------------------------------------------------------
+
+/// The process's job deadline, armed once by [`arm_job_deadline`].
+static JOB_DEADLINE: OnceLock<Instant> = OnceLock::new();
+
+/// Set by [`request_job_stop`] — the signal handler's half of the deadline.
+static JOB_STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// Arms the process-wide job deadline at `now + after`. Returns `false` when
+/// one was already armed, which never overwrites the first.
+///
+/// This is the port's equivalent of the release's job timeout
+/// (`RoutingJobScheduler`'s per-job budget): when it expires the batch loop
+/// stops **exactly like a stop rule** — best board restored, referee run,
+/// session written — instead of the caller killing a process that is holding a
+/// routed board it never wrote.
+///
+/// `after == 0` arms a deadline that is already expired, which is the cheapest
+/// end-to-end test of the whole path.
+pub fn arm_job_deadline(after: Duration) -> bool {
+    JOB_DEADLINE
+        .set(
+            Instant::now()
+                .checked_add(after)
+                .unwrap_or_else(Instant::now),
+        )
+        .is_ok()
+}
+
+/// Asks every polling loop to stop at its next check.
+///
+/// **Async-signal-safe**: one relaxed store and nothing else, so a `SIGTERM` /
+/// `SIGINT` handler may call it.
+pub fn request_job_stop() {
+    JOB_STOP_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+/// Whether [`request_job_stop`] has been called.
+pub fn job_stop_requested() -> bool {
+    JOB_STOP_REQUESTED.load(Ordering::Relaxed)
+}
+
+/// Whether the ambient job budget is gone — the armed deadline has passed, or a
+/// stop was requested.
+pub fn job_budget_spent() -> bool {
+    JobDeadline::ambient().expired()
+}
+
+/// Why a run was cut short from outside the router.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopCause {
+    /// The wall budget ran out.
+    Deadline,
+    /// A signal handler called [`request_job_stop`].
+    Interrupt,
+}
+
+/// A wall budget for the whole job, polled between connections and between
+/// passes.
+///
+/// Deliberately **not** a second per-connection budget:
+/// [`ConnectionBudget`] is upstream's
+/// `TimeLimit` and governs *one* connection, while this governs the run. The
+/// two meet in [`PassContext::connection_budget`], which never hands a
+/// connection more time than the job has left.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct JobDeadline {
+    at: Option<Instant>,
+    /// Whether [`job_stop_requested`] also counts as expiry. Only the ambient
+    /// deadline watches the flag; an explicit one is a pure clock, so a test
+    /// can never be disturbed by a signal handler another test installed.
+    watch_stop_flag: bool,
+}
+
+/// `Instant` is not `Eq`-comparable through a derive on an `Option`? It is —
+/// but the flag makes the derived equality misleading, so it is spelled out.
+impl PartialEq for JobDeadline {
+    fn eq(&self, other: &Self) -> bool {
+        self.at == other.at && self.watch_stop_flag == other.watch_stop_flag
+    }
+}
+
+impl Eq for JobDeadline {}
+
+impl JobDeadline {
+    /// No budget at all — the default, and what every run gets unless a caller
+    /// armed one.
+    pub const NONE: JobDeadline = JobDeadline {
+        at: None,
+        watch_stop_flag: false,
+    };
+
+    /// The process-wide deadline set by [`arm_job_deadline`], which also
+    /// watches the [`request_job_stop`] flag.
+    ///
+    /// This is what [`LoopConfig::default`] and [`PassContext::new`] carry, so
+    /// *every* driver — the batch loop, and the optimizer's per-item
+    /// [`BatchRouter::autoroute_pass`](crate::batch::BatchRouter::autoroute_pass)
+    /// loop, which never goes through [`BatchLoop`] — honours it without being
+    /// told.
+    pub fn ambient() -> JobDeadline {
+        JobDeadline {
+            at: JOB_DEADLINE.get().copied(),
+            watch_stop_flag: true,
+        }
+    }
+
+    /// A deadline `after` from now, ignoring the stop flag. For tests and for
+    /// callers that own their own budget.
+    pub fn after(after: Duration) -> JobDeadline {
+        JobDeadline {
+            at: Instant::now().checked_add(after),
+            watch_stop_flag: false,
+        }
+    }
+
+    /// A deadline that has already passed — the cheapest way to test the
+    /// stop path.
+    pub fn already_passed() -> JobDeadline {
+        JobDeadline {
+            at: Some(Instant::now()),
+            watch_stop_flag: false,
+        }
+    }
+
+    /// Whether a budget was armed at all. A run with none never reads the
+    /// clock.
+    pub fn is_armed(&self) -> bool {
+        self.at.is_some() || self.watch_stop_flag
+    }
+
+    /// Why the budget is gone, or `None` while it lasts.
+    ///
+    /// The stop flag is checked first: an operator's `SIGTERM` is the more
+    /// informative of the two when both are true.
+    pub fn cause(&self) -> Option<StopCause> {
+        if self.watch_stop_flag && job_stop_requested() {
+            return Some(StopCause::Interrupt);
+        }
+        match self.at {
+            Some(at) if Instant::now() >= at => Some(StopCause::Deadline),
+            _ => None,
+        }
+    }
+
+    /// Whether the run must stop now.
+    pub fn expired(&self) -> bool {
+        self.cause().is_some()
+    }
+
+    /// Time left on the clock; `None` when no deadline was armed. Zero once it
+    /// has passed.
+    pub fn remaining(&self) -> Option<Duration> {
+        let at = self.at?;
+        Some(at.saturating_duration_since(Instant::now()))
+    }
+}
 
 /// When a connection whose copper was ripped is re-attempted inside the same
 /// pass.
@@ -145,10 +322,14 @@ pub struct PassContext {
     /// Whether the end-of-pass tail cleanup may delete fanout vias
     /// (`:657-661`).
     pub remove_unconnected_vias: bool,
+    /// The job's wall budget, polled between the pass's connections.
+    /// [`JobDeadline::NONE`] unless one was armed.
+    pub deadline: JobDeadline,
 }
 
 impl PassContext {
-    /// The context of pass `pass_no` under these settings.
+    /// The context of pass `pass_no` under these settings, under the ambient
+    /// job deadline ([`JobDeadline::ambient`]).
     pub fn new(
         pass_no: i32,
         start_ripup_costs: i32,
@@ -160,7 +341,47 @@ impl PassContext {
             ripup_costs: start_ripup_costs.saturating_mul(pass_no),
             budget: policy.for_pass(pass_no),
             remove_unconnected_vias,
+            deadline: JobDeadline::ambient(),
         }
+    }
+
+    /// The same context under an explicit job budget — what [`BatchLoop`]
+    /// hands its driver, and what a test uses to avoid the ambient one.
+    pub fn with_deadline(mut self, deadline: JobDeadline) -> PassContext {
+        self.deadline = deadline;
+        self
+    }
+
+    /// The allowance to arm the *next* connection with: upstream's
+    /// per-connection budget, never longer than the job has left.
+    ///
+    /// Without the clamp a single connection may overrun the job deadline by
+    /// its whole allowance — 100 s on pass 1, doubling — which is exactly the
+    /// case the deadline exists to prevent. The clamp is skipped in
+    /// [`BudgetMode::Deterministic`], where by construction nothing reads the
+    /// wall clock (gate G2.2); a deterministic run that wants a wall budget is
+    /// a contradiction, and the between-connections poll still stops it.
+    pub fn connection_budget(&self) -> ConnectionBudget {
+        if self.budget.mode() != BudgetMode::Wall {
+            return self.budget;
+        }
+        let Some(remaining) = self.deadline.remaining() else {
+            return self.budget;
+        };
+        let remaining_ms = u64::try_from(remaining.as_millis()).unwrap_or(u64::MAX);
+        if remaining_ms >= self.budget.limit_ms() {
+            return self.budget;
+        }
+        // Rebuilt through the policy rather than mutated, because
+        // `ConnectionBudget`'s fields are the budget module's business;
+        // `for_pass(1)` is the identity on the base allowance.
+        BudgetPolicy {
+            mode: BudgetMode::Wall,
+            base_connection_ms: remaining_ms,
+            effort_ceiling: self.budget.effort_ceiling(),
+            ..BudgetPolicy::default()
+        }
+        .for_pass(1)
     }
 }
 
@@ -212,6 +433,15 @@ pub enum StopReason {
     PassLocalStagnation,
     /// Ten passes since the best score anywhere (`:1108-1121`).
     GlobalStagnation,
+    /// The job's wall budget ran out ([`JobDeadline`]). Not an upstream stop
+    /// rule — it is the port's answer to being killed at a harness cap while
+    /// holding a routed board — but it *behaves* like one: the loop leaves
+    /// through the same "restore the best board ever seen" tail, so the run
+    /// still ends on the best board it held.
+    JobDeadline,
+    /// A signal handler called [`request_job_stop`]. Same path as
+    /// [`StopReason::JobDeadline`].
+    Interrupted,
 }
 
 /// The knobs of one batch run.
@@ -237,6 +467,10 @@ pub struct LoopConfig {
     pub history_limit: usize,
     /// The per-connection budget policy.
     pub budget: BudgetPolicy,
+    /// The job's wall budget. Defaults to [`JobDeadline::ambient`], so a
+    /// process that armed one gets it everywhere without threading it through
+    /// every constructor; [`JobDeadline::NONE`] opts out.
+    pub deadline: JobDeadline,
 }
 
 impl Default for LoopConfig {
@@ -248,6 +482,7 @@ impl Default for LoopConfig {
             remove_unconnected_vias: false,
             history_limit: crate::batch::history::MAX_HISTORY_SIZE,
             budget: BudgetPolicy::default(),
+            deadline: JobDeadline::ambient(),
         }
     }
 }
@@ -272,6 +507,8 @@ pub struct RunOutcome {
     pub restores: usize,
     /// Whether the loop ended by restoring the best board ever seen.
     pub best_board_restored: bool,
+    /// Why the job budget cut the run short, or `None` when it did not.
+    pub stop_cause: Option<StopCause>,
     /// Whether the one-time fanout-tail recovery fired.
     pub fanout_recovery_applied: bool,
     /// Deepest the snapshot store got.
@@ -337,6 +574,19 @@ impl BatchLoop {
         let mut current_score = scorer.score(board);
 
         while continue_autorouting && !stop_requested {
+            // The job budget, checked **between passes**. It is not one of
+            // upstream's rules, so it is checked before them: whatever the pass
+            // loop would have done next, it costs at least one more pass, and
+            // the whole point is to leave enough of the budget to judge and
+            // write the board we already have.
+            if let Some(cause) = self.config.deadline.cause() {
+                outcome.stop_cause = Some(cause);
+                outcome.stop_reason = Some(match cause {
+                    StopCause::Deadline => StopReason::JobDeadline,
+                    StopCause::Interrupt => StopReason::Interrupted,
+                });
+                break;
+            }
             // `:931` — the cap is skipped entirely when `maxPasses <= 0`.
             if self.config.max_passes > 0 && current_pass > self.config.max_passes {
                 // `:932` requests the stop *before* breaking, which is what
@@ -356,7 +606,8 @@ impl BatchLoop {
                 self.config.start_ripup_costs,
                 &self.config.budget,
                 self.config.remove_unconnected_vias,
-            );
+            )
+            .with_deadline(self.config.deadline);
             let pass = driver.run_pass(board, &ctx);
             // `:947` + `:688` — `autoroute_pass` returns false on an empty work
             // list (the board is complete) and on a pass that attempted nothing.
@@ -378,6 +629,22 @@ impl BatchLoop {
             outcome.passes.push(pass);
 
             current_score = scorer.score(board);
+
+            // The pass polls the same budget between its connections and
+            // returns early when it runs out, so a pass that ended that way is
+            // recorded here rather than one iteration later — the loop's own
+            // check would otherwise attribute it to the *next* pass that never
+            // ran. Leaving through `break` keeps the closing "restore the best
+            // board ever seen" below, which is what makes the deadline a stop
+            // rule and not a crash.
+            if let Some(cause) = self.config.deadline.cause() {
+                outcome.stop_cause = Some(cause);
+                outcome.stop_reason = Some(match cause {
+                    StopCause::Deadline => StopReason::JobDeadline,
+                    StopCause::Interrupt => StopReason::Interrupted,
+                });
+                break;
+            }
 
             // --- board restore check (`:953-995`) -------------------------
             //
@@ -899,6 +1166,36 @@ mod tests {
         );
     }
 
+    /// The final restore has **no pass-count guard** (`:1141-1159`): unlike the
+    /// in-loop restore check, which upstream arms only at
+    /// [`STOP_AT_PASS_MINIMUM`] on passes `≡ 0 (mod 4)`, the end-of-run one is a
+    /// bare `bestHistoryScore > currentFinalScore`. A two-pass run whose second
+    /// pass wrecked the board therefore still ends on the first pass's board —
+    /// the case a short `-mp` is entirely made of, and the reason a low pass cap
+    /// cannot end below what a lower one reached.
+    #[test]
+    fn the_final_restore_is_not_gated_by_the_pass_minimum() {
+        for cap in 2..=5 {
+            // Pass 1 climbs to 9, every later pass wrecks it back down to 2.
+            let mut script = vec![Script::scoring(9)];
+            script.extend((2..=cap).map(|_| Script::churning(2)));
+            let mut harness = scripted(script, 10);
+            let outcome = run(&mut harness, config(cap));
+
+            assert_eq!(outcome.restores, 0, "cap {cap}: no in-loop restore arms");
+            assert!(
+                outcome.best_board_restored,
+                "cap {cap}: the end-of-run restore must fire anyway: {outcome:?}"
+            );
+            assert_eq!(outcome.final_score, 9.0, "cap {cap}");
+            assert_eq!(
+                harness.driver.stubs(&harness.board),
+                9,
+                "cap {cap}: the board itself is pass 1's"
+            );
+        }
+    }
+
     /// The restore callback is the invalidation seam: it sees the board *after*
     /// the swap.
     #[test]
@@ -1014,6 +1311,140 @@ mod tests {
         let outcome = BatchLoop::new(config(9_999)).run(&mut board, &mut CappedDriver, &mut scorer);
         assert_eq!(outcome.passes.len(), 2);
         assert_eq!(outcome.stop_reason, Some(StopReason::ItemLimit));
+    }
+
+    /// An armed budget that is already gone stops the loop **before** the first
+    /// pass, and the run still leaves through the normal tail — nothing is
+    /// half-done and the board is the one it came in on.
+    #[test]
+    fn an_expired_job_deadline_stops_the_loop_before_any_pass() {
+        let mut harness = scripted(vec![], 10);
+        let outcome = run(
+            &mut harness,
+            LoopConfig {
+                max_passes: 40,
+                deadline: JobDeadline::already_passed(),
+                ..LoopConfig::default()
+            },
+        );
+        assert!(outcome.passes.is_empty(), "{outcome:?}");
+        assert_eq!(outcome.stop_reason, Some(StopReason::JobDeadline));
+        assert_eq!(outcome.stop_cause, Some(StopCause::Deadline));
+        assert!(harness.driver.seen.is_empty(), "no pass may have run");
+    }
+
+    /// A budget that runs out *during* the run stops it at the next pass
+    /// boundary and — the whole point — the board that comes out is the best
+    /// one the run held, not the one the last pass happened to leave.
+    ///
+    /// The one test in this file that spends real time, because the thing under
+    /// test is a wall clock. Two passes of 25 ms against a 40 ms budget: the
+    /// margins are an order of magnitude apart, so a loaded machine changes
+    /// which pass the deadline lands on and not whether the assertions hold —
+    /// none of them names a pass count.
+    #[test]
+    fn a_deadline_that_expires_mid_run_still_finishes_on_the_best_board() {
+        struct SlowDriver {
+            inner: ScriptedDriver,
+            per_pass: Duration,
+        }
+        impl PassDriver for SlowDriver {
+            fn run_pass(&mut self, board: &mut Board, ctx: &PassContext) -> PassOutcome {
+                std::thread::sleep(self.per_pass);
+                self.inner.run_pass(board, ctx)
+            }
+            fn remove_tails(&mut self, board: &mut Board, stop: StopConnection) {
+                self.inner.remove_tails(board, stop);
+            }
+        }
+
+        let fixture = TestFixture::empty_two_layer();
+        let base_items = fixture.board.store().len();
+        let mut board = fixture.board;
+        // Climb to 9, then throw it away and stay down. Without the closing
+        // restore the deadline would hand back the wrecked board.
+        let mut script = vec![Script::scoring(9)];
+        script.extend((2..=40).map(|_| Script::scoring(1)));
+        let mut driver = SlowDriver {
+            inner: ScriptedDriver::new(script, base_items),
+            per_pass: Duration::from_millis(25),
+        };
+        let mut scorer = StubScorer {
+            base_items,
+            target_stubs: 10,
+            score_per_stub: SCORE_PER_STUB,
+        };
+        let outcome = BatchLoop::new(LoopConfig {
+            max_passes: 40,
+            deadline: JobDeadline::after(Duration::from_millis(40)),
+            ..LoopConfig::default()
+        })
+        .run(&mut board, &mut driver, &mut scorer);
+
+        assert_eq!(outcome.stop_reason, Some(StopReason::JobDeadline));
+        assert_eq!(outcome.stop_cause, Some(StopCause::Deadline));
+        assert!(
+            outcome.passes.len() < 40,
+            "the pass cap must not be what stopped it: {}",
+            outcome.passes.len()
+        );
+        assert!(outcome.best_board_restored, "{outcome:?}");
+        assert_eq!(outcome.final_score, 9.0);
+        assert_eq!(
+            driver.inner.stubs(&board),
+            9,
+            "the board itself is the best one, not just the score"
+        );
+    }
+
+    /// `LoopConfig::default` carries the ambient deadline, and with none armed
+    /// that is a budget nothing ever spends — no wall clock is read at all.
+    #[test]
+    fn no_armed_deadline_means_no_budget() {
+        assert!(!JobDeadline::NONE.is_armed());
+        assert!(!JobDeadline::NONE.expired());
+        assert_eq!(JobDeadline::NONE.remaining(), None);
+        assert_eq!(JobDeadline::NONE.cause(), None);
+        // Nothing in this process armed one, so the ambient deadline is a
+        // no-op too — which is what keeps every other test in this file
+        // clock-free.
+        assert!(!JobDeadline::ambient().expired());
+        assert!(JobDeadline::already_passed().expired());
+        assert_eq!(
+            JobDeadline::already_passed().cause(),
+            Some(StopCause::Deadline)
+        );
+    }
+
+    /// The connection allowance never outlives the job: a connection armed with
+    /// 100 s of upstream budget gets what the job has left when that is less.
+    #[test]
+    fn the_connection_budget_is_clamped_to_what_the_job_has_left() {
+        let policy = BudgetPolicy::default();
+        let unbounded = PassContext::new(1, 100, &policy, false).with_deadline(JobDeadline::NONE);
+        assert_eq!(
+            unbounded.connection_budget().limit_ms(),
+            unbounded.budget.limit_ms(),
+            "no deadline, no clamp"
+        );
+
+        let tight = PassContext::new(4, 100, &policy, false)
+            .with_deadline(JobDeadline::after(Duration::from_millis(250)));
+        assert_eq!(tight.budget.limit_ms(), 800_000, "pass 4 is 8 x 100 s");
+        assert!(
+            tight.connection_budget().limit_ms() <= 250,
+            "{}",
+            tight.connection_budget().limit_ms()
+        );
+
+        // A deterministic run never reads the wall clock, so it is never
+        // clamped by one either (gate G2.2).
+        let deterministic = PassContext::new(1, 100, &BudgetPolicy::deterministic(), false)
+            .with_deadline(JobDeadline::after(Duration::from_millis(1)));
+        assert_eq!(
+            deterministic.connection_budget().limit_ms(),
+            deterministic.budget.limit_ms()
+        );
     }
 
     #[test]

@@ -193,6 +193,19 @@ Gates (all executable without a router):
   snap_angle 90/none, ≥1 non-KiCad export, ≥2 clean unrouted boards — including the CLA45
   threeboard 6-layer HDI exports. Same gate form as G2.1 (Java references generated for them).
 
+### G2.1 progress log
+- 2026-08-29 first read: 15/46 (26 failures = our own 300s timeout writing no SES).
+- 2026-08-29 after deadline/SES-on-stop + optimizer-cost + final-restore fixes: **36/46,
+  zero regressions, zero SIGKILLs**. java_finished 22/29, java_timeout 12/14 (absolute
+  gate: e.g. Issue027 938->7 unrouted), crash 1/1. Remaining 10: three +1/+2-violation
+  boards (Issue034/155/219), four one-connection-short boards (Issue054, Issue110-RM,
+  Issue110-testPCB, + Issue159-class root cause escalated to rooms door density),
+  two gate-definition edge cases (Issue208 nobody-routes-it anti-degeneracy;
+  Issue229 we beat Java by 44 connections but absolute gate reads unrouted==input),
+  one genuine hard-board gap (Issue039 45 vs 9; Issue269 97 vs 92).
+  Perf note: with the optimizer fixed the suite runs 0 SIGKILLs; router core without
+  optimizer measured 1.28x faster in-tool than Java on commonly-finished boards.
+
 ## M3 — Speed
 
 1. Profile-driven single-thread work against the measured budget from M0.5 (query buffers, door

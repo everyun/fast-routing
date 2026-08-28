@@ -94,6 +94,96 @@ ARCHITECTURE "Budgets".
   *Effect*: traces that fork or end on another trace keep an acute angle upstream would chamfer.
   One-sided — it can only leave a trace longer, never introduce a violation.
 
+- **A reported route must have copper to show for it** (`fr_router::batch`,
+  `BatchRouter::discount_routes_that_left_no_copper` and the `board_changed` arm of
+  `route_with_control`). **Report only — the board is bit-for-bit upstream's.**
+  *Upstream* labels a connection `ROUTED` the moment `InsertFoundConnectionAlgo.get_instance`
+  returns non-null, and never revisits the label. Three of its paths return non-null having left
+  no copper: a located connection of a single corner is "already at the target" and inserts
+  nothing (`InsertFoundConnectionAlgo:95-103`); `connect_to_trace` returns `true` for a corner
+  already lying on the target trace's polyline (`RoutingBoard:1100-1105`), delegating the actual
+  contact to the `normalize_traces` that follows; and a stub that *is* inserted may be deleted by
+  the end-of-pass `remove_tails` (`:657-661`) or ripped out by a later connection in the same
+  pass, both after the count was taken.
+  *We* report `NOT_ROUTED` when the insertion left no live item behind, and move a connection
+  out of `routed` when its copper is gone by the end of the pass (`PassOutcome::routes_undone`
+  records how many). Nothing else changes: the pull-tight over the changed area still runs
+  unconditionally — it also covers the region a ripup freed — and the ripup/requeue bookkeeping
+  is untouched.
+  *Why*: on `Issue229-display-8-digit-hc595` the whole `(wiring)` scope is `(type protect)`, i.e.
+  `USER_FIXED`, and `PolylineTrace.split` refuses to split such a trace (`:707-709`). Contacts
+  are exact endpoint equality (`Trace:172-176`, `DrillItem:266-283`), so no route the maze finds
+  can ever attach to that copper. The pre-fix binary reported **702 routed connections at
+  `-mp 20`** for a session whose copper is byte-identical to the input's — a number no harness
+  could act on. It now reports 0 routed / 39 failed, with the same board. Java, for its part,
+  declines the board outright (manifest class `java_degenerate`, "nothing to route", 0.03 s).
+  *Effect*: `routed` falls on every board that ripped its own work — `Issue159` reports 23
+  instead of 32 with an identical, complete board, the 9 being exactly its `ripped` count.
+  Quality metrics (incompletes, violations, score) are unaffected everywhere, by construction.
+
+- **A job wall budget, and a stop on it** (`fr_router::batch::schedule::JobDeadline`,
+  `fr-cli --job-timeout`). *Upstream* has a per-job timeout in the scheduler; the headless entry
+  point does not expose one, and `-mp` is the only bound a caller has. *We* add an optional wall
+  budget, polled between connections and between passes, which ends the run through the same
+  tail as every stop rule — best retained board restored, referee run, session written — and
+  clamps each connection's `TimeLimit` to what the job has left so one connection cannot overrun
+  it by its own 100 s. Off by default: a run without `--job-timeout` reads no clock and is
+  unchanged. *Why*: a harness cap that `SIGKILL`s the process produces no session at all, which
+  is strictly less information than the board we were holding. 26 of the 46 boards in the first
+  full-suite G2.1 read failed exactly that way.
+
+## Optimizer
+
+- **The improvement lattice compares weighted length against weighted length**
+  (`fr_router::optimizer::LengthMetric`, default `WeightedBoth`).
+  *Upstream* (`autoroute/BatchOptimizer.java:225`, `:381-393`; conformance #87) seeds
+  `min_cumulative_trace_length` from `BoardStatistics.traces.totalWeightedLength` and then
+  compares it against `boardStatisticsAfter.traces.**totalLength**` — the raw, unweighted sum.
+  The weight is `half_width + clearance` per unit length, so on a real board the two differ by
+  three or four orders of magnitude (Issue102 routed: raw 19 331 380 against weighted
+  62 865 647 951, ratio 3 252). The length branch is therefore not a comparison at all, it is a
+  constant `true`, and the lexicographic rule degenerates to "keep unless incompletes or vias
+  got worse" — including reroutes that made the board longer and reroutes that changed nothing.
+  *We* compare the weighted floor against the weighted result. `LengthMetric::UpstreamMixed`
+  remains and remains tested (`optimizer_small_board.rs`,
+  `optimizer_exit_rules.rs::the_release_metric_counts_a_reroute_that_changed_nothing_as_an_improvement`).
+  *Why*: the release's number is an accounting artefact, and two of the optimizer's three brakes
+  read it. On `Issue026-J2_reference -mp 3` the release metric reports **53 of 57 items
+  improved** while leaving the score at 909.08 with 3 connections open — every phantom
+  improvement resets `maxConsecutiveFailures` and holds the ×10 ripup surcharge on, so the pass
+  can neither stop early nor get cheaper. Under the weighted metric the same board reports
+  **9 of 41 improved**, finishes at **999.99 with 0 open**, and takes 64 s instead of 129 s.
+  *Effect*: strictly fewer items are kept (`items_improved` falls), and the ones kept are the
+  ones for which `(incompletes, vias, weighted length)` provably fell — which is what promise 2
+  of `optimizer_small_board.rs` asserts. It is not uniformly better per board: on the same
+  fixture at `-mp 1` the release metric's extra churn happens to land on 999.99 where the
+  weighted metric stops at 969.69. What it is, is *accountable*.
+
+- **The per-item reroute stops escalating at the first pass that routes nothing**
+  (`fr_router::optimizer::escalation_continues`).
+  *Upstream* (`BatchAutorouter.autoroute_passes_for_optimizing_item:146-167`) loops up to
+  `optimizer.maxAutoroutePasses` (6) passes per optimized item while `still_unrouted_items`,
+  which `autoroute_pass` returns as `routed > 0 || not_routed > 0` (`:688`). That is "did the
+  pass attempt anything", not "did it achieve anything", so on any board carrying a connection
+  the router could not close the guard is permanently true and every item pays all six passes —
+  each of them re-deriving the whole board's work list and re-attempting the entire unroutable
+  backlog at a ripup cost that grows with the pass number.
+  *We* keep both of upstream's terms and add `routed > 0`.
+  *Why*: measured on `Issue026-J2_reference -mp 3`, one optimizer pass over 57 items — inner
+  pass 1 22.8 s / 449 connections queued / 78 routed; pass 2 21.2 s / 346 / 5; pass 3 22.2 s /
+  343 / 3; passes 4, 5 and 6 21-22 s each for 337 queued and **0 routed**. Five sixths of the
+  stage bought 8 connections out of 86. The loop's own javadoc says it exists to "auto-route
+  ripup passes until the board is completed"; a pass that completed nothing has not moved
+  towards that, and the only thing the next pass changes is the price of ripping copper that
+  already refused to move.
+  *Effect*: less wall clock, same board. Over the 21 suite fixtures that finish at `-mp 1`,
+  every one produced a **byte-identical session** under the shipped metric, for 1.2x - 2.7x
+  less wall — and `Issue190-processor.Z80` went from a 150 s timeout to finishing in 95 s.
+  Sequentially: `Issue026 -mp 3` 129.1 s → 47.2 s and `-mp 1` 36.5 s → 21.7 s under the release
+  metric; 64.2 s → 23.9 s and 27.7 s → 13.8 s under the weighted one. Under the release metric
+  two fixtures (`Issue107`, both variants) do come out with different bytes and the same score,
+  which is the expected consequence of that metric committing reroutes that changed nothing.
+
 ## Referee
 
 (none yet)

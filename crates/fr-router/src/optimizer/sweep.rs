@@ -9,6 +9,30 @@
 //! that a deliberate simplicity/correctness tradeoff; the price is O(N) per call
 //! and O(N²) per pass (`batch-orchestration.md` §7.1).
 //!
+//! # Why the O(N²) is still here
+//!
+//! It was measured before it was optimized, and it is not where the optimizer's
+//! time goes. On Issue102 (1123 items, the suite's slowest board) a full sweep
+//! hands out 74 items in **1.4 ms** — 0.018 ms per call — against an optimizer
+//! pass of roughly 2 900 s: two millionths of the stage. On Issue026 at `-mp 3`
+//! the whole sweep costs 1 ms of a 131 s stage. All of the cost is
+//! [`MazeRerouter`](super::MazeRerouter); see its docs.
+//!
+//! An ordered index keyed `(x, y, layer, id)` would make a call O(log N), and it
+//! is the obvious replacement — but it cannot be built correctly from inside
+//! this crate. It has to be invalidated on *every* mutation of a sweepable item,
+//! and two of the board's mutations move an item's key **in place, keeping its
+//! id**: [`Board::replace_trace_polyline`] (pull-tight, which runs after every
+//! routed connection) and `Board::translate_drill_item` (via shove). An index
+//! that watches ids alone would silently hand out stale keys after either. The
+//! board does track exactly the right set — `Board::touched`, the transaction's
+//! touched-item list — but it is private and there is no delta accessor, so the
+//! index needs an `fr-board` change feed first. Until then the honest thing is
+//! to keep the transcription, keep it allocation-free, and pin the visit order
+//! it has to reproduce (`tests::the_sweep_order_is_the_sorted_order_of_the_keys`).
+//!
+//! [`Board::replace_trace_polyline`]: fr_board::board::Board
+//!
 //! # The order
 //!
 //! Ascending `(x, y, layer)` of a *representative corner*:
@@ -105,6 +129,10 @@ impl SweepKey {
 #[derive(Debug, Clone)]
 pub struct SortedRouteItems {
     cursor: SweepKey,
+    /// The trace scan's contact buffer, owned by the sweep so that the scan
+    /// does not allocate once per candidate trace per call. Never carries state
+    /// between calls; [`normal_contacts`] clears it.
+    contacts: Vec<ItemId>,
 }
 
 impl Default for SortedRouteItems {
@@ -118,6 +146,7 @@ impl SortedRouteItems {
     pub fn new() -> SortedRouteItems {
         SortedRouteItems {
             cursor: SweepKey::before_everything(),
+            contacts: Vec::new(),
         }
     }
 
@@ -164,7 +193,7 @@ impl SortedRouteItems {
 
         // Scan 2 — traces (`:509-547`). Read last so that a trace can never
         // displace a via with the same key.
-        let mut contacts = Vec::new();
+        let mut contacts = std::mem::take(&mut self.contacts);
         for (id, item) in board.store().iter() {
             let ItemKind::Trace(trace) = &item.kind else {
                 continue;
@@ -205,6 +234,8 @@ impl SortedRouteItems {
 
         // `:548-549` — unconditional, exhausted or not.
         self.cursor = best;
+        contacts.clear();
+        self.contacts = contacts;
         result
     }
 }
@@ -318,6 +349,90 @@ mod tests {
         let mut scratch = ContactScratch::new();
         let mut sweep = SortedRouteItems::new();
         assert_eq!(sweep.next(&fixture.board, &mut scratch), None);
+    }
+
+    /// The whole visit order, against the order written out by hand.
+    ///
+    /// This is the contract any replacement index has to reproduce: ascending
+    /// `(x, y, layer)` of the larger endpoint, and no item twice. It is here so
+    /// that the ordered index the module docs describe can be dropped in behind
+    /// a green test rather than behind an argument.
+    #[test]
+    fn the_sweep_order_is_the_sorted_order_of_the_keys() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        // Inserted back to front, on two layers, so that neither the store's
+        // id order nor a layer scan can pass by accident.
+        let mut expected: Vec<(i32, i32, i32, ItemId)> = Vec::new();
+        for step in (0..8).rev() {
+            for layer in [1, 0] {
+                let x = -2_500 + 600 * step;
+                let id = fixture
+                    .board
+                    .insert_trace_points(
+                        &[IntPoint::new(x, 400), IntPoint::new(x + 200, 400)],
+                        layer,
+                        TEST_HALF_WIDTH,
+                        NetNos::of(TEST_NET),
+                        1,
+                        FixedState::Unfixed,
+                        None,
+                    )
+                    .expect("the wire inserts");
+                expected.push((x + 200, 400, layer, id));
+            }
+        }
+        expected.sort_unstable();
+        let expected: Vec<ItemId> = expected.into_iter().map(|entry| entry.3).collect();
+
+        let mut scratch = ContactScratch::new();
+        let mut sweep = SortedRouteItems::new();
+        let mut seen = Vec::new();
+        while let Some(id) = sweep.next(&fixture.board, &mut scratch) {
+            seen.push(id);
+        }
+        assert_eq!(seen, expected);
+    }
+
+    /// The trace scan's contact buffer belongs to the sweep, not to the call:
+    /// `next` is on the optimizer's hot path and must not allocate per item.
+    #[test]
+    fn the_contact_buffer_survives_a_call() {
+        // A T junction: three wires meet at one point, so none of them is
+        // folded into another and the scan's contact query has something to
+        // put in the buffer.
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let junction = IntPoint::new(-2_000, 500);
+        for far in [
+            IntPoint::new(-2_500, 500),
+            IntPoint::new(-1_500, 500),
+            IntPoint::new(-2_000, 1_000),
+        ] {
+            fixture
+                .board
+                .insert_trace_points(
+                    &[junction, far],
+                    0,
+                    TEST_HALF_WIDTH,
+                    NetNos::of(TEST_NET),
+                    1,
+                    FixedState::Unfixed,
+                    None,
+                )
+                .expect("the wire inserts");
+        }
+        let mut scratch = ContactScratch::new();
+        let mut sweep = SortedRouteItems::new();
+        assert_eq!(sweep.contacts.capacity(), 0, "nothing allocated up front");
+        assert!(sweep.next(&fixture.board, &mut scratch).is_some());
+        let grown = sweep.contacts.capacity();
+        assert!(grown > 0, "the first call grew it");
+        assert!(sweep.contacts.is_empty(), "and left no state in it");
+        while sweep.next(&fixture.board, &mut scratch).is_some() {}
+        assert_eq!(
+            sweep.contacts.capacity(),
+            grown,
+            "the rest of the sweep reused it"
+        );
     }
 
     #[test]
