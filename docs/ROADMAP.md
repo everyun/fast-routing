@@ -59,14 +59,18 @@ import/checker gates are what measure the trap list):
    1.2x faster than MinAreaTree at 10k scale; adversarially verified incl. 4-thread
    shared-&self query proof) — SoA nodes, zero-alloc queries, STR bulk-load, epoch-scoped
    reader snapshots; microbench vs current MinAreaTree.
-3. **[first half DONE — wave 2]** Board item model — slotmap + semantic ItemId (restore-30-passes
+3. **[DONE — waves 2+3]** Board item model — slotmap + semantic ItemId (restore-30-passes
    microbench: 0.17 ms vs the 50 ms gate), trace split/merge/normalize (this path is
    what Issue187/Issue103 stress — the two boards where current Rust is *slower* than Java;
    they get their own gate), fixed states, the three state mechanisms (transaction /
    history / CoW clone) with the restore-≤50 ms microbench, SearchTreeManager with compensated
    trees, incremental union-find connectivity.
-4. **fr-check referee v1** — clearance DRC (octagon norm) + connectivity/ratsnest + score.
-5. **Rules wiring** — ClearanceMatrix everywhere; delete every hard-coded 250/300/150.
+4. **[DONE — wave 3]** fr-check referee v1 (octagon-norm metric with three hand-derived
+   Euclid-vs-octagon discriminating cases; found a §1.5 direction error in the DRC spec —
+   fixed in spec) — clearance DRC (octagon norm) + connectivity/ratsnest + score.
+5. **[DONE — wave 3, fr-rules side]** Rules wiring (exact ClearanceMatrix semantics verified
+   against the release source; name algebra; RouterSettings with board-derived cost prep) —
+   ClearanceMatrix everywhere; delete every hard-coded 250/300/150.
 6. **DSN/SES to spec** — raw-spelling lexer, the KiCad trap list, `calcFixed` route→USER_FIXED,
    board-derived cost prep (`applyBoardSpecificOptimizations`), board_edge class synthesis,
    keepouts/planes, wiring re-import; SES writer with snapping + reserved chars.

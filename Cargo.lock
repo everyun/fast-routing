@@ -59,6 +59,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fr-check"
+version = "0.1.0"
+dependencies = [
+ "fr-board",
+ "fr-geometry",
+ "fr-rules",
+]
+
+[[package]]
 name = "fr-cli"
 version = "0.1.0"
 dependencies = [
