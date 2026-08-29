@@ -79,6 +79,7 @@ pub mod ast;
 pub mod build;
 pub mod jround;
 pub mod lex;
+pub mod overlay;
 pub mod read;
 pub mod ses_common;
 pub mod ses_read;
@@ -92,6 +93,7 @@ pub use build::{
 };
 pub use jround::{jround, JavaRound};
 pub use lex::{Kw, LexState, Lexer, Token};
+pub use overlay::strip_session_copper;
 pub use read::{ReadOutcome, Reader};
 pub use ses_common::{java_rint, ResolvedPadstack, SesLibrary, SesScale};
 pub use ses_read::{

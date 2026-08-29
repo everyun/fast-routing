@@ -178,13 +178,34 @@ Gates (all executable without a router):
   transactional-insert == eager-insert-plus-undo equivalence property tests (NOT "check ==
   insert" — upstream specifies check as deliberately optimistic).
 - **M2c** batch loop + optimizer (as shipped in the jar per conformance pass). Full gates:
-- **G2.1** per fixture, referee-judged, default mode, reference config:
-  `added_violations(ours) ≤ added_violations(java)` AND `unrouted(ours) ≤ unrouted(java)`,
-  where added = final − imported-board baseline, and no violation may involve two USER_FIXED
-  items. Fixture classes: `java_finished+stable` → comparative gate; `timeout/crash/degenerate/
-  unstable` → absolute gate (added_violations = 0 AND unrouted < unrouted(input)) — "route
-  nothing" is rejected by the anti-degeneracy guard (SES must contain copper for ≥1 multi-pin
-  net when the DSN has any).
+- **G2.1** per fixture, referee-judged, default mode, reference config. Method, tooling and
+  worked examples: `bench/README.md` "Judging a session" (normative);
+  `bench/tools/g21_judge.py` + `bench/tools/g21_referee/` are its only implementation. Both
+  tools' sessions are read into the **session overlay** — the DSN with exactly the copper a
+  session re-emits removed, `(type fix)` copper kept — and `added = judged − the unmodified
+  import`; no violation between two USER_FIXED items is charged to either tool; every board
+  requires `ses_errors = 0`.
+  - `java_finished` AND `stability.class = stable` AND a reference session exists → **comparative
+    gate**: `added_violations(ours) ≤ added_violations(java)` AND `unrouted(ours) ≤ unrouted(java)`.
+  - everything else (timeout / crash / degenerate / unstable / unmeasured / reference session
+    missing) → **absolute gate**: `added_violations = 0` AND `unrouted(ours) ≤ unrouted(input)`
+    AND (no reference session OR `unrouted(ours) ≤ unrouted(java)`) AND the anti-degeneracy guard.
+  - **anti-degeneracy guard.** A board may only come back unchanged when the *reference* could
+    not move it either. Progress is a recorded property of the reference — a referee-judged
+    reference session that beats the input, or a stability/uncapped run whose own `unrouted` beat
+    its own `started_unrouted`, or the uncapped `hit_cap`-with-zero-passes case (7200 s in the
+    routing stage without finishing pass 1 is evidence of no progress, not missing data). If the
+    reference made progress we must too: copper for ≥1 multi-pin net **and** `unrouted(ours) <
+    unrouted(input)` strictly. With no evidence at all the guard assumes progress is possible and
+    demands it — silence is never a way through.
+  - `≤ unrouted(input)` rather than `<` is forced by `Issue229`: 20 of its 64 connections arrive
+    blocked by USER_FIXED copper no router may move, we return the input unchanged with 0 added
+    violations, and Java's own session for it is **64 unrouted** — 44 connections *worse* than
+    doing nothing. Failing us for tying the input while the tool we are compared against
+    regresses it measures the wrong thing. `Issue208` is the guard's "no progress" branch:
+    nobody routes it (Java: 7200 s uncapped without finishing pass 1; all three stability runs
+    killed at the cap with nothing reported), so a well-formed copper-empty session that adds no
+    violation and loses no connection is the whole of what the board permits.
 - **G2.2** determinism: two `--deterministic` runs → byte-identical SES.
 - **G2.3** speed floor (not the headline): suite in-tool total ≤ 1/3 of Java's on
   `java_finished` boards; peak RSS ≤ absolute per-size-class targets (set from M0.5 data),
@@ -195,6 +216,17 @@ Gates (all executable without a router):
 
 ### G2.1 progress log
 - 2026-08-29 first read: 15/46 (26 failures = our own 300s timeout writing no SES).
+- 2026-08-29 closure wave: **39/46**. Obstacle-visit-order fix in complete_shape (+4/-2 boards,
+  causally verified by revert); evidence-based absolute-gate refinement (<= input + uncheatable
+  guard, flips Issue208/229 where we beat or tie a Java that does worse than the input);
+  referee overlay corrected to keep (type fix) copper (Issue230's old 'pass' was a tie against
+  a broken yardstick — now an honest 3-connection gap). Suite invariants: added_violations=0
+  on 46/46, 0 SIGKILLs, 0 SES-fidelity gaps. Residual 7 = comparative unrouted only: four
+  single-connection (Issue093 19v18, Issue110-RM 1v0, Issue110-tPCB 21v20, Issue102 5v1),
+  two budget-starved (Issue039 34v9, Issue269), Issue230 5v2. Leads logged: DrillPage
+  split_to_convex divergence (Issue110 pair), room-id minting parity, per-exp cost.
+  Perf: both-finished in-tool now 1.56x faster than Java default mode / 3.52x no-optimizer.
+  M2 declared functionally complete; residual 7 fold into M3 (their fix IS the M3 work).
 - 2026-08-29 after deadline/SES-on-stop + optimizer-cost + final-restore fixes: **36/46,
   zero regressions, zero SIGKILLs**. java_finished 22/29, java_timeout 12/14 (absolute
   gate: e.g. Issue027 938->7 unrouted), crash 1/1. Remaining 10: three +1/+2-violation
@@ -205,6 +237,77 @@ Gates (all executable without a router):
   one genuine hard-board gap (Issue039 45 vs 9; Issue269 97 vs 92).
   Perf note: with the optimizer fixed the suite runs 0 SIGKILLs; router core without
   optimizer measured 1.28x faster in-tool than Java on commonly-finished boards.
+- 2026-08-29 gate promoted into the repo + SES fidelity fixed: **37/46** on the same `-mp 20`
+  sessions, re-judged. The referee and the judge now live in `bench/tools/g21_referee/` (a
+  workspace member) and `bench/tools/g21_judge.py`, with the method normative in
+  `bench/README.md` and 24 unit tests over the gate itself; `/tmp` scripts are no longer
+  load-bearing. Four changes, all evidence-backed:
+  - **Issue229 FAIL → pass, Issue208 FAIL → pass** under the refined absolute gate above. Both
+    are gate-definition fixes, not router work: Issue229 ties the input (20u, +0v) while Java's
+    own session regresses it to 64u, and Issue208 is a board neither tool moves at all.
+  - **The judging overlay was losing `(type fix)` copper.** `SesWriter` never writes
+    `SYSTEM_FIXED` items, so emptying the whole `(wiring …)` scope hands the reader a board that
+    is missing them. On Issue230 that read 8u/14v off a session the router had produced 5u/16v
+    on — three connections lost *and two clearance violations forgiven*. Fixed in
+    `fr_io::specctra::strip_session_copper` (with the round-trip test that now covers Issue230);
+    the whole-suite in-process-vs-re-imported gap is **0 boards**, was 1.
+  - **Issue230 pass → FAIL (5 vs 2 unrouted).** The old overlay was crediting us with Java's
+    handicap; corrected, we are three connections behind. An honest regression in the table, and
+    a real router gap to close.
+  - `SesReader` no longer charges an error for a wire that collapses on insert (upstream counts
+    it and shrugs — `docs/PARITY-DIVERGENCES.md`); that alone was failing Issue039 for the wrong
+    reason.
+  The 3-run Java stability sweep (M0.5) is complete — 46/46 fixtures, 32 `stable`, 14
+  `no_result`, **0 `unstable`: no board changed its answer between runs** — and folded into
+  `bench/fixtures-manifest.json`, read strictly: only `java_finished + stable` is judged
+  comparatively. All 29 `java_finished` boards are stable, so the split is 29 comparative
+  (21 pass) / 17 absolute (16 pass).
+  Remaining 9: three added-violation boards (Issue034 +1, Issue155 +1, Issue219 +2), three
+  one-connection-short boards (Issue054 2v1, Issue110-RM 1v0, Issue110-testPCB 21v20), and
+  three genuine gaps (Issue230 5 vs 2, Issue269 97 vs 92, Issue039 45 vs 9).
+- 2026-08-29 re-gate after the closure fixes, on a **fresh** full-suite `-mp 20
+  --job-timeout 290` run (W=5, 300 s harness cap, quiet machine): **39/46**. Per class,
+  java_finished/comparative 22/29, java_timeout/absolute 14/14, java_crash/absolute 1/1,
+  java_degenerate 2/2. **Added violations are 0 on all 46 boards**, no board was SIGKILLed at
+  the cap, 45/46 print a `Total`, and the in-process-vs-re-imported gap stays at 0 boards.
+  Every one of the seven residual failures is now a comparative *unrouted* gap; not one is a
+  violation or a session-integrity failure.
+  - +6 vs the 36/46 read. Four are the obstacle-visit-order fix
+    (`sort_obstacles_for_completion` / `sort_obstacles_for_neighbours`): Issue034 1u/1v → 0u/0v,
+    Issue054 2u → 1u (and 291 s → 28 s), Issue155 +1v → +0v, Issue219 571u/2v → 562u/0v.
+    Two are the gate refinement: Issue208 and Issue229.
+  - −3, and only two of them are the router. Issue093 18u → 19u and Issue102 0u → 5u both
+    reproduce exactly on a build with the order fix reverted, so they are caused by it.
+    Issue102 is **not** a deadline artefact: the pass loop completes (`Router: 20 passes …
+    stopped on pass limit`) in both builds, and only the optimizer is cut. Issue230 pass → FAIL
+    is the overlay measurement correction and not a router change — it reads 5u/16v with the
+    order fix on *and* off, and the old overlay collapsed both tools onto the same wrong 8u/14v.
+  - Causality was measured, not asserted: reverting `engine.rs` and `rooms/{complete,
+    neighbours}.rs` to `eac16d6` and re-running reproduces the pre-fix number on all eleven
+    moved boards. Flipping the one under-determined choice in the new order — the rooms-first
+    exact-id tie-break, which the doc comment already flags as ours — changes nothing anywhere
+    except Issue039 34u → 35u, so the shipped tie-break stands and there is no cheap win there.
+  - The `SesReader` collapsed-wire change is **inert on this run**: all 45 sessions read back
+    identically under a referee built with it reverted. It was causal on the *previous* run's
+    Issue039 session (1 error → 0), and it is upstream-exact, so it stays — but it is not
+    load-bearing for 39/46 and should not be counted as one of the fixes.
+  - The refined gate is not cheatable, tested by construction. A route-nothing session (the real
+    session with `(network_out)` emptied) FAILs Issue026 on the comparative clause, and FAILs
+    Issue027 and Issue219 on the anti-degeneracy guard. Disabling only the guard lets the
+    Issue219 cheat through — which is exactly the hole the guard exists to close. Putting the
+    pre-refinement strict `unrouted < input` back costs exactly Issue208 and Issue229 and
+    nothing else, i.e. those two passes are the gate refinement and not router work.
+  - Residual 7, all comparative, all unrouted-only: Issue039 34 vs 9 (was 45; job deadline),
+    Issue269 95 vs 92 (was 97; job deadline), Issue230 5 vs 2, Issue110-testPCB 21 vs 20,
+    Issue102 5 vs 1, Issue093 19 vs 18, Issue110-RelayModule 1 vs 0. Four of the seven are a
+    single connection.
+  - easy-10 is 9/10, unchanged. The one miss is Issue155 at `-mp 1` (+1 violation); the order fix
+    clears it from pass 2 on, and the G2.1 gate runs `-mp 20`, where it is 0u/0v.
+  - Perf, same run: suite wall 7209 s with 0 SIGKILLs (Java 2.3.0's own capped sweep is 5842 s
+    with 14 boards hitting the cap). On the 19 boards `java_finished` *and* finished in both our
+    modes in both runs, in-tool: Java 727 s, ours 467 s default (**1.56×**) and 207 s with
+    `--no-optimizer` (**3.52×**) — 1.25× and 1.41× faster than the same measurement at
+    `eac16d6`. Boards finishing under the cap at `-mp 1`: 23/46 default, 40/46 `--no-optimizer`.
 
 ## M3 — Speed
 

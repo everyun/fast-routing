@@ -19,16 +19,39 @@
 //!
 //! # Obstacle visit order
 //!
-//! `complete_shape` sorts its overlapping leaves (`ShapeSearchTree.java:598-602`
-//! — *"Sorting with Leaf's natural comparison … provides a stable visit
-//! order"*) and `SortedRoomNeighbours.calculate_neighbours` re-sorts by
-//! `(object_id, shape_index)` (`:141-147`). Both are determinism fixes that are
-//! shipped in 2.3.0 and must be kept. Since rooms and items no longer share an
-//! id space here, the total order is: **all items first, by ascending
-//! [`ItemId`] then shape index; then all rooms, by ascending [`RoomId`]**. It
-//! is deterministic and stable, but it is not numerically Java's, so a
-//! room-tiling divergence against the lab jar is expected on boards where a
-//! room id happens to fall between two item ids.
+//! Upstream's two consumers of an obstacle list sort it **differently**, and
+//! both sorts are determinism fixes shipped in 2.3.0:
+//!
+//! * `SortedRoomNeighbours.calculate_neighbours` (`:139-147`) sorts on one
+//!   ascending `(get_id_no(), shape_index)` key over items *and* rooms
+//!   together. That is
+//!   [`sort_obstacles_for_neighbours`](AutorouteEngine::sort_obstacles_for_neighbours),
+//!   which every [`overlapping_obstacles`](AutorouteEngine::overlapping_obstacles)
+//!   result comes back in.
+//! * `ShapeSearchTree.complete_shape` (`:598-602` — *"Sorting with Leaf's
+//!   natural comparison … provides a stable visit order"*) sorts with
+//!   `ShapeTree.Leaf.compareTo`, and the `compareTo` implementations it
+//!   delegates to subtract *this* id from the other's, so that order is
+//!   **rooms before items, each class by descending id**. That is
+//!   [`sort_obstacles_for_completion`](AutorouteEngine::sort_obstacles_for_completion),
+//!   which `complete_shape` applies on top.
+//!
+//! The two orders live in one id space upstream because a room is a
+//! `SearchTreeObject` there. They live in one id space here too:
+//! [`Room::id_no`](crate::rooms::Room::id_no) is the same
+//! `generate_room_id_no` counter, so the numeric interleave is reproducible
+//! even though the rooms sit in a separate tree.
+//!
+//! Getting the completion order wrong is not a tie-break detail.
+//! `restrain_shape` is greedy — it cuts with the furthest border line of
+//! whichever obstacle it is handed *now* — so the sequence decides the tiling.
+//! Visiting the items first re-cuts free space that the already-completed
+//! neighbour rooms had settled, because the `p_ignore_shape` short circuit at
+//! `ShapeSearchTree.java:625-628` can only recognise the room we came from
+//! while the candidate is still whole. Once an item has split the candidate,
+//! the neighbour's overlap with each piece no longer sits inside the from-door
+//! shape, the room is carved against itself, and the corridor fills with
+//! sliver tiles and the doors that come with them.
 
 use std::collections::BTreeMap;
 
@@ -419,11 +442,8 @@ impl<'b> AutorouteEngine<'b> {
                 own_net.push((entry.item, entry.shape_index));
             }
         }
-        // Ascending item id then shape index — `SortedRoomNeighbours.java:141-147`.
-        obstacles.sort_unstable();
         own_net.sort_unstable();
 
-        // Rooms come after every item; see the module docs.
         self.scratch_rooms.clear();
         self.room_tree.overlaps_with_stack(
             &query_tile.bounds(),
@@ -452,6 +472,75 @@ impl<'b> AutorouteEngine<'b> {
         room_hits.sort_unstable();
         room_hits.dedup();
         obstacles.extend(room_hits.into_iter().map(Obstacle::Room));
+        // One ascending `get_id_no()` key over items *and* rooms together —
+        // `SortedRoomNeighbours.java:139-147`. See
+        // [`sort_obstacles_for_neighbours`](Self::sort_obstacles_for_neighbours)
+        // for why the two kinds interleave instead of items-then-rooms, and
+        // `complete_shape` for the one caller that needs the *other* upstream
+        // order and re-sorts.
+        self.sort_obstacles_for_neighbours(obstacles);
+    }
+
+    /// Reorders an obstacle list into the visit order
+    /// `ShapeSearchTree.complete_shape` uses (`ShapeSearchTree.java:576-601`).
+    ///
+    /// Upstream collects the overlapping leaves with one tree walk and then
+    /// `Collections.sort`s them with `ShapeTree.Leaf.compareTo`
+    /// (`datastructures/ShapeTree.java:234-240`), which delegates to the stored
+    /// object's `compareTo`. Both implementations subtract *this* id from the
+    /// other's — `Item.compareTo` is `item.id_no - id_no` (`board/Item.java:94-101`)
+    /// and `CompleteFreeSpaceExpansionRoom.compareTo` is `other.id_no - this.id_no`
+    /// (`autoroute/CompleteFreeSpaceExpansionRoom.java:48-56`) — so each class
+    /// sorts by **descending** id. The cross-class arms disagree in sign on
+    /// purpose (an item returns `1` against a non-item, a room returns `-1`
+    /// against a non-room), which puts every room *before* every item. Ties
+    /// within one item break on ascending shape index.
+    ///
+    /// This is deliberately **not** the order
+    /// [`overlapping_obstacles_tile`](Self::overlapping_obstacles_tile) hands
+    /// back: that one is `SortedRoomNeighbours`' ascending-id sort
+    /// (`SortedRoomNeighbours.java:139-147`), and the two upstream call sites
+    /// really do sort differently. The distinction is not cosmetic —
+    /// [`restrain_shape`](Self::complete_shape) picks its cut line greedily
+    /// from whichever obstacle it sees first, so the sequence decides the
+    /// tiling: carving with the items before the rooms re-cuts free space the
+    /// already-completed neighbour rooms had settled, which strands sliver
+    /// tiles and multiplies the door count along a corridor.
+    pub(crate) fn sort_obstacles_for_completion(&self, obstacles: &mut [Obstacle]) {
+        obstacles.sort_unstable_by_key(|obstacle| match *obstacle {
+            Obstacle::Room(room) => (0u8, -self.rooms.room(room).id_no, 0u16),
+            Obstacle::Item(item, index) => (1u8, -(i64::from(item.raw())), index),
+        });
+    }
+
+    /// Reorders an obstacle list into the visit order
+    /// `SortedRoomNeighbours.calculate_neighbours` uses
+    /// (`SortedRoomNeighbours.java:139-147`).
+    ///
+    /// Upstream sorts the overlapping tree entries on a *single* ascending
+    /// `SearchTreeObject.get_id_no()` key, ties broken on ascending shape
+    /// index. Items and complete free rooms share that key space — an item's
+    /// key is its board id (`board/Item.java:107`), a room's is the
+    /// per-connection counter `generate_room_id_no` handed it
+    /// (`CompleteFreeSpaceExpansionRoom.java:105`) — so the two kinds
+    /// *interleave*. Sorting items ahead of rooms, which is what
+    /// [`overlapping_obstacles_tile`](Self::overlapping_obstacles_tile) hands
+    /// back, changes which neighbour wins the counter-clockwise sort and
+    /// therefore which doors the room ends up with.
+    ///
+    /// Obstacle rooms never reach here from the tree — `ObstacleExpansionRoom`
+    /// is not a `SearchTreeObject` (`autoroute/ObstacleExpansionRoom.java:19`)
+    /// — so their `(item << 10) | index` ids play no part in this order.
+    pub(crate) fn sort_obstacles_for_neighbours(&self, obstacles: &mut [Obstacle]) {
+        obstacles.sort_unstable_by_key(|obstacle| match *obstacle {
+            // The room arm sorts first on an exact id tie: upstream's sort is
+            // stable over a tree walk we do not reproduce, so the tie needs
+            // *some* rule, and the rooms are the objects this connection just
+            // built — visiting them before the board items keeps a freshly
+            // completed neighbour from being re-cut by an item of the same id.
+            Obstacle::Room(room) => (self.rooms.room(room).id_no, 0u8, 0u16),
+            Obstacle::Item(item, index) => (i64::from(item.raw()), 1u8, index),
+        });
     }
 
     /// The shape of one obstacle.
@@ -602,7 +691,10 @@ const BOUNDS_MARGIN: i32 = 1000;
 
 #[cfg(test)]
 mod tests {
+    use super::{Obstacle, RoomId};
     use crate::test_support::TestFixture;
+    use fr_board::item::ItemId;
+    use fr_geometry::planar::IntBox;
 
     #[test]
     fn the_engine_starts_with_no_rooms() {
@@ -652,5 +744,120 @@ mod tests {
         let first = engine.obstacle_room(item, 0).expect("pad has a tile shape");
         let second = engine.obstacle_room(item, 0).expect("cached");
         assert_eq!(first, second, "identity must be stable across the search");
+    }
+
+    /// Three rooms with `id_no` 0, 1, 2 on a fixture whose items are ids 1..n,
+    /// so both comparators have something to interleave.
+    fn ordering_fixture(engine: &mut crate::engine::AutorouteEngine<'_>) -> Vec<Obstacle> {
+        let square = IntBox::new(0, 0, 10, 10).to_simplex();
+        let rooms: Vec<RoomId> = (0..3)
+            .map(|_| engine.rooms.add_complete_free_room(square.clone(), 0))
+            .collect();
+        assert_eq!(
+            rooms
+                .iter()
+                .map(|r| engine.rooms.room(*r).id_no)
+                .collect::<Vec<_>>(),
+            vec![0, 1, 2],
+            "the room counter is `generate_room_id_no`, so it starts at the bottom"
+        );
+        vec![
+            Obstacle::Item(ItemId::from_raw(2), 1),
+            Obstacle::Room(rooms[1]),
+            Obstacle::Item(ItemId::from_raw(1), 0),
+            Obstacle::Room(rooms[2]),
+            Obstacle::Item(ItemId::from_raw(2), 0),
+            Obstacle::Room(rooms[0]),
+        ]
+    }
+
+    #[test]
+    fn the_completion_order_is_rooms_first_by_descending_id() {
+        // `ShapeSearchTree.java:598` sorts with `ShapeTree.Leaf.compareTo`,
+        // which delegates to `Item.compareTo` / `CompleteFreeSpaceExpansionRoom
+        // .compareTo` — both `other.id - this.id`, and both disagreeing in sign
+        // on the cross-class arm.
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        let mut obstacles = ordering_fixture(&mut engine);
+        engine.sort_obstacles_for_completion(&mut obstacles);
+        let kinds: Vec<(u8, i64, u16)> = obstacles
+            .iter()
+            .map(|obstacle| match *obstacle {
+                Obstacle::Room(room) => (0, engine.rooms.room(room).id_no, 0),
+                Obstacle::Item(item, index) => (1, i64::from(item.raw()), index),
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                (0, 2, 0),
+                (0, 1, 0),
+                (0, 0, 0),
+                (1, 2, 0),
+                (1, 2, 1),
+                (1, 1, 0),
+            ],
+            "rooms before items, each class descending, shape index ascending"
+        );
+    }
+
+    #[test]
+    fn the_neighbour_order_interleaves_rooms_and_items_by_ascending_id() {
+        // `SortedRoomNeighbours.java:141-147` — one `get_id_no()` key over the
+        // whole list, so a room whose counter value falls between two item ids
+        // is visited between them.
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        let mut obstacles = ordering_fixture(&mut engine);
+        engine.sort_obstacles_for_neighbours(&mut obstacles);
+        let keys: Vec<(i64, u8, u16)> = obstacles
+            .iter()
+            .map(|obstacle| match *obstacle {
+                Obstacle::Room(room) => (engine.rooms.room(room).id_no, 0, 0),
+                Obstacle::Item(item, index) => (i64::from(item.raw()), 1, index),
+            })
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                (0, 0, 0),
+                (1, 0, 0),
+                (1, 1, 0),
+                (2, 0, 0),
+                (2, 1, 0),
+                (2, 1, 1),
+            ],
+            "one ascending id key, rooms winning an exact tie"
+        );
+    }
+
+    #[test]
+    fn a_tree_query_hands_back_the_neighbour_order() {
+        // The query is the only producer of obstacle lists, so the order it
+        // establishes is the one `SortedRoomNeighbours` needs; `complete_shape`
+        // is the single caller that re-sorts.
+        let fixture = TestFixture::with_foreign_trace();
+        let mut engine = fixture.engine();
+        let square = IntBox::new(-100, -100, 100, 100).to_simplex();
+        let room = engine.rooms.add_complete_free_room(square, 0);
+        engine.insert_room_in_tree(room);
+        let mut obstacles = Vec::new();
+        let mut own_net = Vec::new();
+        let query = engine.bounds().to_simplex();
+        engine.overlapping_obstacles(
+            &query,
+            Some(0),
+            crate::test_support::TEST_NET,
+            &mut obstacles,
+            &mut own_net,
+        );
+        let mut expected = obstacles.clone();
+        engine.sort_obstacles_for_neighbours(&mut expected);
+        assert_eq!(obstacles, expected, "the query already sorted the list");
+        assert!(
+            obstacles.contains(&Obstacle::Room(room)),
+            "the room tree is part of the query"
+        );
     }
 }

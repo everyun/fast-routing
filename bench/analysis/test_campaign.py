@@ -108,6 +108,84 @@ class TestParseUncappedLog(unittest.TestCase):
         self.assertEqual(rec["stages"], {})
 
 
+class TestStabilitySweep(unittest.TestCase):
+    """`stability.class` picks which G2.1 gate a board gets, so it is held to
+    the same standard as `uncapped.status`: a parser that called a board
+    "stable" on no evidence would hand the comparative gate a number that does
+    not reproduce."""
+
+    def runs(self, *texts):
+        by_index = {
+            index + 1: fixture_manifest.parse_stability_run(text)
+            for index, text in enumerate(texts)
+        }
+        logs = {index: f"r{index}.log" for index in by_index}
+        return fixture_manifest.summarise_stability(by_index, logs)
+
+    def test_three_agreeing_runs_are_stable(self):
+        out = self.runs(COMPLETED, COMPLETED, COMPLETED)
+        self.assertEqual(out["class"], "stable")
+        self.assertEqual(out["unrouted"], 54)
+        self.assertEqual(out["violations"], 511)
+        self.assertEqual(out["started_unrouted"], 146)
+
+    def test_one_disagreeing_run_makes_the_board_unstable(self):
+        drifted = COMPLETED.replace(
+            "(54 unrouted and 511 violations)", "(55 unrouted and 511 violations)"
+        )
+        out = self.runs(COMPLETED, COMPLETED, drifted)
+        self.assertEqual(out["class"], "unstable")
+        self.assertIsNone(out["unrouted"])
+        self.assertIn("r3=55u/511v", out["reason"])
+
+    def test_finishing_only_sometimes_is_unstable_not_stable(self):
+        out = self.runs(COMPLETED, HIT_CAP, COMPLETED)
+        self.assertEqual(out["class"], "unstable")
+        self.assertEqual(out["scored_runs"], 2)
+
+    def test_runs_that_all_hit_the_cap_are_no_result_not_stable(self):
+        out = self.runs(HIT_CAP, HIT_CAP, HIT_CAP)
+        self.assertEqual(out["class"], "no_result")
+        self.assertIn("killed at the cap", out["reason"])
+        # Java's own starting count survives even when nothing else does; the
+        # anti-degeneracy guard is the caller that needs it.
+        self.assertEqual(out["started_unrouted"], 378)
+
+    def test_a_board_that_never_starts_routing_says_so(self):
+        out = self.runs(BLOCKED, BLOCKED, BLOCKED)
+        self.assertEqual(out["class"], "no_result")
+        self.assertIn("no routing stage ever started", out["reason"])
+
+    def test_one_run_is_not_enough_to_call_anything(self):
+        self.assertEqual(self.runs(COMPLETED)["class"], "unmeasured")
+
+    def test_class_is_always_one_of_the_declared_values(self):
+        for texts in (
+            (COMPLETED,),
+            (COMPLETED, HIT_CAP),
+            (BLOCKED, BLOCKED),
+            ("", ""),
+            (COMPLETED, COMPLETED),
+        ):
+            self.assertIn(
+                self.runs(*texts)["class"], fixture_manifest.STABILITY_CLASSES
+            )
+
+    def test_strip_stability_removes_every_derived_field(self):
+        man = fixture_manifest.load_manifest()
+        if man is None:
+            self.skipTest("manifest not generated")
+        stripped = fixture_manifest._strip_stability(man)
+        self.assertNotIn("java_stability_source", stripped)
+        for key in ("by_stability_class", "comparative_gate_eligible",
+                    "java_finished_not_stable", "stability_measured"):
+            self.assertNotIn(key, stripped["coverage"])
+        for entry in stripped["fixtures"]:
+            self.assertNotIn("stability", entry)
+        # and the original is untouched
+        self.assertIn("java_stability_source", man)
+
+
 class TestRealCampaignLogs(unittest.TestCase):
     """Guards the specific claims measurement-campaign.md makes."""
 

@@ -26,8 +26,13 @@ answers, per board, the three questions every gate in docs/ROADMAP.md asks:
      bench/analysis/measurement-campaign.md for the campaign write-up and
      its caveats.
 
-The `stability` field is deliberately left `null`: it gets filled by the
-3-run Java sweep in ROADMAP M0.5 ("record 3-run stability per fixture").
+  5. *Does Java give the same answer twice?* — the `stability` block, folded
+     in from `bench/results/java-stability/<stem>.r{1,2,3}.log` (three runs of
+     the capped baseline's exact command line). ROADMAP M0.5 asks for it and
+     G2.1 spends it: only a `java_finished` board whose three runs agree is
+     judged comparatively, because a comparative gate against a number that
+     moves between runs is not a gate. Everything else — including a board
+     Java routes well but not reproducibly — gets the absolute gate.
 
 Stdlib only. Usage (from the repo root):
 
@@ -35,6 +40,7 @@ Stdlib only. Usage (from the repo root):
     python3 bench/manifest.py --check             # CI: fail if stale
     python3 bench/manifest.py --results bench/results/<stamp>/results.json
     python3 bench/manifest.py --no-uncapped       # skip the uncapped fold-in
+    python3 bench/manifest.py --no-stability      # skip the stability fold-in
 """
 
 from __future__ import annotations
@@ -56,13 +62,18 @@ DEFAULT_FIXTURES_DIR = "/tmp/freerouting-upstream/fixtures"
 DEFAULT_RESULTS = os.path.join(BENCH_DIR, "results", "20260828-013025", "results.json")
 DEFAULT_MANIFEST = os.path.join(BENCH_DIR, "fixtures-manifest.json")
 DEFAULT_UNCAPPED_DIR = os.path.join(BENCH_DIR, "results", "java-uncapped")
+DEFAULT_STABILITY_DIR = os.path.join(BENCH_DIR, "results", "java-stability")
 
 # `timeout 7200` in the uncapped runner. A run whose /usr/bin/time footer
 # reports a wall at or past this is a kill, not a finish, and its numbers are
 # lower bounds — never cite them as T_java(complete).
 UNCAPPED_CAP_S = 7200.0
 
-MANIFEST_VERSION = 2
+# `timeout 300` in the stability runner, i.e. the capped baseline's own cap.
+STABILITY_CAP_S = 300.0
+STABILITY_RUNS = 3
+
+MANIFEST_VERSION = 3
 
 # Freerouting's DSN reader defaults to 45-degree snapping when the board
 # declares no (snap_angle ...); recorded separately from the declared value so
@@ -196,6 +207,15 @@ RE_UNCAPPED_FINAL = re.compile(
     r"final score: ([\d.,]+) \((\d+) unrouted and (\d+) violations\)",
     re.IGNORECASE,
 )
+# `Auto-routing stage started on board '<hash>' for 33 unrouted items.` and the matching
+# `started with 33 unrouted nets` in the completion line. This is the *only* unrouted number
+# comparable with the final one — both are Java's own count on Java's own board — so it is what
+# "did the reference make progress on this board?" has to be answered with. Our referee's count
+# of the same board is a different measurement and may not be mixed with it.
+RE_STARTED_UNROUTED = re.compile(
+    r"started (?:with|on board '[^']*' for) (\d+) unrouted (?:nets|items)",
+    re.IGNORECASE,
+)
 # The board-specific `<name>.rules` sidecar Freerouting offers to re-read.
 # Reaching this line and then going silent is the modal-dialog hang described
 # in bench/analysis/measurement-campaign.md, not slow routing.
@@ -221,6 +241,7 @@ def parse_uncapped_log(text: str) -> dict:
         "uncapped_wall_s": None,
         "uncapped_unrouted": None,
         "uncapped_violations": None,
+        "started_unrouted": None,
         "hit_cap": None,
         "status": "in_flight",
         "score": None,
@@ -262,6 +283,10 @@ def parse_uncapped_log(text: str) -> dict:
     m = RE_UNCAPPED_RULES.search(text)
     if m:
         out["rules_sidecar"] = m.group(1)
+
+    m = RE_STARTED_UNROUTED.search(text)
+    if m:
+        out["started_unrouted"] = int(m.group(1))
 
     passes = list(RE_UNCAPPED_PASS.finditer(text))
     out["passes_run"] = len(passes)
@@ -305,6 +330,132 @@ def load_uncapped(uncapped_dir: str = DEFAULT_UNCAPPED_DIR) -> dict:
         rec["log"] = repo_rel(path)
         out[stem + ".dsn"] = rec
     return out
+
+
+# --------------------------------------------------------------------------
+# 3-run Java stability sweep (bench/results/java-stability/<stem>.r<n>.log)
+# --------------------------------------------------------------------------
+#
+# Same jar, same flags, same 300 s cap as the capped baseline, three times per
+# fixture. What the gate needs out of it is one bit — *may this board be judged
+# comparatively?* — and that bit has to be conservative in both directions, so
+# the raw per-run numbers are kept alongside it.
+
+STABILITY_CLASSES = ("stable", "unstable", "no_result", "unmeasured")
+
+
+def parse_stability_run(text: str) -> dict:
+    """Java's self-reported outcome of one capped run."""
+    out = {
+        "unrouted": None,
+        "violations": None,
+        "score": None,
+        "started_unrouted": None,
+        "passes_run": len(RE_UNCAPPED_PASS.findall(text)),
+        "routing_started": bool(RE_UNCAPPED_STAGE_START.search(text)),
+    }
+    m = RE_STARTED_UNROUTED.search(text)
+    if m:
+        out["started_unrouted"] = int(m.group(1))
+    finals = list(RE_UNCAPPED_FINAL.finditer(text))
+    if finals:
+        m = finals[-1]
+        out["score"] = float(m.group(1).replace(",", "."))
+        out["unrouted"] = int(m.group(2))
+        out["violations"] = int(m.group(3))
+    return out
+
+
+def summarise_stability(runs: dict, logs: dict) -> dict:
+    """Fold `{run index -> parsed run}` into the block the manifest stores.
+
+    The class is what G2.1 reads, and only `stable` unlocks the comparative
+    gate:
+
+      stable     — at least two runs produced a final score and every one of
+                   them reported the same `(unrouted, violations)`
+      unstable   — at least two produced one and they disagree; the board is
+                   judged absolutely, exactly like a timeout
+      no_result  — the runs agree that there is nothing to report: Java was
+                   killed at the cap, or the file is not a routable board, so
+                   it never printed a final score. Not a defect of the sweep —
+                   it is the same information `java_timeout` /
+                   `java_degenerate` already carry — but it is not a
+                   comparable number either
+      unmeasured — fewer than two runs on disk; the sweep has not covered this
+                   fixture yet
+    """
+    indices = sorted(runs)
+    results = [runs[i] for i in indices]
+    scored = [r for r in results if r["unrouted"] is not None]
+    keys = {(r["unrouted"], r["violations"]) for r in scored}
+
+    if len(results) < 2:
+        cls, reason = "unmeasured", f"{len(results)} of {STABILITY_RUNS} runs on disk"
+    elif not scored:
+        started = any(r["routing_started"] for r in results)
+        cls = "no_result"
+        reason = (
+            f"{len(results)} runs, none reached a final score "
+            + ("(killed at the cap while routing)" if started
+               else "(no routing stage ever started)")
+        )
+    elif len(scored) < len(results):
+        cls = "unstable"
+        reason = (
+            f"{len(scored)} of {len(results)} runs produced a final score: the "
+            f"board is only sometimes finished inside the cap"
+        )
+    elif len(keys) > 1:
+        cls = "unstable"
+        reason = "runs disagree: " + ", ".join(
+            f"r{i}={r['unrouted']}u/{r['violations']}v" for i, r in zip(indices, results)
+        )
+    else:
+        cls = "stable"
+        unrouted, violations = next(iter(keys))
+        reason = f"{len(results)} runs agree on {unrouted}u/{violations}v"
+
+    agreed = next(iter(keys)) if cls == "stable" else (None, None)
+    return {
+        "runs": len(results),
+        "scored_runs": len(scored),
+        "cap_s": STABILITY_CAP_S,
+        "class": cls,
+        "reason": reason,
+        "unrouted": agreed[0],
+        "violations": agreed[1],
+        "score": results[0]["score"] if cls == "stable" else None,
+        "started_unrouted": next(
+            (r["started_unrouted"] for r in results if r["started_unrouted"] is not None),
+            None,
+        ),
+        "per_run": {f"r{i}": runs[i] for i in indices},
+        "logs": [logs[i] for i in indices],
+    }
+
+
+def load_stability(stability_dir: str = DEFAULT_STABILITY_DIR) -> dict:
+    """{fixture basename -> stability block} for one sweep directory.
+
+    Log names are `<stem>.r<n>.log`; a partially finished sweep is normal and
+    every fixture is summarised from whatever runs it has.
+    """
+    runs: dict = {}
+    logs: dict = {}
+    for path in sorted(glob.glob(os.path.join(stability_dir, "*.r*.log"))):
+        base = os.path.basename(path)[: -len(".log")]
+        stem, _, index = base.rpartition(".r")
+        if not stem or not index.isdigit():
+            continue
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            parsed = parse_stability_run(f.read())
+        runs.setdefault(stem + ".dsn", {})[int(index)] = parsed
+        logs.setdefault(stem + ".dsn", {})[int(index)] = repo_rel(path)
+    return {
+        name: summarise_stability(by_index, logs[name])
+        for name, by_index in runs.items()
+    }
 
 
 # --------------------------------------------------------------------------
@@ -515,6 +666,7 @@ def build_manifest(
     fixtures_dir: str,
     results_path: str | None,
     uncapped_dir: str | None = None,
+    stability_dir: str | None = None,
 ) -> dict:
     paths = sorted(
         p
@@ -525,6 +677,7 @@ def build_manifest(
         raise SystemExit(f"error: no *.dsn fixtures in {fixtures_dir}")
 
     uncapped = load_uncapped(uncapped_dir) if uncapped_dir else {}
+    stability = load_stability(stability_dir) if stability_dir else {}
 
     meta, records = ({}, [])
     results_rel = None
@@ -568,7 +721,7 @@ def build_manifest(
                 "properties": parse_properties(path),
                 "java": None,  # filled below, needs properties
                 "uncapped": uncapped.get(name),
-                "stability": None,
+                "stability": stability.get(name),
             }
         )
 
@@ -619,6 +772,26 @@ def build_manifest(
             e["name"] for e in entries if not e["properties"]["is_specctra_dsn"]
         ],
         "stability_measured": sum(1 for e in entries if e["stability"] is not None),
+        "by_stability_class": {
+            cls: sum(
+                1 for e in entries if (e["stability"] or {}).get("class") == cls
+            )
+            for cls in STABILITY_CLASSES
+        },
+        # The G2.1 comparative gate's entry condition, precomputed so the number
+        # in the roadmap and the number the judge uses come from one place.
+        "comparative_gate_eligible": sorted(
+            e["name"]
+            for e in entries
+            if e["java"]["class"] == "java_finished"
+            and (e["stability"] or {}).get("class") == "stable"
+        ),
+        "java_finished_not_stable": sorted(
+            e["name"]
+            for e in entries
+            if e["java"]["class"] == "java_finished"
+            and (e["stability"] or {}).get("class") != "stable"
+        ),
         "uncapped_measured": sum(1 for e in entries if e["uncapped"] is not None),
         "by_uncapped_status": {
             status: sum(
@@ -659,13 +832,22 @@ def build_manifest(
             "cap_s": UNCAPPED_CAP_S if uncapped_dir else None,
             "analysis": "bench/analysis/measurement-campaign.md",
         },
+        "java_stability_source": {
+            "dir": repo_rel(stability_dir) if stability_dir else None,
+            "runs": STABILITY_RUNS if stability_dir else None,
+            "cap_s": STABILITY_CAP_S if stability_dir else None,
+        },
         "notes": [
             "dedup.group is exact-md5; variant_family is a curated table of "
             "same-design variants (VARIANT_FAMILIES in bench/manifest.py).",
             "java.class comes from java_source.results — regenerate after the "
             "-mp 9999 re-baseline (ROADMAP M0.5) or the classes go stale.",
-            "stability is null everywhere until the 3-run Java sweep lands; "
-            "ROADMAP G2.1 treats unstable boards like timeout/crash boards.",
+            "stability.class is the G2.1 gate selector: only java_finished + "
+            "stable is judged comparatively, everything else (unstable, "
+            "no_result, unmeasured) gets the absolute gate.",
+            "stability.unrouted/violations are Java's self-reported numbers, "
+            "not the referee's, and are comparable only with each other and "
+            "with stability.started_unrouted — never with a referee count.",
             "snap_angle_effective falls back to the reader default "
             f"({DEFAULT_SNAP_ANGLE}) when the board declares none.",
             "uncapped.uncapped_wall_s is T_java(complete) ONLY when "
@@ -709,6 +891,24 @@ def _strip_uncapped(man: dict) -> dict:
     return copy
 
 
+def _strip_stability(man: dict) -> dict:
+    """Drop everything derived from the stability logs, for the same reason as
+    [`_strip_uncapped`]: `bench/results/java-stability/*.log` is gitignored."""
+    copy = json.loads(json.dumps(man))
+    copy.pop("java_stability_source", None)
+    for key in (
+        "stability_measured",
+        "by_stability_class",
+        "comparative_gate_eligible",
+        "java_finished_not_stable",
+    ):
+        copy.get("coverage", {}).pop(key, None)
+    for entry in copy.get("fixtures", []):
+        entry.pop("stability", None)
+    copy["notes"] = [n for n in copy.get("notes", []) if "stability" not in n]
+    return copy
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__,
@@ -729,6 +929,14 @@ def main(argv=None) -> int:
     )
     ap.add_argument("--no-uncapped", action="store_true",
                     help="skip the uncapped fold-in (uncapped null everywhere)")
+    ap.add_argument(
+        "--stability-dir", default=DEFAULT_STABILITY_DIR,
+        help="directory of <stem>.r<n>.log 3-run sweep logs folded into "
+             "fixtures[].stability "
+             f"(default: {os.path.relpath(DEFAULT_STABILITY_DIR, REPO_ROOT)})",
+    )
+    ap.add_argument("--no-stability", action="store_true",
+                    help="skip the stability fold-in (stability null everywhere)")
     ap.add_argument("--out", default=DEFAULT_MANIFEST)
     ap.add_argument("--check", action="store_true",
                     help="do not write; exit 1 if the on-disk manifest differs")
@@ -751,7 +959,16 @@ def main(argv=None) -> int:
               f"skipping the uncapped fold-in", file=sys.stderr)
         uncapped_dir = None
 
-    man = build_manifest(args.fixtures_dir, results, uncapped_dir)
+    stability_dir = None if args.no_stability else args.stability_dir
+    if stability_dir and not os.path.isdir(stability_dir):
+        if stability_dir != DEFAULT_STABILITY_DIR:
+            print(f"error: stability dir not found: {stability_dir}", file=sys.stderr)
+            return 2
+        print(f"note: no stability results at {repo_rel(stability_dir)}, "
+              f"skipping the stability fold-in", file=sys.stderr)
+        stability_dir = None
+
+    man = build_manifest(args.fixtures_dir, results, uncapped_dir, stability_dir)
     text = dumps(man)
 
     if args.to_stdout:
@@ -763,15 +980,24 @@ def main(argv=None) -> int:
         if old is None:
             print(f"stale: {args.out} does not exist", file=sys.stderr)
             return 1
-        project = (
-            _strip_volatile if uncapped_dir
-            else lambda m: _strip_uncapped(_strip_volatile(m))
-        )
+        def project(m):
+            m = _strip_volatile(m)
+            if not uncapped_dir:
+                m = _strip_uncapped(m)
+            if not stability_dir:
+                m = _strip_stability(m)
+            return m
+
         if project(old) != project(man):
             print(f"stale: {args.out} differs from a fresh generation "
                   f"(run: python3 bench/manifest.py)", file=sys.stderr)
             return 1
-        scope = "" if uncapped_dir else " (uncapped fields not compared)"
+        skipped = [
+            name
+            for name, present in (("uncapped", uncapped_dir), ("stability", stability_dir))
+            if not present
+        ]
+        scope = f" ({' and '.join(skipped)} fields not compared)" if skipped else ""
         print(f"ok: {args.out} is up to date{scope}")
         return 0
 
@@ -790,6 +1016,14 @@ def main(argv=None) -> int:
     still = cov["timeout_without_uncapped_wall"]
     if still:
         print(f"  no T_java(complete) yet for {len(still)}: " + ", ".join(still))
+    print(f"  stability: {cov['stability_measured']} measured (" + ", ".join(
+        f"{k}={v}" for k, v in cov["by_stability_class"].items() if v
+    ) + ")")
+    print(f"  G2.1 comparative-gate eligible: "
+          f"{len(cov['comparative_gate_eligible'])} of {cov['fixtures']}")
+    demoted = cov["java_finished_not_stable"]
+    if demoted:
+        print(f"  java_finished but not stable ({len(demoted)}): " + ", ".join(demoted))
     return 0
 
 

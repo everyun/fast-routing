@@ -4,14 +4,14 @@ This is the project's referee: a head-to-head comparison of the reference
 Java Freerouting against our Rust `fr-cli` over the upstream fixture suite.
 Every future optimization gets judged by it. Python 3, stdlib only.
 
-Three tools:
-
 | file | role |
 |---|---|
-| `manifest.py` → `fixtures-manifest.json` | what each fixture *is*: md5 dedup, coverage properties, Java classification |
+| `manifest.py` → `fixtures-manifest.json` | what each fixture *is*: md5 dedup, coverage properties, Java classification, 3-run stability |
 | `run_bench.py` | runs both tools, classifies every row from the manifest, writes `results.json` + `report.md` |
 | `check_ses.py` | independent (coarse) DSN/SES checker — totals **and per-net** wire length / via count |
-| `test_bench.py` | self-tests for all three (`python3 bench/test_bench.py`); hermetic, no fixtures or jar needed |
+| `tools/g21_referee/` | the real referee: `(dsn, ses)` in, one JSON verdict out, same binary for both tools |
+| `tools/g21_judge.py` | the ROADMAP G2.1 gate — see "Judging a session" below |
+| `test_bench.py`, `tools/tests/`, `analysis/test_campaign.py` | self-tests; hermetic, no fixtures or jar needed |
 
 ## Quick start
 
@@ -34,8 +34,14 @@ python3 bench/run_bench.py --jar /tmp/fr-lab-release/freerouting-lab.jar \
 # Re-render an old run's report with today's report code (runs nothing)
 python3 bench/run_bench.py --render-from bench/results/<stamp> --report-out -
 
+# 4. Judge the run against ROADMAP G2.1 (see "Judging a session")
+cargo build --release -p g21-referee
+python3 bench/tools/g21_judge.py --ours bench/results/<stamp>/ses
+
 # Harness self-tests (fast, hermetic) and manifest staleness check
 python3 bench/test_bench.py
+python3 -m unittest discover -s bench/tools/tests
+python3 bench/analysis/test_campaign.py
 python3 bench/manifest.py --check
 ```
 
@@ -118,9 +124,134 @@ On the `-mp 20` / 300 s baseline checked in at `bench/results/20260828-013025`:
 the classes describe a config nobody runs any more. `manifest.py --check`
 exits 1 when the checked-in manifest differs from a fresh generation (CI).
 
-`stability` is `null` on every fixture: it is filled by the 3-run Java sweep
-(ROADMAP M0.5). G2.1 treats `unstable` boards like timeout/crash boards, so
-null is the conservative state, not a forgotten field.
+**4. Does Java give the same answer twice?** `stability`, folded in from
+`bench/results/java-stability/<stem>.r{1,2,3}.log` — three runs of the capped
+baseline's exact command line. `stability.class` is what G2.1 reads:
+
+| class | rule | what the gate does with it |
+|---|---|---|
+| `stable` | ≥2 runs reached a final score and all of them report the same `(unrouted, violations)` | the only class that unlocks the comparative gate |
+| `unstable` | ≥2 runs reached one and they disagree (including "sometimes finishes inside the cap, sometimes not") | absolute gate, exactly like a timeout |
+| `no_result` | the runs agree there is nothing to report: killed at the cap, or not a routable board | absolute gate |
+| `unmeasured` | fewer than two runs on disk — the sweep has not covered this fixture | absolute gate |
+
+`stability.unrouted` / `violations` / `started_unrouted` are **Java's own**
+numbers and are comparable only with each other, never with a referee count:
+they are what "did the reference make progress on this board?" is answered
+with (see the anti-degeneracy guard below).
+
+The logs are gitignored like every other `bench/results/**/*.log`, so
+`manifest.py --check` compares on a projection that drops the `stability`
+block when they are absent, the same trick it already uses for `uncapped`.
+
+## Judging a session (ROADMAP G2.1)
+
+This is the normative description of the gate. `bench/tools/g21_judge.py`
+implements it and `bench/tools/g21_referee/` measures it; changing one without
+the others is a bug.
+
+```sh
+cargo build --release -p g21-referee
+python3 bench/tools/g21_judge.py --ours <dir-of-*.rust.ses> \
+    [--java <dir-of-*.java.ses>] [--sweep <our-runner's sweep.json>]
+```
+
+### The overlay: which board a session is read into
+
+`read_session` **merges** into the board it is handed, and both tools re-emit
+the input board's copper in their session. Reading a session into the full DSN
+import therefore inserts every pre-existing trace twice — on `Issue093` that
+alone takes the judged violation count from 192 to 322. The session is read
+into `fr_io::specctra::strip_session_copper(dsn)` instead: the same DSN with
+exactly the copper a session carries removed.
+
+"Exactly" is load-bearing, and emptying the whole `(wiring …)` scope is *not*
+it. `SesWriter.writeNet` skips `SYSTEM_FIXED` items, which is what `(type fix)`
+copper imports as, so that copper is on the board and in no session file.
+`Issue230-CNH_Functional_Tester_1.dsn` is the suite's only board with any (8
+wires), and emptying the scope mis-judges it in both directions at once:
+
+| Issue230, same session | unrouted | violations |
+|---|---|---|
+| our routed board, in process | 5 | 16 |
+| judged into an emptied `(wiring)` | 8 | **14** |
+| judged into `strip_session_copper` | 5 | 16 |
+
+Three connections lost *and* two clearance violations forgiven. The reference's
+own session for that board reads 2/16 through the correct overlay and 8/14
+through the emptied one, so the error is not even symmetric between tools.
+
+The **baseline** (`g21-referee <dsn>` with no session) is the *unmodified*
+import: `added = judged − baseline` only means anything if the baseline is the
+board as delivered.
+
+A violation whose two items are both `USER_FIXED` is never charged to either
+tool — it is a property of the input board.
+
+### The two gates
+
+A board is judged **comparatively** only when the reference's answer is a fact
+that reproduces: `java.class == java_finished` **and**
+`stability.class == stable` **and** a reference session exists.
+
+```
+comparative:  added_violations(ours) <= added_violations(java)
+         AND  unrouted(ours)         <= unrouted(java)
+```
+
+Everything else — timeout, crash, degenerate, unstable, unmeasured, or a
+missing reference session — is judged **absolutely**:
+
+```
+absolute:  added_violations(ours) == 0
+      AND  unrouted(ours) <= unrouted(input)
+      AND  (no reference session OR unrouted(ours) <= unrouted(java))
+      AND  the anti-degeneracy guard
+```
+
+Both gates additionally require `ses_errors == 0`: a session the reader has to
+guess at is not a result, however good its numbers look.
+
+### The anti-degeneracy guard
+
+`unrouted <= input` on its own would let "emit an empty session" pass every
+absolute board. It cannot, because a board may only stand still when *the
+reference implementation could not move it either*. Progress is a recorded
+property of the reference — from the manifest, never from the run being
+judged — and is looked for in this order:
+
+1. a referee-judged reference session that beats the input;
+2. a stability run whose own `unrouted` beat its own `started_unrouted`
+   (Java's numbers against Java's numbers);
+3. the uncapped campaign: the same self-reported improvement, or the
+   `hit_cap`-with-zero-passes case — 2 h in the routing stage without
+   finishing a single pass is positive evidence that the board did not move,
+   not missing data.
+
+If any of those says the reference made progress, we must too: copper for at
+least one multi-pin net **and** `unrouted(ours) < unrouted(input)` strictly. If
+they all say it did not, standing still is the correct answer. With no evidence
+at all the guard assumes progress is possible and demands it — silence is never
+a way through. The guard does not apply to a board that arrives with nothing
+unrouted: there is no progress to make, and `< input` would be unsatisfiable.
+
+`Issue229-display-8-digit-hc595.dsn` is why the clause is `<=` and not `<`: 20
+of its 64 connections arrive blocked by `USER_FIXED` copper no router may move,
+we return the input unchanged with zero added violations, and the reference's
+own session for it is **64 unrouted** — 44 connections *worse* than doing
+nothing. `Issue208-freerouting.dsn` is why the guard has a "no progress" branch:
+the reference spent 7200 s in the routing stage without finishing pass 1 and
+all three stability runs were killed at the cap reporting nothing, and we emit a
+well-formed, copper-empty session in 66 s that adds no violations and loses no
+connection.
+
+### The fidelity check
+
+With `--sweep`, the judge also compares the router's own in-process referee
+line against the same referee reading the session back. A gap means the writer,
+the reader or the overlay lost or invented something — it is what found the
+`(type fix)` overlay bug above. It is reported per run and is expected to be
+empty.
 
 ## Quality filter and the geomean rule
 

@@ -1,0 +1,20 @@
+[package]
+name = "g21-referee"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "The G2.1 referee: judges a (dsn, ses) pair on the session overlay and prints one JSON object for bench/tools/g21_judge.py."
+
+# `fr-core` re-exports the referee and pulls in the importer; `fr-check` supplies the score
+# weights and `fr-board` the item kinds the anti-degeneracy counters read. Nothing here may
+# depend on `fr-router`: the referee must judge a session file without knowing who wrote it.
+[dependencies]
+fr-board = { path = "../../../crates/fr-board" }
+fr-check = { path = "../../../crates/fr-check" }
+fr-core = { path = "../../../crates/fr-core", default-features = false }
+fr-io = { path = "../../../crates/fr-io" }
+
+[[bin]]
+name = "g21-referee"
+path = "src/main.rs"

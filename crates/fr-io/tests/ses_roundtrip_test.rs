@@ -5,14 +5,18 @@
 //! ```text
 //! reference = import(fixture)                      the board the DSN describes
 //! session   = write_session(import(fixture))       what the writer emits for it
-//! actual    = read_session(session, import(fixture with (wiring …) emptied))
+//! actual    = read_session(session, import(strip_session_copper(fixture)))
 //! assert equivalent(reference, actual)
 //! ```
 //!
-//! The target board is the *same DSN with its wiring scope emptied*, which is the real KiCad
-//! workflow — export an unrouted board, route it, import the session — and it is the only way to
-//! get an empty target: `Board::remove_item` refuses `USER_FIXED` items, which is what
-//! `(type route)` copper imports as (§10.3).
+//! The target board is the *same DSN with the copper a session re-emits removed*, which is the
+//! real KiCad workflow — export an unrouted board, route it, import the session — and it is the
+//! only way to get an empty target: `Board::remove_item` refuses `USER_FIXED` items, which is
+//! what `(type route)` copper imports as (§10.3). `strip_session_copper` is not quite "empty the
+//! `(wiring …)` scope": `(type fix)` copper is `SYSTEM_FIXED`, which `SesWriter.writeNet` never
+//! writes, so it has to stay on the target board or the round trip is judged against a board
+//! that is missing it. `fr_io::specctra::overlay` documents the case and the fixture that shows
+//! it (`Issue230`, the suite's only `(type fix)` board).
 //!
 //! # What the session format cannot carry, and what that costs
 //!
@@ -41,7 +45,7 @@ use fr_io::specctra::{
     import,
     ses_read::{read_session, read_session_with_options, SesCompat, SesReadOptions, SesTarget},
     ses_write::{write_session, SesInput},
-    ImportedDesign, SesLibrary,
+    strip_session_copper, ImportedDesign, SesLibrary,
 };
 
 const FIXTURE_DIR: &str = "/tmp/freerouting-upstream/fixtures";
@@ -58,43 +62,6 @@ fn read_fixture(name: &str) -> Vec<u8> {
              {FIXTURE_DIR}"
         )
     })
-}
-
-/// Replaces the `(wiring …)` scope with an empty one, giving the unrouted board the session file
-/// is applied to.
-///
-/// The scan starts at the *last* `(wiring` in the file — the scope is top level and cannot
-/// nest — and then counts brackets outside quoted strings. Starting there is what keeps the
-/// `(string_quote ")` directive in the parser scope, whose lone `"` would otherwise flip the
-/// quote state for the rest of the file, out of the way.
-fn strip_wiring(src: &[u8]) -> Vec<u8> {
-    let needle = b"(wiring";
-    let start = (0..src.len())
-        .rev()
-        .find(|&index| src[index..].starts_with(needle))
-        .expect("the fixture must have a wiring scope");
-    let mut depth = 0i32;
-    let mut in_quote = false;
-    let mut end = start;
-    while end < src.len() {
-        match src[end] {
-            b'"' => in_quote = !in_quote,
-            b'(' if !in_quote => depth += 1,
-            b')' if !in_quote => {
-                depth -= 1;
-                if depth == 0 {
-                    break;
-                }
-            }
-            _ => {}
-        }
-        end += 1;
-    }
-    let mut out = Vec::with_capacity(src.len());
-    out.extend_from_slice(&src[..start]);
-    out.extend_from_slice(b"(wiring)");
-    out.extend_from_slice(&src[end + 1..]);
-    out
 }
 
 /// Rewrites `(type shove_fixed)` to `(type normal)`, keeping the byte length so nothing else in
@@ -240,13 +207,28 @@ fn round_trip(fixture: &str) {
     let reference = import(&downgrade_shove_fixed(&bytes))
         .unwrap_or_else(|error| panic!("{fixture} without shove_fixed should import: {error}"));
 
-    let mut actual = import(&strip_wiring(&bytes))
+    let mut actual = import(&strip_session_copper(&bytes))
         .unwrap_or_else(|error| panic!("{fixture} without wiring should import: {error}"));
-    assert_eq!(
-        traces_by_key(&actual.board).len() + vias_by_key(&actual.board).len(),
-        0,
-        "{fixture}: the target board should start with no routing"
+    // The overlay target starts with exactly the copper no session file can carry: `(type fix)`,
+    // i.e. `SYSTEM_FIXED`. Anything else left standing would be double-inserted by the read.
+    let survivors: Vec<FixedState> = actual
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| matches!(item.kind, ItemKind::Trace(_) | ItemKind::Via(_)))
+        .map(|(_, item)| item.fixed_state)
+        .collect();
+    assert!(
+        survivors
+            .iter()
+            .all(|state| *state == FixedState::SystemFixed),
+        "{fixture}: the target board should start with SYSTEM_FIXED copper and nothing else, \
+         got {survivors:?}"
     );
+    // Those survivors are on the board without ever passing through the session, so the
+    // `SesImportSummary` counters below are compared against the board minus them.
+    let carried_over_vias = vias_by_key(&actual.board).values().sum::<usize>();
+    let carried_over_traces = survivors.len() - carried_over_vias;
 
     let library = SesLibrary::from_design(&actual);
     let summary = read_session(
@@ -262,14 +244,15 @@ fn round_trip(fixture: &str) {
 
     assert_equivalent(&reference.board, &actual.board, fixture);
 
-    // The counters are upstream's `SesImportSummary`; they must agree with what landed.
+    // The counters are upstream's `SesImportSummary`; they must agree with what landed, once
+    // the copper that was already on the overlay target is discounted.
     assert_eq!(
-        summary.vias_imported,
+        summary.vias_imported + carried_over_vias,
         vias_by_key(&actual.board).values().sum::<usize>(),
         "{fixture}: the via counter disagrees with the board"
     );
     assert!(
-        summary.wires_imported
+        summary.wires_imported + carried_over_traces
             >= traces_by_key(&actual.board)
                 .values()
                 .map(Vec::len)
@@ -325,6 +308,33 @@ fn issue103_routed_round_trips_across_the_shove_fixed_erasure() {
     );
 
     round_trip("Issue103-Board-Routed.dsn");
+}
+
+#[test]
+fn issue230_system_fixed_copper_stays_on_the_overlay_target() {
+    // The suite's only `(type fix)` board: eight `SYSTEM_FIXED` wires that `SesWriter.writeNet`
+    // refuses to write (`SesWriter.java:306`) and that the overlay target therefore has to keep.
+    // Emptying the whole `(wiring …)` scope instead loses them, and the G2.1 referee then reads
+    // three extra unrouted connections and *two fewer* clearance violations off the same
+    // session — see `fr_io::specctra::overlay` for the numbers.
+    let bytes = read_fixture("Issue230-CNH_Functional_Tester_1.dsn");
+    let design = import(&bytes).unwrap();
+    assert_eq!(
+        count_fixed(&design, FixedState::SystemFixed),
+        8,
+        "Issue230 is supposed to be the (type fix) case"
+    );
+
+    let session = write_session(&SesInput::from_design(
+        &design,
+        "Issue230-CNH_Functional_Tester_1.dsn",
+    ));
+    assert!(
+        !session.contains("(type fix)"),
+        "SYSTEM_FIXED copper must not be written to a session file"
+    );
+
+    round_trip("Issue230-CNH_Functional_Tester_1.dsn");
 }
 
 #[test]

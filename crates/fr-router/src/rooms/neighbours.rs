@@ -118,7 +118,11 @@ impl AutorouteEngine<'_> {
                 .map(|(item, index)| Obstacle::Item(item, index))
                 .collect();
             promoted.append(&mut obstacles);
-            promoted.sort_unstable();
+            // The promoted own-net items have to take their place in the one
+            // ascending `get_id_no()` order the query already put the rest in
+            // (`:139-147`) — upstream sorts before the own-net split, so an
+            // obstacle room, which never splits, sees a single sorted list.
+            self.sort_obstacles_for_neighbours(&mut promoted);
             obstacles = promoted;
         }
 

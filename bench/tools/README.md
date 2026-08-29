@@ -1,6 +1,6 @@
 # bench/tools/ — measurement contracts and the differential harness
 
-Three data contracts feed the benchmark and gate machinery. This file is their
+Four data contracts feed the benchmark and gate machinery. This file is their
 normative definition; anything that emits or parses them must match it.
 
 | contract | producer | consumer | gate |
@@ -8,6 +8,15 @@ normative definition; anything that emits or parses them must match it.
 | `FRLAB …` | the instrumented **lab jar**, `/tmp/fr-lab-release/freerouting-lab.jar` | `frlab_parse.py` | M2a–c settle order |
 | `FRMETRIC …` | our router, via the **`fr-metrics`** crate | `frlab_parse.py`, `run_bench.py` | M2/M3 counters |
 | **golden-dump JSON** (`fast-routing.golden-dump/1`) | `fr_io::golden_dump` (CLI: the `golden_emit` example) and the Java-dump adapter | `golden_compare.py` | **G1.0 / G1.1 import parity** |
+| **referee JSON** (one object per judged board) | `g21_referee/`, a workspace member — `cargo build --release -p g21-referee` | `g21_judge.py` | **G2.1 / G2.4 quality** |
+
+The G2.1 pair is documented in `bench/README.md` ("Judging a session"), which is
+normative for the *method*: which board a session is read into, which gate a
+fixture gets, and the anti-degeneracy guard. `g21_judge.py`'s module docstring
+carries the same rules in the form the code applies them. The referee is
+deliberately dumb — one board in, one JSON object out, no notion of pass or
+fail — so that every judgement rule lives in exactly one place, and so that the
+same binary measures both tools.
 
 `frlab_parse.py` parses both and diffs the settle sequences against each other.
 That diff is the M2 oracle: it answers *"did our maze engine visit the same

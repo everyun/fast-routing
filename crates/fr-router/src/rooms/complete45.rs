@@ -151,6 +151,14 @@ impl AutorouteEngine<'_> {
         // test, the query returns a superset, and every extra entry is a no-op
         // because it fails the `overlaps` gate below. The query goes in as a
         // box so the tree's per-leaf filter stays four integer comparisons.
+        //
+        // Unlike `complete::complete_shape` this does **not** re-sort into the
+        // `ShapeTree.Leaf` order: `ShapeSearchTree45Degree.complete_shape`
+        // (`:127-200`) never got the `Collections.sort` its orthogonal sibling
+        // did and still carves in raw `node_stack` pop order, which is a tree
+        // shape we do not reproduce. The query's ascending-id order stands in
+        // for it — deterministic, but not numerically upstream's, which is one
+        // more reason the 45° chain ships behind `TILING_45_ENV`.
         let mut obstacles = Vec::new();
         let mut own_net = Vec::new();
         self.overlapping_obstacles_tile(

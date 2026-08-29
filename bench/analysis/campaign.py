@@ -36,6 +36,7 @@ import manifest as fixture_manifest  # noqa: E402
 UNCAPPED_DIR = os.path.join(BENCH_DIR, "results", "java-uncapped")
 EXPERIMENTS_DIR = os.path.join(BENCH_DIR, "results", "java-experiments")
 BASELINE_DIR = os.path.join(BENCH_DIR, "results", "20260828-013025")
+STABILITY_DIR = os.path.join(BENCH_DIR, "results", "java-stability")
 
 # The five boards phase 2 of /tmp/frbase/measure.sh actually reached. slow6.txt
 # lists six; its last line has no trailing newline, so `while read -r` dropped
@@ -432,8 +433,46 @@ def section_issue219() -> str:
     ])
 
 
+def section_stability() -> str:
+    """§6: the 3-run sweep, one row per class and the boards in each."""
+    stability = fixture_manifest.load_stability(STABILITY_DIR)
+    if not stability:
+        return "(no stability logs in " + fixture_manifest.repo_rel(STABILITY_DIR) + ")"
+    by_class: dict = {}
+    for name, block in sorted(stability.items()):
+        by_class.setdefault(block["class"], []).append((name, block))
+
+    rows = []
+    for cls in fixture_manifest.STABILITY_CLASSES:
+        members = by_class.get(cls, [])
+        if not members:
+            continue
+        example = members[0][1]["reason"]
+        rows.append([
+            cls,
+            len(members),
+            example,
+            ", ".join(n.replace(".dsn", "") for n, _ in members[:4])
+            + (" …" if len(members) > 4 else ""),
+        ])
+
+    unstable = by_class.get("unstable", [])
+    detail = "\n".join(
+        f"- `{name}` — {block['reason']}" for name, block in unstable
+    )
+    summary = (
+        f"\n{len(stability)} of 46 fixtures swept. "
+        f"unstable: {len(unstable)}."
+        + (f"\n\n{detail}" if detail else
+           " Every fixture that reached a final score reached the same one all "
+           "three times.")
+    )
+    return table(["class", "boards", "example reason", "members"], rows) + summary
+
+
 SECTIONS = {
     "uncapped": section_uncapped,
+    "stability": section_stability,
     "uncapped-overlap": section_uncapped_overlap,
     "gc-surplus": section_gc_surplus,
     "serialgc": section_serialgc,

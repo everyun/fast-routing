@@ -1,6 +1,6 @@
 {
-  "manifest_version": 2,
-  "generated_utc": "2026-08-28T00:37:30Z",
+  "manifest_version": 3,
+  "generated_utc": "2026-08-29T00:01:45Z",
   "generator": "bench/manifest.py",
   "fixtures_dir": "/tmp/freerouting-upstream/fixtures",
   "java_source": {
@@ -17,10 +17,16 @@
     "cap_s": 7200.0,
     "analysis": "bench/analysis/measurement-campaign.md"
   },
+  "java_stability_source": {
+    "dir": "bench/results/java-stability",
+    "runs": 3,
+    "cap_s": 300.0
+  },
   "notes": [
     "dedup.group is exact-md5; variant_family is a curated table of same-design variants (VARIANT_FAMILIES in bench/manifest.py).",
     "java.class comes from java_source.results — regenerate after the -mp 9999 re-baseline (ROADMAP M0.5) or the classes go stale.",
-    "stability is null everywhere until the 3-run Java sweep lands; ROADMAP G2.1 treats unstable boards like timeout/crash boards.",
+    "stability.class is the G2.1 gate selector: only java_finished + stable is judged comparatively, everything else (unstable, no_result, unmeasured) gets the absolute gate.",
+    "stability.unrouted/violations are Java's self-reported numbers, not the referee's, and are comparable only with each other and with stability.started_unrouted — never with a referee count.",
     "snap_angle_effective falls back to the reader default (fortyfive_degree) when the board declares none.",
     "uncapped.uncapped_wall_s is T_java(complete) ONLY when uncapped.status == 'completed'; 'hit_cap' is a lower bound and 'blocked' measures a modal-dialog hang, not the board.",
     "the uncapped campaign ran with the fanout stage inactive while java_source.results ran it on 37/46 boards — the two Java columns are not the same pipeline (measurement-campaign.md §5)."
@@ -71,7 +77,45 @@
     "not_specctra_dsn": [
       "Issue006-LPC18XX_43XX_SCH.dsn"
     ],
-    "stability_measured": 0,
+    "stability_measured": 46,
+    "by_stability_class": {
+      "stable": 32,
+      "unstable": 0,
+      "no_result": 14,
+      "unmeasured": 0
+    },
+    "comparative_gate_eligible": [
+      "Issue026-J2_reference.dsn",
+      "Issue034-Green14SegLED.dsn",
+      "Issue035-ReadPlaceScope.dsn",
+      "Issue039-bug-design.dsn",
+      "Issue054-tairakb.dsn",
+      "Issue093-interf_u.dsn",
+      "Issue102-Mars-64-revE-rot00.dsn",
+      "Issue103-Board-Routed.dsn",
+      "Issue107-freq_teiler_200kHz_kicad.dsn",
+      "Issue110-Pajalnaja_stancija.dsn",
+      "Issue110-RelayModule.dsn",
+      "Issue110-testPCBSpecctraFile.dsn",
+      "Issue110-testProjectFromFreeroutingBugTest.dsn",
+      "Issue110-testProjectFromFreeroutingBugTest01.dsn",
+      "Issue110-Паяльная станция.dsn",
+      "Issue143-rpi_splitter.dsn",
+      "Issue143-rpi_splitter_mod.dsn",
+      "Issue153-wavefolder.dsn",
+      "Issue155-CH376_MCP795_Module.dsn",
+      "Issue157-TeamAdapt-LinePCB.dsn",
+      "Issue159-setonix_2hp-pcb.dsn",
+      "Issue163-pic_programmer.dsn",
+      "Issue187-processor.Z80.dsn",
+      "Issue190-processor.Z80.dsn",
+      "Issue209-split05.dsn",
+      "Issue209-split10.dsn",
+      "Issue217-8088sbc.dsn",
+      "Issue230-CNH_Functional_Tester_1.dsn",
+      "Issue269-caniot-tiny-arm.dsn"
+    ],
+    "java_finished_not_stable": [],
     "uncapped_measured": 14,
     "by_uncapped_status": {
       "completed": 11,
@@ -133,7 +177,48 @@
         "checker_nets_multi_pin": 0
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (no routing stage ever started)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": null,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": false
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": false
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": false
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue006-LPC18XX_43XX_SCH.r1.log",
+          "bench/results/java-stability/Issue006-LPC18XX_43XX_SCH.r2.log",
+          "bench/results/java-stability/Issue006-LPC18XX_43XX_SCH.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue015-StackOverflow.dsn",
@@ -188,6 +273,7 @@
         "uncapped_wall_s": 459.75,
         "uncapped_unrouted": 54,
         "uncapped_violations": 511,
+        "started_unrouted": 146,
         "hit_cap": false,
         "status": "completed",
         "score": 699.61,
@@ -205,7 +291,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue015-StackOverflow.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 146,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 146,
+            "passes_run": 7,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 146,
+            "passes_run": 7,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 146,
+            "passes_run": 7,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue015-StackOverflow.r1.log",
+          "bench/results/java-stability/Issue015-StackOverflow.r2.log",
+          "bench/results/java-stability/Issue015-StackOverflow.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue022-AutoRouter_interrupted.dsn",
@@ -260,6 +387,7 @@
         "uncapped_wall_s": 832.3,
         "uncapped_unrouted": 42,
         "uncapped_violations": 531,
+        "started_unrouted": 235,
         "hit_cap": false,
         "status": "completed",
         "score": 731.52,
@@ -277,7 +405,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue022-AutoRouter_interrupted.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 235,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 235,
+            "passes_run": 5,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 235,
+            "passes_run": 5,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 235,
+            "passes_run": 5,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue022-AutoRouter_interrupted.r1.log",
+          "bench/results/java-stability/Issue022-AutoRouter_interrupted.r2.log",
+          "bench/results/java-stability/Issue022-AutoRouter_interrupted.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue026-J2_reference.dsn",
@@ -329,7 +498,48 @@
         "checker_nets_multi_pin": 12
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.99,
+        "started_unrouted": 33,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 33,
+            "passes_run": 5,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 33,
+            "passes_run": 5,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 33,
+            "passes_run": 5,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue026-J2_reference.r1.log",
+          "bench/results/java-stability/Issue026-J2_reference.r2.log",
+          "bench/results/java-stability/Issue026-J2_reference.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue027-zMRETestFixture.dsn",
@@ -384,6 +594,7 @@
         "uncapped_wall_s": 804.34,
         "uncapped_unrouted": 7,
         "uncapped_violations": 1138,
+        "started_unrouted": 938,
         "hit_cap": false,
         "status": "completed",
         "score": 782.37,
@@ -401,7 +612,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue027-zMRETestFixture.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 938,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 938,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 938,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 938,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue027-zMRETestFixture.r1.log",
+          "bench/results/java-stability/Issue027-zMRETestFixture.r2.log",
+          "bench/results/java-stability/Issue027-zMRETestFixture.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue029-hw48na.dsn",
@@ -456,6 +708,7 @@
         "uncapped_wall_s": 7200.39,
         "uncapped_unrouted": null,
         "uncapped_violations": null,
+        "started_unrouted": null,
         "hit_cap": true,
         "status": "blocked",
         "score": null,
@@ -469,7 +722,48 @@
         "rules_sidecar": "Issue029-hw48na.rules",
         "log": "bench/results/java-uncapped/Issue029-hw48na.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 189,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 189,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 189,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 189,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue029-hw48na.r1.log",
+          "bench/results/java-stability/Issue029-hw48na.r2.log",
+          "bench/results/java-stability/Issue029-hw48na.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue034-Green14SegLED.dsn",
@@ -521,7 +815,48 @@
         "checker_nets_multi_pin": 101
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 5u/0v",
+        "unrouted": 5,
+        "violations": 0,
+        "score": 965.97,
+        "started_unrouted": 147,
+        "per_run": {
+          "r1": {
+            "unrouted": 5,
+            "violations": 0,
+            "score": 965.97,
+            "started_unrouted": 147,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 5,
+            "violations": 0,
+            "score": 965.97,
+            "started_unrouted": 147,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 5,
+            "violations": 0,
+            "score": 965.97,
+            "started_unrouted": 147,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue034-Green14SegLED.r1.log",
+          "bench/results/java-stability/Issue034-Green14SegLED.r2.log",
+          "bench/results/java-stability/Issue034-Green14SegLED.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue035-ReadPlaceScope.dsn",
@@ -573,7 +908,48 @@
         "checker_nets_multi_pin": 93
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 6u/152v",
+        "unrouted": 6,
+        "violations": 152,
+        "score": 848.32,
+        "started_unrouted": 240,
+        "per_run": {
+          "r1": {
+            "unrouted": 6,
+            "violations": 152,
+            "score": 848.32,
+            "started_unrouted": 240,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 6,
+            "violations": 152,
+            "score": 848.32,
+            "started_unrouted": 240,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 6,
+            "violations": 152,
+            "score": 848.32,
+            "started_unrouted": 240,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue035-ReadPlaceScope.r1.log",
+          "bench/results/java-stability/Issue035-ReadPlaceScope.r2.log",
+          "bench/results/java-stability/Issue035-ReadPlaceScope.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue039-bug-design.dsn",
@@ -625,7 +1001,48 @@
         "checker_nets_multi_pin": 74
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 13u/25v",
+        "unrouted": 13,
+        "violations": 25,
+        "score": 911.75,
+        "started_unrouted": 204,
+        "per_run": {
+          "r1": {
+            "unrouted": 13,
+            "violations": 25,
+            "score": 911.75,
+            "started_unrouted": 204,
+            "passes_run": 20,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 13,
+            "violations": 25,
+            "score": 911.75,
+            "started_unrouted": 204,
+            "passes_run": 20,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 13,
+            "violations": 25,
+            "score": 911.75,
+            "started_unrouted": 204,
+            "passes_run": 20,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue039-bug-design.r1.log",
+          "bench/results/java-stability/Issue039-bug-design.r2.log",
+          "bench/results/java-stability/Issue039-bug-design.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue054-tairakb.dsn",
@@ -677,7 +1094,48 @@
         "checker_nets_multi_pin": 56
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 3u/5v",
+        "unrouted": 3,
+        "violations": 5,
+        "score": 984.84,
+        "started_unrouted": 257,
+        "per_run": {
+          "r1": {
+            "unrouted": 3,
+            "violations": 5,
+            "score": 984.84,
+            "started_unrouted": 257,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 3,
+            "violations": 5,
+            "score": 984.84,
+            "started_unrouted": 257,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 3,
+            "violations": 5,
+            "score": 984.84,
+            "started_unrouted": 257,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue054-tairakb.r1.log",
+          "bench/results/java-stability/Issue054-tairakb.r2.log",
+          "bench/results/java-stability/Issue054-tairakb.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue066-Project_GP8B.dsn",
@@ -734,6 +1192,7 @@
         "uncapped_wall_s": 850.22,
         "uncapped_unrouted": 5,
         "uncapped_violations": 23,
+        "started_unrouted": 733,
         "hit_cap": false,
         "status": "completed",
         "score": 987.33,
@@ -751,7 +1210,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue066-Project_GP8B.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 733,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 733,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 733,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 733,
+            "passes_run": 1,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue066-Project_GP8B.r1.log",
+          "bench/results/java-stability/Issue066-Project_GP8B.r2.log",
+          "bench/results/java-stability/Issue066-Project_GP8B.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue070-Autorouter_FQ101_PCB_2022-05-13.dsn",
@@ -806,6 +1306,7 @@
         "uncapped_wall_s": 4405.4,
         "uncapped_unrouted": 113,
         "uncapped_violations": 275,
+        "started_unrouted": 254,
         "hit_cap": false,
         "status": "completed",
         "score": 590.24,
@@ -823,7 +1324,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue070-Autorouter_FQ101_PCB_2022-05-13.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 254,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 254,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 254,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 254,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue070-Autorouter_FQ101_PCB_2022-05-13.r1.log",
+          "bench/results/java-stability/Issue070-Autorouter_FQ101_PCB_2022-05-13.r2.log",
+          "bench/results/java-stability/Issue070-Autorouter_FQ101_PCB_2022-05-13.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue093-interf_u.dsn",
@@ -875,7 +1417,48 @@
         "checker_nets_multi_pin": 110
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 18u/192v",
+        "unrouted": 18,
+        "violations": 192,
+        "score": 719.39,
+        "started_unrouted": 43,
+        "per_run": {
+          "r1": {
+            "unrouted": 18,
+            "violations": 192,
+            "score": 719.39,
+            "started_unrouted": 43,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 18,
+            "violations": 192,
+            "score": 719.39,
+            "started_unrouted": 43,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 18,
+            "violations": 192,
+            "score": 719.39,
+            "started_unrouted": 43,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue093-interf_u.r1.log",
+          "bench/results/java-stability/Issue093-interf_u.r2.log",
+          "bench/results/java-stability/Issue093-interf_u.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue102-Mars-64-revE-rot00.dsn",
@@ -927,7 +1510,48 @@
         "checker_nets_multi_pin": 74
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/64v",
+        "unrouted": 0,
+        "violations": 64,
+        "score": 879.21,
+        "started_unrouted": 106,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 64,
+            "score": 879.21,
+            "started_unrouted": 106,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 64,
+            "score": 879.21,
+            "started_unrouted": 106,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 64,
+            "score": 879.21,
+            "started_unrouted": 106,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue102-Mars-64-revE-rot00.r1.log",
+          "bench/results/java-stability/Issue102-Mars-64-revE-rot00.r2.log",
+          "bench/results/java-stability/Issue102-Mars-64-revE-rot00.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue103-Board-Routed.dsn",
@@ -979,7 +1603,48 @@
         "checker_nets_multi_pin": 267
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/63v",
+        "unrouted": 0,
+        "violations": 63,
+        "score": 982.02,
+        "started_unrouted": 0,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 63,
+            "score": 982.02,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 63,
+            "score": 982.02,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 63,
+            "score": 982.02,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue103-Board-Routed.r1.log",
+          "bench/results/java-stability/Issue103-Board-Routed.r2.log",
+          "bench/results/java-stability/Issue103-Board-Routed.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue103-Board-Unrouted.dsn",
@@ -1034,6 +1699,7 @@
         "uncapped_wall_s": 885.15,
         "uncapped_unrouted": 4,
         "uncapped_violations": 60,
+        "started_unrouted": 702,
         "hit_cap": false,
         "status": "completed",
         "score": 977.18,
@@ -1051,7 +1717,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue103-Board-Unrouted.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 702,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 702,
+            "passes_run": 4,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 702,
+            "passes_run": 4,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 702,
+            "passes_run": 4,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue103-Board-Unrouted.r1.log",
+          "bench/results/java-stability/Issue103-Board-Unrouted.r2.log",
+          "bench/results/java-stability/Issue103-Board-Unrouted.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue107-freq_teiler_200kHz_kicad.dsn",
@@ -1103,7 +1810,48 @@
         "checker_nets_multi_pin": 59
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 2u/0v",
+        "unrouted": 2,
+        "violations": 0,
+        "score": 988.16,
+        "started_unrouted": 164,
+        "per_run": {
+          "r1": {
+            "unrouted": 2,
+            "violations": 0,
+            "score": 988.16,
+            "started_unrouted": 164,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 2,
+            "violations": 0,
+            "score": 988.16,
+            "started_unrouted": 164,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 2,
+            "violations": 0,
+            "score": 988.16,
+            "started_unrouted": 164,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue107-freq_teiler_200kHz_kicad.r1.log",
+          "bench/results/java-stability/Issue107-freq_teiler_200kHz_kicad.r2.log",
+          "bench/results/java-stability/Issue107-freq_teiler_200kHz_kicad.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue107-freq_teiler_200kHz_kicad_bad.dsn",
@@ -1158,6 +1906,7 @@
         "uncapped_wall_s": 7200.39,
         "uncapped_unrouted": null,
         "uncapped_violations": null,
+        "started_unrouted": null,
         "hit_cap": true,
         "status": "blocked",
         "score": null,
@@ -1171,7 +1920,48 @@
         "rules_sidecar": "Issue107-freq_teiler_200kHz_kicad_bad.rules",
         "log": "bench/results/java-uncapped/Issue107-freq_teiler_200kHz_kicad_bad.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 2u/0v",
+        "unrouted": 2,
+        "violations": 0,
+        "score": 988.7,
+        "started_unrouted": 172,
+        "per_run": {
+          "r1": {
+            "unrouted": 2,
+            "violations": 0,
+            "score": 988.7,
+            "started_unrouted": 172,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 2,
+            "violations": 0,
+            "score": 988.7,
+            "started_unrouted": 172,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 2,
+            "violations": 0,
+            "score": 988.7,
+            "started_unrouted": 172,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue107-freq_teiler_200kHz_kicad_bad.r1.log",
+          "bench/results/java-stability/Issue107-freq_teiler_200kHz_kicad_bad.r2.log",
+          "bench/results/java-stability/Issue107-freq_teiler_200kHz_kicad_bad.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue110-Pajalnaja_stancija.dsn",
@@ -1224,7 +2014,48 @@
         "checker_nets_multi_pin": 41
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 6u/18v",
+        "unrouted": 6,
+        "violations": 18,
+        "score": 911.92,
+        "started_unrouted": 109,
+        "per_run": {
+          "r1": {
+            "unrouted": 6,
+            "violations": 18,
+            "score": 911.92,
+            "started_unrouted": 109,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 6,
+            "violations": 18,
+            "score": 911.92,
+            "started_unrouted": 109,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 6,
+            "violations": 18,
+            "score": 911.92,
+            "started_unrouted": 109,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue110-Pajalnaja_stancija.r1.log",
+          "bench/results/java-stability/Issue110-Pajalnaja_stancija.r2.log",
+          "bench/results/java-stability/Issue110-Pajalnaja_stancija.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue110-RelayModule.dsn",
@@ -1276,7 +2107,48 @@
         "checker_nets_multi_pin": 44
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 1u/2v",
+        "unrouted": 1,
+        "violations": 2,
+        "score": 984.08,
+        "started_unrouted": 88,
+        "per_run": {
+          "r1": {
+            "unrouted": 1,
+            "violations": 2,
+            "score": 984.08,
+            "started_unrouted": 88,
+            "passes_run": 20,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 1,
+            "violations": 2,
+            "score": 984.08,
+            "started_unrouted": 88,
+            "passes_run": 20,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 1,
+            "violations": 2,
+            "score": 984.08,
+            "started_unrouted": 88,
+            "passes_run": 20,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue110-RelayModule.r1.log",
+          "bench/results/java-stability/Issue110-RelayModule.r2.log",
+          "bench/results/java-stability/Issue110-RelayModule.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue110-testPCBSpecctraFile.dsn",
@@ -1328,7 +2200,48 @@
         "checker_nets_multi_pin": 25
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 20u/41v",
+        "unrouted": 20,
+        "violations": 41,
+        "score": 613.69,
+        "started_unrouted": 26,
+        "per_run": {
+          "r1": {
+            "unrouted": 20,
+            "violations": 41,
+            "score": 613.69,
+            "started_unrouted": 26,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 20,
+            "violations": 41,
+            "score": 613.69,
+            "started_unrouted": 26,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 20,
+            "violations": 41,
+            "score": 613.69,
+            "started_unrouted": 26,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue110-testPCBSpecctraFile.r1.log",
+          "bench/results/java-stability/Issue110-testPCBSpecctraFile.r2.log",
+          "bench/results/java-stability/Issue110-testPCBSpecctraFile.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue110-testProjectFromFreeroutingBugTest.dsn",
@@ -1380,7 +2293,48 @@
         "checker_nets_multi_pin": 4
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.98,
+        "started_unrouted": 4,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 4,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 4,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 4,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue110-testProjectFromFreeroutingBugTest.r1.log",
+          "bench/results/java-stability/Issue110-testProjectFromFreeroutingBugTest.r2.log",
+          "bench/results/java-stability/Issue110-testProjectFromFreeroutingBugTest.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue110-testProjectFromFreeroutingBugTest01.dsn",
@@ -1432,7 +2386,48 @@
         "checker_nets_multi_pin": 4
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.98,
+        "started_unrouted": 4,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 4,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 4,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 4,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue110-testProjectFromFreeroutingBugTest01.r1.log",
+          "bench/results/java-stability/Issue110-testProjectFromFreeroutingBugTest01.r2.log",
+          "bench/results/java-stability/Issue110-testProjectFromFreeroutingBugTest01.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue110-Паяльная станция.dsn",
@@ -1485,7 +2480,48 @@
         "checker_nets_multi_pin": 41
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 6u/18v",
+        "unrouted": 6,
+        "violations": 18,
+        "score": 911.92,
+        "started_unrouted": 109,
+        "per_run": {
+          "r1": {
+            "unrouted": 6,
+            "violations": 18,
+            "score": 911.92,
+            "started_unrouted": 109,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 6,
+            "violations": 18,
+            "score": 911.92,
+            "started_unrouted": 109,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 6,
+            "violations": 18,
+            "score": 911.92,
+            "started_unrouted": 109,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue110-Паяльная станция.r1.log",
+          "bench/results/java-stability/Issue110-Паяльная станция.r2.log",
+          "bench/results/java-stability/Issue110-Паяльная станция.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue113-Protein.dsn",
@@ -1540,6 +2576,7 @@
         "uncapped_wall_s": 1709.19,
         "uncapped_unrouted": 21,
         "uncapped_violations": 44,
+        "started_unrouted": 351,
         "hit_cap": false,
         "status": "completed",
         "score": 932.86,
@@ -1557,7 +2594,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue113-Protein.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 351,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 351,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 351,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 351,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue113-Protein.r1.log",
+          "bench/results/java-stability/Issue113-Protein.r2.log",
+          "bench/results/java-stability/Issue113-Protein.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue143-rpi_splitter.dsn",
@@ -1609,7 +2687,48 @@
         "checker_nets_multi_pin": 5
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.97,
+        "started_unrouted": 5,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.97,
+            "started_unrouted": 5,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.97,
+            "started_unrouted": 5,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.97,
+            "started_unrouted": 5,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue143-rpi_splitter.r1.log",
+          "bench/results/java-stability/Issue143-rpi_splitter.r2.log",
+          "bench/results/java-stability/Issue143-rpi_splitter.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue143-rpi_splitter_mod.dsn",
@@ -1661,7 +2780,48 @@
         "checker_nets_multi_pin": 5
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.98,
+        "started_unrouted": 1,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 1,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 1,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 1,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue143-rpi_splitter_mod.r1.log",
+          "bench/results/java-stability/Issue143-rpi_splitter_mod.r2.log",
+          "bench/results/java-stability/Issue143-rpi_splitter_mod.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue145-smoothieboard.dsn",
@@ -1718,6 +2878,7 @@
         "uncapped_wall_s": 1052.7,
         "uncapped_unrouted": 135,
         "uncapped_violations": 112,
+        "started_unrouted": 746,
         "hit_cap": false,
         "status": "completed",
         "score": 801.5,
@@ -1735,7 +2896,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue145-smoothieboard.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 746,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 746,
+            "passes_run": 3,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 746,
+            "passes_run": 3,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 746,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue145-smoothieboard.r1.log",
+          "bench/results/java-stability/Issue145-smoothieboard.r2.log",
+          "bench/results/java-stability/Issue145-smoothieboard.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue153-wavefolder.dsn",
@@ -1787,7 +2989,48 @@
         "checker_nets_multi_pin": 30
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 3u/9v",
+        "unrouted": 3,
+        "violations": 9,
+        "score": 940.73,
+        "started_unrouted": 27,
+        "per_run": {
+          "r1": {
+            "unrouted": 3,
+            "violations": 9,
+            "score": 940.73,
+            "started_unrouted": 27,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 3,
+            "violations": 9,
+            "score": 940.73,
+            "started_unrouted": 27,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 3,
+            "violations": 9,
+            "score": 940.73,
+            "started_unrouted": 27,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue153-wavefolder.r1.log",
+          "bench/results/java-stability/Issue153-wavefolder.r2.log",
+          "bench/results/java-stability/Issue153-wavefolder.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue155-CH376_MCP795_Module.dsn",
@@ -1839,7 +3082,48 @@
         "checker_nets_multi_pin": 25
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.99,
+        "started_unrouted": 53,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 53,
+            "passes_run": 9,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 53,
+            "passes_run": 9,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 53,
+            "passes_run": 9,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue155-CH376_MCP795_Module.r1.log",
+          "bench/results/java-stability/Issue155-CH376_MCP795_Module.r2.log",
+          "bench/results/java-stability/Issue155-CH376_MCP795_Module.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue157-TeamAdapt-LinePCB.dsn",
@@ -1891,7 +3175,48 @@
         "checker_nets_multi_pin": 64
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 16u/19v",
+        "unrouted": 16,
+        "violations": 19,
+        "score": 912.38,
+        "started_unrouted": 226,
+        "per_run": {
+          "r1": {
+            "unrouted": 16,
+            "violations": 19,
+            "score": 912.38,
+            "started_unrouted": 226,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 16,
+            "violations": 19,
+            "score": 912.38,
+            "started_unrouted": 226,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 16,
+            "violations": 19,
+            "score": 912.38,
+            "started_unrouted": 226,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue157-TeamAdapt-LinePCB.r1.log",
+          "bench/results/java-stability/Issue157-TeamAdapt-LinePCB.r2.log",
+          "bench/results/java-stability/Issue157-TeamAdapt-LinePCB.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue159-setonix_2hp-pcb.dsn",
@@ -1943,7 +3268,48 @@
         "checker_nets_multi_pin": 6
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.99,
+        "started_unrouted": 23,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 23,
+            "passes_run": 4,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 23,
+            "passes_run": 4,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 23,
+            "passes_run": 4,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue159-setonix_2hp-pcb.r1.log",
+          "bench/results/java-stability/Issue159-setonix_2hp-pcb.r2.log",
+          "bench/results/java-stability/Issue159-setonix_2hp-pcb.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue163-pic_programmer.dsn",
@@ -1995,7 +3361,48 @@
         "checker_nets_multi_pin": 34
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 9u/6v",
+        "unrouted": 9,
+        "violations": 6,
+        "score": 919.04,
+        "started_unrouted": 23,
+        "per_run": {
+          "r1": {
+            "unrouted": 9,
+            "violations": 6,
+            "score": 919.04,
+            "started_unrouted": 23,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 9,
+            "violations": 6,
+            "score": 919.04,
+            "started_unrouted": 23,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 9,
+            "violations": 6,
+            "score": 919.04,
+            "started_unrouted": 23,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue163-pic_programmer.r1.log",
+          "bench/results/java-stability/Issue163-pic_programmer.r2.log",
+          "bench/results/java-stability/Issue163-pic_programmer.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue178-KeebMaker_Sofle_Choc.dsn",
@@ -2050,6 +3457,7 @@
         "uncapped_wall_s": 296.21,
         "uncapped_unrouted": 6,
         "uncapped_violations": 20,
+        "started_unrouted": 418,
         "hit_cap": false,
         "status": "completed",
         "score": 976.5,
@@ -2067,7 +3475,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue178-KeebMaker_Sofle_Choc.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 418,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 418,
+            "passes_run": 14,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 418,
+            "passes_run": 13,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 418,
+            "passes_run": 12,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue178-KeebMaker_Sofle_Choc.r1.log",
+          "bench/results/java-stability/Issue178-KeebMaker_Sofle_Choc.r2.log",
+          "bench/results/java-stability/Issue178-KeebMaker_Sofle_Choc.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue179-Autorouter_PCB1_2023-3-24.dsn",
@@ -2119,7 +3568,48 @@
         "checker_nets_multi_pin": 20
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 68u/37v",
+        "unrouted": 68,
+        "violations": 37,
+        "score": 0.0,
+        "started_unrouted": 68,
+        "per_run": {
+          "r1": {
+            "unrouted": 68,
+            "violations": 37,
+            "score": 0.0,
+            "started_unrouted": 68,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 68,
+            "violations": 37,
+            "score": 0.0,
+            "started_unrouted": 68,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 68,
+            "violations": 37,
+            "score": 0.0,
+            "started_unrouted": 68,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue179-Autorouter_PCB1_2023-3-24.r1.log",
+          "bench/results/java-stability/Issue179-Autorouter_PCB1_2023-3-24.r2.log",
+          "bench/results/java-stability/Issue179-Autorouter_PCB1_2023-3-24.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue187-processor.Z80.dsn",
@@ -2171,7 +3661,48 @@
         "checker_nets_multi_pin": 245
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.98,
+        "started_unrouted": 0,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.98,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue187-processor.Z80.r1.log",
+          "bench/results/java-stability/Issue187-processor.Z80.r2.log",
+          "bench/results/java-stability/Issue187-processor.Z80.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue190-processor.Z80.dsn",
@@ -2223,7 +3754,48 @@
         "checker_nets_multi_pin": 244
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 12u/1372v",
+        "unrouted": 12,
+        "violations": 1372,
+        "score": 656.58,
+        "started_unrouted": 18,
+        "per_run": {
+          "r1": {
+            "unrouted": 12,
+            "violations": 1372,
+            "score": 656.58,
+            "started_unrouted": 18,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 12,
+            "violations": 1372,
+            "score": 656.58,
+            "started_unrouted": 18,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 12,
+            "violations": 1372,
+            "score": 656.58,
+            "started_unrouted": 18,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue190-processor.Z80.r1.log",
+          "bench/results/java-stability/Issue190-processor.Z80.r2.log",
+          "bench/results/java-stability/Issue190-processor.Z80.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue208-freerouting.dsn",
@@ -2278,6 +3850,7 @@
         "uncapped_wall_s": 7200.38,
         "uncapped_unrouted": null,
         "uncapped_violations": null,
+        "started_unrouted": 378,
         "hit_cap": true,
         "status": "hit_cap",
         "score": null,
@@ -2293,7 +3866,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue208-freerouting.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 378,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 378,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 378,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 378,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue208-freerouting.r1.log",
+          "bench/results/java-stability/Issue208-freerouting.r2.log",
+          "bench/results/java-stability/Issue208-freerouting.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue209-split05.dsn",
@@ -2345,7 +3959,48 @@
         "checker_nets_multi_pin": 45
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 18u/183v",
+        "unrouted": 18,
+        "violations": 183,
+        "score": 827.75,
+        "started_unrouted": 272,
+        "per_run": {
+          "r1": {
+            "unrouted": 18,
+            "violations": 183,
+            "score": 827.75,
+            "started_unrouted": 272,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 18,
+            "violations": 183,
+            "score": 827.75,
+            "started_unrouted": 272,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 18,
+            "violations": 183,
+            "score": 827.75,
+            "started_unrouted": 272,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue209-split05.r1.log",
+          "bench/results/java-stability/Issue209-split05.r2.log",
+          "bench/results/java-stability/Issue209-split05.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue209-split10.dsn",
@@ -2397,7 +4052,48 @@
         "checker_nets_multi_pin": 45
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 4u/183v",
+        "unrouted": 4,
+        "violations": 183,
+        "score": 871.92,
+        "started_unrouted": 272,
+        "per_run": {
+          "r1": {
+            "unrouted": 4,
+            "violations": 183,
+            "score": 871.92,
+            "started_unrouted": 272,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 4,
+            "violations": 183,
+            "score": 871.92,
+            "started_unrouted": 272,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 4,
+            "violations": 183,
+            "score": 871.92,
+            "started_unrouted": 272,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue209-split10.r1.log",
+          "bench/results/java-stability/Issue209-split10.r2.log",
+          "bench/results/java-stability/Issue209-split10.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue214-freerouting.dsn",
@@ -2454,6 +4150,7 @@
         "uncapped_wall_s": 1087.08,
         "uncapped_unrouted": 64,
         "uncapped_violations": 192,
+        "started_unrouted": 153,
         "hit_cap": false,
         "status": "completed",
         "score": 752.05,
@@ -2471,7 +4168,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue214-freerouting.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 153,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 153,
+            "passes_run": 3,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 153,
+            "passes_run": 3,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 153,
+            "passes_run": 3,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue214-freerouting.r1.log",
+          "bench/results/java-stability/Issue214-freerouting.r2.log",
+          "bench/results/java-stability/Issue214-freerouting.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue217-8088sbc.dsn",
@@ -2523,7 +4261,48 @@
         "checker_nets_multi_pin": 76
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 999.99,
+        "started_unrouted": 235,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 235,
+            "passes_run": 9,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 235,
+            "passes_run": 9,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 999.99,
+            "started_unrouted": 235,
+            "passes_run": 9,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue217-8088sbc.r1.log",
+          "bench/results/java-stability/Issue217-8088sbc.r2.log",
+          "bench/results/java-stability/Issue217-8088sbc.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue219-LogicBoard_smt.dsn",
@@ -2580,6 +4359,7 @@
         "uncapped_wall_s": 4675.43,
         "uncapped_unrouted": 2,
         "uncapped_violations": 0,
+        "started_unrouted": 981,
         "hit_cap": false,
         "status": "completed",
         "score": 997.96,
@@ -2597,7 +4377,48 @@
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue219-LogicBoard_smt.log"
       },
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 981,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 981,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 981,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 981,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue219-LogicBoard_smt.r1.log",
+          "bench/results/java-stability/Issue219-LogicBoard_smt.r2.log",
+          "bench/results/java-stability/Issue219-LogicBoard_smt.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue229-display-8-digit-hc595.dsn",
@@ -2649,7 +4470,48 @@
         "checker_nets_multi_pin": 30
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 0.0,
+        "started_unrouted": 0,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 1,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue229-display-8-digit-hc595.r1.log",
+          "bench/results/java-stability/Issue229-display-8-digit-hc595.r2.log",
+          "bench/results/java-stability/Issue229-display-8-digit-hc595.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue230-CNH_Functional_Tester_1.dsn",
@@ -2703,7 +4565,48 @@
         "checker_nets_multi_pin": 64
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 5u/16v",
+        "unrouted": 5,
+        "violations": 16,
+        "score": 959.6,
+        "started_unrouted": 149,
+        "per_run": {
+          "r1": {
+            "unrouted": 5,
+            "violations": 16,
+            "score": 959.6,
+            "started_unrouted": 149,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 5,
+            "violations": 16,
+            "score": 959.6,
+            "started_unrouted": 149,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 5,
+            "violations": 16,
+            "score": 959.6,
+            "started_unrouted": 149,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue230-CNH_Functional_Tester_1.r1.log",
+          "bench/results/java-stability/Issue230-CNH_Functional_Tester_1.r2.log",
+          "bench/results/java-stability/Issue230-CNH_Functional_Tester_1.r3.log"
+        ]
+      }
     },
     {
       "name": "Issue269-caniot-tiny-arm.dsn",
@@ -2755,7 +4658,48 @@
         "checker_nets_multi_pin": 76
       },
       "uncapped": null,
-      "stability": null
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 97u/4v",
+        "unrouted": 97,
+        "violations": 4,
+        "score": 490.62,
+        "started_unrouted": 107,
+        "per_run": {
+          "r1": {
+            "unrouted": 97,
+            "violations": 4,
+            "score": 490.62,
+            "started_unrouted": 107,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 97,
+            "violations": 4,
+            "score": 490.62,
+            "started_unrouted": 107,
+            "passes_run": 18,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 97,
+            "violations": 4,
+            "score": 490.62,
+            "started_unrouted": 107,
+            "passes_run": 18,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/java-stability/Issue269-caniot-tiny-arm.r1.log",
+          "bench/results/java-stability/Issue269-caniot-tiny-arm.r2.log",
+          "bench/results/java-stability/Issue269-caniot-tiny-arm.r3.log"
+        ]
+      }
     }
   ]
 }

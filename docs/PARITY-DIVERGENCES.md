@@ -186,9 +186,33 @@ ARCHITECTURE "Budgets".
 
 ## Referee
 
-(none yet)
+- **The G2.1 session overlay has no upstream counterpart.** Upstream reads a session back into
+  whatever board is loaded, because interactively that board *is* the one the session came from.
+  Our gate has to judge a file, so it reads it into
+  `fr_io::specctra::strip_session_copper(dsn)` — the DSN with exactly the copper a session
+  re-emits removed. Not a behaviour change in the product (nothing on the `-de/-do` path calls
+  it); a measurement decision, and the one the numbers in `docs/ROADMAP.md` G2.1 are produced
+  with. Effect if it is got wrong: reading into the *full* import double-inserts every
+  pre-existing trace (Issue093: 192 judged violations → 322); reading into an *emptied*
+  `(wiring …)` scope drops `(type fix)` copper no session can carry (Issue230: 5u/16v → 8u/14v,
+  i.e. three connections lost and two violations silently forgiven). Normative description:
+  `bench/README.md`, "Judging a session"; the module docs of `fr_io::specctra::overlay` carry
+  the fixture evidence.
 
 ## Rejected divergences (things we deliberately do NOT fix)
+
+- **`SesReader` counting a wire it could not insert.** `SesReader.processWireScope` calls the
+  `void` `BasicBoard.insert_trace`, which silently drops a polyline that collapses to fewer than
+  two corners (`BasicBoard.java:244-255`), then increments `wiresImported` and returns `true`
+  (`SesReader.java:293-297`); only a thrown exception reaches `errorsEncountered`. Our reader
+  used to return `false` there and charge an error, which is arguably better and is still wrong:
+  `SesImportSummary`'s counters are a contract compared against the jar's, and our own writer
+  legitimately produces such wires (§12.3's duplicate-corner elision runs in session units, so
+  two corners one session unit apart round back onto the same board coordinate —
+  `Issue039-bug-design`). Replicated, with a warning the jar does not emit. Whether the board
+  really received everything the file describes is answered by comparing boards, not counters:
+  `bench/tools/g21_judge.py`'s fidelity check does that against the router's in-process referee
+  line.
 
 - `class_class` inner-iterator pairing bug: replicated (identical clearance matrix). No fixture
   exercises it; real-world files may — revisit only with a test case.

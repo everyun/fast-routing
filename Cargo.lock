@@ -161,6 +161,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "g21-referee"
+version = "0.1.0"
+dependencies = [
+ "fr-board",
+ "fr-check",
+ "fr-core",
+ "fr-io",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"

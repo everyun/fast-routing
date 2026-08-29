@@ -337,8 +337,8 @@ impl SesFileReader<'_, '_> {
 
     /// `SesReader.processWireScope`.
     ///
-    /// Returning `true` without importing anything is upstream's shrug, and it covers two cases
-    /// that are worth telling apart in a log even though neither is an error:
+    /// Returning `true` without importing anything is upstream's shrug, and it covers three
+    /// cases that are worth telling apart in a log even though none is an error:
     ///
     /// * a `(wire <shape>)` with no `(path …)` at all — a conduction area, which comes back from
     ///   the DSN rather than from the session;
@@ -346,7 +346,20 @@ impl SesFileReader<'_, '_> {
     ///   corners or on an unknown layer (`Shape.java`, "Single-point paths are not valid traces,
     ///   skip them"). §12.3's duplicate-corner elision can *produce* a single-corner path when
     ///   every corner of a trace rounds onto the same session coordinate, so a writer/reader
-    ///   pair will hit this on genuinely sub-unit copper.
+    ///   pair will hit this on genuinely sub-unit copper;
+    /// * a path with two or more corners that still collapses in
+    ///   `insert_trace_without_cleaning` — the corners rounded together on the way *back* to
+    ///   board units, or the trace is a zero-length loop below `USER_FIXED`
+    ///   (`BasicBoard.java:244-255`). `SesReader.processWireScope` calls the `void`
+    ///   `insert_trace` and has no way to see this: it increments `wiresImported` and returns
+    ///   `true` regardless (`SesReader.java:293-297`), and only a thrown exception makes it
+    ///   report an error. The counters are `SesImportSummary`'s and are compared against the
+    ///   jar's, so they are kept upstream-exact here; the *warning* is ours, and is the thing to
+    ///   look at when a session's copper does not all survive a round trip.
+    ///
+    /// A caller that needs to know whether the board really received everything the file
+    /// describes must compare the board, not the counters — `bench/tools/g21_judge.py` does that
+    /// with the router's own in-process referee line.
     fn read_wire_scope(&mut self, net_no: i32, net_class_index: usize) -> bool {
         let mut path: Option<(i32, Vec<f64>)> = None;
         let mut fixed = FixedState::Unfixed;
@@ -420,9 +433,11 @@ impl SesFileReader<'_, '_> {
             ),
         };
         if inserted.is_none() {
-            // Fewer than two corners after rounding, or a zero-length unfixed trace.
+            // Fewer than two corners after rounding, or a zero-length unfixed trace. Upstream
+            // cannot see this and counts the wire anyway; see the doc comment.
             self.warn("SesReader.read_wire_scope: degenerate wire skipped");
-            return false;
+            self.summary.wires_imported += 1;
+            return true;
         }
         if !self.touched_nets.contains(&net_no) {
             self.touched_nets.push(net_no);
@@ -715,6 +730,53 @@ mod tests {
         assert_eq!(summary.errors_encountered, 0);
         assert_eq!(summary.wires_imported, 0);
         assert_eq!(summary.vias_imported, 0);
+    }
+
+    #[test]
+    fn a_wire_that_collapses_on_insert_is_warned_about_but_not_charged_as_an_error() {
+        // `SesReader.processWireScope` calls the `void` `insert_trace` and increments
+        // `wiresImported` unconditionally (`SesReader.java:293-297`), so a path that survives
+        // `read_polygon_path_scope` and then collapses in `insert_trace_without_cleaning`
+        // (`BasicBoard.java:244-255`) is invisible to upstream's error counter. Our writer can
+        // emit one: §12.3's duplicate-corner elision runs in session units, and two corners a
+        // session unit apart round back onto the same board coordinate. `Issue039-bug-design`
+        // is the fixture where that happens, and charging it as an error used to fail the whole
+        // board on the G2.1 gate.
+        let mut design = super::super::import(
+            b"(pcb test\n\
+              (parser (string_quote \") (space_in_quoted_tokens on))\n\
+              (resolution um 10)\n\
+              (structure\n\
+                (layer F.Cu (type signal))\n\
+                (layer B.Cu (type signal))\n\
+                (boundary (rect pcb 0 0 10000 10000))\n\
+                (rule (width 200) (clearance 200))\n\
+              )\n\
+              (library)\n\
+              (network (net N (pins )))\n\
+              (wiring)\n\
+            )",
+        )
+        .expect("synthetic board should import");
+        let library = SesLibrary::from_design(&design);
+        let target = SesTarget::for_design(&mut design, &library);
+        let summary = read_session(
+            b"(session \"test.ses\"\n\
+              (routes (network_out (net N (wire (path F.Cu 100 500 500 500 500)))))\n\
+            )",
+            target,
+        )
+        .expect("a well-formed session should parse");
+        assert_eq!(summary.errors_encountered, 0, "{:?}", summary.warnings);
+        assert_eq!(summary.wires_imported, 1);
+        assert!(
+            summary
+                .warnings
+                .iter()
+                .any(|warning| warning.contains("degenerate wire skipped")),
+            "{:?}",
+            summary.warnings
+        );
     }
 
     #[test]

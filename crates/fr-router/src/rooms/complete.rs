@@ -111,6 +111,9 @@ impl AutorouteEngine<'_> {
             &mut obstacles,
             &mut own_net,
         );
+        // `:598` — the leaves are sorted before the carve loop, and with the
+        // *completion* comparator, not the neighbour one.
+        self.sort_obstacles_for_completion(&mut obstacles);
 
         for obstacle in obstacles {
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {

@@ -21,6 +21,7 @@ data rather than from this document.
 | uncapped | 05:13–08:33 | `-mp 20`, `timeout 7200`, **4 concurrent workers** | `bench/results/java-uncapped/*.log` |
 | SerialGC | 05:03–05:22 | `-XX:+UseSerialGC -mp 20`, 600 s cap, serial | `bench/results/java-experiments/*.serialgc.log` |
 | DEBUG console | 05:27–05:39 | `-Dfreerouting.logging.console.level=DEBUG -mp 20` | `bench/results/java-experiments/*.profile.log` |
+| 3-run stability | 2026-08-29 03:30–08:0x | the capped baseline's command line, three times per fixture, serial, `nice -n 15` | `bench/results/java-stability/<stem>.r{1,2,3}.log` |
 
 Same jar throughout: `/tmp/frbase/freerouting-2.3.0.jar` (v2.3.0, build-date
 2026-08-07), same JDK (Homebrew OpenJDK 26.0.2), same machine.
@@ -349,3 +350,46 @@ What it means for the numbers here:
 `bench/analysis/test_campaign.py::test_no_uncapped_run_executed_a_fanout_stage`
 pins the observation so a re-run that changes it fails loudly instead of
 quietly invalidating this document.
+
+## 6. 3-run stability — which boards may be judged comparatively
+
+M0.5's "record 3-run stability per fixture", run as the capped baseline's own
+command line three times over each of the 46 boards, serially, `nice -n 15`:
+
+```sh
+for f in /tmp/freerouting-upstream/fixtures/*.dsn; do
+  b=$(basename "$f" .dsn)
+  for i in 1 2 3; do
+    nice -n 15 timeout 300 java -Djava.awt.headless=true \
+      -jar /tmp/frbase/freerouting-2.3.0.jar \
+      -de "$f" -do "bench/results/java-stability/$b.r$i.ses" -mp 20 -l en \
+      > "bench/results/java-stability/$b.r$i.log" 2>&1
+  done
+done
+```
+
+`manifest.parse_stability_run` / `summarise_stability` fold the logs into
+`fixtures[].stability`; the classification is defined in `bench/README.md`
+(manifest question 4) and is what ROADMAP G2.1 reads to choose a gate.
+
+All 46 fixtures swept, 138 runs: **32 `stable`, 14 `no_result`, 0 `unstable`**
+(`python3 bench/analysis/campaign.py --section stability`). No board changed its
+answer between runs — every fixture that reached a final score reached the same
+`(unrouted, violations)` all three times — so every one of the 29
+`java_finished` boards is comparative-gate eligible. That is a real result and
+not a foregone one: the jar's batch loop is wall-clock-budgeted, so a board that
+finishes near the cap could easily have landed on different passes in different
+runs. None did, on this machine, at this load — which is also the caveat, since
+a busier machine is exactly the condition under which the budget would bite.
+
+The rest split as the other two campaigns already implied: boards Java is
+killed on at 300 s report nothing at all, three times over, and `Issue006`
+never starts a routing stage because it is not a board. Both are `no_result` —
+recorded as "the runs agree there is nothing to report" rather than as a
+missing measurement, because that distinction is exactly what the G2.1
+anti-degeneracy guard spends (`bench/README.md`, "Judging a session").
+
+The one number worth keeping from a `no_result` log is Java's own
+`started with N unrouted` line, which survives even when the run is killed:
+paired with a final count from the same tool it is the only self-consistent way
+to ask "did the reference make progress on this board?".
