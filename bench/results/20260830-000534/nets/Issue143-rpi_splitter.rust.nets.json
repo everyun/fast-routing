@@ -1,0 +1,37 @@
+{
+ "D+": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 29.1826,
+  "wire_length_raw": 2918259.7677
+ },
+ "D-": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 26.9897,
+  "wire_length_raw": 2698965.8326
+ },
+ "N$5": {
+  "pins": 3,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 39.0847,
+  "wire_length_raw": 3908470.7792
+ },
+ "VBUS": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "VCC": {
+  "pins": 2,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 12.5268,
+  "wire_length_raw": 1252680.9972
+ }
+}

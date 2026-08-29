@@ -1,0 +1,170 @@
+{
+ "+3V3": {
+  "pins": 3,
+  "wire_count": 2,
+  "via_count": 0,
+  "wire_length_mm": 21.5187,
+  "wire_length_raw": 215186.562
+ },
+ "/I2C_SCL": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 29.6513,
+  "wire_length_raw": 296512.562
+ },
+ "/I2C_SDA": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 29.2983,
+  "wire_length_raw": 292982.5979
+ },
+ "/MIPI_CSI_CAM_PWDN": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 20.0641,
+  "wire_length_raw": 200641.1593
+ },
+ "/MIPI_CSI_CAM_nRST": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "/MIPI_CSI_CLK_N": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 21.7956,
+  "wire_length_raw": 217956.1146
+ },
+ "/MIPI_CSI_CLK_P": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 21.8785,
+  "wire_length_raw": 218784.5417
+ },
+ "/MIPI_CSI_D0_N": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 25.9959,
+  "wire_length_raw": 259958.5072
+ },
+ "/MIPI_CSI_D0_P": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 26.4128,
+  "wire_length_raw": 264127.815
+ },
+ "/MIPI_CSI_D1_N": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 27.4626,
+  "wire_length_raw": 274626.3457
+ },
+ "/MIPI_CSI_D1_P": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 27.2958,
+  "wire_length_raw": 272958.3119
+ },
+ "/MIPI_CSI_MCLK": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 2,
+  "wire_length_mm": 26.8172,
+  "wire_length_raw": 268171.5519
+ },
+ "GND": {
+  "pins": 22,
+  "wire_count": 30,
+  "via_count": 2,
+  "wire_length_mm": 148.708,
+  "wire_length_raw": 1487079.969
+ },
+ "Net-(J2-PadA13)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadA14)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadA16)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadA17)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB10)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB16)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB17)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB5)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB6)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB8)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "Net-(J2-PadB9)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ }
+}

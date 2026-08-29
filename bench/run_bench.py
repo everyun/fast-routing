@@ -58,9 +58,19 @@ DEFAULT_MANIFEST = fixture_manifest.DEFAULT_MANIFEST
 TIME_BIN = "/usr/bin/time"  # `-l` prints max RSS in BYTES on this macOS (verified)
 
 # How far under `--timeout` fr-cli's own `--job-timeout` is set. The gap has to
-# cover the referee pass and the session writer on the largest fixture in the
-# suite; ten seconds is roughly four times the worst measured pair.
-RUST_JOB_TIMEOUT_MARGIN_S = 10.0
+# cover everything fr-cli still does after its own budget expires: restore the
+# best board, run the referee, and write the session.
+#
+# It was 10 s, chosen when the worst measured pair was ~2.5 s. M3 wave 1 blew
+# through it — the post-deadline tail on `Issue209-split10` measured 10.9 s, so
+# the process was still writing its SES when the harness cap fired and the run
+# lost the board to a SIGKILL for no routing reason. 15 s restores the ~1.4x
+# headroom the constant is supposed to carry; the harness still kills at
+# `--timeout` if the budget is not honoured, and that is then a real failure.
+#
+# `bench/tools/g21_judge.py` reads the resulting `wall_s`, so widening this
+# shortens the routing budget by 5 s rather than lengthening the run.
+RUST_JOB_TIMEOUT_MARGIN_S = 15.0
 
 # results.json layout: {"meta": {...}, "records": [...]}. Bumped whenever the
 # meta block or a record field changes meaning; readers accept the pre-schema

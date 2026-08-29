@@ -124,6 +124,18 @@ pub fn locate(
     // them in the same transaction as the new copper
     // (`AutorouteEngine.java:221-239`).
     located.ripped_items.clone_from(&connection.ripped_items);
+    if crate::rooms::trace::is_enabled() {
+        crate::rooms::trace::located(
+            engine.ctrl.net_no,
+            hops.len(),
+            located
+                .connection_items
+                .iter()
+                .map(|item| item.corners.len())
+                .sum(),
+            located.connection_items.len(),
+        );
+    }
     Ok(located)
 }
 

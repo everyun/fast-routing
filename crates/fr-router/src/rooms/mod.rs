@@ -40,6 +40,7 @@ pub mod complete;
 pub mod complete45;
 pub mod neighbours;
 pub mod neighbours45;
+pub mod trace;
 
 /// Index of a room in [`RoomArena`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

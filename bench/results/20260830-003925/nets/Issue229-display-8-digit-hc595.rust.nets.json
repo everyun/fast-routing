@@ -1,0 +1,212 @@
+{
+ "/A": {
+  "pins": 9,
+  "wire_count": 21,
+  "via_count": 1,
+  "wire_length_mm": 128.7208,
+  "wire_length_raw": 1287207.7349
+ },
+ "/B": {
+  "pins": 9,
+  "wire_count": 13,
+  "via_count": 1,
+  "wire_length_mm": 126.5474,
+  "wire_length_raw": 1265473.8151
+ },
+ "/C": {
+  "pins": 9,
+  "wire_count": 11,
+  "via_count": 1,
+  "wire_length_mm": 127.4548,
+  "wire_length_raw": 1274547.5345
+ },
+ "/D": {
+  "pins": 9,
+  "wire_count": 11,
+  "via_count": 0,
+  "wire_length_mm": 133.1063,
+  "wire_length_raw": 1331062.5345
+ },
+ "/E": {
+  "pins": 9,
+  "wire_count": 14,
+  "via_count": 0,
+  "wire_length_mm": 130.7838,
+  "wire_length_raw": 1307838.3028
+ },
+ "/F": {
+  "pins": 9,
+  "wire_count": 14,
+  "via_count": 2,
+  "wire_length_mm": 121.2963,
+  "wire_length_raw": 1212963.4844
+ },
+ "/G": {
+  "pins": 9,
+  "wire_count": 11,
+  "via_count": 0,
+  "wire_length_mm": 124.8696,
+  "wire_length_raw": 1248696.2539
+ },
+ "/K1": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 21.857,
+  "wire_length_raw": 218569.5122
+ },
+ "/K2": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 41.4252,
+  "wire_length_raw": 414251.5122
+ },
+ "/K3": {
+  "pins": 2,
+  "wire_count": 6,
+  "via_count": 1,
+  "wire_length_mm": 48.527,
+  "wire_length_raw": 485269.5122
+ },
+ "/K4": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 81.5662,
+  "wire_length_raw": 815661.7684
+ },
+ "/K5": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 21.3309,
+  "wire_length_raw": 213309.0
+ },
+ "/K6": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 32.7609,
+  "wire_length_raw": 327609.0
+ },
+ "/K7": {
+  "pins": 2,
+  "wire_count": 2,
+  "via_count": 1,
+  "wire_length_mm": 44.1909,
+  "wire_length_raw": 441909.0
+ },
+ "/K8": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 55.2489,
+  "wire_length_raw": 552489.2561
+ },
+ "/P": {
+  "pins": 9,
+  "wire_count": 11,
+  "via_count": 3,
+  "wire_length_mm": 127.191,
+  "wire_length_raw": 1271909.5356
+ },
+ "GND": {
+  "pins": 8,
+  "wire_count": 21,
+  "via_count": 3,
+  "wire_length_mm": 92.2701,
+  "wire_length_raw": 922701.4855
+ },
+ "Net-(K1-Pad3)": {
+  "pins": 2,
+  "wire_count": 6,
+  "via_count": 2,
+  "wire_length_mm": 46.6285,
+  "wire_length_raw": 466284.7127
+ },
+ "Net-(K1-Pad4)": {
+  "pins": 3,
+  "wire_count": 8,
+  "via_count": 2,
+  "wire_length_mm": 70.1793,
+  "wire_length_raw": 701793.3948
+ },
+ "Net-(K1-Pad5)": {
+  "pins": 3,
+  "wire_count": 14,
+  "via_count": 2,
+  "wire_length_mm": 80.891,
+  "wire_length_raw": 808909.9648
+ },
+ "Net-(R1-Pad1)": {
+  "pins": 2,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 22.6382,
+  "wire_length_raw": 226381.7684
+ },
+ "Net-(R2-Pad1)": {
+  "pins": 2,
+  "wire_count": 3,
+  "via_count": 0,
+  "wire_length_mm": 5.347,
+  "wire_length_raw": 53469.5122
+ },
+ "Net-(R3-Pad1)": {
+  "pins": 2,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 13.6335,
+  "wire_length_raw": 136335.063
+ },
+ "Net-(R4-Pad1)": {
+  "pins": 2,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 16.2955,
+  "wire_length_raw": 162955.2561
+ },
+ "Net-(R5-Pad1)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 19.6889,
+  "wire_length_raw": 196889.2561
+ },
+ "Net-(R6-Pad1)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 15.8789,
+  "wire_length_raw": 158789.2561
+ },
+ "Net-(R7-Pad1)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 9.5289,
+  "wire_length_raw": 95289.2561
+ },
+ "Net-(R8-Pad1)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 6.0909,
+  "wire_length_raw": 60909.0
+ },
+ "Net-(U1-Pad9)": {
+  "pins": 2,
+  "wire_count": 7,
+  "via_count": 0,
+  "wire_length_mm": 22.5258,
+  "wire_length_raw": 225257.9508
+ },
+ "VCC": {
+  "pins": 8,
+  "wire_count": 19,
+  "via_count": 2,
+  "wire_length_mm": 108.4375,
+  "wire_length_raw": 1084375.0554
+ }
+}

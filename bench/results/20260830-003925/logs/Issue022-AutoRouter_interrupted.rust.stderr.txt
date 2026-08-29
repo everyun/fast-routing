@@ -1,0 +1,36 @@
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+55 of 552 connections still incomplete
+job budget spent — the session above is the best board the run held (55 of 552 connections incomplete)
+      140.11 real       139.12 user         0.49 sys
+            49528832  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                6944  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+               56565  involuntary context switches
+       1949031016736  instructions retired
+        494841150899  cycles elapsed
+            45580696  peak memory footprint

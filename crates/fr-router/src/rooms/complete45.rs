@@ -28,6 +28,19 @@
 //! not fewer and larger: an obstacle whose exact simplex cut would leave the
 //! room alone still gets one of eight fixed half planes taken out of it.
 //!
+//! Re-measured in M3 against the lab jar's own decomposition, with the
+//! `FR_ROOM_TRACE` / `bench/tools/room_stats.py` harness and after the
+//! `divide_large_room` contained-shape fix in [`complete`](super::complete):
+//! on Issue026 at `-mp 1` this mode builds **3.73×** the jar's rooms against
+//! [`Tiling45Mode::Off`]'s 5.36×, and its located chains carry **1.52×** the
+//! jar's corners against `Off`'s 1.59× — and the *opening* of a connection is
+//! bit-identical to the jar's, room bounding box for room bounding box (net 19
+//! agrees on its first sixteen completed rooms before the door visit order
+//! parts company). That is the parity evidence the A/B never had: the octagon
+//! completion is upstream's algorithm on a 45° board and reproduces it exactly
+//! until something *else* diverges. It still does not ship by default, because
+//! the gate score, not the parity, decides that.
+//!
 //! The win in the chain is the *other* half, the octagon door calculation in
 //! [`neighbours45`](super::neighbours45), which is why
 //! [`Tiling45Mode::Doors`] exists and why this module is behind
@@ -350,14 +363,16 @@ impl AutorouteEngine<'_> {
                 oct: Some(room.shape),
             })
             .collect();
+        // `:226-237`: every piece is re-octagonized, contained shape included.
+        // An empty contained shape stays empty — `simplex_octagon` answers
+        // `IntOctagon::EMPTY` for it — which is what makes a section that
+        // misses the contained shape die at its next completion instead of
+        // being kept alive as a room equal to its own contained shape.
         self.divide_large_rooms(simplex_form)
             .into_iter()
             .filter_map(|piece| {
                 let shape = simplex_octagon(&piece.shape)?;
-                if shape.dimension() != 2 {
-                    return None;
-                }
-                let contained = simplex_octagon(&piece.contained).unwrap_or(shape);
+                let contained = simplex_octagon(&piece.contained)?;
                 Some(Room45 { shape, contained })
             })
             .collect()

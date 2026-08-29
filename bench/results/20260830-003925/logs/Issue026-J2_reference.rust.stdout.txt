@@ -1,0 +1,7 @@
+Imported /home/khang/Workspace/Dev/dynim_imx8_camera_adapters/adapters/e-con_STEEReoCAM_Nano_FFC_MiniSAS_Adapter/e-con_STEEReoCAM_Nano_FFC_MiniSAS_Adapter.dsn in 0.00s: 2 layers, 149 items (59 pins, 54 traces, 14 vias)
+Router: 1 passes, 23 routed, 16 failed, 3 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Optimizer: 1 passes, 2 of 42 items improved, score 909.08 -> 999.99, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 33 connections incomplete, score 999.99/1000
+Total 2.59s
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260830-003925/ses/Issue026-J2_reference.rust.ses

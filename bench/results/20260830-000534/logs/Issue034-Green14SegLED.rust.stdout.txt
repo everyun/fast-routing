@@ -1,0 +1,7 @@
+Imported C:\Data\DEV\KiCad\Green14segLED\Green14SegLED\Green14SegLED.dsn in 0.00s: 2 layers, 1190 items (278 pins, 247 traces, 48 vias)
+Router: 1 passes, 121 routed, 290 failed, 263 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Optimizer: 1 passes, 7 of 175 items improved, score 857.13 -> 999.98, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 147 connections incomplete, score 999.98/1000
+Total 70.59s
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260830-000534/ses/Issue034-Green14SegLED.rust.ses

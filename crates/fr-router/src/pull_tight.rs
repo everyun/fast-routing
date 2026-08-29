@@ -27,7 +27,11 @@
 //!   region's trace ids and revalidates each against the store before touching
 //!   it, instead of upstream's break-out-of-a-live-`Collection` dance
 //!   (`:118-127`). Spec §11 "Iterator invalidation discipline" prescribes this,
-//!   and it is what makes the driver safe when a move removes an item.
+//!   and it is what makes the driver safe when a move removes an item. The
+//!   revalidation is **not** about id churn — `change` keeps the id — but about
+//!   the normalization that follows every move: it can split a trace into new
+//!   ids or delete one that collapsed, and the §6.4 branch removes and
+//!   re-inserts outright.
 //! * **The binding-constraint cache** (spec §11, "`check_trace_shape` dominates
 //!   runtime"). Every binary search re-queries the tree from scratch upstream;
 //!   here the first obstacle that rejected a candidate is remembered as
@@ -36,12 +40,16 @@
 //!   blocker, so the cached tile answers most rejections without a traversal.
 //!   The cache is only ever consulted to prove a *rejection*: an acceptance
 //!   always costs the full query, so it cannot change the result.
-//! * **`change(new_polyline)` is remove + re-insert** rather than upstream's
-//!   in-place `search_tree_manager.change_entries` leaf reuse
-//!   (`PolylineTrace.java:942-1009`). That is an allocation optimization, not a
-//!   semantic: upstream's own fork-smoothing path re-inserts the same way
-//!   (`PullTightAlgo.java:376-381`). Board-visible result is identical; only the
-//!   item id changes, which is why the driver's worklist is id-revalidated.
+//! * **`change(new_polyline)` is in place**, upstream's
+//!   `search_tree_manager.change_entries` leaf reuse
+//!   (`PolylineTrace.java:942-1009`) — see
+//!   [`Board::change_trace_polyline`](fr_board::board::Board::change_trace_polyline).
+//!   The item id survives the move, the leaves and tile shapes of every segment
+//!   the move did not touch are reused, and the trace's journal pre-image is
+//!   cloned once per transaction rather than once per move. This is the call the
+//!   whole family's cost lands on: a move edits two or three lines of a polyline
+//!   that routinely has thirty, and re-offsetting the other twenty-seven was the
+//!   port's largest single performance debt.
 //! * **Fork/end smoothing (`smoothen_end_corners_at_trace`, §6.4) is ported
 //!   for both flavors**, including the improvement round's
 //!   `insert_trace_without_cleaning` + `split_traces` + `normalize_traces`
@@ -59,7 +67,7 @@ use std::time::{Duration, Instant};
 
 use fr_board::board::Board;
 use fr_board::clearance::ClearanceSource;
-use fr_board::item::{FixedState, ItemId, ItemKind};
+use fr_board::item::{ItemId, ItemKind};
 use fr_board::net_nos::NetNos;
 use fr_board::search_tree::TreeEntry;
 use fr_board::shape::{AngleRestriction, TileShape};
@@ -226,7 +234,6 @@ struct TracePrep {
     half_width: i32,
     polyline: Polyline,
     clearance_class: i32,
-    fixed_state: FixedState,
     nets: NetNos,
 }
 
@@ -476,6 +483,9 @@ impl<'b> PullTightAlgo<'b> {
                 // The explicit worklist: snapshot the ids, then revalidate each
                 // one before use. Upstream iterates a live collection and breaks
                 // out of it whenever an item may have been removed (`:121-127`).
+                // `change` itself is in place and id-preserving; what still
+                // invalidates a snapshot is the normalization after it (split,
+                // combine, drop) and the §6.4 branch's re-insert.
                 let mut candidates = Vec::new();
                 self.board.overlapping_items(
                     &TileShape::Simplex(region.to_simplex()),
@@ -495,8 +505,8 @@ impl<'b> PullTightAlgo<'b> {
                     if self.is_stop_requested() {
                         return anything_changed;
                     }
-                    // Liveness: a previous move may have removed, split or
-                    // replaced this trace.
+                    // Liveness: a previous move's normalization may have
+                    // removed or split this trace.
                     if !self
                         .board
                         .store()
@@ -544,10 +554,12 @@ impl<'b> PullTightAlgo<'b> {
     /// `PolylineTrace.pull_tight` (`:827-875`) — the guards, the optimize call,
     /// and `change(new_lines)` on success.
     ///
-    /// Returns the trace's id after the change (a new id, see the module docs),
-    /// or `None` when nothing was changed. The trace may be **gone** on success
-    /// — normalization can delete a piece that collapsed — in which case the
-    /// returned id is not in the store.
+    /// Returns the trace's id after the change — **the same id**, because
+    /// `change` is in place — or `None` when nothing was changed. The trace may
+    /// be **gone** on success: normalization deletes a piece that collapsed, and
+    /// splits it into new ids when it did not. So the returned id still has to
+    /// be looked up before use, it just never *silently* denotes a different
+    /// object than it did before the call.
     ///
     /// The `swap_connection_to_pin` / `correct_connection_to_pin` ladder
     /// (`:855-873`) is gated on `rules.pin_edge_to_turn_dist() > 0` upstream and
@@ -556,35 +568,30 @@ impl<'b> PullTightAlgo<'b> {
     /// insertion so this path stays off exactly when upstream turns it off.
     pub fn trace_pull_tight(&mut self, id: ItemId, changed_area: &mut ChangedArea) -> Option<ItemId> {
         let prepared = self.prepare_trace(id)?;
-        let TracePrep {
-            layer,
-            half_width,
-            polyline,
-            clearance_class,
-            fixed_state,
-            nets,
-        } = prepared;
+        let TracePrep { layer, polyline, .. } = prepared;
 
         let new_polyline = self.pull_tight_flavor(&polyline, changed_area)?;
 
         // `change(new_polyline)` (`PolylineTrace.java:942-1009`): swap the
-        // geometry, then normalize against the changed-area clip.
-        self.board.remove_item(id);
-        let new_id = self.board.insert_trace_without_cleaning(
-            new_polyline,
-            layer,
-            half_width,
-            nets,
-            clearance_class,
-            fixed_state,
-        )?;
+        // geometry in place — reusing the tree leaves of every segment the move
+        // did not touch — then normalize against the changed-area clip.
+        //
+        // The optimizer's whole job is small local edits to long polylines, so
+        // this is the single call the family's cost is decided by; see
+        // [`Board::change_trace_polyline`] for what it reuses and why.
+        if !self.board.change_trace_polyline(id, new_polyline) {
+            return None;
+        }
         // `change` ends in `this.normalize(clip_shape)` and nothing else
         // (`PolylineTrace.java:1004`); `normalize` itself splits and then
         // combines each piece, so an extra `combine_trace` here would be a
-        // second, unsynchronised merge pass.
+        // second, unsynchronised merge pass. It is per *trace*, not per net —
+        // the whole-net `normalize_traces` upstream reaches for lives in
+        // fork smoothing alone (`PullTightAlgo.java:391`), where an end corner
+        // really has moved onto another trace.
         let clip = changed_area.area(layer);
-        self.board.normalize_trace(new_id, Some(&clip));
-        Some(new_id)
+        self.board.normalize_trace(id, Some(&clip));
+        Some(id)
     }
 
     /// `PullTightAlgo.get_instance`'s flavor dispatch (`:71-85`).
@@ -642,7 +649,6 @@ impl<'b> PullTightAlgo<'b> {
             half_width: trace.half_width,
             polyline: trace.polyline.clone(),
             clearance_class: item.clearance_class,
-            fixed_state: item.fixed_state,
             nets,
         };
 

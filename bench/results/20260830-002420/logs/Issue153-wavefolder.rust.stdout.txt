@@ -1,0 +1,7 @@
+Imported /Users/tim/Projekte/wavefolder.dsn in 0.00s: 2 layers, 1104 items (115 pins, 122 traces, 15 vias)
+Router: 1 passes, 24 routed, 53 failed, 48 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Optimizer: 3 passes, 13 of 100 items improved, score 916.04 -> 965.42, stopped on below improvement threshold
+Referee: 9 clearance violations, 1 of 81 connections incomplete, score 965.42/1000
+Total 11.49s
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260830-002420/ses/Issue153-wavefolder.rust.ses

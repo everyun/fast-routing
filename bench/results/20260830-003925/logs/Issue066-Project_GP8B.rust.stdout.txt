@@ -1,0 +1,6 @@
+Imported C:\Users\guill\Desktop\Creation\Github\GP8B\Project_GP8B.dsn in 0.01s: 4 layers, 2700 items (1032 pins, 279 traces, 59 vias)
+Router: 1 passes, 102 routed, 124 failed, 42 ripped, 0 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 23 clearance violations, 637 of 759 connections incomplete, score 154.68/1000
+Total 140.03s
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260830-003925/ses/Issue066-Project_GP8B.rust.ses

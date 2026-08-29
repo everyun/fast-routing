@@ -298,23 +298,43 @@ impl AutorouteEngine<'_> {
         if sections.len() <= 1 {
             return rooms;
         }
-        sections
+        // `:1078-1087` verbatim: the contained shape of a section is
+        // `section ∩ contained` and nothing else. A section that misses the
+        // contained shape keeps an **empty** contained shape and dies where
+        // upstream lets it die — `restrain_shape` bails on an empty contained
+        // shape (`:689-693`), so the section is dropped the first time it is
+        // re-completed, and `complete_expansion_room` re-completes every
+        // candidate but the first.
+        //
+        // Substituting the section for an empty intersection, which this used
+        // to do, is not a harmless default: in the 45° chain the substituted
+        // room is immediately equal to its own contained shape and the
+        // endless-loop guard (`ShapeSearchTree45Degree.java:216-218`) deletes
+        // it, so the very split this function exists to make — *"otherwise the
+        // maze search algorithm gets problems with vias"* — collapsed back to
+        // one room. In the any-angle chain it did the opposite and kept
+        // sections upstream discards. There is no `dimension() == 2` filter
+        // either: `try_remove_edge` gates on `new_rooms.len() != 1`
+        // (`SortedRoomNeighbours.java:360-364`), so dropping a section here
+        // silently changes an edge-removal verdict.
+        let divided: Vec<CompletedShape> = sections
             .into_iter()
-            .filter(|section| section.dimension() == 2)
             .map(|section| {
                 let contained = room.contained.intersection(&section);
-                let contained = if contained.is_empty() {
-                    section.clone()
-                } else {
-                    contained
-                };
                 CompletedShape {
                     shape: section,
                     contained,
                     oct: None,
                 }
             })
-            .collect()
+            .collect();
+        if crate::rooms::trace::is_enabled() {
+            crate::rooms::trace::divide(
+                divided.len(),
+                divided.iter().filter(|s| !s.contained.is_empty()).count(),
+            );
+        }
+        divided
     }
 
     /// `AutorouteEngine.complete_expansion_room` (`:394-477`).
@@ -358,6 +378,15 @@ impl AutorouteEngine<'_> {
         } else {
             Some(&shape)
         };
+        if crate::rooms::trace::is_enabled() {
+            crate::rooms::trace::input(
+                self.ctrl.net_no,
+                layer,
+                &shape,
+                &contained,
+                from_door_shape.as_ref(),
+            );
+        }
         let completed = self.complete_shape(
             shape_arg,
             &contained,
@@ -419,6 +448,10 @@ impl AutorouteEngine<'_> {
         }
         self.rooms.complete.push(room_id);
         self.insert_room_in_tree(room_id);
+        if crate::rooms::trace::is_enabled() {
+            let shape = self.rooms.room(room_id).shape.clone();
+            crate::rooms::trace::added(self.ctrl.net_no, layer, &shape);
+        }
         Some(room_id)
     }
 
@@ -581,6 +614,54 @@ mod tests {
             }
         }
         assert!(total > 0.0);
+    }
+
+    /// `divide_large_room` (`ShapeSearchTree.java:1078-1087`) gives each section
+    /// `section ∩ contained` and nothing else: the sections the contained shape
+    /// reaches keep a clipped copy of it, the rest keep an **empty** contained
+    /// shape.
+    ///
+    /// Substituting the section itself for an empty intersection reads like a
+    /// harmless default and is not: the contained shape is what
+    /// `restrain_shape` measures its cut line against and what the 45° chain's
+    /// endless-loop guard (`ShapeSearchTree45Degree.java:216-218`) compares the
+    /// room to, so a section carrying *itself* as its contained shape is
+    /// deleted on the spot by that guard — the split this function exists to
+    /// make collapses back to a single room.
+    #[test]
+    fn a_divided_section_that_misses_the_contained_shape_keeps_an_empty_one() {
+        let fixture = TestFixture::empty_two_layer();
+        let mut engine = fixture.engine();
+        // Well inside one section: the board is 6000 × 3000 and the sections
+        // are 3000 wide, so a contained shape on the origin would straddle the
+        // split and reach both.
+        let contained = IntBox::new(1000, 0, 1010, 10).to_simplex();
+        let completed = engine.complete_shape(None, &contained, 0, None, None);
+        assert!(completed.len() > 1, "a board-sized room must be divided");
+
+        let with_contained = completed
+            .iter()
+            .filter(|section| !section.contained.is_empty())
+            .count();
+        assert!(
+            with_contained >= 1 && with_contained < completed.len(),
+            "the board-sized contained shape reaches some sections, not all: \
+             {with_contained} of {}",
+            completed.len()
+        );
+        for section in &completed {
+            // The signature of the old fallback: a section that *is* its own
+            // contained shape.
+            assert!(
+                section.contained.is_empty()
+                    || section.contained.area() < section.shape.area(),
+                "a section must never carry itself as its contained shape"
+            );
+            assert!(
+                section.contained.is_empty() || section.contained.area() <= contained.area(),
+                "a section's contained shape is the original clipped, nothing more"
+            );
+        }
     }
 
     #[test]

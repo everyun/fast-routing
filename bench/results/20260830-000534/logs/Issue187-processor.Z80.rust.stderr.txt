@@ -1,0 +1,21 @@
+warning: Network.insert_net_class: clearance class not found at 'kicad_default'
+warning: Network.insert_net_class: clearance class not found at 'G_PLCC'
+warning: Network.insert_net_class: clearance class not found at 'Power'
+        1.15 real         1.07 user         0.00 sys
+            35192832  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                2332  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+                 565  involuntary context switches
+         18310890702  instructions retired
+          3812339730  cycles elapsed
+            33587584  peak memory footprint

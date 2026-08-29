@@ -22,7 +22,7 @@
 //! is the obvious replacement — but it cannot be built correctly from inside
 //! this crate. It has to be invalidated on *every* mutation of a sweepable item,
 //! and two of the board's mutations move an item's key **in place, keeping its
-//! id**: [`Board::replace_trace_polyline`] (pull-tight, which runs after every
+//! id**: [`Board::change_trace_polyline`] (pull-tight, which runs after every
 //! routed connection) and `Board::translate_drill_item` (via shove). An index
 //! that watches ids alone would silently hand out stale keys after either. The
 //! board does track exactly the right set — `Board::touched`, the transaction's
@@ -31,7 +31,7 @@
 //! to keep the transcription, keep it allocation-free, and pin the visit order
 //! it has to reproduce (`tests::the_sweep_order_is_the_sorted_order_of_the_keys`).
 //!
-//! [`Board::replace_trace_polyline`]: fr_board::board::Board
+//! [`Board::change_trace_polyline`]: fr_board::board::Board
 //!
 //! # The order
 //!

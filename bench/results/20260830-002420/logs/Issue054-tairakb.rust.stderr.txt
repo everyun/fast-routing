@@ -1,0 +1,20 @@
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+1 of 264 connections still incomplete
+       68.79 real        59.29 user         1.34 sys
+            29294592  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+                1975  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+              179530  involuntary context switches
+        790374230695  instructions retired
+        214638949316  cycles elapsed
+            20496792  peak memory footprint

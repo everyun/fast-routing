@@ -1,12 +1,13 @@
 # bench/tools/ — measurement contracts and the differential harness
 
-Four data contracts feed the benchmark and gate machinery. This file is their
+Five data contracts feed the benchmark and gate machinery. This file is their
 normative definition; anything that emits or parses them must match it.
 
 | contract | producer | consumer | gate |
 |---|---|---|---|
 | `FRLAB …` | the instrumented **lab jar**, `/tmp/fr-lab-release/freerouting-lab.jar` | `frlab_parse.py` | M2a–c settle order |
 | `FRMETRIC …` | our router, via the **`fr-metrics`** crate | `frlab_parse.py`, `run_bench.py` | M2/M3 counters |
+| `FRROOM …` | our router, `fr-router`'s `rooms::trace` (`FR_ROOM_TRACE`) | `room_stats.py` | room-decomposition parity (diagnostic) |
 | **golden-dump JSON** (`fast-routing.golden-dump/1`) | `fr_io::golden_dump` (CLI: the `golden_emit` example) and the Java-dump adapter | `golden_compare.py` | **G1.0 / G1.1 import parity** |
 | **referee JSON** (one object per judged board) | `g21_referee/`, a workspace member — `cargo build --release -p g21-referee` | `g21_judge.py` | **G2.1 / G2.4 quality** |
 
@@ -195,6 +196,58 @@ The one non-JSON `FRMETRIC` record, deliberately identical in shape to
 It is a diagnostic mode — one formatted, buffered line per expansion. Never
 benchmark with it on, and always let the process exit cleanly (or call
 `fr_metrics::settle_trace::flush()`) so the tail of the buffer reaches disk.
+
+---
+
+## The `FRROOM` contract (`fr-router`) and the room-decomposition diff
+
+The settle trace answers *"did we visit the same frontier elements?"*. It cannot
+answer *"is the free space cut into the same tiles?"* — and every corner-density
+and pull-tight number is a function of that second question, because the located
+chain puts a corner down per room it crosses.
+
+`crates/fr-router/src/rooms/trace.rs` is the room-level analogue, off unless
+`FR_ROOM_TRACE` is set (same three-valued sink rule as `FR_SETTLE_TRACE`). Five
+records, each one line, each mirroring a lab-jar TRACE record:
+
+| ours | lab jar (`--logging.console.level=TRACE`) |
+|---|---|
+| `FRROOM input, net=, layer=, room_bounds=, contained_bounds=, from_door_bounds=` | `COMPLETE_ROOM input, …` (`AutorouteEngine.java:394`) |
+| `FRROOM added, net=, layer=, bounds=, area=, corners=` | `COMPLETE_ROOM added, …` (`AutorouteEngine.java:497`) |
+| `FRROOM located, net=, hops=, corners=, items=` | a run of `compare_trace_insert_segment_raw … i=` (`InsertFoundConnectionAlgo.java:161`) |
+| `FRROOM edge, net=, layer=, candidates=, old_area=, new_area=, applied=` | `ROOM_EDGE_REMOVE start` / `… applied` (`SortedRoomNeighbours.java:348`) |
+| `FRROOM divide, sections=, with_contained=` | — (upstream has no trace here) |
+
+The lab jar's TRACE level is *loud* — ~600k lines and ~5× the wall clock on
+Issue034 — but it carries `COMPLETE_ROOM`, `ROOM_DOOR`, `ROOM_EDGE_REMOVE`,
+`RAW_SECTION`, `COMPLETE_SHAPE_BLOCKED` and `BACKTRACK_*`, which is far more
+than `-Dfrlab.settle_trace=1` gives. `BACKTRACK_START` / `BACKTRACK_STEP` are
+hard-gated to `net == 98` in the release source
+(`LocateFoundConnectionAlgo.java:203`), so do not plan a comparison around them.
+
+`room_stats.py` reads either spelling into the same table:
+
+```sh
+# Java side
+nice -n 10 java -Djava.awt.headless=true -jar /tmp/fr-lab-release/freerouting-lab.jar \
+    --logging.console.level=TRACE -de …/Issue034-Green14SegLED.dsn \
+    -do /tmp/java034.ses -mp 1 -l en > /tmp/java034.log 2>&1
+
+# our side
+FR_ROOM_TRACE=/tmp/ours034.rooms target/release/fr-cli \
+    -de …/Issue034-Green14SegLED.dsn -do /tmp/ours034.ses -mp 1
+
+python3 bench/tools/room_stats.py compare /tmp/ours034.rooms /tmp/java034.log
+python3 bench/tools/room_stats.py --top 20 nets /tmp/ours034.rooms
+```
+
+`compare` prints rooms, `complete_expansion_room` calls, rooms per net, the
+bounding-box area distribution, the sliver fraction, and the located-chain
+corner distribution, each with the ours/java ratio — plus the per-net rooms
+ratio, worst first, which is how a single pathological net is found.
+
+Only the **bounding box** is compared, because it is the only geometry both
+sides print. That is enough: the question is granularity, not shape.
 
 ---
 

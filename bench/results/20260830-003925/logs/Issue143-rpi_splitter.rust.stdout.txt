@@ -1,0 +1,7 @@
+Imported untitled.brd in 0.00s: 2 layers, 51 items (24 pins, 14 traces, 4 vias)
+Router: 1 passes, 4 routed, 3 failed, 0 ripped, 0 pins fanned out
+Router stopped on pass limit (0 board restores)
+Optimizer: 1 passes, 2 of 9 items improved, score 799.98 -> 999.98, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 5 connections incomplete, score 999.98/1000
+Total 0.46s
+Exported Specctra SES session file: /Users/chiqingzhen/Documents/fast-routing/bench/results/20260830-003925/ses/Issue143-rpi_splitter.rust.ses

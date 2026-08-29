@@ -581,16 +581,31 @@ impl Board {
     ///    *neither* trace's deletion is forbidden;
     /// 3. it ends or starts at that corner.
     ///
-    /// The join itself always takes upstream's **safe** path — remove the
-    /// survivor's leaves, rewrite its polyline, reinsert
-    /// ([`Board::replace_trace_polyline`], upstream's
-    /// `PolylineTraceSearchTreeAdapter.replaceGeometry`). Upstream reserves that
-    /// for the case where the joined polyline collapsed a line or a trace has no
-    /// default-tree entries, and takes `mergeEntriesInFront` otherwise; the
-    /// fast path only reuses leaves, it does not change the resulting index. So
-    /// the v19 bug the v2 fallback fixes — an NPE inside `merge_entries_in_front`
-    /// for a trace without tree entries (§11.5 delta) — is structurally absent
-    /// here.
+    /// The join goes through [`Board::change_trace_polyline`], which is where
+    /// upstream's `merge_entries_in_front` / `merge_entries_at_end`
+    /// (`ShapeSearchTree.java:155-290`) land in this port.
+    ///
+    /// [`Polyline::combine`](fr_geometry::planar::Polyline::combine) lays the
+    /// joined polyline out as *the survivor's lines with one end line dropped*,
+    /// concatenated with the absorbed trace's (reversed and negated when the two
+    /// meet head-to-head). So the survivor's own lines are an exact prefix —
+    /// combining at the end — or an exact suffix — combining at the start — of
+    /// the join, and `change_trace_polyline`'s equal-run scan finds them without
+    /// being told: every one of the survivor's segments but the one at the seam
+    /// keeps its leaf and its tile shape, and only the seam plus the absorbed
+    /// trace's segments are offset. That is upstream's
+    /// `p_from_entry_no = this_lines.length - 3` (`PolylineTrace.java:404`)
+    /// arrived at from the geometry rather than passed down.
+    ///
+    /// What upstream additionally does and this cannot is *retarget* the
+    /// absorbed trace's leaves onto the survivor (`leaf.object = p_to_trace`).
+    /// A leaf's `(item, shape index)` payload lives inside the arena tree here
+    /// and is not addressable from outside it, so those segments are re-offset
+    /// and re-inserted instead. The resulting index is the same either way.
+    ///
+    /// The v19 bug the v2 fallback fixes — an NPE inside
+    /// `merge_entries_in_front` for a trace without tree entries (§11.5 delta) —
+    /// is structurally absent here.
     fn combine_trace_at(&mut self, id: ItemId, at_start: bool) -> bool {
         let Some(info) = self.trace_info(id) else {
             return false;
@@ -645,7 +660,7 @@ impl Board {
         }
         let joined_line_count = joined.arr.len();
 
-        self.replace_trace_polyline(id, joined);
+        self.change_trace_polyline(id, joined);
         // Upstream order: the survivor is shrunk-checked first, then the
         // absorbed trace is removed unconditionally.
         if joined_line_count < 3 {

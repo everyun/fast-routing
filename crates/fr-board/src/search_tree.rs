@@ -45,11 +45,11 @@
 //! | 9.1 | missing pad ⇒ `Circle(center, ceil(drill_radius))` + `drillHoleClearanceDelta` | the circle's **bounding octagon**; the extra hole-clearance delta is not modelled |
 //! | 3.5 | `area.split_to_convex()` per piece, `enlarge`, `divide_into_sections(50000)` | identical — [`AreaShape::Polygon`] is split by [`fr_geometry::planar::split_to_convex`] on demand; only a corner list that is not a simple polygon (where upstream fails too) falls back to a bounding octagon |
 //! | 3.6 | outline ring: one `offset_shape(BoardOutline.HALF_WIDTH + comp, 0)` per border line per layer | identical, driven off the stored border polylines; the `keepout_outside_outline_generated()` branch is **not** modelled (the generated keepout area has no field on [`crate::item::BoardOutline`] yet) |
-//! | 6 | `change_entries` / `merge_entries_*` / `reuse_entries_after_cutout` reuse leaves in place | plain remove + insert; the fast paths are an optimization of the same result |
+//! | 6 | `change_entries` / `merge_entries_*` reuse leaves in place | [`SearchTree::change_trace_entries`], which `combine` reaches through [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline) as well; `reuse_entries_after_cutout` is still plain remove + insert |
 //! | 2.2 | `overlapping_tree_entries_with_clearance` for uncompensated trees | not here — it belongs to the checker, which is not this crate |
 
 use fr_datastructures::arena_shape_tree::{ArenaLeafId, ArenaShapeTree, OctBounds, QueryStack};
-use fr_geometry::planar::{IntBox, IntOctagon, IntPoint, Point};
+use fr_geometry::planar::{IntBox, IntOctagon, IntPoint, Point, Polyline};
 
 use crate::clearance::ClearanceSource;
 use crate::item::{AreaShape, Item, ItemId, ItemKind, PlacedArea};
@@ -406,6 +406,168 @@ impl SearchTree {
             entry.leaves.push(leaf);
         }
         self.slots[slot_index] = entry;
+    }
+
+    /// Re-indexes a trace whose polyline changed, **reusing** the leaves and
+    /// the tile shapes of the segments that did not move — upstream's
+    /// `ShapeSearchTree.change_entries` (`:110-153`).
+    ///
+    /// `item` must already carry the *new* polyline; the slot still carries the
+    /// shapes computed for the old one, and those are what the kept ranges are
+    /// taken from. `keep_at_start` / `keep_at_end` are the **upper bounds**
+    /// [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline)
+    /// derives from the two line arrays: `k` equal leading lines bound the
+    /// reusable leading shapes at `k - 2`, and likewise at the end. They are
+    /// narrowed here — see `dogear_safe_keep_at_start`, which is where the
+    /// fact that a tile shape reads more than its own three lines is paid for.
+    ///
+    /// Returns `false` — having touched nothing — when the fast path does not
+    /// apply (the slot holds another item, the item is not a trace, or the slot
+    /// state is not the one-leaf-per-shape shape a trace always has). The caller
+    /// then falls back to [`remove`](Self::remove) + [`insert`](Self::insert),
+    /// which produces the same index.
+    ///
+    /// # Where this stops short of upstream
+    ///
+    /// A leaf's payload here is the pair `(item, shape index)` stored *inside*
+    /// the arena tree, where upstream's `Leaf` is a heap object it can mutate in
+    /// place (`leaf.shape_index_in_object = new_index`). So when the segment
+    /// count changes, the trailing leaves — whose shapes are unchanged but whose
+    /// index shifts — are re-inserted rather than relabelled. Their **geometry
+    /// is still not recomputed**, which is the expensive half; only `O(shift)`
+    /// tree splices are paid, and when the count is unchanged (the whole
+    /// `reposition_line` family) nothing at all is.
+    pub fn change_trace_entries(
+        &mut self,
+        slot: SlotIndex,
+        item: &Item,
+        keep_at_start: usize,
+        keep_at_end: usize,
+        ctx: ShapeContext<'_>,
+    ) -> bool {
+        let ItemKind::Trace(trace) = &item.kind else {
+            return false;
+        };
+        let slot_index = slot.index();
+        match self.slots.get(slot_index) {
+            // One leaf per shape is what a trace always has (no `None` tile),
+            // and it is what makes `leaves[i]` the leaf of shape `i`.
+            Some(entry)
+                if entry.id == item.id
+                    && entry.leaves.len() == entry.shapes.len()
+                    && entry.hulls.len() == entry.shapes.len() => {}
+            _ => return false,
+        }
+
+        let line_count = trace.polyline.arr.len();
+        let new_shape_count = line_count.saturating_sub(2);
+        let mut entry = std::mem::take(&mut self.slots[slot_index]);
+        let old_shape_count = entry.shapes.len();
+
+        // The offset width this tree stores the trace at — `p_obj.get_half_width()
+        // + clearance_compensation_value(...)` (`change_entries`, `:117-119`).
+        // It is also the radius the dog-ear scan below is bounded by, which is
+        // why the kept ranges have to be narrowed per tree rather than once.
+        let offset_width = trace.half_width
+            + ctx
+                .clearances
+                .tree_compensation(item.clearance_class, self.compensated_class, trace.layer);
+
+        // Clamp before use: the two kept ranges must not overlap in either the
+        // old or the new shape array, and neither may reach past the dog-ear
+        // horizon.
+        let keep_start = dogear_safe_keep_at_start(
+            &trace.polyline,
+            offset_width,
+            keep_at_start.min(old_shape_count).min(new_shape_count),
+        );
+        let keep_end = dogear_safe_keep_at_end(
+            &trace.polyline,
+            offset_width,
+            keep_at_end
+                .min(old_shape_count - keep_start)
+                .min(new_shape_count - keep_start),
+            new_shape_count,
+        );
+        let old_mid_end = old_shape_count - keep_end;
+        let new_mid_end = new_shape_count - keep_end;
+
+        // 1. The changed middle's old leaves go, exactly as `change_entries`
+        //    drops `old_entries[keep_at_start .. old_shape_count - keep_at_end]`.
+        for leaf in entry.leaves[keep_start..old_mid_end].iter().copied() {
+            self.tree.remove(leaf);
+        }
+        // The trailing leaves survive only if their index does not move.
+        let suffix_shifts = new_shape_count != old_shape_count;
+        if suffix_shifts {
+            for leaf in entry.leaves[old_mid_end..].iter().copied() {
+                self.tree.remove(leaf);
+            }
+        }
+
+        // 2. Only the changed segments' geometry is recomputed —
+        //    `offset_shapes(p_new_polyline, chw, keep_at_start,
+        //    arr.length - 1 - keep_at_end)`.
+        let middle = trace.polyline.offset_shapes_range(
+            offset_width,
+            keep_start,
+            line_count.saturating_sub(1) - keep_end,
+        );
+        debug_assert_eq!(
+            middle.len(),
+            new_mid_end - keep_start,
+            "offset_shapes_range disagrees with the kept-range arithmetic"
+        );
+        // 3. Shape, hull and leaf of each changed segment, in one pass — the
+        //    leaf carries its **final** index, so nothing has to be relabelled.
+        let mut mid_shapes: Vec<ItemTileShape> = Vec::with_capacity(middle.len());
+        let mut mid_hulls: Vec<Option<IntBox>> = Vec::with_capacity(middle.len());
+        let mut mid_leaves: Vec<ArenaLeafId> = Vec::with_capacity(middle.len());
+        for (offset, simplex) in middle.into_iter().enumerate() {
+            let mut shape = TileShape::Simplex(simplex);
+            if self.angle_family == TreeAngleFamily::FortyFive {
+                shape = shape.to_flavor(AngleRestriction::FortyFive);
+            }
+            mid_hulls.push(hull_box(&shape));
+            mid_leaves.push(self.tree.insert(
+                shape.bounds(),
+                LeafPayload {
+                    item: item.id,
+                    shape_index: (keep_start + offset) as u16,
+                },
+            ));
+            mid_shapes.push(ItemTileShape {
+                shape: Some(shape),
+                layer: trace.layer,
+            });
+        }
+        entry.shapes.splice(keep_start..old_mid_end, mid_shapes);
+        entry.hulls.splice(keep_start..old_mid_end, mid_hulls);
+        entry.leaves.splice(keep_start..old_mid_end, mid_leaves);
+
+        // 4. The trailing shapes are kept verbatim; only their index moved, and
+        //    only then does the tree have to be told about them again.
+        if suffix_shifts {
+            for index in new_mid_end..new_shape_count {
+                let Some(shape) = entry.shapes[index].shape.as_ref() else {
+                    debug_assert!(false, "a trace tile shape is never absent");
+                    continue;
+                };
+                entry.leaves[index] = self.tree.insert(
+                    shape.bounds(),
+                    LeafPayload {
+                        item: item.id,
+                        shape_index: index as u16,
+                    },
+                );
+            }
+        }
+        debug_assert_eq!(entry.shapes.len(), new_shape_count);
+        debug_assert_eq!(entry.hulls.len(), new_shape_count);
+        debug_assert_eq!(entry.leaves.len(), new_shape_count);
+
+        self.slots[slot_index] = entry;
+        true
     }
 
     /// Removes every leaf of the item in `slot`.
@@ -765,6 +927,30 @@ impl SearchTreeManager {
         }
     }
 
+    /// Fans [`SearchTree::change_trace_entries`] out to every active tree,
+    /// upstream's `SearchTreeManager.change_entries` (`:278-284`).
+    ///
+    /// The kept-range counts are geometry-independent — a tile shape at index
+    /// `s` is a function of lines `s..=s+2` in *any* tree, only its offset
+    /// width differs — so the same pair is correct for all of them. A tree that
+    /// refuses the fast path (it has never seen the item, say) falls back to
+    /// remove + insert, which lands on the same index.
+    pub fn change_trace_entries(
+        &mut self,
+        slot: SlotIndex,
+        item: &Item,
+        keep_at_start: usize,
+        keep_at_end: usize,
+        ctx: ShapeContext<'_>,
+    ) {
+        for tree in self.trees_mut() {
+            if !tree.change_trace_entries(slot, item, keep_at_start, keep_at_end, ctx) {
+                tree.remove(slot, item.id);
+                tree.insert(slot, item, ctx);
+            }
+        }
+    }
+
     /// Creates — and bulk-loads — the tree compensated for `clearance_class`,
     /// upstream's `getAutorouteTree` (`SearchTreeManager.java:129-159`).
     ///
@@ -865,6 +1051,127 @@ impl SearchTreeManager {
             tree.assert_consistent(store);
         }
     }
+}
+
+// ------------------------------------------------- the dog-ear horizon (§6)
+
+/// How far a tile shape's dog-ear scan may look, as a squared distance.
+///
+/// `Polyline::offset_shapes_range` builds a segment's four border lines from
+/// the three lines around it and then walks *outwards* along the polyline,
+/// cutting the corner's "dog ear" against each further border line, for as long
+/// as consecutive corners stay inside this radius of the segment's own corner
+/// (`polyline.rs`, `check_dist_square = 2 * half_width²`). A tile shape is
+/// therefore **not** a function of its own three lines alone, which is the one
+/// place upstream's `change_entries` contract is too optimistic: it derives the
+/// kept ranges from line equality only (`PolylineTrace.java:983-987`).
+///
+/// On a board whose corners are further apart than the trace is wide the two
+/// rules coincide, which is why the discrepancy is invisible almost everywhere.
+/// Where it is not — a chain of chamfers shorter than the trace half width,
+/// exactly what `smoothen_corners` produces — a kept leaf would hold a shape
+/// with a stale dog-ear cut, i.e. a *smaller* obstacle than the trace really
+/// is. That is a missed clearance violation, so the horizon is respected here
+/// rather than inherited.
+#[inline]
+fn dogear_horizon_square(offset_width: i32) -> f64 {
+    let w = f64::from(offset_width);
+    2.0 * w * w
+}
+
+/// How many corners the narrowing scans will look at before giving up and
+/// keeping nothing.
+///
+/// Both scans stop at the first corner outside the horizon, so on any board
+/// whose corners are further apart than its traces are wide they cost one
+/// distance each. The cap bounds the other case — a polyline that folds a long
+/// run of corners into one trace-width disc — to `O(1)` instead of `O(run²)`.
+/// Giving up means reusing fewer leaves, never more, so the cap can only cost
+/// time, not correctness.
+const DOGEAR_SCAN_LIMIT: usize = 64;
+
+/// Narrows `keep_at_start` to the shapes whose dog-ear scan provably stays
+/// inside the unchanged leading run.
+///
+/// `keep_at_start` came from `k` equal leading lines as `k - 2`, so lines
+/// `0..k` and hence corners `0..=k - 2` are shared by the old and the new
+/// polyline. Shape `s` anchors its forward scan at corner `s + 1` and walks
+/// corners `s + 2, s + 3, …`, stopping at the first one outside the horizon. If
+/// it stops at a *shared* corner it read shared lines only and the stored shape
+/// is still exact; if it runs to the end of the shared run it may have read a
+/// line that moved.
+///
+/// So the largest kept count is the largest `K` for which some corner in
+/// `K + 1 ..= k - 2` is outside corner `K`'s horizon. Only shared corners are
+/// consulted, which is what makes the answer the same for the old polyline (the
+/// one the kept shapes were computed from) and the new one.
+///
+/// The last shape of the run is always dropped: its scan starts at the first
+/// line that changed, so nothing shared can prove it stopped in time. One
+/// segment per end is a rounding error against the whole polyline.
+fn dogear_safe_keep_at_start(polyline: &Polyline, offset_width: i32, keep_at_start: usize) -> usize {
+    if keep_at_start == 0 {
+        return 0;
+    }
+    let horizon = dogear_horizon_square(offset_width);
+    // `keep_at_start = k - 2`, so the last shared corner is `k - 2 =
+    // keep_at_start`.
+    let last_shared_corner = keep_at_start;
+    let floor = keep_at_start.saturating_sub(DOGEAR_SCAN_LIMIT);
+    let mut keep = keep_at_start;
+    while keep > floor {
+        let anchor = polyline.corner_approx(keep);
+        if ((keep + 1)..=last_shared_corner)
+            .take(DOGEAR_SCAN_LIMIT)
+            .any(|corner| polyline.corner_approx(corner).distance_square(&anchor) > horizon)
+        {
+            return keep;
+        }
+        keep -= 1;
+    }
+    // Ran out of budget inside a dense run: keep nothing rather than guess.
+    if keep == floor && floor > 0 {
+        return 0;
+    }
+    keep
+}
+
+/// [`dogear_safe_keep_at_start`] for the trailing run, whose scan walks
+/// *backwards*.
+///
+/// `keep_at_end = m - 2` for `m` equal trailing lines, so the first shared
+/// trailing line is `new_shape_count + 2 - m = new_shape_count - keep_at_end`
+/// and every corner from there on is shared. Shape `s` anchors its backward
+/// scan at corner `s` and walks corners `s - 1, s - 2, …`.
+fn dogear_safe_keep_at_end(
+    polyline: &Polyline,
+    offset_width: i32,
+    keep_at_end: usize,
+    new_shape_count: usize,
+) -> usize {
+    if keep_at_end == 0 {
+        return 0;
+    }
+    let horizon = dogear_horizon_square(offset_width);
+    let first_shared_corner = new_shape_count - keep_at_end;
+    let floor = keep_at_end.saturating_sub(DOGEAR_SCAN_LIMIT);
+    let mut keep = keep_at_end;
+    while keep > floor {
+        let anchor_corner = new_shape_count - keep;
+        let anchor = polyline.corner_approx(anchor_corner);
+        if (first_shared_corner..anchor_corner)
+            .rev()
+            .take(DOGEAR_SCAN_LIMIT)
+            .any(|corner| polyline.corner_approx(corner).distance_square(&anchor) > horizon)
+        {
+            return keep;
+        }
+        keep -= 1;
+    }
+    if keep == floor && floor > 0 {
+        return 0;
+    }
+    keep
 }
 
 // ---------------------------------------------------------------- geometry

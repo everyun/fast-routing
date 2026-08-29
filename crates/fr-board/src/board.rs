@@ -470,27 +470,94 @@ impl Board {
         self.store.remove(id)
     }
 
-    /// Replaces a trace's polyline in place, keeping its identity.
+    /// Replaces a trace's polyline in place, keeping its identity and
+    /// **reusing** the search-tree leaves and tile shapes of every segment that
+    /// did not move — upstream's `PolylineTrace.change(Polyline)` (`:942-1009`)
+    /// plus the `ShapeSearchTree.change_entries` it delegates to.
     ///
-    /// The mandatory order is upstream's `PolylineTraceSearchTreeAdapter.replaceGeometry`:
-    /// remove from the trees → mutate → re-insert. Doing it the other way round
-    /// leaves leaves indexed under the old shapes.
-    pub(crate) fn replace_trace_polyline(&mut self, id: ItemId, polyline: Polyline) -> bool {
-        if !matches!(
-            self.store.get(id).map(|item| &item.kind),
-            Some(ItemKind::Trace(_))
-        ) {
+    /// The naive version of this is remove-from-the-trees → mutate →
+    /// re-insert, which re-offsets every segment of the trace on every call.
+    /// What this does instead:
+    ///
+    /// * the [`ItemId`] does not change, so no caller has to revalidate ids;
+    /// * the two line arrays are compared end-inwards to find the longest equal
+    ///   prefix and suffix; `k` equal leading lines yield up to `k - 2` reusable
+    ///   leading shapes and their leaves are never touched (`:983-987`). Each
+    ///   tree then narrows that further to the shapes whose dog-ear scan cannot
+    ///   have read a line that moved — see
+    ///   `dogear_safe_keep_at_start` in [`search_tree`](crate::search_tree), which is a
+    ///   correctness fix over upstream's rule, not an optimization;
+    /// * only the segments in between are re-offset and re-inserted;
+    /// * the pre-image reaches the journal **once per open transaction**
+    ///   (`store.mutate` → `UndoableObjects.save_for_undo`, whose
+    ///   `curr_node.level < stack_level` guard is exactly that rule), so a
+    ///   pull-tight that moves one trace a hundred times inside one transaction
+    ///   clones it once, not a hundred times;
+    /// * connectivity is dirtied **only when an end corner moved**. A trace's
+    ///   connection points are its two end corners ([`connectivity`]), so a
+    ///   move that leaves both where they were cannot change any net's
+    ///   components, and the whole-net union-find rebuild it would otherwise
+    ///   have forced is skipped.
+    ///
+    /// Returns `false` — having changed nothing at all — when `id` is not a
+    /// trace or when the polyline is already the one asked for (upstream's
+    /// "both polylines are equal, no change necessary", `:970`).
+    ///
+    /// > **One upstream quirk is deliberately not reproduced.** `:966-978`
+    /// > compares lines by *reference*, and bails out of `change` entirely when
+    /// > the scan runs off the end of the shorter array — which silently refuses
+    /// > a new polyline that is a strict prefix or suffix of the old one. Here
+    /// > the equal run is simply clamped to the shorter array and the change is
+    /// > applied, which is what this port has always done through
+    /// > `replace_trace_polyline`. Value comparison also finds *longer* equal
+    /// > runs than Java's identity comparison does; that only ever reuses more
+    /// > leaves, and equal lines produce equal shapes, so the index is the same.
+    pub fn change_trace_polyline(&mut self, id: ItemId, polyline: Polyline) -> bool {
+        let Some(item) = self.store.get(id) else {
             return false;
-        }
+        };
+        let ItemKind::Trace(trace) = &item.kind else {
+            return false;
+        };
+        let Some((keep_at_start, keep_at_end)) =
+            kept_shape_counts(&trace.polyline.arr, &polyline.arr)
+        else {
+            return false;
+        };
+        let endpoints_moved = trace.polyline.first_corner() != polyline.first_corner()
+            || trace.polyline.last_corner() != polyline.last_corner();
+
         self.note_touched(id);
-        self.unindex_from_trees(id);
         self.store.mutate(id, move |item| {
             if let ItemKind::Trace(trace) = &mut item.kind {
                 trace.polyline = polyline;
             }
         });
-        self.index_in_trees(id);
-        self.mark_nets_dirty(id);
+
+        let Board {
+            store,
+            trees,
+            clearances,
+            padstacks,
+            layers,
+            angle_restriction,
+            max_tree_shape_width,
+            ..
+        } = self;
+        if let (Some(slot), Some(item)) = (store.slot_of(id), store.get(id)) {
+            let ctx = Board::shape_context(
+                clearances,
+                padstacks,
+                layers,
+                *angle_restriction,
+                *max_tree_shape_width,
+            );
+            trees.change_trace_entries(slot, item, keep_at_start, keep_at_end, ctx);
+        }
+
+        if endpoints_moved {
+            self.mark_nets_dirty(id);
+        }
         true
     }
 
@@ -1038,6 +1105,47 @@ impl Board {
         self.store.assert_consistent();
         self.trees.assert_consistent(&self.store);
     }
+}
+
+/// How many tile shapes of `old` survive unchanged at each end when its
+/// polyline becomes `new` — upstream's `index_of_first_different_line` /
+/// `index_of_last_different_line` arithmetic (`PolylineTrace.java:966-987`).
+///
+/// `None` means the two line arrays are identical, upstream's "no change
+/// necessary".
+///
+/// The `- 2` on each side is the rule: tile shape `s` is offset from lines `s`,
+/// `s + 1` and `s + 2`, so `k` equal leading lines pin down `k - 2` leading
+/// shapes and `m` equal trailing lines pin down `m - 2` trailing ones.
+///
+/// It is an **upper bound**, not the answer. Nothing here clamps the two
+/// against each other, and nothing here knows about the dog-ear scan that makes
+/// a tile shape depend on more than its own three lines; both are
+/// [`SearchTree::change_trace_entries`](crate::search_tree::SearchTree::change_trace_entries)'s
+/// job, because both need the shape counts and the tree's offset width.
+fn kept_shape_counts(
+    old: &[fr_geometry::planar::Line],
+    new: &[fr_geometry::planar::Line],
+) -> Option<(usize, usize)> {
+    let limit = old.len().min(new.len());
+    let mut prefix = limit;
+    for i in 0..limit {
+        if old[i] != new[i] {
+            prefix = i;
+            break;
+        }
+    }
+    let mut suffix = limit;
+    for i in 1..=limit {
+        if old[old.len() - i] != new[new.len() - i] {
+            suffix = i - 1;
+            break;
+        }
+    }
+    if old.len() == new.len() && prefix == limit {
+        return None;
+    }
+    Some((prefix.saturating_sub(2), suffix.saturating_sub(2)))
 }
 
 #[cfg(test)]

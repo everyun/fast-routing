@@ -1,0 +1,65 @@
+{
+ "GND": {
+  "pins": 4,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 71.1298,
+  "wire_length_raw": 711297.6565
+ },
+ "Net-(D1-A)": {
+  "pins": 5,
+  "wire_count": 4,
+  "via_count": 0,
+  "wire_length_mm": 28.3963,
+  "wire_length_raw": 283963.196
+ },
+ "Net-(D1-K)": {
+  "pins": 7,
+  "wire_count": 9,
+  "via_count": 2,
+  "wire_length_mm": 89.1031,
+  "wire_length_raw": 891031.0042
+ },
+ "Net-(D5-A)": {
+  "pins": 5,
+  "wire_count": 5,
+  "via_count": 0,
+  "wire_length_mm": 34.9118,
+  "wire_length_raw": 349117.645
+ },
+ "Net-(D5-K)": {
+  "pins": 6,
+  "wire_count": 6,
+  "via_count": 0,
+  "wire_length_mm": 63.0666,
+  "wire_length_raw": 630665.5659
+ },
+ "Net-(J3-PadTN)": {
+  "pins": 2,
+  "wire_count": 1,
+  "via_count": 0,
+  "wire_length_mm": 4.317,
+  "wire_length_raw": 43170.3021
+ },
+ "unconnected-(J1-PadTN)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J2-PadTN)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ },
+ "unconnected-(J4-PadTN)": {
+  "pins": 1,
+  "wire_count": 0,
+  "via_count": 0,
+  "wire_length_mm": 0.0,
+  "wire_length_raw": 0.0
+ }
+}

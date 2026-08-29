@@ -168,13 +168,33 @@ struct Slot {
     /// of the board. That is what lets [`ItemStore::diff_into`] detect
     /// "same id, different content" in O(1) per item instead of deep-comparing.
     revision: u64,
+    /// The [`ItemStore`] snapshot epoch this slot's pre-image was last written
+    /// to the journal at, or [`NEVER_SAVED`].
+    ///
+    /// Upstream's `UndoableObjects.save_for_undo` clones an object at most once
+    /// per snapshot level (`curr_node.level < this.stack_level`,
+    /// `UndoableObjects.java:279`); this is that guard. See
+    /// [`ItemStore::mutate`] for why an epoch bumped at every transaction
+    /// boundary is enough to make skipping safe.
+    saved_epoch: u64,
 }
 
+/// [`Slot::saved_epoch`] of a slot whose pre-image is not in the journal.
+///
+/// A sentinel rather than an `Option` so the check in [`ItemStore::mutate`] is
+/// one integer compare; the epoch counter cannot reach it.
+const NEVER_SAVED: u64 = u64::MAX;
+
 impl Clone for Slot {
+    /// `saved_epoch` is deliberately **not** copied: it is a stamp against one
+    /// store's own epoch counter, meaningless in the copy, and a value that
+    /// happened to match the destination's counter would suppress a pre-image
+    /// that is genuinely needed. Cloning a store clears its journal anyway.
     fn clone(&self) -> Self {
         Slot {
             item: self.item.clone(),
             revision: self.revision,
+            saved_epoch: NEVER_SAVED,
         }
     }
 
@@ -185,6 +205,7 @@ impl Clone for Slot {
     fn clone_from(&mut self, source: &Self) {
         self.item.clone_from(&source.item);
         self.revision = source.revision;
+        self.saved_epoch = NEVER_SAVED;
     }
 }
 
@@ -206,6 +227,14 @@ pub struct ItemStore {
     journal: Journal,
     /// Reusable buffer for rollback, so undoing a transaction allocates nothing.
     undo_scratch: Vec<Entry>,
+    /// Bumped by every transaction boundary — `begin`, `commit`, `rollback_to`
+    /// — and by every wholesale replacement of the arena.
+    ///
+    /// It is the validity stamp behind [`Slot::saved_epoch`]: between two
+    /// consecutive bumps the journal only ever grows, so a pre-image logged
+    /// under the current epoch is still in the log and still predates every
+    /// later mutation of that slot.
+    snapshot_epoch: u64,
 }
 
 impl Default for ItemStore {
@@ -229,6 +258,7 @@ impl ItemStore {
             next_revision: 1,
             journal: Journal::new(),
             undo_scratch: Vec::new(),
+            snapshot_epoch: 0,
         }
     }
 
@@ -489,6 +519,7 @@ impl ItemStore {
                 before,
                 revision: before_revision,
             });
+            self.slots[slot].saved_epoch = self.snapshot_epoch;
         }
         true
     }
@@ -503,9 +534,28 @@ impl ItemStore {
     ///
     /// The item's `id` is restored after `f` runs, and the per-net index is
     /// updated if `f` changed the net array.
+    ///
+    /// # The clone happens once per transaction, not once per call
+    ///
+    /// `save_for_undo` is idempotent upstream: the second and later mutations
+    /// of the same object at the same snapshot level skip the clone, because
+    /// the pre-image already in the log is the one the undo needs
+    /// (`UndoableObjects.java:277-286`). That is reproduced by stamping each
+    /// slot with the store-wide snapshot epoch it last logged a pre-image at,
+    /// and the reason skipping is safe is that *every* event which could retire
+    /// a logged entry — `begin`, `commit`, `rollback_to`, `clear`, `copy_from`
+    /// — bumps that epoch. So a stamp that still matches proves the entry is
+    /// still in the log, still ahead of the mark that will replay it, and still
+    /// holds this slot's state from before the first of this run of
+    /// mutations.
+    ///
+    /// It matters because the optimizer edits one trace's polyline hundreds of
+    /// times inside a single open transaction, and an `Item` clone is a
+    /// polyline copy.
     pub fn mutate<R>(&mut self, id: ItemId, f: impl FnOnce(&mut Item) -> R) -> Option<R> {
         let slot = self.live_slot(id)?;
-        let recording = self.journal.is_recording();
+        let recording =
+            self.journal.is_recording() && self.slots[slot].saved_epoch != self.snapshot_epoch;
 
         let (nets_before, pre_image) = {
             let slot_ref = &self.slots[slot];
@@ -539,6 +589,7 @@ impl ItemStore {
         }
         if let Some(entry) = pre_image {
             self.journal.push(entry);
+            self.slots[slot].saved_epoch = self.snapshot_epoch;
         }
         Some(out)
     }
@@ -566,6 +617,7 @@ impl ItemStore {
     /// `next_id` and the revision counter deliberately survive: ids are never
     /// reused for the lifetime of a store, not even across a clear.
     pub fn clear(&mut self) {
+        self.bump_snapshot_epoch();
         self.slots.clear();
         self.free_slots.clear();
         self.order.clear();
@@ -585,7 +637,19 @@ impl ItemStore {
     /// Marks nest LIFO; see [`journal`](crate::journal) for what is and is not
     /// undone.
     pub fn begin(&mut self) -> Mark {
+        self.bump_snapshot_epoch();
         self.journal.begin()
+    }
+
+    /// Retires every [`Slot::saved_epoch`] stamp at once, so the next
+    /// [`mutate`](ItemStore::mutate) of any slot logs a fresh pre-image.
+    #[inline]
+    fn bump_snapshot_epoch(&mut self) {
+        // One bump per transaction boundary; reaching the sentinel would need
+        // more transactions than there are nanoseconds in the age of the
+        // universe, and overflow would panic in debug anyway.
+        self.snapshot_epoch += 1;
+        debug_assert!(self.snapshot_epoch < NEVER_SAVED);
     }
 
     /// Undoes every mutation made since `mark` and closes its level.
@@ -593,6 +657,7 @@ impl ItemStore {
     /// O(number of mutations), independent of board size. Panics if `mark` is
     /// stale or used out of LIFO order.
     pub fn rollback_to(&mut self, mark: Mark) {
+        self.bump_snapshot_epoch();
         let mut scratch = std::mem::take(&mut self.undo_scratch);
         scratch.clear();
         self.journal.drain_since(mark, &mut scratch);
@@ -607,6 +672,7 @@ impl ItemStore {
     ///
     /// Panics if `mark` is stale or used out of LIFO order.
     pub fn commit(&mut self, mark: Mark) {
+        self.bump_snapshot_epoch();
         self.journal.commit(mark);
         self.maybe_compact();
     }
@@ -695,7 +761,10 @@ impl ItemStore {
         self.next_id = src.next_id;
         self.next_revision = src.next_revision;
         // A snapshot is only ever taken outside a transaction, so there is
-        // nothing to copy; clearing keeps that invariant explicit.
+        // nothing to copy; clearing keeps that invariant explicit. The cloned
+        // slots arrive stamped `NEVER_SAVED` (see `Slot::clone`), and the epoch
+        // bump retires anything this store stamped before the overwrite.
+        self.bump_snapshot_epoch();
         self.journal.clear();
         self.undo_scratch.clear();
     }
@@ -813,11 +882,15 @@ impl ItemStore {
             let slot_ref = &mut self.slots[slot as usize];
             slot_ref.item = Some(item);
             slot_ref.revision = revision;
+            // A recycled slot holds a *different* item; the pre-image the old
+            // one left in the journal says nothing about this one.
+            slot_ref.saved_epoch = NEVER_SAVED;
             slot
         } else {
             self.slots.push(Slot {
                 item: Some(item),
                 revision,
+                saved_epoch: NEVER_SAVED,
             });
             (self.slots.len() - 1) as u32
         }
@@ -834,6 +907,7 @@ impl ItemStore {
         let slot = entry.slot;
         let item = self.slots[slot as usize].item.take()?;
         let revision = self.slots[slot as usize].revision;
+        self.slots[slot as usize].saved_epoch = NEVER_SAVED;
         self.free_slots.push(slot);
 
         if pos + 1 == self.order.len() {

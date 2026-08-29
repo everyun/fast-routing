@@ -512,6 +512,15 @@ impl AutorouteEngine<'_> {
             (room.contained_shape.clone(), room.layer)
         };
         let new_rooms = self.complete_shape(Some(&enlarged_shape), &contained, layer, None, None);
+        if crate::rooms::trace::is_enabled() {
+            crate::rooms::trace::edge(
+                self.ctrl.net_no,
+                layer,
+                new_rooms.len(),
+                room_shape_area,
+                new_rooms.first().map_or(0.0, |r| geom::area(&r.shape)),
+            );
+        }
         if new_rooms.len() != 1 {
             return false;
         }
