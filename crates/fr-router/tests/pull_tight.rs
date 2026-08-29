@@ -10,13 +10,20 @@
 //! * the clip shape and the net filter are honoured;
 //! * the whole thing is deterministic and terminates.
 
+use std::time::Duration;
+
 use fr_board::board::Board;
 use fr_board::item::{FixedState, ItemId, ItemKind};
 use fr_board::net_nos::NetNos;
 use fr_geometry::planar::{IntOctagon, IntPoint, Polyline};
+use fr_router::batch::budget::BudgetMode;
 use fr_router::insert_forced::ChangedArea;
-use fr_router::pull_tight::{PullTightAlgo, DEFAULT_PULL_TIGHT_ACCURACY, MIN_TRANSLATE_DIST_FLOOR};
+use fr_router::pull_tight::{
+    PullTightAlgo, StallGuard, DEFAULT_PULL_TIGHT_ACCURACY, MIN_TRANSLATE_DIST_FLOOR,
+    ROUNDS_PER_VIRTUAL_MS, TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
+};
 use fr_router::test_support::{TestFixture, TEST_CLEARANCE, TEST_HALF_WIDTH, TEST_NET};
+use fr_router::JobDeadline;
 
 /// A **45°-legal** staircase of `steps` diagonal/horizontal pairs, each leg
 /// `leg` units long, starting at `from`.
@@ -461,4 +468,120 @@ fn accuracy_below_the_floor_is_raised_to_it() {
     // And the floor really is below the shipped default, or it would never bind.
     assert!(run(DEFAULT_PULL_TIGHT_ACCURACY).is_some());
     let _ = TEST_CLEARANCE;
+}
+
+// ---------------------------------------------------------------------------
+// the stall guard (M3 gate: "unbounded rounds hang the router")
+// ---------------------------------------------------------------------------
+
+/// `ARCHITECTURE.md` "Budgets" says the default mode keeps upstream's
+/// wall-clock constants *verbatim* — "pull-tight 1000/2000 ms" — and that
+/// `--deterministic` replaces wall checks with effort-based virtual time. That
+/// is the whole content of [`StallGuard::for_mode`], and it is worth an
+/// assertion because getting it backwards is silent: the run still finishes,
+/// just under the wrong stopping rule.
+#[test]
+fn the_stall_guard_is_upstreams_constant_in_wall_mode_and_rounds_otherwise() {
+    assert_eq!(
+        StallGuard::for_mode(BudgetMode::Wall, TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS),
+        StallGuard::Wall(Duration::from_millis(1_000)),
+    );
+    assert_eq!(
+        StallGuard::for_mode(BudgetMode::Deterministic, TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS),
+        StallGuard::Rounds(1_000 * ROUNDS_PER_VIRTUAL_MS),
+    );
+    // The generous side: the deterministic guard must not bind before the wall
+    // clock it stands in for would, and the heaviest `opt_changed_area`
+    // measured in the fixture suite spent 17 229 rounds in 1 050 ms.
+    assert!(
+        1_000 * ROUNDS_PER_VIRTUAL_MS > 17_229,
+        "the deterministic guard would bind on healthy work"
+    );
+}
+
+/// A board with real work to do, so that "nothing happened" is a statement
+/// about the guard and not about the board.
+fn two_staircases() -> TestFixture {
+    let mut fixture = TestFixture::two_layer_with_pads();
+    for (index, net) in [TEST_NET, 2].into_iter().enumerate() {
+        let base_y = -1000 + 700 * index as i32;
+        let corners = staircase(IntPoint::new(-2000, base_y), 8, 120);
+        insert(&mut fixture.board, &corners, net);
+    }
+    fixture
+}
+
+/// Which of the three guards a case arms.
+#[derive(Clone, Copy)]
+enum Armed {
+    Rounds,
+    Wall,
+    Job,
+}
+
+/// Every guard `is_stop_requested` polls stops the regional driver on its way
+/// in, and each of the three is reachable on its own.
+///
+/// The third is the one the M3 gate is about: before it, a `SIGTERM` or an
+/// expired `--job-timeout` could not interrupt a pull-tight at all, so a
+/// `§6.4` region that had stopped converging held the board past the budget
+/// and the process was killed without ever writing a session.
+#[test]
+fn each_stall_guard_stops_the_regional_driver_on_its_own() {
+    for (name, arm) in [
+        ("an exhausted round budget", Armed::Rounds),
+        ("a wall cutoff that has passed", Armed::Wall),
+        ("an expired job deadline", Armed::Job),
+    ] {
+        let mut fixture = two_staircases();
+        let before = corner_total(&fixture.board, TEST_NET) + corner_total(&fixture.board, 2);
+        let mut area = whole_board_area(&fixture.board);
+        let rules = fixture.rules.clone();
+        let algo = PullTightAlgo::new(
+            &mut fixture.board,
+            &rules,
+            &[],
+            None,
+            DEFAULT_PULL_TIGHT_ACCURACY,
+            None,
+            None,
+            0,
+        );
+        let mut algo = match arm {
+            Armed::Rounds => algo.with_stall_guard(StallGuard::Rounds(0)),
+            Armed::Wall => algo.with_stall_guard(StallGuard::Wall(Duration::ZERO)),
+            Armed::Job => algo.with_job_deadline(JobDeadline::already_passed()),
+        };
+        assert!(algo.is_stop_requested(), "{name} must read as stopped");
+        assert!(
+            !algo.opt_changed_area(&mut area),
+            "{name} must stop the driver before it touches anything"
+        );
+        let after = corner_total(&fixture.board, TEST_NET) + corner_total(&fixture.board, 2);
+        assert_eq!(before, after, "{name} left the board alone");
+    }
+
+    // The control: the same board with no guard armed *does* get optimized, so
+    // the assertions above are about the guards and not about the fixture.
+    let mut fixture = two_staircases();
+    let before = corner_total(&fixture.board, TEST_NET) + corner_total(&fixture.board, 2);
+    let mut area = whole_board_area(&fixture.board);
+    let rules = fixture.rules.clone();
+    let mut algo = PullTightAlgo::new(
+        &mut fixture.board,
+        &rules,
+        &[],
+        None,
+        DEFAULT_PULL_TIGHT_ACCURACY,
+        None,
+        None,
+        0,
+    )
+    .with_stall_guard(StallGuard::for_mode(
+        BudgetMode::Wall,
+        TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
+    ));
+    assert!(algo.opt_changed_area(&mut area));
+    let after = corner_total(&fixture.board, TEST_NET) + corner_total(&fixture.board, 2);
+    assert!(after < before, "{before} corners before, {after} after");
 }

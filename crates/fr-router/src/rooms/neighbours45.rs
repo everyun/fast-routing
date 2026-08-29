@@ -645,7 +645,8 @@ fn compare_neighbours(a: &Neighbour45, b: &Neighbour45) -> std::cmp::Ordering {
     // `:849-852`. Upstream's key is the bare object id, so two tile shapes of
     // the *same* item with identical geometry compare equal and the `TreeSet`
     // silently drops one; the key here carries the shape index as well, so both
-    // survive in a fixed order. Strictly more information, never less.
+    // survive in a fixed order — a measured divergence, see
+    // `neighbours::AutorouteEngine::obstacle_id`.
     a.obstacle_id.cmp(&b.obstacle_id)
 }
 
@@ -669,6 +670,8 @@ impl AutorouteEngine<'_> {
     /// `AutorouteEngine.calculate_doors`.
     pub fn calculate_doors_45(&mut self, room_id: RoomId) {
         for _ in 0..MAX_EDGE_REMOVAL_ROUNDS {
+            // `:46-47` mints once per invocation, restarts included.
+            self.mint_room_id(room_id);
             let found = self.calculate_neighbours_45(room_id);
             // `:54-59`: an enlarged room invalidates every door; start over.
             if self.try_remove_edge_line_45(room_id, &found) {
@@ -797,6 +800,13 @@ impl AutorouteEngine<'_> {
             }
         }
 
+        // `sorted_neighbours` is a `TreeSet` (`:22`, `:36`, `:221`), so equal
+        // elements collapse *there*. This is a plain stable sort and nothing is
+        // removed: not reproducing that collapse is the measured divergence
+        // recorded on `neighbours::AutorouteEngine::obstacle_id` (3.2x
+        // expansions on Issue026, 11x on Issue034 when it is reproduced), and
+        // `compare_neighbours` reads an `obstacle_id` that carries the shape
+        // index, so two distinct obstacles never compare equal to begin with.
         found.neighbours.sort_by(compare_neighbours);
         found
     }

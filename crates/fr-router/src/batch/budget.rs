@@ -245,6 +245,14 @@ impl ConnectionClock {
         self.effort
     }
 
+    /// Which clock this connection is spending — what a stage inside the
+    /// connection's window needs to pick its own guard's currency, e.g.
+    /// [`crate::pull_tight::StallGuard`].
+    #[inline]
+    pub fn mode(&self) -> BudgetMode {
+        self.budget.mode()
+    }
+
     /// Whether the allowance is gone — upstream's `TimeLimit.limit_exceeded()`,
     /// plus the effort ceiling.
     ///

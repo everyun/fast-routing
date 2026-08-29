@@ -376,15 +376,26 @@ fn a_bad_job_timeout_is_a_usage_error() {
 ///
 /// The one race that has to be excluded is the process's own start-up: a signal that arrives
 /// before `main` installs the handler is fatal in any program, and nothing this binary does can
-/// change that. `main` installs it on its first line, so the child's **first output** — the
-/// `-us` note, written during argument scanning — proves the handler is up, and that is what
-/// this test waits for. Whether the run is still going at that moment is left open on purpose:
-/// both outcomes satisfy the contract, and pinning the race would make the test flaky rather
-/// than stronger.
+/// change that. `main` installs it on its first line, before it looks at a single argument.
+///
+/// This test used to wait for the child's **first output** — the `-us N is accepted but inert`
+/// note, written during argument scanning — as proof that the handler was up. That note is gone
+/// now that `--threads` is live, and with it went the binary's only pre-run output: `fr-cli`
+/// prints nothing at all until `print_summary` runs, i.e. until the job is already over. There
+/// is no observable "I have started" edge left to synchronise on, so this is a grace period
+/// instead, and the length is not arbitrary: **250 ms was measured to be too short** on a
+/// loaded machine — `exec` plus dyld plus the Rust runtime had not reached `main`'s first line,
+/// the signal hit the default disposition, and the child died of `SIGTERM` (raw wait status 15).
+/// Two seconds makes that window negligible without making the suite slower in any way anyone
+/// will notice.
+///
+/// Whether the run is still going when the signal lands is left open on purpose — both outcomes
+/// satisfy the contract — but note that on a board this small it usually *has* finished by then,
+/// so the signal path itself is only lightly exercised. Restoring a real synchronisation point
+/// means giving `fr-cli` something to say before it starts working; that is a CLI-contract
+/// decision, not a test fix.
 #[test]
 fn a_sigterm_does_not_cost_us_the_session() {
-    use std::io::BufRead as _;
-
     let workspace = Workspace::with_board("sigterm", UNROUTED_BOARD);
     let ses = workspace.path("sigterm.ses");
     let mut child = Command::new(env!("CARGO_BIN_EXE_fr-cli"))
@@ -395,21 +406,15 @@ fn a_sigterm_does_not_cost_us_the_session() {
             ses.as_os_str(),
             "-mp".as_ref(),
             "20".as_ref(),
-            // Only here to make the child talk before it starts working; see above.
-            "-us".as_ref(),
-            "4".as_ref(),
         ])
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("fr-cli spawns");
 
-    let mut piped = std::io::BufReader::new(child.stderr.take().expect("stderr is piped"));
-    let mut first = String::new();
-    piped
-        .read_line(&mut first)
-        .expect("the child says something");
-    assert!(first.contains("-us 4 is accepted but inert"), "{first}");
+    let mut piped = child.stderr.take().expect("stderr is piped");
+    // See the doc comment: 250 ms was measured to be too short under load.
+    std::thread::sleep(std::time::Duration::from_secs(2));
 
     // `kill(1)` rather than a `libc` dependency, for the same reason `main.rs` declares
     // `signal` itself: this workspace has no third-party crates. A run that already finished
@@ -420,9 +425,8 @@ fn a_sigterm_does_not_cost_us_the_session() {
         .expect("kill runs");
 
     let status = child.wait().expect("fr-cli exits");
-    let mut rest = String::new();
-    let _ = std::io::Read::read_to_string(&mut piped, &mut rest);
-    let output = format!("{first}{rest}");
+    let mut output = String::new();
+    let _ = std::io::Read::read_to_string(&mut piped, &mut output);
     assert!(
         status.code().is_some(),
         "a first SIGTERM must be handled, not fatal: {status:?}"
@@ -448,8 +452,10 @@ fn the_default_output_path_is_the_design_with_a_ses_extension() {
     assert!(workspace.path("board.ses").is_file());
 }
 
-/// `-mp` is live and `-us` is inert, and neither may become an argument error: a harness passes
-/// both. `-us` says so on stderr rather than being silently dropped.
+/// `-mp` and `-us` are both live now, and neither may become an argument error: a harness
+/// passes both. Neither may announce itself as inert either — `-us` did until `--threads`
+/// started driving the T1 optimizer and the T2 referee scan, and a stale note is a lie a
+/// harness would go on believing.
 #[test]
 fn the_router_flags_are_still_accepted() {
     let workspace = Workspace::new("inert");
@@ -462,12 +468,19 @@ fn the_router_flags_are_still_accepted() {
         "4".as_ref(),
     ]);
     assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
-    assert!(stderr(&output).contains("-us 4 is accepted but inert"));
     assert!(
-        !stderr(&output).contains("-mp 20 is accepted but inert"),
-        "-mp is live now: {}",
+        !stderr(&output).contains("inert"),
+        "both flags are live now: {}",
         stderr(&output)
     );
+    // `--portfolio` is the other count flag on the same scan; a harness may pass it too.
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "--portfolio".as_ref(),
+        "1".as_ref(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
 }
 
 /// `--settle-trace` is the differential harness's producer: one `FRMETRIC settle` record per

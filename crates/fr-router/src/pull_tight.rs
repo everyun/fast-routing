@@ -42,12 +42,14 @@
 //!   semantic: upstream's own fork-smoothing path re-inserts the same way
 //!   (`PullTightAlgo.java:376-381`). Board-visible result is identical; only the
 //!   item id changes, which is why the driver's worklist is id-revalidated.
-//! * **Fork/end smoothing (`smoothen_end_corners_at_trace`, §6.4) is not
-//!   ported.** It is the one part of the family that needs the shove unit
-//!   (`insert_trace_without_cleaning` + `split_traces` + `normalize_traces` per
-//!   improvement round). The driver's call site is present and returns `false`,
-//!   so the net-filtered wrapper semantics of conformance row **D2** are what
-//!   lands the day it is filled in.
+//! * **Fork/end smoothing (`smoothen_end_corners_at_trace`, §6.4) is ported
+//!   for both flavors**, including the improvement round's
+//!   `insert_trace_without_cleaning` + `split_traces` + `normalize_traces`
+//!   triple. The one thing it does not carry over is upstream's second
+//!   `board.remove_item(curr_trace)` at `:383`, which is a no-op on an item
+//!   already off the board. §6.4 is also why a *round* is not a unit of bounded
+//!   work — one of its rounds normalizes a whole net — and therefore why the
+//!   driver arms a [`StallGuard`] as well as the round counter; see that type.
 //! * **90° mode shares the 45° rules**, which is upstream's own dispatch:
 //!   `get_instance` returns `PullTightAlgo45` for `NINETY_DEGREE` as well as for
 //!   `FORTYFIVE_DEGREE` (`:71-85`), and the rules read the restriction back
@@ -64,10 +66,12 @@ use fr_board::shape::{AngleRestriction, TileShape};
 use fr_datastructures::arena_shape_tree::QueryStack;
 use fr_datastructures::signum::Signum;
 use fr_geometry::planar::{
-    IntBox, IntOctagon, Line, Point, Polyline, Side, Simplex,
+    Direction, FloatPoint, IntBox, IntOctagon, Limits, Line, Point, Polyline, Side, Simplex,
 };
 use fr_rules::board_rules::BoardRules;
 
+use crate::batch::budget::BudgetMode;
+use crate::batch::schedule::JobDeadline;
 use crate::insert_forced::ChangedArea;
 
 /// `c_max_cos_angle` (`PullTightAlgo.java:24`) — angles closer than ~2.6° to
@@ -86,38 +90,91 @@ pub const MIN_TRANSLATE_DIST_FLOOR: i32 = 100;
 pub const DEFAULT_PULL_TIGHT_ACCURACY: i32 = 500;
 
 /// `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` — the per-connection pull-tight budget
-/// (`BatchAutorouter.java:57`, used at `:1331`).
-///
-/// Recorded for reference; the batch driver deliberately does **not** use it,
-/// see [`DEFAULT_ROUND_BUDGET`].
+/// (`BatchAutorouter.java:57`, used at `:1331`), which
+/// [`crate::batch::route_with_control`] arms verbatim in
+/// [`BudgetMode::Wall`].
 pub const TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS: u64 = 1000;
 
-/// `PULL_TIGHT_TIME_LIMIT` — the budget the interactive removal path uses
-/// (`RoutingBoard.java:49`).
+/// `PULL_TIGHT_TIME_LIMIT` — the budget upstream's removal path uses
+/// (`RoutingBoard.java:49`, used at `:144`), and what the keep-point pull-tight
+/// inside [`crate::insert_forced`] is armed with.
 pub const PULL_TIGHT_TIME_LIMIT_MS: u64 = 2000;
 
-/// The **deterministic** replacement for upstream's wall-clock stall guard: the
-/// number of per-polyline optimization rounds one `opt_changed_area` may spend.
+/// Optimization rounds that buy one *virtual* millisecond in
+/// [`BudgetMode::Deterministic`] — the pull-tight half of
+/// [`crate::batch::budget::DEFAULT_EFFORT_PER_VIRTUAL_MS`], in the currency this
+/// family actually spends.
 ///
-/// Upstream stops pull-tight after `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` (1000)
-/// milliseconds of wall clock. Adopting that verbatim was measurably wrong here:
-/// on a loaded machine the same board produced a different `.ses` (56 vs 34
-/// incomplete connections on `Issue034`) purely because fewer rounds fitted in
-/// the second, and this crate's documented contract is that every ordering and
-/// stopping input is an integer (see the crate docs, "Determinism", and
-/// `tests/determinism.rs`).
+/// **Provisional, and deliberately generous.** Measured on the heaviest single
+/// `opt_changed_area` in the fixture suite (`Issue102`, one connection):
+/// 17 229 rounds in 1 050 ms, i.e. ~16 rounds per millisecond. At 100 the
+/// deterministic guard is ~6× looser than the wall clock it stands in for, so
+/// it cannot bind *earlier* than upstream's own cutoff would on a healthy
+/// board — erring in that direction keeps `--deterministic` a mode that changes
+/// timing, not results — while still stopping a region that has stopped
+/// converging.
+pub const ROUNDS_PER_VIRTUAL_MS: u64 = 100;
+
+/// The stall guard a caller that never armed one falls back to: the number of
+/// per-polyline optimization rounds one [`PullTightAlgo`] may spend.
 ///
-/// A round budget is the same *kind* of guard — both exist only to stop a
-/// pathological region from spinning forever, since every individual move is
-/// already monotone (spec §5.5) — but it is reproducible. The value is far above
-/// what any fixture reaches, so it is a safety valve and not a quality knob; a
-/// board that trips it gets upstream's behaviour of leaving the region partly
-/// optimized.
+/// Every individual move is monotone (spec §5.5), so this exists only to stop a
+/// pathological *region* from spinning; it is a safety valve, not a quality
+/// knob. It is far above what any fixture's healthy connection reaches
+/// (measured maximum: 17 229), and a run that trips it gets upstream's
+/// behaviour of leaving the region partly optimized.
+///
+/// It is **not** a substitute for a wall budget, and the M3 gate is why that
+/// sentence is here. §6.4 fork smoothing made a round unboundedly expensive —
+/// one round normalizes a whole net — and on `Issue209-split10` the driver
+/// diverges outright: each round adds a trace to the net (372 → 650 over 300
+/// regional rounds) so each subsequent round costs more, and 2 000 000 of them
+/// is not a bound anybody can wait for. Drivers arm a [`StallGuard`], which in
+/// [`BudgetMode::Wall`] is upstream's own millisecond cutoff.
 pub const DEFAULT_ROUND_BUDGET: u64 = 2_000_000;
 
 /// The numeric backoff every binary search takes when a translation overshot
 /// its own side test (`shorten_value = sign * 0.5`, all loops).
 pub const NUMERIC_BACKOFF: f64 = 0.5;
+
+/// What stops a pull-tight that has stopped converging, in whichever currency
+/// the run's [`BudgetMode`] spends.
+///
+/// This is `ARCHITECTURE.md` "Budgets" applied to `PullTightAlgo`: the default
+/// mode keeps *upstream's wall-clock constants verbatim* — "per-connection
+/// `100 s·2^(pass−1)`, **pull-tight 1000/2000 ms**" — and `--deterministic`
+/// "replaces wall checks with effort-based virtual time". The two currencies
+/// are the same duality [`crate::batch::budget::ConnectionClock`] already
+/// spends for the maze; here the effort unit is one optimization round.
+///
+/// Whichever guard is armed, it is only ever the *inner* bound: the ambient job
+/// deadline ([`JobDeadline::ambient`], `--job-timeout` and the signal handler's
+/// stop flag) is polled by [`PullTightAlgo::is_stop_requested`] in both modes,
+/// because a stop from outside the router is not a budget decision. That is the
+/// same rule [`crate::batch::schedule::PassContext::connection_budget`] states
+/// for the per-connection clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StallGuard {
+    /// Upstream's millisecond cutoff, verbatim.
+    Wall(Duration),
+    /// Its deterministic equivalent, in optimization rounds.
+    Rounds(u64),
+}
+
+impl StallGuard {
+    /// The guard for `limit_ms` of upstream's budget under `mode`.
+    ///
+    /// [`BudgetMode::Wall`] is the constant itself; [`BudgetMode::Deterministic`]
+    /// buys rounds with it at [`ROUNDS_PER_VIRTUAL_MS`].
+    pub fn for_mode(mode: BudgetMode, limit_ms: u64) -> StallGuard {
+        match mode {
+            BudgetMode::Wall => StallGuard::Wall(Duration::from_millis(limit_ms)),
+            BudgetMode::Deterministic => {
+                StallGuard::Rounds(limit_ms.saturating_mul(ROUNDS_PER_VIRTUAL_MS))
+            }
+        }
+    }
+}
 
 /// The obstacle that rejected the previous candidate shape, remembered so the
 /// next candidate can be rejected without a tree traversal.
@@ -128,6 +185,38 @@ struct BindingObstacle {
     shape_index: u16,
     /// Store revision the cache was taken at; anything else invalidates it.
     revision: u64,
+}
+
+/// One contact trace's geometry at a fork, as §6.4's rules read it.
+///
+/// The four fields are upstream's `curr_other_trace_corner_approx`,
+/// `curr_other_trace_line`, `curr_other_prev_trace_line` and the contact's own
+/// corner count, already resolved for whichever end of the contact meets the
+/// trace being smoothed (`PullTightAlgo45.java:439-450`).
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ContactTraceLines {
+    /// The contact's neighbouring corner, approximated.
+    pub(crate) corner_approx: FloatPoint,
+    /// The contact's line at the fork, oriented **away** from the fork.
+    pub(crate) line: Line,
+    /// The line one further into the contact.
+    pub(crate) prev_line: Line,
+    /// The contact's corner count, which the any-angle end rule filters on.
+    pub(crate) corner_count: usize,
+}
+
+/// The winning contact of a fork-smoothing scan: which branch fired, and the
+/// contact geometry that fired it.
+pub(crate) struct ForkCandidate {
+    /// True when the joint doubles back at an acute angle (the acid trap).
+    pub(crate) acute_angle: bool,
+    /// True when the joint is perpendicular and the next line continues along
+    /// the contact.
+    pub(crate) bend: bool,
+    /// The contact that set the flags — `None` when neither fired.
+    pub(crate) contact: Option<ContactTraceLines>,
+    /// `curr_prev_end_corner.side_of(contact.line)` for that contact.
+    pub(crate) prev_corner_side: Side,
 }
 
 /// Everything `prepare_trace` reads off a trace before optimizing it, so the
@@ -159,17 +248,32 @@ pub struct PullTightAlgo<'b> {
     min_translate_dist: f64,
     keep_point: Option<Point>,
     keep_point_layer: i32,
-    /// Optional wall-clock cutoff. `None` — the batch default — keeps the run
-    /// reproducible; see [`DEFAULT_ROUND_BUDGET`].
+    /// Optional wall-clock cutoff — upstream's `TimeLimit`, armed by
+    /// [`PullTightAlgo::with_stall_guard`] in [`BudgetMode::Wall`].
     deadline: Option<Instant>,
     /// The deterministic stall guard, decremented once per optimization round.
     round_budget: u64,
+    /// The job's own budget: `--job-timeout` and the signal handler's stop
+    /// flag. Polled in **both** budget modes — see [`StallGuard`].
+    job_deadline: JobDeadline,
     /// Set when a guard fired, so callers can tell "converged" from "gave up".
     budget_exhausted: bool,
 
     // ---- per-trace working state (`pull_tight(Polyline,…)`, `:140-148`) ----
     curr_layer: i32,
     curr_half_width: i32,
+    /// The trace's **uncompensated** half width, which §6.4 needs separately.
+    ///
+    /// Upstream conflates the two: `smoothen_end_corners_at_trace` sets
+    /// `curr_half_width = p_trace.get_half_width()` (`PullTightAlgo.java:352`)
+    /// while `pull_tight(Polyline, …)` sets it to
+    /// `half_width + clearance_compensation_value` (`:141`). Those are the same
+    /// number upstream, because a headless run leaves clearance compensation off
+    /// (`SearchTreeManager.java:34`) and the value is always 0. Here the
+    /// compensated tree is real, so the two uses have to be told apart: the
+    /// oracle shape must carry the compensation or it is checked against a tree
+    /// that already expects it, and the re-inserted trace must not.
+    curr_raw_half_width: i32,
     curr_net_no_arr: NetNos,
     curr_cl_type: i32,
     /// The pins at the trace's end corners. `None` is upstream's `null`, which
@@ -192,7 +296,13 @@ impl<'b> PullTightAlgo<'b> {
     ///
     /// `min_translate_dist` is floored at [`MIN_TRANSLATE_DIST_FLOOR`] exactly as
     /// upstream does (`:83`). `time_limit` of `None` means "no limit"; upstream
-    /// spells that `p_time_limit <= 0` (`:56-60`).
+    /// spells that `p_time_limit <= 0` (`:56-60`) — the argument
+    /// `RoutingBoard.java:834` actually passes, and what a caller that arms a
+    /// [`StallGuard`] with [`PullTightAlgo::with_stall_guard`] passes too.
+    ///
+    /// A `PullTightAlgo` built and never given a guard falls back to
+    /// [`DEFAULT_ROUND_BUDGET`], which is a *safety valve* and not a budget;
+    /// every production driver arms one.
     // Upstream's `get_instance` takes the same eight; keeping them positional
     // keeps the call sites diffable against the Java.
     #[allow(clippy::too_many_arguments)]
@@ -221,9 +331,11 @@ impl<'b> PullTightAlgo<'b> {
             keep_point_layer,
             deadline: time_limit.map(|limit| Instant::now() + limit),
             round_budget: DEFAULT_ROUND_BUDGET,
+            job_deadline: JobDeadline::ambient(),
             budget_exhausted: false,
             curr_layer: 0,
             curr_half_width: 0,
+            curr_raw_half_width: 0,
             curr_net_no_arr: NetNos::default(),
             curr_cl_type: 0,
             contact_pins: None,
@@ -237,13 +349,62 @@ impl<'b> PullTightAlgo<'b> {
         }
     }
 
-    /// `is_stop_requested` (`:150-170`), with the round budget standing in for
-    /// upstream's wall clock. This crate has no stoppable thread.
+    /// Arms the driver's stall guard — upstream's `p_time_limit`, in whichever
+    /// currency the run's [`BudgetMode`] spends. See [`StallGuard`].
     ///
-    /// The budget is checked first and is the only guard the batch driver arms,
-    /// so a run's output does not depend on how fast the machine is.
+    /// A [`StallGuard::Rounds`] guard *replaces* [`DEFAULT_ROUND_BUDGET`]
+    /// rather than adding to it: the fallback is the value for a caller that
+    /// said nothing, and a caller that named a number means that number.
+    #[must_use]
+    pub fn with_stall_guard(mut self, guard: StallGuard) -> PullTightAlgo<'b> {
+        match guard {
+            StallGuard::Wall(limit) => {
+                self.deadline = Instant::now().checked_add(limit);
+            }
+            StallGuard::Rounds(rounds) => self.round_budget = rounds,
+        }
+        self
+    }
+
+    /// Replaces the ambient job budget this was built with.
+    ///
+    /// The mirror of
+    /// [`PassContext::with_deadline`](crate::batch::schedule::PassContext::with_deadline),
+    /// and for the same reason: a test needs a budget it owns, so that proving
+    /// the poll does not mean setting the process-wide stop flag every other
+    /// test in the binary is also reading.
+    #[must_use]
+    pub fn with_job_deadline(mut self, deadline: JobDeadline) -> PullTightAlgo<'b> {
+        self.job_deadline = deadline;
+        self
+    }
+
+    /// `is_stop_requested` (`:150-170`) — upstream's time limit and its
+    /// stoppable thread, plus the deterministic round budget.
+    ///
+    /// The three guards, in the order they are cheapest to answer:
+    ///
+    /// * the **round budget**, which is a plain integer and is what
+    ///   [`BudgetMode::Deterministic`] spends;
+    /// * the **job deadline**, which is `--job-timeout` and the `SIGTERM`
+    ///   handler's flag — upstream's `stoppable_thread.is_stop_requested()`
+    ///   (`:151`), the argument `BatchAutorouter` passes its `this.thread` as
+    ///   (`:1332`). With no `--job-timeout` armed this is one relaxed atomic
+    ///   load and no clock read at all, so a plain run pays nothing for it;
+    /// * the **wall cutoff**, upstream's `TimeLimit.limit_exceeded()` (`:154`).
+    ///
+    /// The job deadline is polled in both budget modes on purpose: an operator
+    /// stopping the process is not a budget decision, and a run that is killed
+    /// mid-pull-tight loses the board it never wrote. `--deterministic` with a
+    /// wall budget is already documented as a contradiction whose
+    /// between-connections poll still stops it
+    /// ([`crate::batch::schedule::PassContext::connection_budget`]); this is the
+    /// same rule one level down.
     pub fn is_stop_requested(&self) -> bool {
         if self.round_budget == 0 {
+            return true;
+        }
+        if self.job_deadline.expired() {
             return true;
         }
         self.deadline
@@ -292,6 +453,13 @@ impl<'b> PullTightAlgo<'b> {
         let mut anything_changed = false;
         let mut something_changed = true;
         while something_changed {
+            // The regional round itself has to be polled, not just the traces
+            // inside it: a round that finds no candidate on any layer still
+            // pays the per-layer region query, and the §6.4 branch's `break`
+            // makes one improvement cost a whole extra round of them.
+            if self.is_stop_requested() {
+                return anything_changed;
+            }
             something_changed = false;
             for layer in 0..changed_area.layer_count() as i32 {
                 let region = changed_area.area(layer);
@@ -343,10 +511,15 @@ impl<'b> PullTightAlgo<'b> {
                         if self.split_traces_at_keep_point() {
                             break;
                         }
+                    } else if self.smoothen_end_corners_at_trace(id, changed_area) {
+                        // `:123-126` — §6.4. The `break` is upstream's, and it
+                        // is not cosmetic: this branch removes and re-inserts
+                        // items, so the rest of the snapshot may name ids that
+                        // no longer exist.
+                        something_changed = true;
+                        anything_changed = true;
+                        break;
                     }
-                    // `else if smoothen_end_corners_at_trace(t)` — §6.4, the
-                    // net-filtered wrapper of conformance row D2. Not ported;
-                    // see the module docs.
                 }
             }
         }
@@ -489,6 +662,7 @@ impl<'b> PullTightAlgo<'b> {
         // `:140-148` — the working state, with the tree's clearance
         // compensation folded into the half width.
         self.curr_layer = prep.layer;
+        self.curr_raw_half_width = prep.half_width;
         self.curr_half_width = prep.half_width
             + self
                 .board
@@ -607,6 +781,391 @@ impl<'b> PullTightAlgo<'b> {
             }
         }
         false
+    }
+
+    // ---- §6.4 fork/end smoothing -----------------------------------------
+
+    /// `smoothen_end_corners_at_trace` (`:347-356`) — the net-filtered wrapper
+    /// that installs the per-trace working state, then `_1` (`:361-405`), the
+    /// remove/re-insert/split/normalize improvement loop.
+    ///
+    /// This is the branch `opt_changed_area` takes when `pull_tight` could not
+    /// improve a trace: it slides the trace's *end corner* along the trace it
+    /// forks off, chamfering the acute joint upstream's `insert` leaves behind.
+    ///
+    /// Three details of the wrapper are load-bearing and easy to lose:
+    ///
+    /// * the net filter is `nets_equal(only_net_no_arr)` — the same equality the
+    ///   per-trace guard uses, not a subset test (`:348`);
+    /// * `curr_half_width` here is the trace's **raw** half width (`:352`), not
+    ///   the clearance-compensated one [`PullTightAlgo::prepare_trace`]
+    ///   installs. It is what the new trace is re-inserted with, so compensating
+    ///   it would fatten every smoothed trace;
+    /// * `contact_pins` is forced to `None` for the whole loop (`:369-371`) so
+    ///   the trace may slide onto a contact trace that ends at a pin, and
+    ///   restored afterwards. `_2` sets it back to the *new* trace's touching
+    ///   pins before `skip_segments_of_length_0` runs (`:441`).
+    ///
+    /// Returns true when the board changed.
+    pub fn smoothen_end_corners_at_trace(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> bool {
+        let Some(item) = self.board.store().get(id) else {
+            return false;
+        };
+        let ItemKind::Trace(trace) = &item.kind else {
+            return false;
+        };
+        // `:348` — the wrapper's own net filter.
+        if !self.only_net_no_arr.is_empty()
+            && item.nets.as_slice() != self.only_net_no_arr.as_slice()
+        {
+            return false;
+        }
+        // `:362-364` — `_1`'s first guard.
+        if item.is_shove_fixed() {
+            return false;
+        }
+        let layer = trace.layer;
+        let raw_half_width = trace.half_width;
+        self.curr_layer = layer;
+        self.curr_raw_half_width = raw_half_width;
+        self.curr_net_no_arr = item.nets.clone();
+        self.curr_cl_type = item.clearance_class;
+        // The oracle `reposition_line` reaches through must see this trace's
+        // class compensated into the tree, exactly as `prepare_trace` arranges
+        // it for the pull-tight path — and the check shape must then carry the
+        // same compensation. Upstream can get away with the raw half width at
+        // `:352` only because its compensation is identically 0; using it here
+        // under-inflates every candidate shape by exactly one compensation and
+        // lets the `bend` branch slide a trace that far into a foreign pin.
+        self.board.ensure_compensated_tree(self.curr_cl_type);
+        self.curr_half_width = raw_half_width
+            + self
+                .board
+                .clearances()
+                .compensation_value(self.curr_cl_type, layer);
+        self.binding = None;
+
+        let saved_contact_pins = self.contact_pins.take();
+        let result = self.smoothen_end_corners_at_trace_1(id, changed_area);
+        self.contact_pins = saved_contact_pins;
+        result
+    }
+
+    /// `smoothen_end_corners_at_trace_1` (`:361-405`).
+    fn smoothen_end_corners_at_trace_1(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> bool {
+        let mut result = false;
+        let mut curr = id;
+        while !self.is_stop_requested() && self.take_round() {
+            let Some(adjusted) = self.smoothen_end_corners_at_trace_2(curr, changed_area) else {
+                break;
+            };
+            let Some(item) = self.board.store().get(curr) else {
+                break;
+            };
+            let ItemKind::Trace(trace) = &item.kind else {
+                break;
+            };
+            let layer = trace.layer;
+            let clearance_class = item.clearance_class;
+            let fixed_state = item.fixed_state;
+            let nets = item.nets.clone();
+            let half_width = self.curr_raw_half_width;
+
+            // `:376-381` — remove, then re-insert the adjusted polyline. The
+            // release removes `curr_trace` a second time at `:383`; that call
+            // is a no-op and is not reproduced.
+            self.board.remove_item(curr);
+            let Some(inserted) = self.board.insert_trace_without_cleaning(
+                adjusted.clone(),
+                layer,
+                half_width,
+                nets.clone(),
+                clearance_class,
+                fixed_state,
+            ) else {
+                break;
+            };
+            result = true;
+            curr = inserted;
+
+            // `:385-399` — split at both new end corners and normalize, per net.
+            let mut keep_point_split = false;
+            for net_no in nets.as_slice().iter().copied() {
+                self.board
+                    .split_traces(&adjusted.first_corner(), layer, net_no);
+                self.board
+                    .split_traces(&adjusted.last_corner(), layer, net_no);
+                self.board.normalize_traces(net_no);
+                if self.split_traces_at_keep_point() {
+                    keep_point_split = true;
+                    break;
+                }
+            }
+            if keep_point_split {
+                // `:397` returns straight out of `_1`.
+                return true;
+            }
+        }
+        result
+    }
+
+    /// `smoothen_end_corners_at_trace_2` (`:429-450`) — try the start corner,
+    /// then the end corner, join the moved corner into the changed area, and
+    /// clean the result up.
+    fn smoothen_end_corners_at_trace_2(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        // `:430-432` — the trace may have been removed by the previous round's
+        // normalization.
+        if !self
+            .board
+            .store()
+            .get(id)
+            .is_some_and(|item| matches!(item.kind, ItemKind::Trace(_)))
+        {
+            return None;
+        }
+        let layer = self.curr_layer;
+        let mut result = self.smoothen_start_corner_at_trace(id, changed_area);
+        if let Some(polyline) = result.as_ref() {
+            changed_area.join_point(polyline.corner_approx(0), layer);
+        } else {
+            result = self.smoothen_end_corner_at_trace(id, changed_area);
+            if let Some(polyline) = result.as_ref() {
+                changed_area.join_point(polyline.corner_approx(polyline.corner_count() - 1), layer);
+            }
+        }
+        let polyline = result?;
+        // `:441` — the pin set is refreshed from the *adjusted* geometry before
+        // the length-0 cleanup, because that cleanup checks clearance.
+        let contact_pins = self.touching_pins_at_end_corners(
+            &polyline,
+            layer,
+            self.curr_raw_half_width,
+            &self.curr_net_no_arr.clone(),
+            self.curr_cl_type,
+        );
+        self.contact_pins = Some(contact_pins);
+        let cleaned = self
+            .skip_segments_of_length_0(&polyline)
+            .unwrap_or(polyline);
+        if cleaned.arr.len() < 3 {
+            return None;
+        }
+        Some(cleaned)
+    }
+
+    /// The angle-mode dispatch of `smoothen_start_corner_at_trace` (`:471`).
+    fn smoothen_start_corner_at_trace(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        match self.board.angle_restriction() {
+            AngleRestriction::None => self.smoothen_start_corner_at_trace_any(id, changed_area),
+            _ => self.smoothen_start_corner_at_trace_45(id, changed_area),
+        }
+    }
+
+    /// The angle-mode dispatch of `smoothen_end_corner_at_trace` (`:473`).
+    fn smoothen_end_corner_at_trace(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        match self.board.angle_restriction() {
+            AngleRestriction::None => self.smoothen_end_corner_at_trace_any(id, changed_area),
+            _ => self.smoothen_end_corner_at_trace_45(id, changed_area),
+        }
+    }
+
+    /// The contact traces at one end corner, read the way both fork-smoothing
+    /// rules read them (`PullTightAlgo45.java:433-450`, the any-angle copy at
+    /// `PullTightAlgoAnyAngle.java:744-758`).
+    ///
+    /// `None` is upstream's `return null` from the *whole* rule: a contact that
+    /// is not a `PolylineTrace`, or is shove-fixed, aborts the smoothing. An
+    /// empty vector means "no contacts at all", which upstream lets fall
+    /// through to the `acute_angle == bend == false` return.
+    ///
+    /// **The order is descending by id, and it decides the result.**
+    /// `get_start_contacts` / `get_end_contacts` return a `TreeSet<Item>`
+    /// (`Trace.java:101-116`, `:172-199`) and `Item.compareTo` is
+    /// `other.id_no - this.id_no` (`Item.java:94-99`), so an item sorts *before*
+    /// another exactly when its own id is larger — the set iterates **highest id
+    /// first**. [`PullTightAlgo::scan_fork_contacts`] keeps the *last* contact
+    /// that fires, so at a fork where two contacts both fire, ascending order
+    /// picks the opposite one from upstream and the chamfer is built against the
+    /// wrong branch. Same tie-break, same reason, as
+    /// [`PullTightAlgo::picked_trace_at`].
+    pub(crate) fn contact_trace_lines_at(
+        &mut self,
+        id: ItemId,
+        end_corner: &Point,
+    ) -> Option<Vec<ContactTraceLines>> {
+        let mut contacts = Vec::new();
+        self.board.normal_contacts_at(id, end_corner, &mut contacts);
+        contacts.sort_unstable_by(|a, b| b.cmp(a));
+        let mut result = Vec::with_capacity(contacts.len());
+        for contact in contacts {
+            let item = self.board.store().get(contact)?;
+            let ItemKind::Trace(trace) = &item.kind else {
+                return None;
+            };
+            if item.is_shove_fixed() {
+                return None;
+            }
+            let polyline = &trace.polyline;
+            if polyline.arr.len() < 3 {
+                return None;
+            }
+            let lines = if polyline.first_corner() == *end_corner {
+                ContactTraceLines {
+                    corner_approx: polyline.corner_approx(1),
+                    line: polyline.arr[1],
+                    prev_line: polyline.arr[2],
+                    corner_count: polyline.corner_count(),
+                }
+            } else {
+                let corner_no = polyline.corner_count() - 2;
+                ContactTraceLines {
+                    corner_approx: polyline.corner_approx(corner_no),
+                    line: polyline.arr[corner_no + 1].opposite(),
+                    prev_line: polyline.arr[corner_no],
+                    corner_count: polyline.corner_count(),
+                }
+            };
+            result.push(lines);
+        }
+        Some(result)
+    }
+
+    /// The polyline of `id`, when `id` is still a trace on the board.
+    pub(crate) fn trace_polyline_of(&self, id: ItemId) -> Option<Polyline> {
+        match &self.board.store().get(id)?.kind {
+            ItemKind::Trace(trace) => Some(trace.polyline.clone()),
+            _ => None,
+        }
+    }
+
+    /// The contact scan shared by all four §6.4 rules
+    /// (`PullTightAlgo45.java:433-473` and its three copies).
+    ///
+    /// Walks the contacts at `end_corner` and classifies the joint. Upstream
+    /// keeps **the last** contact that set a flag, not the first, and lets a
+    /// later `bend` overwrite an earlier `acute_angle`'s bookkeeping while both
+    /// flags stay set — the branch order at the bottom of each rule then
+    /// resolves the tie in favour of `acute_angle`. Both are reproduced.
+    ///
+    /// "Last" is only meaningful against upstream's iteration order, which is
+    /// **descending by id** — see [`PullTightAlgo::contact_trace_lines_at`],
+    /// which is where that order is established and argued.
+    ///
+    /// `None` propagates upstream's `return null` out of the whole rule.
+    ///
+    /// * `orthogonal_contact_line` is the 45° rules' extra condition
+    ///   (`PullTightAlgo45.java:454`), absent from the any-angle copies;
+    /// * `skip_two_corner_contacts` is the any-angle **end** rule's extra guard
+    ///   (`PullTightAlgoAnyAngle.java:867`), absent from the other three.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn scan_fork_contacts(
+        &mut self,
+        id: ItemId,
+        end_corner: &Point,
+        prev_end_corner: &Point,
+        line_direction: &Direction,
+        prev_line_direction: &Direction,
+        corner_count: usize,
+        orthogonal_contact_line: bool,
+        skip_two_corner_contacts: bool,
+    ) -> Option<ForkCandidate> {
+        let contacts = self.contact_trace_lines_at(id, end_corner)?;
+        let mut fork = ForkCandidate {
+            acute_angle: false,
+            bend: false,
+            contact: None,
+            prev_corner_side: Side::Collinear,
+        };
+        for contact in contacts {
+            if skip_two_corner_contacts && contact.corner_count <= 2 {
+                continue;
+            }
+            let prev_corner_side = prev_end_corner.side_of(&contact.line);
+            let projection = line_direction.projection(&contact.line.direction());
+            let mut found = false;
+            if projection == Signum::Positive && prev_corner_side != Side::Collinear {
+                if !orthogonal_contact_line || contact.line.direction().is_orthogonal() {
+                    fork.acute_angle = true;
+                    found = true;
+                }
+            } else if projection == Signum::Zero
+                && corner_count > 2
+                && prev_line_direction.projection(&contact.line.direction()) == Signum::Positive
+            {
+                fork.bend = true;
+                found = true;
+            }
+            if found {
+                fork.contact = Some(contact);
+                fork.prev_corner_side = prev_corner_side;
+            }
+        }
+        Some(fork)
+    }
+
+    /// The chamfer line the `acute_angle` branch of all four §6.4 rules builds
+    /// (`PullTightAlgo45.java:475-497` and its three copies, which differ only
+    /// in the two `turn_45_degree` factors).
+    ///
+    /// The distance is `(√2 − 1) · curr_half_width` clamped by the distances to
+    /// the previous end corner and to the contact's neighbouring corner, then
+    /// `max(d − 1, 1)` — the −1 is upstream's integer safety margin, and the
+    /// `>= 0.99` gate below it is why a joint with no room simply stays acute.
+    ///
+    /// `None` is upstream's "fall through and return null".
+    pub(crate) fn fork_chamfer_line(
+        &self,
+        end_corner: &Point,
+        prev_end_corner: &Point,
+        contact: &ContactTraceLines,
+        prev_corner_side: Side,
+        turns: (i32, i32),
+    ) -> Option<Line> {
+        let (turn_when_left, turn_otherwise) = turns;
+        let new_line_dir = if prev_corner_side == Side::OnTheLeft {
+            contact.line.direction().turn_45_degree(turn_when_left)
+        } else {
+            contact.line.direction().turn_45_degree(turn_otherwise)
+        };
+        let translate_line =
+            Line::new_from_point_and_dir(end_corner.to_float().round(), &new_line_dir);
+        // `(√2 − 1) · half_width` is the cut that turns a right angle of a trace
+        // this wide into a 45° chamfer, so it is the **raw** width, not the
+        // oracle's compensated one.
+        let mut translate_dist = (Limits::SQRT2 - 1.0) * f64::from(self.curr_raw_half_width);
+        let prev_corner_dist = translate_line
+            .signed_distance(&prev_end_corner.to_float())
+            .abs();
+        let other_dist = translate_line.signed_distance(&contact.corner_approx).abs();
+        translate_dist = translate_dist.min(prev_corner_dist).min(other_dist);
+        if translate_dist < 0.99 {
+            return None;
+        }
+        translate_dist = (translate_dist - 1.0).max(1.0);
+        if translate_line.side_of_point(prev_end_corner) == Side::OnTheLeft {
+            translate_dist = -translate_dist;
+        }
+        Some(translate_line.translate(translate_dist))
     }
 
     /// The trace `pick_items(point, layer, TRACES).iterator().next()` answers
@@ -763,7 +1322,7 @@ impl<'b> PullTightAlgo<'b> {
             return None;
         }
         for index in 2..polyline.arr.len() - 2 {
-            let Some(new_line) = self.reposition_line(&polyline.arr, index, changed_area) else {
+            let Some(new_line) = self.reposition_line_base(&polyline.arr, index, changed_area) else {
                 continue;
             };
             self.scratch_lines.clear();
@@ -793,7 +1352,7 @@ impl<'b> PullTightAlgo<'b> {
     ///   point is backed off by [`NUMERIC_BACKOFF`] and retried, rather than
     ///   accepted (`:245-255`);
     /// * a translation that does not move the line at all aborts (`:238-242`).
-    fn reposition_line(
+    pub(crate) fn reposition_line_base(
         &mut self,
         line_arr: &[Line],
         no: usize,
@@ -1012,6 +1571,22 @@ impl<'b> PullTightAlgo<'b> {
     pub(crate) fn min_translate_dist(&self) -> f64 {
         self.min_translate_dist
     }
+}
+
+/// `new Polyline(Line[])` with upstream's degeneracy check folded in.
+///
+/// The constructor drops consecutive parallel lines and overlaps, and can be
+/// left with fewer than three — a polyline with no corners, which upstream then
+/// fails to insert. Answering `None` here is the same outcome one step earlier.
+pub(crate) fn polyline_from_lines(lines: &[Line]) -> Option<Polyline> {
+    if lines.len() < 3 {
+        return None;
+    }
+    let polyline = Polyline::new_from_lines(lines);
+    if polyline.arr.len() < 3 {
+        return None;
+    }
+    Some(polyline)
 }
 
 /// `IntOctagon.is_outside(Point)` — outside any of the eight half planes.

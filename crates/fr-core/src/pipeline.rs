@@ -56,14 +56,16 @@ use std::path::{Path, PathBuf};
 use fr_board::item::ItemKind;
 use fr_board::Board;
 use fr_check::{
-    board_connectivity, check_clearance, score, shape_store, BoardConnectivity, BoardStats, Score,
-    ScoreWeights, StoreView, Violation,
+    board_connectivity, check_clearance_parallel, score, shape_store, AnchorIndex,
+    BoardConnectivity, BoardStats, Score, ScoreWeights, StoreView, Violation,
 };
 use fr_io::specctra::{self, ImportError, ImportOptions, ImportedDesign, SesInput, Unit};
 use fr_router::batch::budget::BudgetPolicy;
+use fr_router::batch::portfolio::{self, PortfolioConfig};
+use fr_router::batch::threads::Threads;
 use fr_router::batch::BatchRouter;
 use fr_router::fanout::{fanout_board, FanoutConfig};
-use fr_router::optimizer::{run_optimization_stage, LoopExit};
+use fr_router::optimizer::{run_optimization_stage_with_threads, LoopExit};
 use fr_router::StopReason;
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 
@@ -109,6 +111,19 @@ pub struct MazeOptions {
     /// command line is the only way to reach the off state, exactly as
     /// `--router.optimizer.enabled=false` is upstream.
     pub optimize: bool,
+    /// The worker budget the caller asked for: `None` = "not stated",
+    /// `Some(0)` = "pick for me", `Some(n)` = exactly `n`. `--threads` on the
+    /// command line.
+    ///
+    /// Kept as the *request* rather than as a resolved [`Threads`] so that
+    /// [`MazeOptions::threads`] can apply the `--deterministic` rule whatever
+    /// order the builders were called in.
+    pub threads_requested: Option<usize>,
+    /// Route passes to race against one another on board clones, keeping the
+    /// best referee score (`fr_router::batch::portfolio`). `1` — the default —
+    /// is the plain single run and clones nothing. `--portfolio` on the command
+    /// line.
+    pub portfolio: usize,
 }
 
 impl Default for MazeOptions {
@@ -118,6 +133,8 @@ impl Default for MazeOptions {
             fanout: false,
             deterministic: false,
             optimize: true,
+            threads_requested: None,
+            portfolio: 1,
         }
     }
 }
@@ -148,6 +165,53 @@ impl MazeOptions {
         self.optimize = optimize;
         self
     }
+
+    /// Records the caller's `--threads` request. See
+    /// [`MazeOptions::threads_requested`].
+    pub fn with_threads(mut self, requested: Option<usize>) -> MazeOptions {
+        self.threads_requested = requested;
+        self
+    }
+
+    /// Sets the portfolio arm count (`--portfolio`). Floored at one.
+    pub fn with_portfolio(mut self, arms: usize) -> MazeOptions {
+        self.portfolio = arms.max(1);
+        self
+    }
+
+    /// The worker budget actually in force.
+    ///
+    /// # An absent `--threads` is one worker, not the machine's core count
+    ///
+    /// The T1 optimizer is *deterministic* but it is not the *same heuristic* as
+    /// the sequential one — it trusts a worker verdict that a promotion inside
+    /// the same window may have staled, which can hide an improvement
+    /// (`fr_router::optimizer::parallel`). Defaulting it on would therefore move
+    /// the quality gate as a side effect of a performance change, and would move
+    /// it by a different amount on every machine, because the default would be
+    /// `available_parallelism`. So an absent flag means one worker. `--threads
+    /// 0` is how a caller says "pick from the machine" and gets
+    /// [`Threads::automatic`].
+    ///
+    /// # `--deterministic` and an unstated thread count
+    ///
+    /// `--deterministic` exists so a run is byte-reproducible
+    /// (`ARCHITECTURE.md`, "Budgets"). T1 *is* deterministic — the promoter
+    /// applies winners in sweep order regardless of completion order, and
+    /// workers are assigned items by a fixed round-robin — but it is
+    /// deterministic **at a fixed worker count**, and two thread counts are two
+    /// configurations of the heuristic, not two runs of one. So
+    /// `--deterministic` does not force one thread: it refuses a thread count
+    /// that came from the *machine*, because that number cannot be reproduced
+    /// elsewhere. `--deterministic --threads 4` is honoured and reproduces
+    /// byte-for-byte anywhere; `--deterministic --threads 0` falls back to one.
+    pub fn threads(&self) -> Threads {
+        match (self.deterministic, self.threads_requested) {
+            (_, None) => Threads::single(),
+            (true, Some(0)) => Threads::single(),
+            (_, requested) => Threads::resolve(requested),
+        }
+    }
 }
 
 /// What the optimization stage did, `None` when it did not run.
@@ -171,6 +235,27 @@ pub struct OptimizerReport {
     pub incomplete_count: usize,
     /// Why the loop stopped, as a short label.
     pub exit: &'static str,
+}
+
+/// What a `--portfolio N` race did, `None` when only one arm ran.
+///
+/// The numbers the experiment `ARCHITECTURE.md` asks for is answerable from:
+/// *"does a diverse portfolio find more connections within the same wall
+/// budget?"* — [`PortfolioReport::arm_incompletes`] is that question's answer,
+/// per arm.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PortfolioReport {
+    /// Arms raced.
+    pub arms: usize,
+    /// Index of the arm whose board was adopted; `0` is the default item order.
+    pub winner: usize,
+    /// Whether a shuffled arm beat the default one. `false` means the race cost
+    /// cores and bought nothing on this board.
+    pub shuffle_won: bool,
+    /// Ratsnest incompletes per arm, in arm order.
+    pub arm_incompletes: Vec<usize>,
+    /// `getNormalizedScore` per arm, in arm order.
+    pub arm_scores: Vec<f64>,
 }
 
 /// What the router stage did, `None` when it did not run.
@@ -206,6 +291,8 @@ pub struct RouterReport {
     /// The post-routing optimization stage; `None` when it was switched off or
     /// skipped.
     pub optimizer: Option<OptimizerReport>,
+    /// The `--portfolio` race; `None` when a single arm ran.
+    pub portfolio: Option<PortfolioReport>,
 }
 
 /// Millimetres to board units for this design.
@@ -260,11 +347,43 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     } else {
         BudgetPolicy::default()
     };
+    let threads = options.threads();
     let mut router = BatchRouter::new(&design.rules, &settings)
         .with_fanout(options.fanout)
         .with_board_units_per_mm(scale)
         .with_budget(budget);
-    let outcome = router.run(&mut design.board, options.max_passes);
+    // T1b. A portfolio of one is the plain run and clones nothing, so the
+    // default path through here is byte-identical to the pre-portfolio one; the
+    // `total_items_routed` item-cap check below reads the router either way,
+    // and a portfolio arm's copy of it is discarded with the losing arms.
+    let outcome = if options.portfolio > 1 {
+        let race = portfolio::race(
+            &mut design.board,
+            &design.rules,
+            &settings,
+            PortfolioConfig {
+                arms: options.portfolio,
+                max_passes: options.max_passes,
+                budget,
+                fanout: options.fanout,
+                board_units_per_mm: scale,
+            },
+        );
+        report.portfolio = Some(PortfolioReport {
+            arms: race.arms.len(),
+            winner: race.winner,
+            shuffle_won: race.shuffle_won(),
+            arm_incompletes: race
+                .arms
+                .iter()
+                .map(|arm| arm.score.incomplete_count)
+                .collect(),
+            arm_scores: race.arms.iter().map(|arm| arm.score.normalized).collect(),
+        });
+        race.outcome()
+    } else {
+        router.run(&mut design.board, options.max_passes)
+    };
     report.passes = outcome.passes.len();
     report.routed = outcome.passes.iter().map(|pass| pass.routed).sum();
     report.ripped = outcome
@@ -297,18 +416,22 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     // exactly the work that would spend it.
     let budget_spent = fr_router::job_budget_spent();
     if options.optimize && !hit_the_item_cap && !budget_spent {
-        report.optimizer =
-            run_optimization_stage(&mut design.board, &design.rules, &settings, scale).map(
-                |outcome| OptimizerReport {
-                    passes: outcome.passes.len(),
-                    items_optimized: outcome.total_items_optimized.max(0) as usize,
-                    items_improved: outcome.items_improved(),
-                    score_before: outcome.score_before.normalized,
-                    score_after: outcome.score_after.normalized,
-                    incomplete_count: outcome.score_after.incomplete_count,
-                    exit: describe_optimizer_exit(outcome.exit),
-                },
-            );
+        report.optimizer = run_optimization_stage_with_threads(
+            &mut design.board,
+            &design.rules,
+            &settings,
+            scale,
+            threads,
+        )
+        .map(|outcome| OptimizerReport {
+            passes: outcome.passes.len(),
+            items_optimized: outcome.total_items_optimized.max(0) as usize,
+            items_improved: outcome.items_improved(),
+            score_before: outcome.score_before.normalized,
+            score_after: outcome.score_after.normalized,
+            incomplete_count: outcome.score_after.incomplete_count,
+            exit: describe_optimizer_exit(outcome.exit),
+        });
     }
     // The stage the board actually left is the one the incomplete count has to
     // describe; the referee re-derives it below and the two must agree.
@@ -417,6 +540,11 @@ pub struct RoutingJob {
     import_options: ImportOptions,
     weights: ScoreWeights,
     stage: RouterStage,
+    /// The referee's **T2** worker budget. `Threads::single()` unless a caller
+    /// says otherwise; [`RoutingJob::with_stage`] adopts the routing stage's own
+    /// `--threads`, so the router and the referee never disagree about how much
+    /// of the machine this job may use.
+    referee_threads: Threads,
 }
 
 impl std::fmt::Debug for RoutingJob {
@@ -427,6 +555,7 @@ impl std::fmt::Debug for RoutingJob {
             .field("import_options", &self.import_options)
             .field("weights", &self.weights)
             .field("stage", &self.stage)
+            .field("referee_threads", &self.referee_threads)
             .finish()
     }
 }
@@ -444,6 +573,7 @@ impl RoutingJob {
             import_options: ImportOptions::default(),
             weights: ScoreWeights::V2,
             stage: RouterStage::default(),
+            referee_threads: Threads::single(),
         }
     }
 
@@ -474,7 +604,19 @@ impl RoutingJob {
 
     /// Selects the router stage. Only [`RouterStage::ImportOnly`] exists in M1.
     pub fn with_stage(mut self, stage: RouterStage) -> RoutingJob {
+        // A routing stage states the machine budget for the whole job, referee
+        // included: `--threads` is one number, not two.
+        if let RouterStage::Maze(options) = stage {
+            self.referee_threads = options.threads();
+        }
         self.stage = stage;
+        self
+    }
+
+    /// Overrides the referee's worker budget, for a job with no routing stage
+    /// (`--import-only`, the `-drc` and `-do` oracles) that still wants T2.
+    pub fn with_referee_threads(mut self, threads: Threads) -> RoutingJob {
+        self.referee_threads = threads;
         self
     }
 
@@ -514,7 +656,7 @@ impl RoutingJob {
             RouterStage::Maze(options) => Some(run_maze_stage(&mut design, options)),
         };
         let routed = router.is_some();
-        let referee = Referee::judge(&design, &self.weights);
+        let referee = Referee::judge_with_threads(&design, &self.weights, self.referee_threads);
         let session = write_session(&design, &self.design_name);
         Ok(JobReport {
             design_name: self.design_name.clone(),
@@ -605,6 +747,31 @@ pub struct Referee {
 impl Referee {
     /// Runs the clearance DRC and the ratsnest, then scores the result.
     pub fn judge(design: &ImportedDesign, weights: &ScoreWeights) -> Referee {
+        Referee::judge_with_threads(design, weights, Threads::single())
+    }
+
+    /// [`Referee::judge`] with **T2**: the violation scan fanned out over
+    /// `threads` workers.
+    ///
+    /// Safe to turn on by default, and turned on by default, because
+    /// `fr_check::check_clearance_parallel` returns *the same `Vec<Violation>`*
+    /// as the sequential scan — not an equivalent multiset, the same records in
+    /// the same order — which
+    /// `fr-check/tests/property_test.rs::the_parallel_scan_returns_exactly_the_sequential_result`
+    /// pins against the sequential scan on 25 random boards at three thread
+    /// counts. A referee that could disagree with itself would be worthless: it
+    /// judges both tools' output in the bench.
+    ///
+    /// The ratsnest is **not** parallelised. `ARCHITECTURE.md` already predicted
+    /// why — "incremental connectivity deletes much of what T2 would
+    /// parallelize" — and the profile agrees: `board_connectivity` is a
+    /// union-find over an anchor index, linear and cheap next to the
+    /// `O(candidates)` shape-intersection scan next to it.
+    pub fn judge_with_threads(
+        design: &ImportedDesign,
+        weights: &ScoreWeights,
+        threads: Threads,
+    ) -> Referee {
         let board = &design.board;
         let shapes = shape_store(board);
         let view = StoreView::new(
@@ -613,7 +780,8 @@ impl Referee {
             &design.rules.clearance_matrix,
             board.layers().len(),
         );
-        let violations = check_clearance(&view);
+        let anchors = AnchorIndex::build(&view);
+        let violations = check_clearance_parallel(&view, &anchors, threads.get());
         let connectivity = board_connectivity(&view);
         let mut stats = board_geometry_stats(design);
         stats.max_connections = connectivity.max_connections as u64;
@@ -798,9 +966,7 @@ mod tests {
             "{}",
             &report.ses[..report.ses.len().min(60)]
         );
-        assert!(report
-            .ses
-            .contains("(base_design \"pipeline_smoke.dsn\")"));
+        assert!(report.ses.contains("(base_design \"pipeline_smoke.dsn\")"));
         assert!(report.ses.contains("(routes"));
     }
 

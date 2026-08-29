@@ -203,8 +203,7 @@ mod tests {
         let scoring = fixture.settings.scoring.clone();
 
         let pass = pass_score(&mut fixture.board, &rules, &scoring, 10_000.0);
-        let mut scorer =
-            CheckScorer::new(&rules, 10_000.0).with_weights(weights_from(&scoring));
+        let mut scorer = CheckScorer::new(&rules, 10_000.0).with_weights(weights_from(&scoring));
         let batch = scorer.score(&fixture.board);
 
         assert_eq!(pass.normalized, batch.normalized);

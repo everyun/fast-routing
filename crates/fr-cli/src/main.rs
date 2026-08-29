@@ -58,9 +58,17 @@
 //!
 //! Every pre-existing flag is preserved. `-mp/--max-passes` is live now: it is the pass cap the
 //! batch driver runs to, and pass *n* routes at `start_ripup_costs * n`
-//! (`batch-orchestration.md` §4). `-us/--threads` is still inert, and honestly so: upstream
-//! 2.3.0 routes strictly sequentially — its multi-threaded pass is private with no call site
-//! (conformance #107, #111).
+//! (`batch-orchestration.md` §4).
+//!
+//! `-us/--threads N` is live now, and it does **not** parallelise the route pass: upstream 2.3.0
+//! routes strictly sequentially, its multi-threaded pass is private with no call site
+//! (conformance #107, #111), and concurrent connection routing (`ARCHITECTURE.md`'s T3) is not
+//! written. What `--threads` buys is the two stages that are safely parallel — the batch
+//! optimizer's candidate evaluation (T1) and the referee's violation scan (T2). It defaults to
+//! `1`; see the flag's help text for why that is not the machine's core count.
+//!
+//! `--portfolio N` races N route passes with different item orders on board clones and keeps the
+//! best referee score. Off by default. It buys quality at equal wall clock, never speed.
 //!
 //! `--settle-trace FILE` turns on the differential harness's record stream: one
 //! `FRMETRIC settle <door> <section> <g> <f>` line per settled maze element, the same shape the
@@ -181,8 +189,18 @@ DIAGNOSTICS
     --settle-trace <FILE>       Write one `FRMETRIC settle` line per settled maze element, the
                                 lab jar's `-Dfrlab.settle_trace=1` format (`1`/`stderr` = stderr)
 
-ACCEPTED BUT INERT (kept so existing harnesses keep parsing)
-    -us, --threads <N>          Worker threads; upstream 2.3.0 routes single-threaded
+PARALLELISM (see also `docs/ARCHITECTURE.md`, "Parallelism")
+    -us, --threads <N>          Workers for the optimizer's candidate evaluation and the
+                                referee's violation scan. NOT the route pass, which is
+                                sequential upstream and here. `0` = pick from the machine.
+                                (Default: 1 — the parallel optimizer is reproducible at a
+                                fixed N but is not the same heuristic as the sequential one,
+                                so it is opt-in rather than a silent default.)
+    --portfolio <N>             Race N route passes with different item orders on board
+                                clones and keep the best referee score. Arm 0 is always the
+                                default order, so the result is never worse than N=1 on the
+                                same budget. Costs N cores for the same wall clock.
+                                (Default: 1)
 
     -v,  --version              Print version information
     -h,  --help                 Print help
@@ -208,11 +226,23 @@ struct Args {
     emit_boxes: bool,
     max_passes: Option<usize>,
     threads: Option<usize>,
+    portfolio: Option<usize>,
     fanout: bool,
     no_optimizer: bool,
     deterministic: bool,
     job_timeout: Option<std::time::Duration>,
     settle_trace: Option<String>,
+}
+
+/// A non-negative count flag (`--threads`, `--portfolio`), rejected rather than
+/// silently ignored when it is not one — the same rule `-mp` follows.
+fn parse_count(flag: &str, value: &str) -> usize {
+    match value.parse::<usize>() {
+        Ok(count) => count,
+        Err(_) => fail(&format!(
+            "{flag} {value}: expected a non-negative whole number of workers"
+        )),
+    }
 }
 
 fn fail(message: &str) -> ! {
@@ -295,7 +325,10 @@ fn main() {
             "--router-overrides" => args.router_overrides = true,
             "--emit-boxes" => args.emit_boxes = true,
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
-            "-us" | "--threads" => args.threads = next!("-us").parse().ok(),
+            "-us" | "--threads" => args.threads = Some(parse_count("--threads", &next!("-us"))),
+            "--portfolio" => {
+                args.portfolio = Some(parse_count("--portfolio", &next!("--portfolio")))
+            }
             "--fanout" => args.fanout = true,
             "--no-optimizer" => args.no_optimizer = true,
             "--deterministic" => args.deterministic = true,
@@ -318,11 +351,6 @@ fn main() {
         fail("missing required input design file (-de <file.dsn>)");
     };
 
-    if let Some(threads) = args.threads {
-        eprintln!(
-            "note: -us {threads} is accepted but inert — upstream 2.3.0 routes single-threaded"
-        );
-    }
     // Must be set before anything asks the sink, which resolves the environment once.
     if let Some(path) = &args.settle_trace {
         env::set_var("FR_SETTLE_TRACE", path);
@@ -349,7 +377,10 @@ fn main() {
     // `--import-only` keeps the M1 contract: no router stage, so the board the referee judges
     // and the session carries is exactly the imported one.
     let job = if args.import_only {
-        job
+        // No router stage, so nothing sets the job's referee budget from a
+        // `MazeOptions`; `--threads` still applies to the referee's T2 scan,
+        // which is the only parallel work an import-only run has.
+        job.with_referee_threads(MazeOptions::default().with_threads(args.threads).threads())
     } else {
         let passes = args.max_passes.unwrap_or(1).max(1);
         let passes = i32::try_from(passes).unwrap_or(i32::MAX);
@@ -357,7 +388,9 @@ fn main() {
             MazeOptions::with_passes(passes)
                 .with_fanout(args.fanout)
                 .with_optimizer(!args.no_optimizer)
-                .with_deterministic(args.deterministic),
+                .with_deterministic(args.deterministic)
+                .with_threads(args.threads)
+                .with_portfolio(args.portfolio.unwrap_or(1)),
         ))
     };
 
@@ -386,7 +419,11 @@ fn main() {
     let session_path = if args.import_only {
         args.output.clone()
     } else {
-        Some(args.output.clone().unwrap_or_else(|| default_ses(&input_path)))
+        Some(
+            args.output
+                .clone()
+                .unwrap_or_else(|| default_ses(&input_path)),
+        )
     };
     if let Some(path) = &session_path {
         if let Err(error) = fs::write(path, &report.ses) {
@@ -482,6 +519,19 @@ fn print_summary(report: &JobReport, started: Instant) {
                 String::new()
             },
         );
+        if let Some(portfolio) = &router.portfolio {
+            println!(
+                "Portfolio: {} arms, arm {} won ({}), incompletes per arm {:?}",
+                portfolio.arms,
+                portfolio.winner,
+                if portfolio.shuffle_won {
+                    "a shuffled order"
+                } else {
+                    "the default order"
+                },
+                portfolio.arm_incompletes,
+            );
+        }
         if let Some(optimizer) = &router.optimizer {
             println!(
                 "Optimizer: {} passes, {} of {} items improved, score {:.2} -> {:.2}, stopped on {}",

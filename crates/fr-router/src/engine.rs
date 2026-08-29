@@ -39,8 +39,20 @@
 //! The two orders live in one id space upstream because a room is a
 //! `SearchTreeObject` there. They live in one id space here too:
 //! [`Room::id_no`](crate::rooms::Room::id_no) is the same
-//! `generate_room_id_no` counter, so the numeric interleave is reproducible
-//! even though the rooms sit in a separate tree.
+//! `generate_room_id_no` counter, minted at the same call sites (see
+//! [`calculate_doors`](AutorouteEngine::calculate_doors)), so the numeric
+//! interleave is reproducible even though the rooms sit in a separate tree.
+//!
+//! In practice the two halves of that space barely overlap, and the *sign* of
+//! the overlap is what matters. A room counter restarts at 1 for every
+//! connection while board item ids keep climbing for the whole run — every
+//! inserted trace mints one — so after the first few connections nearly every
+//! room sorts ahead of nearly every item. Making the shared space *exact* is
+//! therefore almost free: reproducing upstream's `++count` (1-based, plus an
+//! id burned per `ObstacleExpansionRoom` and per `try_remove_edge` restart)
+//! leaves every counter on Issue026 and Issue034 bit-for-bit unchanged.
+//! Reversing it is not: offsetting the counter so that rooms sort *behind*
+//! items costs 3.2x expansions on Issue026 and 11.4x on Issue034.
 //!
 //! Getting the completion order wrong is not a tie-break detail.
 //! `restrain_shape` is greedy — it cuts with the furthest border line of
@@ -69,6 +81,22 @@ use crate::geom;
 use crate::maze::drills::{DrillArena, DrillPageArray};
 use crate::maze::nodes::NodeArena;
 use crate::rooms::{RoomArena, RoomId, RoomKind};
+
+/// `Vec::dedup` on a sorted slice, returning how many elements were kept.
+///
+/// The caller truncates. This exists because the duplicates sit in the *tail*
+/// of a longer `Vec` that must not be reordered, and `Vec::dedup` only works on
+/// the whole vector.
+fn dedup_in_place<T: PartialEq + Copy>(items: &mut [T]) -> usize {
+    let mut kept = 0;
+    for read in 0..items.len() {
+        if kept == 0 || items[read] != items[kept - 1] {
+            items[kept] = items[read];
+            kept += 1;
+        }
+    }
+    kept
+}
 
 /// One obstacle the room machinery has to tile around.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -450,28 +478,38 @@ impl<'b> AutorouteEngine<'b> {
             &mut self.room_stack,
             &mut self.scratch_rooms,
         );
-        let mut room_hits: Vec<RoomId> = self
-            .scratch_rooms
-            .iter()
-            .map(|(_, room)| *room)
-            .filter(|room| {
-                let room = self.rooms.room(*room);
-                room.alive
-                    && room.kind == RoomKind::CompleteFree
-                    && layer.map(|l| l == room.layer).unwrap_or(true)
-                    && match query_tile {
-                        // Each arm is `room.shape.intersects(<query as a
-                        // simplex>)`, so the room set is the same whichever
-                        // flavor the caller handed in.
-                        fr_board::shape::TileShape::Simplex(s) => room.shape.intersects(s),
-                        fr_board::shape::TileShape::Box(b) => room.shape.intersects_box(b),
-                        fr_board::shape::TileShape::Oct(o) => room.shape.intersects_octagon(o),
-                    }
-            })
-            .collect();
-        room_hits.sort_unstable();
-        room_hits.dedup();
-        obstacles.extend(room_hits.into_iter().map(Obstacle::Room));
+        // The room hits are appended in place and de-duplicated as a tail
+        // slice, not collected into a `Vec<RoomId>` first: this runs once per
+        // tree query — 604k times on Issue034 — and the temporary was one heap
+        // allocation each time.
+        let rooms_from = obstacles.len();
+        obstacles.extend(
+            self.scratch_rooms
+                .iter()
+                .map(|(_, room)| *room)
+                .filter(|room| {
+                    let room = self.rooms.room(*room);
+                    room.alive
+                        && room.kind == RoomKind::CompleteFree
+                        && layer.map(|l| l == room.layer).unwrap_or(true)
+                        && match query_tile {
+                            // Each arm is `room.shape.intersects(<query as a
+                            // simplex>)`, so the room set is the same whichever
+                            // flavor the caller handed in.
+                            fr_board::shape::TileShape::Simplex(s) => room.shape.intersects(s),
+                            fr_board::shape::TileShape::Box(b) => room.shape.intersects_box(b),
+                            fr_board::shape::TileShape::Oct(o) => room.shape.intersects_octagon(o),
+                        }
+                })
+                .map(Obstacle::Room),
+        );
+        // `Obstacle`'s derived order puts `Room` last and orders rooms by id, so
+        // over a tail that is all rooms this is the old `sort + dedup` on
+        // `RoomId`. A room can be reached through more than one leaf, so the
+        // dedup is load-bearing, not defensive.
+        obstacles[rooms_from..].sort_unstable();
+        let kept = dedup_in_place(&mut obstacles[rooms_from..]);
+        obstacles.truncate(rooms_from + kept);
         // One ascending `get_id_no()` key over items *and* rooms together —
         // `SortedRoomNeighbours.java:139-147`. See
         // [`sort_obstacles_for_neighbours`](Self::sort_obstacles_for_neighbours)
@@ -697,6 +735,59 @@ mod tests {
     use fr_geometry::planar::IntBox;
 
     #[test]
+    fn dedup_in_place_is_vec_dedup_over_a_slice() {
+        let mut items = [1, 1, 2, 3, 3, 3, 4];
+        let kept = super::dedup_in_place(&mut items);
+        assert_eq!(&items[..kept], &[1, 2, 3, 4]);
+
+        let mut empty: [u32; 0] = [];
+        assert_eq!(super::dedup_in_place(&mut empty), 0);
+
+        let mut single = [7];
+        assert_eq!(super::dedup_in_place(&mut single), 1);
+
+        // Only *adjacent* runs collapse, exactly like `Vec::dedup`.
+        let mut unsorted = [1, 2, 1];
+        let kept = super::dedup_in_place(&mut unsorted);
+        assert_eq!(&unsorted[..kept], &[1, 2, 1]);
+    }
+
+    #[test]
+    fn a_room_reachable_through_two_leaves_is_returned_once() {
+        // The room hits are appended straight onto `obstacles` and deduped as a
+        // tail slice; a room the tree hands back twice must still appear once,
+        // and the rooms must stay in ascending id order behind the items.
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        let square = IntBox::new(-100, -100, 100, 100).to_simplex();
+        let rooms: Vec<RoomId> = (0..3)
+            .map(|_| {
+                let room = engine.rooms.add_complete_free_room(square.clone(), 0);
+                engine.mint_room_id(room);
+                engine.insert_room_in_tree(room);
+                room
+            })
+            .collect();
+        let mut obstacles = Vec::new();
+        let mut own_net = Vec::new();
+        engine.overlapping_obstacles(
+            &square,
+            Some(0),
+            crate::test_support::TEST_NET,
+            &mut obstacles,
+            &mut own_net,
+        );
+        let hits: Vec<RoomId> = obstacles
+            .iter()
+            .filter_map(|obstacle| match *obstacle {
+                Obstacle::Room(room) => Some(room),
+                Obstacle::Item(..) => None,
+            })
+            .collect();
+        assert_eq!(hits, rooms, "each room once, in ascending id order");
+    }
+
+    #[test]
     fn the_engine_starts_with_no_rooms() {
         let fixture = TestFixture::two_layer_with_pads();
         let engine = fixture.engine();
@@ -746,20 +837,28 @@ mod tests {
         assert_eq!(first, second, "identity must be stable across the search");
     }
 
-    /// Three rooms with `id_no` 0, 1, 2 on a fixture whose items are ids 1..n,
+    /// Three rooms with `id_no` 1, 2, 3 on a fixture whose items are ids 1..n,
     /// so both comparators have something to interleave.
+    ///
+    /// The ids are minted here rather than by `add_complete_free_room`, which
+    /// is what `calculate_doors` does on the real path (upstream mints in
+    /// `SortedRoomNeighbours.calculate`, not at room construction).
     fn ordering_fixture(engine: &mut crate::engine::AutorouteEngine<'_>) -> Vec<Obstacle> {
         let square = IntBox::new(0, 0, 10, 10).to_simplex();
         let rooms: Vec<RoomId> = (0..3)
-            .map(|_| engine.rooms.add_complete_free_room(square.clone(), 0))
+            .map(|_| {
+                let room = engine.rooms.add_complete_free_room(square.clone(), 0);
+                engine.mint_room_id(room);
+                room
+            })
             .collect();
         assert_eq!(
             rooms
                 .iter()
                 .map(|r| engine.rooms.room(*r).id_no)
                 .collect::<Vec<_>>(),
-            vec![0, 1, 2],
-            "the room counter is `generate_room_id_no`, so it starts at the bottom"
+            vec![1, 2, 3],
+            "`generate_room_id_no` is upstream's `++count`, so it starts at 1"
         );
         vec![
             Obstacle::Item(ItemId::from_raw(2), 1),
@@ -791,9 +890,9 @@ mod tests {
         assert_eq!(
             kinds,
             vec![
+                (0, 3, 0),
                 (0, 2, 0),
                 (0, 1, 0),
-                (0, 0, 0),
                 (1, 2, 0),
                 (1, 2, 1),
                 (1, 1, 0),
@@ -821,12 +920,12 @@ mod tests {
         assert_eq!(
             keys,
             vec![
-                (0, 0, 0),
                 (1, 0, 0),
                 (1, 1, 0),
                 (2, 0, 0),
                 (2, 1, 0),
                 (2, 1, 1),
+                (3, 0, 0),
             ],
             "one ascending id key, rooms winning an exact tie"
         );

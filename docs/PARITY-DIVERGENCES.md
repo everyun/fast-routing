@@ -81,18 +81,23 @@ ARCHITECTURE "Budgets".
   Fanout-only is an explicit mode (`--fanout` with the router stage off), never a magic pass
   count, per `batch-orchestration.md` §11.1.
 
-- **Fork/end smoothing (`smoothen_start/end_corner_at_trace`) is not ported for either
-  pull-tight flavor** (`fr_router::pull_tight`, `fr_router::pull_tight_any`).
-  *Upstream* has it in `PullTightAlgo45` (`:415`, `:520`) and in `PullTightAlgoAnyAngle`
-  (`:717`, `:835`); it is `opt_changed_area`'s `else if` branch (`PullTightAlgo.java:128-131`).
-  *We* return `false` from that branch in both flavors. It needs the
+- **Fork/end smoothing (`smoothen_start/end_corner_at_trace`) checks its candidate shapes with the
+  *compensated* half width** (`fr_router::pull_tight`, `PullTightAlgo::smoothen_end_corners_at_trace`).
+  The rule itself **is** ported now, for both flavors, including the
   `insert_trace_without_cleaning` + `split_traces` + `normalize_traces` triple per improvement
-  round, which is the one part of the family that has not been wired.
-  *Why symmetric*: porting it for one angle mode only would make the two flavors disagree for a
-  reason that has nothing to do with the angle mode, which is exactly the kind of drift the
-  differential harness cannot attribute.
-  *Effect*: traces that fork or end on another trace keep an acute angle upstream would chamfer.
-  One-sided — it can only leave a trace longer, never introduce a violation.
+  round; this entry is what is left of the divergence.
+  *Upstream* sets `curr_half_width = p_trace.get_half_width()` in the wrapper
+  (`PullTightAlgo.java:352`) — the trace's raw half width — where `pull_tight(Polyline, …)` sets
+  `p_half_width + clearance_compensation_value` (`:141`). The two are the same number upstream
+  because a headless run leaves clearance compensation off (`SearchTreeManager.java:34`).
+  *We* keep them apart (`curr_half_width` compensated, `curr_raw_half_width` raw): our compensated
+  tree is real, so re-using the raw width in the oracle checks every candidate shape one
+  compensation too thin.
+  *Why not replicate*: measured. With the raw width the `bend` branch slid three traces into
+  foreign pads on `Issue230` — judged 19 violations against a 16-violation input, i.e. **+3 added**,
+  which is a G2.1 failure. The raw width is still what the re-inserted trace and the
+  `(√2 − 1)·half_width` chamfer use, so the geometry upstream produces is unchanged.
+  *Effect*: none on any board where compensation is 0, which is every board upstream runs.
 
 - **A reported route must have copper to show for it** (`fr_router::batch`,
   `BatchRouter::discount_routes_that_left_no_copper` and the `board_changed` arm of
@@ -124,13 +129,64 @@ ARCHITECTURE "Budgets".
 - **A job wall budget, and a stop on it** (`fr_router::batch::schedule::JobDeadline`,
   `fr-cli --job-timeout`). *Upstream* has a per-job timeout in the scheduler; the headless entry
   point does not expose one, and `-mp` is the only bound a caller has. *We* add an optional wall
-  budget, polled between connections and between passes, which ends the run through the same
-  tail as every stop rule — best retained board restored, referee run, session written — and
-  clamps each connection's `TimeLimit` to what the job has left so one connection cannot overrun
-  it by its own 100 s. Off by default: a run without `--job-timeout` reads no clock and is
-  unchanged. *Why*: a harness cap that `SIGKILL`s the process produces no session at all, which
-  is strictly less information than the board we were holding. 26 of the 46 boards in the first
-  full-suite G2.1 read failed exactly that way.
+  budget, polled between connections, between passes, and — since the M3 gate — inside
+  `PullTightAlgo::is_stop_requested`. It ends the run through the same tail as every stop rule —
+  best retained board restored, referee run, session written — and clamps each connection's
+  `TimeLimit` to what the job has left so one connection cannot overrun it by its own 100 s. Off
+  by default: a run without `--job-timeout` reads no clock and is unchanged (an unarmed
+  `JobDeadline::ambient()` is one relaxed atomic load and no `Instant::now`). *Why*: a harness
+  cap that `SIGKILL`s the process produces no session at all, which is strictly less information
+  than the board we were holding. 26 of the 46 boards in the first full-suite G2.1 read failed
+  exactly that way — and `Issue209-split10` failed it again once §6.4 landed, from *inside* a
+  pull-tight that polled nothing.
+
+- **The keep-point pull-tight inside forced insertion has a stall guard upstream leaves off**
+  (`fr_router::insert_forced`, step 8 of `insert_forced_trace_polyline`).
+  *Upstream* passes `p_time_limit = -1` to the `PullTightAlgo` it builds there
+  (`RoutingBoard.java:833-834`), i.e. no `TimeLimit` at all (`PullTightAlgo.java:56-60`); that
+  loop is bounded only by its own convergence.
+  *We* arm `PULL_TIGHT_TIME_LIMIT` — 2000 ms, upstream's constant for its *other* non-batch
+  pull-tight (`RoutingBoard.java:49`, used at `:144`) — spent in **optimization rounds** at
+  `pull_tight::ROUNDS_PER_VIRTUAL_MS`, in both budget modes.
+  *Why the round form and not the wall form*: this pull-tight runs once per *segment* of every
+  forced insertion and moves copper the rest of the insertion then builds on, so a wall cutoff
+  here would make what gets **inserted** depend on machine load — the failure `--deterministic`
+  exists to prevent, one level below where the batch driver's regional pull-tight sits.
+  *Effect*: none measurable. 200 000 rounds against a measured worst case of 17 229 for a whole
+  *connection's* regional pull-tight, so it is a safety valve and no fixture reaches it. Without
+  it the only bound was `DEFAULT_ROUND_BUDGET`'s two million.
+
+- **The room-neighbour list is a sorted list, not a set**
+  (`fr_router::rooms::neighbours::sort_neighbours`, `…::AutorouteEngine::obstacle_id`).
+  *Upstream* keeps `SortedRoomNeighbours.sorted_neighbours` in a `TreeSet` ordered by
+  `SortedRoomNeighbour.compareTo` (`autoroute/SortedRoomNeighbours.java:35, 307, 612-669`), whose
+  final tie-break is the bare `search_tree_object.get_id_no()` — the board id for an item, with
+  the shape index *not* in it. Two tile shapes of one item that touch the room with identical
+  geometry therefore compare equal and the second is silently dropped, which `:643-646` argues is
+  correct ("the 2 intersection pieces … are identical, so that only 1 obstacle is needed").
+  *We* sort and keep every neighbour, and make the tie-break key `(item << 10) | shape_index`
+  for items and `(1 << 48) + room_id` for rooms so that the collapse cannot happen by accident.
+  *Why*: measured. Porting the exact key **and** the collapse costs 37,065 → 118,384 expansions
+  on Issue026 (3.2×) and 163,986 → 1,865,184 on Issue034 (11.4×) at `-mp 3`, with the answer
+  unchanged (0 violations, 0 incomplete on both). The exact key *without* the collapse is
+  bit-for-bit inert on both boards — every counter identical — so it is the dropped neighbours
+  that cost, not the ordering. Same treatment in the 45° arm (`neighbours45::compare_neighbours`).
+
+- **`DrillPage.get_drills` splits the page with simplex arithmetic only**
+  (`fr_router::maze::drills::AutorouteEngine::page_drills`). *Upstream* builds
+  `PolylineArea(page_box, holes)` and calls `split_to_convex`
+  (`geometry/planar/PolylineArea.java:165-196`), which is the same repeated-cutout loop we run —
+  but its `piece.cutout(hole)` is a **double dispatch on the two `TileShape` subclasses**, so an
+  `IntBox` page with an `IntBox` hole goes through `IntBox.cutout_from(IntBox)` (four rectangles
+  chosen to minimise cumulative circumference, then `simplify()`), an `IntOctagon` hole through
+  `IntOctagon.cutout_from(…)` (up to eight octagons), and only the general case through
+  `Simplex.cutout_from`. *We* narrow every shape to a `Simplex` first and always take the last
+  path. *Effect*: the same negative space, different pieces — and a drill sits at a piece's
+  centre of gravity, so the candidate via positions differ. Measured hole-flavour mix on
+  Issue110-RelayModule: 2,808 `Box` / 22,351 `Oct` / 24,841 `Simplex`, so the box-only case is
+  6% and closing this needs `IntOctagon::cutout_from` and `Simplex::simplify` in `fr-geometry`
+  (`geometry/planar/IntOctagon.java:1075-1400`, `Simplex.java:690-880`) before the dispatch can
+  be written. Suspected cause of the Issue110 pair's one-connection G2.1 gaps.
 
 ## Optimizer
 

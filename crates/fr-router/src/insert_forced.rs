@@ -57,6 +57,7 @@ use fr_rules::board_rules::BoardRules;
 use fr_rules::padstack::{PadShape, Padstack as RulesPadstack};
 use fr_rules::via_info::ViaInfo;
 
+use crate::batch::budget::BudgetMode;
 use crate::ctrl::AutorouteControl;
 
 /// `ChangedArea` (`board/ChangedArea.java`): one mutable double-precision
@@ -731,9 +732,9 @@ impl<'b> ForcedInserter<'b> {
         let normalized = self.board.normalize_trace(trace_id, Some(&clip));
 
         // Step 8, `:821-889`: the in-insert pull-tight, with `new_corner` as
-        // the keep point. Gated on [`ForcedInserter::insert_pull_tight`], which
-        // is **off** by default; the field's docs carry the measurement and the
-        // reason, and `docs/PARITY-DIVERGENCES.md` carries the entry.
+        // the keep point. Gated on [`ForcedInserter::insert_pull_tight`], whose
+        // default is [`INSERT_PULL_TIGHT_DEFAULT`] — **on**, which is upstream's
+        // behaviour; the field's docs carry the A/B measurement.
         if !self.insert_pull_tight {
             return Some(new_corner);
         }
@@ -759,6 +760,30 @@ impl<'b> ForcedInserter<'b> {
         let mut changed_area = std::mem::replace(&mut self.changed_area, ChangedArea::new(0));
         let mut trace = Some(trace_id);
         {
+            // The stall guard, and why it is the round-counted one in *both*
+            // budget modes.
+            //
+            // Upstream arms none at all here: `:834` passes `p_time_limit = -1`,
+            // which `PullTightAlgo`'s constructor reads as "no `TimeLimit`"
+            // (`:56-60`). Copying the `-1` verbatim would leave this loop —
+            // which runs once per *segment* of every forced insertion, not once
+            // per connection — with nothing but
+            // [`crate::pull_tight::DEFAULT_ROUND_BUDGET`]'s two million rounds
+            // behind it. But a wall cutoff is the wrong bound here in a way it
+            // is not at the batch driver's regional call: this pull-tight moves
+            // copper the rest of the insertion then builds on, so a deadline
+            // that fires on a loaded machine changes what gets *inserted*, not
+            // just how tidy it is.
+            //
+            // So the guard is `PULL_TIGHT_TIME_LIMIT` — the budget upstream
+            // gives its other non-batch pull-tight (`RoutingBoard.java:49`,
+            // `:144`) — spent in optimization rounds at
+            // [`crate::pull_tight::ROUNDS_PER_VIRTUAL_MS`]. That is ~12× the
+            // heaviest whole-connection regional pull-tight measured in the
+            // fixture suite, so it is a safety valve and not a knob, and it
+            // reads the clock never. The job deadline is still polled
+            // underneath it, which is what makes a `SIGTERM` mid-insertion
+            // unwind instead of hang.
             let mut algo = crate::pull_tight::PullTightAlgo::new(
                 self.board,
                 self.rules,
@@ -768,7 +793,11 @@ impl<'b> ForcedInserter<'b> {
                 None,
                 Some(new_corner.clone()),
                 layer,
-            );
+            )
+            .with_stall_guard(crate::pull_tight::StallGuard::for_mode(
+                BudgetMode::Deterministic,
+                crate::pull_tight::PULL_TIGHT_TIME_LIMIT_MS,
+            ));
             if normalized {
                 // `:849-871`: the keep point must stay a corner of the net, and
                 // the `new_trace` handle is stale after the split — upstream

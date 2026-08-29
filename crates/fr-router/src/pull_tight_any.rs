@@ -26,23 +26,33 @@
 //! (`PullTightAlgo.java:454-457`), so there is nothing to reproduce.
 //!
 //! Fork/end smoothing (`smoothen_start_corner_at_trace` `:717`,
-//! `smoothen_end_corner_at_trace` `:835`) is **not** ported here, exactly as it
-//! is not ported for the 45° flavor: it needs the shove unit, and porting it for
-//! one flavor only would make the two disagree for a reason that has nothing to
-//! do with the angle mode. See [`crate::pull_tight`]'s module docs.
+//! `smoothen_end_corner_at_trace` `:835`) is
+//! [`PullTightAlgo::smoothen_start_corner_at_trace_any`] /
+//! [`PullTightAlgo::smoothen_end_corner_at_trace_any`], landed in the same
+//! change as the 45° pair so the two flavors never disagree for a reason that
+//! has nothing to do with the angle mode. See [`crate::pull_tight`]'s module
+//! docs for the driver.
 
+use fr_board::item::ItemId;
 use fr_datastructures::signum::Signum;
 use fr_geometry::planar::{
     Direction, FloatPoint, IntOctagon, Line, Point, Polyline, Side, Vector,
 };
 
 use crate::insert_forced::ChangedArea;
-use crate::pull_tight::{signum_as_int, PullTightAlgo, MAX_COS_ANGLE};
+use crate::pull_tight::{
+    octagon_is_outside, polyline_from_lines, signum_as_int, PullTightAlgo, MAX_COS_ANGLE,
+};
 
 /// `c_epsilon` (`PullTightAlgoAnyAngle.java:468`) — a corner this close to the
 /// line being translated counts as *on* it, and its neighbours are dragged
 /// along.
 const EPSILON: f64 = 0.001;
+
+/// `SKIP_LENGTH` (`PullTightAlgoAnyAngle.java:20`) — the **squared** distance
+/// under which a non-integer end segment is treated as a rounding artifact by
+/// the fork/end smoothing rules (§6.4) and skipped over.
+const SKIP_LENGTH: f64 = 10.0;
 
 /// The `check_dist` of `reduce_corners` (`:106`) — a squared distance, so the
 /// tolerance on where the rebuilt corner lands is 10 board units.
@@ -865,6 +875,205 @@ impl PullTightAlgo<'_> {
                     }
                 }
             }
+        }
+        None
+    }
+
+    // ---- §6.4 fork/end smoothing, any-angle flavor -----------------------
+
+    /// `PullTightAlgoAnyAngle.smoothen_start_corner_at_trace` (`:717-833`).
+    ///
+    /// Structurally the 45° rule with two differences, both upstream's:
+    ///
+    /// * the `acute_angle` branch does **not** require the contact's line to be
+    ///   orthogonal (`:764-767` against `PullTightAlgo45.java:454-457`) — an
+    ///   any-angle joint can double back at any angle;
+    /// * [`SKIP_LENGTH`]: when the end corner is *not* an integer point and sits
+    ///   within `√SKIP_LENGTH` of its neighbour, the rule operates one line
+    ///   further in (`:731-738`). A sub-grid stub at the end of the trace is an
+    ///   artifact of rounding, not geometry the joint should be measured
+    ///   against.
+    pub(crate) fn smoothen_start_corner_at_trace_any(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        let trace_polyline = self.trace_polyline_of(id)?;
+        let arr = trace_polyline.arr.clone();
+        if arr.len() < 3 {
+            return None;
+        }
+        let curr_end_corner = trace_polyline.corner(0);
+        if let Some(clip) = self.clip_shape() {
+            if octagon_is_outside(&clip, &curr_end_corner) {
+                return None;
+            }
+        }
+        let mut curr_prev_end_corner = trace_polyline.corner(1);
+        let skip_short_segment = !matches!(curr_end_corner, Point::Int(_))
+            && curr_end_corner
+                .to_float()
+                .distance_square(&curr_prev_end_corner.to_float())
+                < SKIP_LENGTH;
+        let mut start_line_no = 1usize;
+        if skip_short_segment {
+            if trace_polyline.corner_count() < 3 {
+                return None;
+            }
+            curr_prev_end_corner = trace_polyline.corner(2);
+            start_line_no += 1;
+        }
+        if arr.len() <= start_line_no + 1 {
+            return None;
+        }
+        let line_direction = arr[start_line_no].direction();
+        let prev_line_direction = arr[start_line_no + 1].direction();
+
+        let fork = self.scan_fork_contacts(
+            id,
+            &curr_end_corner,
+            &curr_prev_end_corner,
+            &line_direction,
+            &prev_line_direction,
+            trace_polyline.corner_count(),
+            false,
+            false,
+        )?;
+        let contact = fork.contact?;
+
+        // `:785-790` — one line shorter, and copied from one line later, when
+        // the short end segment is being skipped.
+        let new_line_count = if skip_short_segment {
+            arr.len()
+        } else {
+            arr.len() + 1
+        };
+        let copy_from = if skip_short_segment { 2 } else { 1 };
+
+        if fork.acute_angle {
+            let add_line = self.fork_chamfer_line(
+                &curr_end_corner,
+                &curr_prev_end_corner,
+                &contact,
+                fork.prev_corner_side,
+                (2, 6),
+            )?;
+            let mut new_lines = Vec::with_capacity(new_line_count);
+            new_lines.push(contact.line);
+            new_lines.push(add_line);
+            new_lines.extend_from_slice(&arr[copy_from..copy_from + new_line_count - 2]);
+            return polyline_from_lines(&new_lines);
+        }
+        if fork.bend {
+            let mut check_lines = Vec::with_capacity(new_line_count);
+            check_lines.push(contact.prev_line);
+            check_lines.push(contact.line);
+            check_lines.extend_from_slice(&arr[copy_from..copy_from + new_line_count - 2]);
+            // `:824` — the any-angle `reposition_line` indexes from the window
+            // start, so the junction window begins at 0 here, not at 2.
+            let new_line = self.reposition_line_any(&check_lines, 0, changed_area)?;
+            let mut new_lines = Vec::with_capacity(arr.len());
+            new_lines.push(contact.line);
+            new_lines.push(new_line);
+            new_lines.extend_from_slice(&arr[2..]);
+            return polyline_from_lines(&new_lines);
+        }
+        None
+    }
+
+    /// `PullTightAlgoAnyAngle.smoothen_end_corner_at_trace` (`:835-951`).
+    ///
+    /// Two things in this one are upstream oddities, transcribed rather than
+    /// corrected because the differential harness cannot attribute a
+    /// "correction":
+    ///
+    /// * `prev_line_direction` reads `arr[end_line_no]`, the **same** index as
+    ///   `line_direction` (`:860` against `:859`), where the 45° mirror reads
+    ///   `arr[len - 3]`. The `bend` branch's second projection test is therefore
+    ///   the first one repeated, which makes `bend` here strictly narrower than
+    ///   its start-corner twin;
+    /// * the contact loop skips two-corner contacts entirely (`:867`), a guard
+    ///   none of the other three rules has.
+    pub(crate) fn smoothen_end_corner_at_trace_any(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        let trace_polyline = self.trace_polyline_of(id)?;
+        let arr = trace_polyline.arr.clone();
+        if arr.len() < 3 {
+            return None;
+        }
+        let curr_end_corner = trace_polyline.last_corner();
+        if let Some(clip) = self.clip_shape() {
+            if octagon_is_outside(&clip, &curr_end_corner) {
+                return None;
+            }
+        }
+        let corner_count = trace_polyline.corner_count();
+        let mut curr_prev_end_corner = trace_polyline.corner(corner_count - 2);
+        let skip_short_segment = !matches!(curr_end_corner, Point::Int(_))
+            && curr_end_corner
+                .to_float()
+                .distance_square(&curr_prev_end_corner.to_float())
+                < SKIP_LENGTH;
+        let mut end_line_no = arr.len() - 2;
+        if skip_short_segment {
+            if corner_count < 3 {
+                return None;
+            }
+            curr_prev_end_corner = trace_polyline.corner(corner_count - 3);
+            end_line_no -= 1;
+        }
+        let line_direction = arr[end_line_no].direction().opposite();
+        // Upstream reads the same index again; see the doc comment.
+        let prev_line_direction = arr[end_line_no].direction().opposite();
+
+        let fork = self.scan_fork_contacts(
+            id,
+            &curr_end_corner,
+            &curr_prev_end_corner,
+            &line_direction,
+            &prev_line_direction,
+            corner_count,
+            false,
+            true,
+        )?;
+        let contact = fork.contact?;
+
+        let new_line_count = if skip_short_segment {
+            arr.len()
+        } else {
+            arr.len() + 1
+        };
+        let copy_from = usize::from(skip_short_segment);
+
+        if fork.acute_angle {
+            let add_line = self.fork_chamfer_line(
+                &curr_end_corner,
+                &curr_prev_end_corner,
+                &contact,
+                fork.prev_corner_side,
+                (6, 2),
+            )?;
+            let mut new_lines = Vec::with_capacity(new_line_count);
+            new_lines.extend_from_slice(&arr[..new_line_count - 2]);
+            new_lines.push(add_line);
+            new_lines.push(contact.line);
+            return polyline_from_lines(&new_lines);
+        }
+        if fork.bend {
+            let mut check_lines = Vec::with_capacity(new_line_count);
+            check_lines.extend_from_slice(&arr[copy_from..copy_from + new_line_count - 2]);
+            check_lines.push(contact.line);
+            check_lines.push(contact.prev_line);
+            let start_no = check_lines.len().checked_sub(5)?;
+            let new_line = self.reposition_line_any(&check_lines, start_no, changed_area)?;
+            let mut new_lines = Vec::with_capacity(arr.len());
+            new_lines.extend_from_slice(&arr[..arr.len() - 2]);
+            new_lines.push(new_line);
+            new_lines.push(contact.line);
+            return polyline_from_lines(&new_lines);
         }
         None
     }

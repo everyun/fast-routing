@@ -38,9 +38,11 @@
 //!   in `docs/PARITY-DIVERGENCES.md`.
 //! * The per-connection pull-tight (`opt_changed_area`, `:1327-1333`) runs, over
 //!   [`crate::insert::InsertOutcome::changed_area`] — see [`crate::pull_tight`]
-//!   for what of the family is ported and what is not. The one argument that is
-//!   deliberately not upstream's is the stall guard: a wall clock there would
-//!   make the routed board depend on machine load.
+//!   for what of the family is ported and what is not. Its stall guard is
+//!   upstream's `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` (1000 ms) in the default
+//!   mode and the round-counted equivalent under `--deterministic`, which is
+//!   [`crate::pull_tight::StallGuard`] and the same duality [`budget`] applies
+//!   to the maze.
 //! * The per-connection budget ([`budget`]) is armed around every connection,
 //!   handed to the engine the maze polls, and accounted for in
 //!   [`PassOutcome`]; see that module.
@@ -74,14 +76,16 @@ use fr_rules::router_settings::RouterSettings;
 use crate::ctrl::AutorouteControl;
 use crate::engine::AutorouteEngine;
 use crate::maze::search::MazeSearch;
-use crate::pull_tight::PullTightAlgo;
+use crate::pull_tight::{PullTightAlgo, StallGuard, TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS};
 
 pub mod budget;
 pub mod history;
+pub mod portfolio;
 pub mod schedule;
 pub mod scoring;
+pub mod threads;
 
-use crate::batch::budget::{BudgetPolicy, ConnectionClock};
+use crate::batch::budget::{BudgetMode, BudgetPolicy, ConnectionClock};
 use crate::batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
 use crate::batch::scoring::CheckScorer;
 
@@ -650,6 +654,13 @@ pub fn route_with_control(
     clock: Option<&mut ConnectionClock>,
 ) -> AttemptOutcome {
     board.ensure_compensated_tree(ctrl.trace_clearance_class_no);
+    // The connection's own clock says which currency this run spends, and the
+    // pull-tight below is inside the window it covers ("armed around the *whole*
+    // attempt — search, insert and the per-connection pull-tight",
+    // [`budget`]). Read before the clock is lent to the engine.
+    let budget_mode = clock
+        .as_deref()
+        .map_or(BudgetMode::default(), ConnectionClock::mode);
     let (located, bounds) = {
         let mut engine = AutorouteEngine::new(board, rules, ctrl.clone());
         if let Some(clock) = clock {
@@ -704,13 +715,24 @@ pub fn route_with_control(
             // * `null` for the clip shape — the changed area is the only
             //   restriction;
             // * `TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP` (1000 ms) as the stall
-            //   guard — the one argument deliberately **not** copied. A
-            //   wall-clock cutoff makes the routed board depend on machine load
-            //   (measured: `Issue034` finished with 34 incomplete connections on
-            //   an idle machine and 56 on a busy one, same binary), and this
-            //   crate promises reproducible output. `None` here arms
-            //   `PullTightAlgo`'s deterministic round budget instead; see
-            //   [`crate::pull_tight::DEFAULT_ROUND_BUDGET`].
+            //   guard, which is armed here through
+            //   [`crate::pull_tight::StallGuard`] so that the default (wall)
+            //   mode is upstream's constant verbatim, per `ARCHITECTURE.md`
+            //   "Budgets", and `--deterministic` spends the equivalent in
+            //   optimization rounds.
+            //
+            // This used to be `None`, on the argument that a wall clock makes
+            // the routed board depend on machine load (measured: `Issue034`
+            // finished with 34 incomplete connections on an idle machine and 56
+            // on a busy one). The argument was right about *why* the
+            // deterministic mode exists and wrong about making it the default:
+            // with no clock at all the only bound was a two-million round
+            // counter, and §6.4 fork smoothing made a round cost a whole net's
+            // `normalize_traces`. `Issue209-split10` then diverged instead of
+            // converging and ran minutes past its `--job-timeout` holding a
+            // board it never wrote. Both halves are back: upstream's constant
+            // by default, the round budget under `--deterministic`, and the job
+            // deadline polled underneath both.
             let mut changed_area = insert.changed_area;
             let mut algo = PullTightAlgo::new(
                 board,
@@ -721,7 +743,11 @@ pub fn route_with_control(
                 None,
                 None,
                 0,
-            );
+            )
+            .with_stall_guard(StallGuard::for_mode(
+                budget_mode,
+                TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
+            ));
             // Unconditional, including for an insertion that placed nothing: the
             // changed area also carries the region a *ripup* freed, and skipping
             // the relaxation of that region would move copper, not just a label.
@@ -889,6 +915,13 @@ pub struct BatchRouter<'r> {
     /// Board units per millimetre, for the score's trace-length term. See
     /// [`CheckScorer::new`].
     pub board_units_per_mm: f64,
+    /// The order a pass hands out its work list.
+    ///
+    /// [`portfolio::WorkOrder::Scan`] — the release's own descending-id order —
+    /// unless this router is a [`portfolio`] arm. It is the *only* thing a
+    /// portfolio arm is allowed to vary, so a router with the default order
+    /// routes exactly what it routed before this field existed.
+    pub work_order: portfolio::WorkOrder,
     /// Whether the current run requeues; resolved from
     /// [`BatchRouter::requeue_policy`] by [`BatchRouter::run`].
     requeue_active: bool,
@@ -918,6 +951,7 @@ impl<'r> BatchRouter<'r> {
             budget: BudgetPolicy::default(),
             max_items: settings.max_items,
             board_units_per_mm: 1.0,
+            work_order: portfolio::WorkOrder::default(),
             // A direct `autoroute_pass` caller drives a single pass, which is
             // the case the requeue exists for; `run` overwrites this.
             requeue_active: true,
@@ -946,6 +980,13 @@ impl<'r> BatchRouter<'r> {
     /// [`BudgetPolicy::deterministic`].
     pub fn with_budget(mut self, budget: BudgetPolicy) -> BatchRouter<'r> {
         self.budget = budget;
+        self
+    }
+
+    /// Sets the pass work-list order. Only [`portfolio::race`] passes anything
+    /// but the default.
+    pub fn with_work_order(mut self, work_order: portfolio::WorkOrder) -> BatchRouter<'r> {
+        self.work_order = work_order;
         self
     }
 
@@ -1035,7 +1076,9 @@ impl<'r> BatchRouter<'r> {
         // Reused across passes, so a run allocates these once.
         self.routed_copper.clear();
         self.routed_copper_spans.clear();
-        let work = autoroute_items(board, self.rules, &mut self.scratch);
+        let mut work = autoroute_items(board, self.rules, &mut self.scratch);
+        // A no-op under the default order; see `portfolio::WorkOrder`.
+        self.work_order.apply(&mut work, ctx.pass_no);
         outcome.queued = work.len();
         if work.is_empty() {
             // `:437-440` — the board is complete.

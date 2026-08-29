@@ -43,7 +43,7 @@
 //!     keep it iff (incompletes, vias, length) strictly fell; otherwise roll back
 //! ```
 //!
-//! # Only single-threaded
+//! # Upstream is single-threaded, and its multi-threaded path is broken
 //!
 //! `BatchOptimizerMultiThreaded` ships in 2.3.0 but is GUI-only, is reached
 //! only when `featureFlags.multiThreading && optimizer.maxThreads > 1`, prints
@@ -51,8 +51,14 @@
 //! carries two confirmed regressions — its per-task optimizer never sets
 //! `minCumulativeTraceLength` (killing the length branch of the improvement
 //! rule) and never gets the ×10 start ripup boost (conformance #100). The
-//! headless path is *always* single-threaded (#3, #106). This module is the
-//! headless path; T1 parallelism is an M3 question.
+//! headless path is *always* single-threaded (#3, #106).
+//!
+//! This module is the headless path, and it is sequential unless a caller asks
+//! for otherwise with [`BatchOptimizer::with_threads`]. The parallel path is
+//! **not** a port of the broken one: it is `ARCHITECTURE.md`'s T1
+//! clone-eval-promote, in which workers only ever produce verdicts on their own
+//! board clones and one promoter re-runs the winners on the live board in sweep
+//! order. See [`parallel`], which argues both halves of it.
 //!
 //! # Rollback is a journal transaction, not a board snapshot
 //!
@@ -64,20 +70,23 @@
 //! reason the optimizer is monotone: a reroute that did not improve leaves the
 //! board bit-for-bit as it was.
 
+pub mod attempt;
 pub mod improvement;
+pub mod parallel;
 pub mod stats;
 pub mod sweep;
 
-use std::collections::BTreeSet;
-
 use fr_board::board::Board;
-use fr_board::item::{ItemId, ItemKind};
+use fr_board::item::ItemId;
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::RouterSettings;
 
-use crate::batch::{BatchRouter, ContactScratch};
-use crate::insert::connection_items;
+use crate::batch::threads::Threads;
+use crate::batch::BatchRouter;
+use crate::optimizer::attempt::{attempt_item, AttemptConfig, AttemptScratch, Disposition};
+use crate::optimizer::parallel::{Verdict, WorkerPool};
 
+pub use attempt::AttemptConfig as ItemAttemptConfig;
 pub use improvement::{BoardKey, ItemRouteResult, LengthMetric};
 pub use stats::PassScore;
 pub use sweep::{SortedRouteItems, SweepKey};
@@ -322,11 +331,81 @@ impl OptimizerOutcome {
     }
 }
 
+/// The counters one pass keeps while it walks its items, plus the two stop
+/// rules that are counted rather than measured.
+///
+/// Extracted so that the sequential driver and the T1 promoter cannot drift:
+/// both call [`PassTally::record`] once per attempted item, in sweep order, and
+/// a pass therefore reports the same `items_attempted` / `items_improved` /
+/// `route_improved` triple whichever one ran it.
+#[derive(Debug, Clone, PartialEq)]
+struct PassTally {
+    /// `:315-321`'s board measurement at pass start; the denominator of
+    /// `route_improved`.
+    key_before: BoardKey,
+    /// `optimizer.maxItems` (`:236-240`).
+    max_items: i32,
+    /// `optimizer.maxConsecutiveFailures` (`:257-263`).
+    max_consecutive_failures: i32,
+    items_attempted: usize,
+    items_improved: usize,
+    consecutive_failures: i32,
+    route_improved: f64,
+}
+
+impl PassTally {
+    fn new(key_before: BoardKey, max_items: i32, max_consecutive_failures: i32) -> PassTally {
+        PassTally {
+            key_before,
+            max_items,
+            max_consecutive_failures,
+            items_attempted: 0,
+            items_improved: 0,
+            consecutive_failures: 0,
+            route_improved: 0.0,
+        }
+    }
+
+    /// `:236-240`. Upstream's guard, with `max_items <= 0` meaning "no cap".
+    fn item_cap_reached(&self, total_items_optimized: i32) -> bool {
+        self.max_items > 0 && total_items_optimized >= self.max_items
+    }
+
+    /// One attempted item. `Some(exit)` means the pass has to stop here.
+    fn record(&mut self, result: &ItemRouteResult) -> Option<PassExit> {
+        self.items_attempted += 1;
+        if result.improved() {
+            self.items_improved += 1;
+            self.consecutive_failures = 0;
+            // `:265-269`. Assignment, not accumulation: whatever the last
+            // improved item scored is what the pass reports.
+            self.route_improved =
+                if self.key_before.via_count != 0 && self.key_before.trace_length != 0.0 {
+                    1.0 - ((result.via_count() as f64 / self.key_before.via_count as f64)
+                        + (result.trace_length() / self.key_before.trace_length))
+                        / 2.0
+                } else {
+                    0.0
+                };
+            None
+        } else {
+            self.consecutive_failures += 1;
+            // `:257-263`.
+            if self.consecutive_failures >= self.max_consecutive_failures {
+                Some(PassExit::ConsecutiveFailures)
+            } else {
+                None
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // the optimizer
 // ---------------------------------------------------------------------------
 
-/// The single-threaded batch optimizer — `autoroute/BatchOptimizer.java`.
+/// The batch optimizer — `autoroute/BatchOptimizer.java`; sequential by default
+/// and T1-parallel under [`BatchOptimizer::with_threads`].
 pub struct BatchOptimizer<'r> {
     rules: &'r BoardRules,
     settings: &'r RouterSettings,
@@ -350,10 +429,18 @@ pub struct BatchOptimizer<'r> {
     min_cumulative_trace_length: f64,
     /// `totalItemsOptimized` (`:36`), across every pass.
     total_items_optimized: i32,
-    scratch: ContactScratch,
-    ripped_items: BTreeSet<ItemId>,
-    ripped_connections: BTreeSet<ItemId>,
-    contacts: Vec<ItemId>,
+    /// How many workers evaluate candidates. [`Threads::single`] is the
+    /// sequential release path; anything more is [`parallel`].
+    threads: Threads,
+    /// Whether [`Self::threads`] may be honoured at all. False once a caller has
+    /// supplied its own [`ItemRerouter`]: a worker has to build a rerouter of
+    /// its own on its own thread, and a `Box<dyn ItemRerouter>` handed in from
+    /// outside is neither `Send` nor cloneable. Scripted rerouters exist to test
+    /// the decision logic, which is the promoter's, so nothing is lost.
+    parallel_capable: bool,
+    /// The workers' board clones, kept across windows.
+    pool: WorkerPool,
+    scratch: AttemptScratch,
 }
 
 impl<'r> BatchOptimizer<'r> {
@@ -364,10 +451,14 @@ impl<'r> BatchOptimizer<'r> {
     /// [`RouterSettings::apply_board_specific_optimizations`], for the same
     /// reason [`BatchRouter::new`] requires it.
     pub fn new(rules: &'r BoardRules, settings: &'r RouterSettings) -> BatchOptimizer<'r> {
-        BatchOptimizer::with_rerouter(rules, settings, Box::new(MazeRerouter))
+        let mut optimizer = BatchOptimizer::with_rerouter(rules, settings, Box::new(MazeRerouter));
+        optimizer.parallel_capable = true;
+        optimizer
     }
 
     /// An optimizer with a caller-supplied [`ItemRerouter`].
+    ///
+    /// Always sequential; see [`BatchOptimizer::parallel_capable`].
     pub fn with_rerouter(
         rules: &'r BoardRules,
         settings: &'r RouterSettings,
@@ -382,11 +473,36 @@ impl<'r> BatchOptimizer<'r> {
             use_increased_ripup_costs: true,
             min_cumulative_trace_length: 0.0,
             total_items_optimized: 0,
-            scratch: ContactScratch::new(),
-            ripped_items: BTreeSet::new(),
-            ripped_connections: BTreeSet::new(),
-            contacts: Vec::new(),
+            threads: Threads::default(),
+            parallel_capable: false,
+            pool: WorkerPool::new(),
+            scratch: AttemptScratch::new(),
         }
+    }
+
+    /// Sets the worker budget for candidate evaluation ([`parallel`]).
+    ///
+    /// Ignored — silently, and [`BatchOptimizer::threads`] reports the effective
+    /// value — when the optimizer was built with a scripted rerouter.
+    pub fn with_threads(mut self, threads: Threads) -> BatchOptimizer<'r> {
+        self.threads = threads;
+        self
+    }
+
+    /// The worker budget actually in force: [`Threads::single`] whenever the
+    /// parallel path is unavailable.
+    pub fn threads(&self) -> Threads {
+        if self.parallel_capable {
+            self.threads
+        } else {
+            Threads::single()
+        }
+    }
+
+    /// Whether the parallel evaluation path may run at all — i.e. whether this
+    /// optimizer owns the production [`MazeRerouter`] a worker can rebuild.
+    pub fn parallel_capable(&self) -> bool {
+        self.parallel_capable
     }
 
     /// `totalItemsOptimized`.
@@ -510,42 +626,31 @@ impl<'r> BatchOptimizer<'r> {
         let pass_settings = pass_settings.as_ref().unwrap_or(self.settings);
 
         let mut sweep = SortedRouteItems::new();
-        let mut items_attempted = 0;
-        let mut items_improved = 0;
-        let mut consecutive_failures = 0;
-        let mut route_improved = 0.0;
-        let exit = loop {
-            // `:236-240`.
-            if max_items > 0 && self.total_items_optimized >= max_items {
-                break PassExit::MaxItems;
-            }
-            // `:243-246`.
-            let Some(item) = sweep.next(board, &mut self.scratch) else {
-                break PassExit::Exhausted;
-            };
-            let result = self.opt_route_item(board, item, pass_settings, with_preferred_directions);
-            self.total_items_optimized += 1;
-            items_attempted += 1;
-            if result.improved() {
-                items_improved += 1;
-                consecutive_failures = 0;
-                // `:265-269`. Assignment, not accumulation: whatever the last
-                // improved item scored is what the pass reports.
-                route_improved = if key_before.via_count != 0 && key_before.trace_length != 0.0 {
-                    1.0 - ((result.via_count() as f64 / key_before.via_count as f64)
-                        + (result.trace_length() / key_before.trace_length))
-                        / 2.0
-                } else {
-                    0.0
-                };
-            } else {
-                consecutive_failures += 1;
-                // `:257-263`.
-                if consecutive_failures >= max_consecutive_failures {
-                    break PassExit::ConsecutiveFailures;
-                }
-            }
+        let mut tally = PassTally::new(key_before, max_items, max_consecutive_failures);
+        let exit = if self.threads().is_parallel() {
+            self.drive_items_in_parallel(
+                board,
+                &mut sweep,
+                pass_settings,
+                with_preferred_directions,
+                &mut tally,
+            )
+        } else {
+            self.drive_items_sequentially(
+                board,
+                &mut sweep,
+                pass_settings,
+                with_preferred_directions,
+                &mut tally,
+            )
         };
+        let PassTally {
+            items_attempted,
+            items_improved,
+            consecutive_failures,
+            route_improved,
+            ..
+        } = tally;
 
         // `:281-284` — the *first* surcharge-drop rule. `runBatchLoop`
         // discards this function's return value (`:154`), so upstream's
@@ -574,9 +679,169 @@ impl<'r> BatchOptimizer<'r> {
         }
     }
 
+    /// The pass's running counters, shared by the sequential and the parallel
+    /// item drivers so that a pass reports the same numbers either way.
+    ///
+    /// It owns the two stop rules that are counted rather than measured —
+    /// `optimizer.maxItems` (`:236-240`) and `optimizer.maxConsecutiveFailures`
+    /// (`:257-263`) — because the parallel driver has to apply them at exactly
+    /// the same point in the sweep order the sequential one does.
+    fn record(&mut self, tally: &mut PassTally, result: &ItemRouteResult) -> Option<PassExit> {
+        self.total_items_optimized += 1;
+        tally.record(result)
+    }
+
+    /// The release's item loop: one item at a time, each one measured against
+    /// the board the previous one left (`:230-279`).
+    fn drive_items_sequentially(
+        &mut self,
+        board: &mut Board,
+        sweep: &mut SortedRouteItems,
+        pass_settings: &RouterSettings,
+        with_preferred_directions: bool,
+        tally: &mut PassTally,
+    ) -> PassExit {
+        loop {
+            // `:236-240`.
+            if tally.item_cap_reached(self.total_items_optimized) {
+                break PassExit::MaxItems;
+            }
+            // `:243-246`.
+            let Some(item) = sweep.next(board, &mut self.scratch.contacts) else {
+                break PassExit::Exhausted;
+            };
+            let result = self.opt_route_item(board, item, pass_settings, with_preferred_directions);
+            if let Some(exit) = self.record(tally, &result) {
+                break exit;
+            }
+        }
+    }
+
+    /// **T1** — the same loop, with candidate evaluation fanned out over
+    /// [`parallel::WorkerPool`].
+    ///
+    /// The sweep is still drawn sequentially against the live board, one window
+    /// at a time; the workers only answer "would this item's reroute have
+    /// improved the board as it stands now"; and every item the promoter acts on
+    /// goes through [`BatchOptimizer::opt_route_item`] on the live board, in
+    /// sweep order. See [`parallel`] for the soundness and determinism
+    /// arguments, including why a `Rejected` verdict may be trusted and an
+    /// `Improved` one may not.
+    fn drive_items_in_parallel(
+        &mut self,
+        board: &mut Board,
+        sweep: &mut SortedRouteItems,
+        pass_settings: &RouterSettings,
+        with_preferred_directions: bool,
+        tally: &mut PassTally,
+    ) -> PassExit {
+        let threads = self.threads();
+        // The window adapts: it starts narrow and widens only while the board
+        // stops moving. `parallel::next_window_size` carries the measurement
+        // that argues for it.
+        let mut window_size = parallel::initial_window_size(threads);
+        let mut window: Vec<ItemId> = Vec::with_capacity(parallel::max_window_size(threads));
+        loop {
+            if tally.item_cap_reached(self.total_items_optimized) {
+                break PassExit::MaxItems;
+            }
+            // Draw the window against the live board — `ReadSortedRouteItems`
+            // is a cursor over a mutating board and this is the only place the
+            // parallel driver lets it see one.
+            window.clear();
+            let mut exhausted = false;
+            while window.len() < window_size {
+                match sweep.next(board, &mut self.scratch.contacts) {
+                    Some(item) => window.push(item),
+                    None => {
+                        exhausted = true;
+                        break;
+                    }
+                }
+            }
+            if window.is_empty() {
+                break PassExit::Exhausted;
+            }
+
+            let cfg = self.attempt_config(pass_settings, with_preferred_directions);
+            let verdicts = self.pool.evaluate(board, &cfg, &window, threads);
+
+            let improved_before = tally.items_improved;
+            for (index, item) in window.iter().copied().enumerate() {
+                if tally.item_cap_reached(self.total_items_optimized) {
+                    return PassExit::MaxItems;
+                }
+                // A promotion earlier in this window may have ripped it out.
+                if !board.store().contains(item) {
+                    continue;
+                }
+                match verdicts[index] {
+                    // Trusted, and counted exactly as the sequential loop counts
+                    // a failed attempt — including towards the consecutive
+                    // failure exit, which is what keeps the two drivers' pass
+                    // lengths comparable.
+                    Verdict::Rejected => {
+                        if let Some(exit) = self.record(tally, &ItemRouteResult::not_attempted()) {
+                            return exit;
+                        }
+                    }
+                    // Re-run for real: the verdict was measured on a clone of a
+                    // board that may already have moved, and only a live attempt
+                    // may commit copper.
+                    Verdict::Improved | Verdict::Unevaluated => {
+                        let result = self.opt_route_item(
+                            board,
+                            item,
+                            pass_settings,
+                            with_preferred_directions,
+                        );
+                        if let Some(exit) = self.record(tally, &result) {
+                            return exit;
+                        }
+                    }
+                }
+            }
+            window_size = parallel::next_window_size(
+                window_size,
+                threads,
+                tally.items_improved > improved_before,
+            );
+            if exhausted {
+                break PassExit::Exhausted;
+            }
+        }
+    }
+
+    /// Everything one item attempt reads, as of right now.
+    fn attempt_config<'c>(
+        &self,
+        pass_settings: &'c RouterSettings,
+        with_preferred_directions: bool,
+    ) -> AttemptConfig<'c>
+    where
+        'r: 'c,
+    {
+        AttemptConfig {
+            rules: self.rules,
+            pass_settings,
+            min_cumulative_trace_length: self.min_cumulative_trace_length,
+            length_metric: self.length_metric,
+            via_ripup_costs: self.item_ripup_costs(false),
+            trace_ripup_costs: self.item_ripup_costs(true),
+            max_autoroute_passes: self.settings.optimizer.max_autoroute_passes,
+            with_preferred_directions,
+        }
+    }
+
     /// `opt_route_item(p_item, p_with_preferred_directions, false)`
     /// (`:308-414`) — rip one item's connection out, re-route it, keep it only
     /// if the board strictly improved.
+    ///
+    /// The attempt itself is [`attempt::attempt_item`], factored out so a T1
+    /// worker can run the identical code on a clone under
+    /// [`Disposition::Discard`]. What stays here is the one piece of state the
+    /// attempt updates rather than reads: `min_cumulative_trace_length`
+    /// (`:397-399`).
     ///
     /// Snapshots are always on: `disableSnapshots = true` is the multi-threaded
     /// optimizer's call, and that path is not ported (conformance #100).
@@ -587,106 +852,24 @@ impl<'r> BatchOptimizer<'r> {
         pass_settings: &RouterSettings,
         with_preferred_directions: bool,
     ) -> ItemRouteResult {
-        // `:315-321` — measured *before* the ripout.
-        let key_before = stats::board_key(board);
-
-        let Some(item_ref) = board.store().get(item) else {
-            return ItemRouteResult::not_attempted();
-        };
-        let nets: Vec<i32> = item_ref.nets.iter().copied().collect();
-        let trace_corners = match &item_ref.kind {
-            ItemKind::Trace(trace) => Some((trace.first_corner(), trace.last_corner())),
-            _ => None,
-        };
-        let is_trace = trace_corners.is_some();
-
-        // `:327-340` — step 1. The sweep matches connection *endpoints*, so a
-        // fork hanging off either end of this trace is not enumerated on its
-        // own; rip it with us, but only when the whole contact group is
-        // unfixed trace, or we would be promising to restore copper we are not
-        // allowed to touch.
-        let mut ripped_items = std::mem::take(&mut self.ripped_items);
-        ripped_items.clear();
-        ripped_items.insert(item);
-        if let Some((first, last)) = trace_corners {
-            for corner in [first, last] {
-                self.contacts.clear();
-                board.normal_contacts_at(item, &corner, &mut self.contacts);
-                if contains_only_unfixed_traces(board, &self.contacts) {
-                    ripped_items.extend(self.contacts.iter().copied());
-                }
-            }
-        }
-
-        // `:342-346` — step 2, `StopConnectionOption.NONE`: the entire
-        // electrical connection, fanout vias included.
-        let mut ripped_connections = std::mem::take(&mut self.ripped_connections);
-        ripped_connections.clear();
-        for member in ripped_items.iter().copied() {
-            ripped_connections.extend(connection_items(board, member, false));
-        }
-
-        // `:348-354` — step 3. One user-fixed member and the whole item is
-        // skipped: a partial ripout would leave the connection unroutable.
-        let blocked = ripped_connections.iter().copied().any(|id| {
-            board
-                .store()
-                .get(id)
-                .is_some_and(fr_board::item::Item::is_user_fixed)
-        });
-        if blocked {
-            self.ripped_items = ripped_items;
-            self.ripped_connections = ripped_connections;
-            return ItemRouteResult::not_attempted();
-        }
-
-        // `:356-357` — step 4. The undo point.
-        let mark = board.begin();
-
-        // `:360-363` — `remove_items` skips what it may not delete rather than
-        // failing (`BasicBoard.java:722-733`); `remove_item` already makes the
-        // `isDeletionForbidden` half of that check.
-        for id in ripped_connections.iter().copied() {
-            board.remove_item(id);
-        }
-        for net_no in nets.iter().copied() {
-            board.combine_traces(net_no);
-        }
-
-        let request = RerouteRequest {
-            ripup_costs: self.item_ripup_costs(is_trace),
-            max_passes: self.settings.optimizer.max_autoroute_passes,
-            with_preferred_directions,
-        };
-        // `:376-378`.
-        self.rerouter
-            .reroute(board, self.rules, pass_settings, &request);
-
-        // `:381-393`.
-        let key_after = stats::board_key(board);
-        let result = ItemRouteResult::new(
-            &key_before,
-            &key_after,
-            self.min_cumulative_trace_length,
-            self.length_metric,
+        let cfg = self.attempt_config(pass_settings, with_preferred_directions);
+        let result = attempt_item(
+            board,
+            item,
+            &cfg,
+            self.rerouter.as_mut(),
+            &mut self.scratch,
+            Disposition::Keep,
         );
-
         if result.improved() {
             // `:397-399` — the release's plain `min`, without v19's extra
             // "adopt outright when incompletes or vias fell" branch
-            // (conformance #86). Always the *weighted* length, whichever
-            // metric the comparison above used.
+            // (conformance #86). Always the *weighted* length, whichever metric
+            // the comparison above used.
             self.min_cumulative_trace_length = self
                 .min_cumulative_trace_length
-                .min(key_after.weighted_trace_length);
-            board.commit(mark);
-        } else {
-            // `:405-411`.
-            board.rollback_to(mark);
+                .min(attempt::weighted_trace_length(board));
         }
-
-        self.ripped_items = ripped_items;
-        self.ripped_connections = ripped_connections;
         result
     }
 
@@ -714,17 +897,6 @@ impl<'r> BatchOptimizer<'r> {
             self.board_units_per_mm,
         )
     }
-}
-
-/// `contains_only_unfixed_traces` (`:54-61`). An empty group is vacuously true,
-/// as upstream's loop over an empty collection is.
-fn contains_only_unfixed_traces(board: &Board, items: &[ItemId]) -> bool {
-    items.iter().copied().all(|id| {
-        board
-            .store()
-            .get(id)
-            .is_some_and(|item| !item.is_user_fixed() && matches!(item.kind, ItemKind::Trace(_)))
-    })
 }
 
 /// `BatchAutorouter`'s constructor with `p_with_preferred_directions = false`
@@ -770,10 +942,31 @@ pub fn run_optimization_stage(
     settings: &RouterSettings,
     board_units_per_mm: f64,
 ) -> Option<OptimizerOutcome> {
+    run_optimization_stage_with_threads(
+        board,
+        rules,
+        settings,
+        board_units_per_mm,
+        Threads::single(),
+    )
+}
+
+/// [`run_optimization_stage`] with a worker budget for T1 candidate evaluation.
+///
+/// `Threads::single()` is exactly [`run_optimization_stage`]; anything more
+/// takes [`parallel`]'s clone-eval-promote path, which is deterministic at a
+/// fixed count but is not bit-identical to the sequential stage.
+pub fn run_optimization_stage_with_threads(
+    board: &mut Board,
+    rules: &BoardRules,
+    settings: &RouterSettings,
+    board_units_per_mm: f64,
+    threads: Threads,
+) -> Option<OptimizerOutcome> {
     if !settings.run_optimizer() {
         return None;
     }
-    let mut optimizer = BatchOptimizer::new(rules, settings);
+    let mut optimizer = BatchOptimizer::new(rules, settings).with_threads(threads);
     optimizer.board_units_per_mm = board_units_per_mm;
     Some(optimizer.run_batch_loop(board))
 }
@@ -859,7 +1052,10 @@ mod tests {
         // A plain router at `-mp 1` requeues; the seam has to be reachable.
         let mut plain = BatchRouter::new(&rules, &settings);
         plain.autoroute_pass(&mut fixture.board.clone(), 1);
-        assert!(plain.requeue_active(), "the default is upstream's -mp 1 rule");
+        assert!(
+            plain.requeue_active(),
+            "the default is upstream's -mp 1 rule"
+        );
 
         // ... and what `MazeRerouter` builds does not.
         let mut router = BatchRouter::new(&rules, &settings);

@@ -363,13 +363,28 @@ impl AutorouteEngine<'_> {
 
         // Step 2 (continued): split the rest into convex pieces.
         //
-        // Upstream builds a `PolylineArea(page, holes)` and calls
-        // `split_to_convex`. `fr-geometry` has no `PolylineArea`, so the same
-        // negative space is produced by repeated `Simplex::cutout`, which
-        // subtracts one convex hole from a convex piece and returns the convex
-        // remainder. The *set* of covered points is identical; the individual
-        // pieces are not, so drill locations (piece centres of gravity) differ
-        // from Java's on any page that has more than one hole.
+        // This loop *is* `PolylineArea.split_to_convex`
+        // (`geometry/planar/PolylineArea.java:165-196`): the border is a
+        // `TileShape`, so `border_shape.split_to_convex()` is `[this]`
+        // (`TileShape.java:941-946`) and so is each hole's, and what remains is
+        // "cut every hole out of every surviving piece, keep the 2-dimensional
+        // remainders". The `dimension() < 2` short circuit is upstream's own
+        // early return inside `Simplex.cutout_from` (`Simplex.java:699-707`),
+        // hoisted.
+        //
+        // What is **not** reproduced is the double dispatch. `piece.cutout(hole)`
+        // resolves on both concrete `TileShape` subclasses upstream, so a box
+        // hole in a box piece takes `IntBox.cutout_from(IntBox)` — four
+        // rectangles chosen to minimise cumulative circumference, then
+        // `simplify()` — and an octagon hole takes
+        // `IntOctagon.cutout_from(…)`, up to eight octagons. Everything here is
+        // a `Simplex`, so everything takes `Simplex.cutout_from`. The *set* of
+        // covered points is identical; the pieces are not, and a drill sits at
+        // a piece's centre of gravity, so the candidate via positions differ.
+        // Closing it is `fr-geometry` work — `IntOctagon::cutout_from` and
+        // `Simplex::simplify` do not exist yet — and it is not a box-only
+        // shortcut: the holes on Issue110-RelayModule measure 2,808 `Box`,
+        // 22,351 `Oct`, 24,841 `Simplex`. See `docs/PARITY-DIVERGENCES.md`.
         let mut pieces = vec![page_shape.clone()];
         for hole in &cutouts {
             let mut next = Vec::with_capacity(pieces.len());
@@ -428,17 +443,40 @@ impl AutorouteEngine<'_> {
         result
     }
 
-    /// `ExpansionDrill.calculate_expansion_rooms` (`:59-93`): point-query for a
-    /// complete room on each layer, completing a fresh one where there is none.
-    /// Anything but exactly one completed room means an obstacle sits at the
-    /// drill point, and the drill is discarded.
+    /// `ExpansionDrill.calculate_expansion_rooms` (`:59-93`): find the complete
+    /// room at the drill point on each layer, completing a fresh one where
+    /// there is none. Anything but exactly one completed room means an obstacle
+    /// sits at the drill point, and the drill is discarded.
+    ///
+    /// Upstream runs **one** all-layer query up front (`:61-62`,
+    /// `overlapping_objects(search_shape, -1)`) and then walks that one
+    /// collection per layer; this does the same. Per-layer querying is
+    /// observationally identical — the per-layer result is the all-layer result
+    /// filtered by layer, and a room completed for layer `i` can never satisfy a
+    /// later layer `j` — but it costs `layer_count` tree descents per drill
+    /// instead of one, and `SearchTree::overlapping_tree_entries` is 15% of the
+    /// router's self time (`/usr/bin/sample`, Issue034).
     fn calculate_drill_expansion_rooms(&mut self, drill: &mut ExpansionDrill) -> bool {
         let search_shape = Point::Int(drill.location)
             .surrounding_octagon()
             .to_simplex();
+        let mut obstacles = Vec::new();
+        let mut own_net = Vec::new();
+        self.overlapping_obstacles(
+            &search_shape,
+            None,
+            self.ctrl.net_no,
+            &mut obstacles,
+            &mut own_net,
+        );
         drill.room_arr.clear();
         for layer in drill.first_layer..=drill.last_layer {
-            let existing = self.room_at_point(&search_shape, layer);
+            let existing = obstacles.iter().find_map(|obstacle| match *obstacle {
+                crate::engine::Obstacle::Room(room) if self.rooms.room(room).layer == layer => {
+                    Some(room)
+                }
+                _ => None,
+            });
             let room = match existing {
                 Some(room) => room,
                 None => {
@@ -455,23 +493,6 @@ impl AutorouteEngine<'_> {
             drill.room_arr.push(room);
         }
         true
-    }
-
-    /// The completed free room containing `shape` on `layer`, if any.
-    fn room_at_point(&mut self, shape: &Simplex, layer: i32) -> Option<RoomId> {
-        let mut obstacles = Vec::new();
-        let mut own_net = Vec::new();
-        self.overlapping_obstacles(
-            shape,
-            Some(layer),
-            self.ctrl.net_no,
-            &mut obstacles,
-            &mut own_net,
-        );
-        obstacles.iter().find_map(|obstacle| match obstacle {
-            crate::engine::Obstacle::Room(room) => Some(*room),
-            _ => None,
-        })
     }
 
     /// `DrillPage.calc_pin_center_in_drill` (`:46-61`): the centre of a

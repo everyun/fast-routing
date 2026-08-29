@@ -403,12 +403,26 @@ impl RoomArena {
         self.doors.len()
     }
 
-    /// `generate_room_id_no()` — a monotonically increasing per-engine counter.
+    /// `generate_room_id_no()` (`AutorouteEngine.java:641-643`) — a
+    /// monotonically increasing per-engine counter.
+    ///
+    /// Upstream's body is `return ++expansion_room_instance_count`, so the
+    /// first id it ever hands out is **1**, not 0. The offset is not cosmetic:
+    /// the id shares one numeric space with the board item ids in
+    /// [`sort_obstacles_for_neighbours`](crate::engine::AutorouteEngine::sort_obstacles_for_neighbours)
+    /// and in the `SortedRoomNeighbour` tie-break, so shifting every room id by
+    /// one moves rooms across items in both orders.
+    ///
+    /// The *call sites* matter as much as the value: upstream mints from
+    /// `Sorted*RoomNeighbours.calculate` only, once per invocation — which
+    /// means an id is also burned for every `ObstacleExpansionRoom` (whose own
+    /// id is `(item << 10) | index` and which throws the minted one away) and
+    /// once more for every `try_remove_edge` restart. See
+    /// [`calculate_doors`](crate::engine::AutorouteEngine::calculate_doors).
     #[inline]
     pub fn generate_room_id_no(&mut self) -> i64 {
-        let id = self.room_id_no;
         self.room_id_no += 1;
-        id
+        self.room_id_no
     }
 
     /// Read access to a room.
@@ -494,9 +508,20 @@ impl RoomArena {
         id
     }
 
-    /// Adds a complete free-space room with a fresh room id.
+    /// Adds a complete free-space room.
+    ///
+    /// The room id is **not** minted here.
+    /// `CompleteFreeSpaceExpansionRoom` is constructed inside
+    /// `SortedRoomNeighbours.calculate_neighbours` from the id
+    /// `SortedRoomNeighbours.calculate` minted a moment earlier (`:55`,
+    /// `:129`), and a `try_remove_edge` restart throws that room away and
+    /// builds another one with a *later* id. So the id is assigned by
+    /// [`calculate_doors`](crate::engine::AutorouteEngine::calculate_doors),
+    /// once per round; until then the room carries the `0` no upstream room
+    /// ever has ([`generate_room_id_no`](Self::generate_room_id_no) is
+    /// pre-increment).
     pub fn add_complete_free_room(&mut self, shape: Simplex, layer: i32) -> RoomId {
-        let id_no = self.generate_room_id_no();
+        let id_no = 0;
         let id = RoomId(self.rooms.len() as u32);
         self.rooms.push(Room {
             kind: RoomKind::CompleteFree,

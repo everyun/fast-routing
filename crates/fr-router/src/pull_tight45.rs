@@ -14,13 +14,18 @@
 //! it is *not* reproduced — there is nothing to reproduce.
 //!
 //! Fork/end smoothing (`smoothen_start/end_corner_at_trace`, `:415`/`:520`) is
-//! not ported; see [`crate::pull_tight`]'s module docs.
+//! [`PullTightAlgo::smoothen_start_corner_at_trace_45`] /
+//! [`PullTightAlgo::smoothen_end_corner_at_trace_45`]; the driver that calls
+//! them is in [`crate::pull_tight`].
 
+use fr_board::item::ItemId;
 use fr_datastructures::signum::Signum;
 use fr_geometry::planar::{Direction, FloatPoint, IntPoint, Limits, Line, Point, Polyline, Side};
 
 use crate::insert_forced::ChangedArea;
-use crate::pull_tight::{octagon_is_outside, signum_as_int, PullTightAlgo, NUMERIC_BACKOFF};
+use crate::pull_tight::{
+    octagon_is_outside, polyline_from_lines, signum_as_int, PullTightAlgo, NUMERIC_BACKOFF,
+};
 
 impl PullTightAlgo<'_> {
     /// `PullTightAlgo45.pull_tight` (`:27-37`) — the fixed-point loop.
@@ -466,6 +471,161 @@ impl PullTightAlgo<'_> {
         };
         let anchor = IntPoint::new(new_x as i32, new_y as i32);
         Some(Line::new_from_point_and_dir(anchor, &new_line_dir))
+    }
+
+    // ---- §6.4 fork/end smoothing, 45° flavor -----------------------------
+
+    /// `PullTightAlgo45.smoothen_start_corner_at_trace` (`:415-517`).
+    ///
+    /// The trace's **first** corner is a fork onto another trace. Two joints get
+    /// fixed:
+    ///
+    /// * **acute** — the fork doubles back (`projection == POSITIVE`) and the
+    ///   previous corner is off the contact's line. A chamfer line is spliced in
+    ///   ahead of the trace, which is what stops the acid trap. The 45° rule
+    ///   additionally requires the contact's line to be **orthogonal**
+    ///   (`:454-457`); that requirement has no counterpart in the any-angle
+    ///   copy and is the only structural difference between the two;
+    /// * **bend** — the fork is perpendicular (`projection == ZERO`) and the
+    ///   trace's *next* line continues in the contact's direction, so the
+    ///   junction can slide along the contact. The slide is decided by the base
+    ///   `reposition_line` over the two-line junction window.
+    ///
+    /// Returns the adjusted polyline, or `None` for upstream's `return null`.
+    pub(crate) fn smoothen_start_corner_at_trace_45(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        let trace_polyline = self.trace_polyline_of(id)?;
+        let arr = &trace_polyline.arr;
+        if arr.len() < 3 {
+            return None;
+        }
+        let curr_end_corner = trace_polyline.corner(0);
+        // `:424-426` — a fork whose corner is outside the clip is left alone.
+        if let Some(clip) = self.clip_shape() {
+            if octagon_is_outside(&clip, &curr_end_corner) {
+                return None;
+            }
+        }
+        let curr_prev_end_corner = trace_polyline.corner(1);
+        let line_direction = arr[1].direction();
+        let prev_line_direction = arr[2].direction();
+
+        let fork = self.scan_fork_contacts(
+            id,
+            &curr_end_corner,
+            &curr_prev_end_corner,
+            &line_direction,
+            &prev_line_direction,
+            trace_polyline.corner_count(),
+            true,
+            false,
+        )?;
+        let contact = fork.contact?;
+
+        if fork.acute_angle {
+            // `:475-497` — the chamfer goes in front of the trace, and the
+            // contact's own line becomes the new leading line.
+            let add_line = self.fork_chamfer_line(
+                &curr_end_corner,
+                &curr_prev_end_corner,
+                &contact,
+                fork.prev_corner_side,
+                (2, 6),
+            )?;
+            let mut new_lines = Vec::with_capacity(arr.len() + 1);
+            new_lines.push(contact.line);
+            new_lines.push(add_line);
+            new_lines.extend_from_slice(&arr[1..]);
+            return polyline_from_lines(&new_lines);
+        }
+        if fork.bend {
+            // `:498-511` — reposition the trace's first line over a window that
+            // starts inside the contact trace.
+            let mut check_lines = Vec::with_capacity(arr.len() + 1);
+            check_lines.push(contact.prev_line);
+            check_lines.push(contact.line);
+            check_lines.extend_from_slice(&arr[1..]);
+            let new_line = self.reposition_line_base(&check_lines, 2, changed_area)?;
+            let mut new_lines = Vec::with_capacity(arr.len());
+            new_lines.push(contact.line);
+            new_lines.push(new_line);
+            new_lines.extend_from_slice(&arr[2..]);
+            return polyline_from_lines(&new_lines);
+        }
+        None
+    }
+
+    /// `PullTightAlgo45.smoothen_end_corner_at_trace` (`:520-622`) — the mirror
+    /// of [`PullTightAlgo::smoothen_start_corner_at_trace_45`] at the trace's
+    /// **last** corner.
+    ///
+    /// The mirror is exact except for the two `turn_45_degree` factors, which
+    /// swap (`:581-586` against `:476-481`) because the chamfer has to lean the
+    /// other way when it is appended rather than prepended.
+    pub(crate) fn smoothen_end_corner_at_trace_45(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<Polyline> {
+        let trace_polyline = self.trace_polyline_of(id)?;
+        let arr = &trace_polyline.arr;
+        if arr.len() < 3 {
+            return None;
+        }
+        let curr_end_corner = trace_polyline.last_corner();
+        if let Some(clip) = self.clip_shape() {
+            if octagon_is_outside(&clip, &curr_end_corner) {
+                return None;
+            }
+        }
+        let corner_count = trace_polyline.corner_count();
+        let curr_prev_end_corner = trace_polyline.corner(corner_count - 2);
+        let line_direction = arr[arr.len() - 2].direction().opposite();
+        let prev_line_direction = arr[arr.len() - 3].direction().opposite();
+
+        let fork = self.scan_fork_contacts(
+            id,
+            &curr_end_corner,
+            &curr_prev_end_corner,
+            &line_direction,
+            &prev_line_direction,
+            corner_count,
+            true,
+            false,
+        )?;
+        let contact = fork.contact?;
+
+        if fork.acute_angle {
+            let add_line = self.fork_chamfer_line(
+                &curr_end_corner,
+                &curr_prev_end_corner,
+                &contact,
+                fork.prev_corner_side,
+                (6, 2),
+            )?;
+            let mut new_lines = Vec::with_capacity(arr.len() + 1);
+            new_lines.extend_from_slice(&arr[..arr.len() - 1]);
+            new_lines.push(add_line);
+            new_lines.push(contact.line);
+            return polyline_from_lines(&new_lines);
+        }
+        if fork.bend {
+            let mut check_lines = Vec::with_capacity(arr.len() + 1);
+            check_lines.extend_from_slice(&arr[..arr.len() - 1]);
+            check_lines.push(contact.line);
+            check_lines.push(contact.prev_line);
+            let new_line =
+                self.reposition_line_base(&check_lines, arr.len() - 2, changed_area)?;
+            let mut new_lines = Vec::with_capacity(arr.len());
+            new_lines.extend_from_slice(&arr[..arr.len() - 2]);
+            new_lines.push(new_line);
+            new_lines.push(contact.line);
+            return polyline_from_lines(&new_lines);
+        }
+        None
     }
 }
 

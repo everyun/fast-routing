@@ -56,6 +56,9 @@ impl AutorouteEngine<'_> {
     /// Computes the neighbours of `room_id`, inserts the doors, runs the
     /// `try_remove_edge` maximality loop and builds the gap rooms. The room's
     /// own shape may shrink inside this call (the corner cut-off at `:457-478`).
+    ///
+    /// This is also where a complete free room gets its
+    /// [`id_no`](crate::rooms::Room::id_no) — see [`mint_room_id`](Self::mint_room_id).
     pub fn calculate_doors(&mut self, room_id: RoomId) {
         // `AutorouteEngine.java:520-525` dispatches on the *tree* subclass:
         // `ShapeSearchTree45Degree` → `Sorted45DegreeRoomNeighbours`, else this
@@ -66,6 +69,7 @@ impl AutorouteEngine<'_> {
         // `:60-65`: an edge removal restarts the whole calculation. The loop is
         // bounded by the strict area increase the removal is gated on.
         loop {
+            self.mint_room_id(room_id);
             let (neighbours, own_net_objects) = self.calculate_neighbours(room_id);
             if self.try_remove_edge(room_id, &neighbours) {
                 self.remove_all_doors(room_id);
@@ -82,6 +86,29 @@ impl AutorouteEngine<'_> {
                 self.calculate_target_doors(room_id, &own_net_objects);
             }
             return;
+        }
+    }
+
+    /// Burns one `generate_room_id_no()` and, for a complete free room, keeps
+    /// it as the room's `id_no`.
+    ///
+    /// `SortedRoomNeighbours.calculate` mints on **every** invocation (`:55`),
+    /// before it knows what kind of room it was handed, and hands the value to
+    /// the `CompleteFreeSpaceExpansionRoom` constructor (`:129`). Three
+    /// consequences this reproduces, all of which move the shared item/room id
+    /// space and therefore the obstacle visit order:
+    ///
+    /// * an `ObstacleExpansionRoom` burns an id and discards it — its own id
+    ///   stays `(item << 10) | index` (`:131`);
+    /// * a `try_remove_edge` restart re-enters `calculate` (`:63`), so the room
+    ///   that survives carries the **last** id of the chain, not the first;
+    /// * ids therefore have gaps, and a free room's id is well above the count
+    ///   of free rooms — which is what decides whether it sorts before or after
+    ///   a board item of a similar id.
+    pub(crate) fn mint_room_id(&mut self, room_id: RoomId) {
+        let id_no = self.rooms.generate_room_id_no();
+        if self.rooms.room(room_id).kind == RoomKind::CompleteFree {
+            self.rooms.room_mut(room_id).id_no = id_no;
         }
     }
 
@@ -280,10 +307,28 @@ impl AutorouteEngine<'_> {
     }
 
     /// The `get_id_no()` the neighbour sort's tie-break reads (`:666`).
+    ///
+    /// Upstream's key is the **bare** `search_tree_object.get_id_no()`: the
+    /// board id for an item (`board/Item.java:107-109`, the shape index is
+    /// *not* part of it) and the room counter for a complete free room
+    /// (`CompleteFreeSpaceExpansionRoom.java:105-107`), in one numeric space.
+    ///
+    /// This key keeps the shape index and lifts every room above every item
+    /// instead — a **measured divergence** (`docs/PARITY-DIVERGENCES.md`). It
+    /// makes the key unique per obstacle, and that uniqueness is what stops
+    /// [`sort_neighbours`] from collapsing two tile shapes of one item into a
+    /// single neighbour the way upstream's `TreeSet` does. On the exact key
+    /// *plus* that collapse, expansions go 37,065 -> 118,384 on Issue026 and
+    /// 163,986 -> 1,865,184 on Issue034 (11x). The exact key *without* the
+    /// collapse is bit-for-bit inert on both boards, so the ordering is not
+    /// what pays here — keeping every neighbour is.
+    ///
+    /// `ObstacleExpansionRoom` never reaches here: it is not a
+    /// `SearchTreeObject` (`ObstacleExpansionRoom.java:19`), so its
+    /// `(item << 10) | index` id is not in this space.
     pub(super) fn obstacle_id(&self, obstacle: Obstacle) -> i64 {
         match obstacle {
             Obstacle::Item(item, index) => ((item.raw() as i64) << 10) | index as i64,
-            // Rooms sort after every item, matching the obstacle visit order.
             Obstacle::Room(room) => (1i64 << 48) + self.rooms.room(room).id_no,
         }
     }
@@ -703,7 +748,17 @@ impl AutorouteEngine<'_> {
     }
 }
 
-/// `SortedRoomNeighbour.compareTo` (`:612-669`), applied as a sort.
+/// `SortedRoomNeighbours.sorted_neighbours` (`:35`, `:307`), ordered by
+/// `SortedRoomNeighbour.compareTo` (`:612-669`).
+///
+/// Upstream's container is a `TreeSet`, i.e. a *set*: a neighbour that compares
+/// equal to one already in it is silently dropped, on the argument at `:643-646`
+/// that the two intersection pieces are identical so one obstacle is enough.
+/// This is a plain sort — the collapse is deliberately **not** reproduced, and
+/// [`obstacle_id`](AutorouteEngine::obstacle_id) is unique per obstacle so that
+/// it cannot happen by accident. Reproducing it faithfully costs 3.2x
+/// expansions on Issue026 and 11x on Issue034; the numbers and the reasoning
+/// are on `obstacle_id`.
 fn sort_neighbours(neighbours: &mut [SortedNeighbour], room_shape: &Simplex) {
     neighbours.sort_by(|a, b| compare_neighbours(a, b, room_shape));
 }
@@ -838,6 +893,59 @@ mod tests {
             assert!(engine.rooms.room(room).alive);
             assert_eq!(engine.rooms.room(room).shape.dimension(), 2);
         }
+    }
+
+    #[test]
+    fn every_door_calculation_burns_a_room_id() {
+        // `SortedRoomNeighbours.calculate` mints once per invocation, whatever
+        // kind of room it was handed (`:55`). An obstacle room keeps its
+        // `(item << 10) | index` id and throws the minted one away — but the
+        // counter still moves, which is what shifts the free rooms of the rest
+        // of the connection through the shared item/room id space.
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        let pad = fixture.pad_ids()[0];
+        let shape = engine.item_tile(pad, 0).expect("pad tile");
+        let layer = engine.item_tile_layer(pad, 0).expect("pad layer");
+
+        let free = engine
+            .rooms
+            .add_complete_free_room(IntBox::new(0, 0, 10, 10).to_simplex(), layer);
+        assert_eq!(
+            engine.rooms.room(free).id_no,
+            0,
+            "a room carries no id until its doors are calculated"
+        );
+        engine.mint_room_id(free);
+        assert_eq!(
+            engine.rooms.room(free).id_no,
+            1,
+            "`generate_room_id_no` is `++count`, so the first id is 1"
+        );
+
+        let obstacle = engine.rooms.add_obstacle_room(pad, 0, shape, layer);
+        let packed = engine.rooms.room(obstacle).id_no;
+        engine.mint_room_id(obstacle);
+        assert_eq!(
+            engine.rooms.room(obstacle).id_no,
+            packed,
+            "an obstacle room keeps its packed id"
+        );
+
+        let second = engine
+            .rooms
+            .add_complete_free_room(IntBox::new(20, 20, 30, 30).to_simplex(), layer);
+        engine.mint_room_id(second);
+        assert_eq!(
+            engine.rooms.room(second).id_no,
+            3,
+            "the obstacle room burned id 2"
+        );
+
+        // A `try_remove_edge` restart re-enters `calculate`, so the room that
+        // survives carries the *last* id of the chain.
+        engine.mint_room_id(second);
+        assert_eq!(engine.rooms.room(second).id_no, 4);
     }
 
     #[test]

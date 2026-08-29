@@ -354,6 +354,63 @@ fn the_sweep_agrees_with_brute_force_on_denser_boards() {
     }
 }
 
+/// **T2.** The parallel violation scan is not "equivalent" to the sequential
+/// one, it is *equal* to it — same records, same order, same `expected`/`actual`
+/// on every deduplicated pair.
+///
+/// The chunk floor is forced down to 8 entries so that most chunks start in the
+/// middle of a layer run and have to rebuild the sweep's active set from a
+/// prefix scan (`seed_active`). At the shipped floor these boards would be one
+/// chunk per layer and the interesting path would never run.
+#[test]
+fn the_parallel_scan_returns_exactly_the_sequential_result() {
+    let rules = matrix();
+    let mut chunked_boards = 0;
+    for seed in 1..=25u64 {
+        let mut rng = Rng::new(0x5EED_0000 ^ seed);
+        let board = random_board(&mut rng, 120);
+        let view = board.view(&rules);
+        let anchors = fr_check::AnchorIndex::build(&view);
+        let expected = fr_check::check_clearance_with(&view, &anchors);
+        for threads in [2usize, 3, 8] {
+            let actual =
+                fr_check::clearance::check_clearance_parallel_chunked(&view, &anchors, threads, 8);
+            assert_eq!(actual, expected, "seed {seed}, {threads} threads");
+        }
+        if !expected.is_empty() {
+            chunked_boards += 1;
+        }
+    }
+    assert!(
+        chunked_boards >= 10,
+        "the corpus has to actually produce violations, or this proves nothing"
+    );
+}
+
+/// ... and at the shipped chunk floor, which is the configuration the product
+/// runs.
+#[test]
+fn the_shipped_parallel_scan_agrees_too() {
+    let rules = matrix();
+    for seed in 1..=25u64 {
+        let mut rng = Rng::new(0xB0A7_0000 ^ seed);
+        let board = random_board(&mut rng, 120);
+        let view = board.view(&rules);
+        let anchors = fr_check::AnchorIndex::build(&view);
+        assert_eq!(
+            fr_check::check_clearance_parallel(&view, &anchors, 4),
+            fr_check::check_clearance_with(&view, &anchors),
+            "seed {seed}"
+        );
+        // One worker is the sequential path by construction.
+        assert_eq!(
+            fr_check::check_clearance_parallel(&view, &anchors, 1),
+            fr_check::check_clearance_with(&view, &anchors),
+            "seed {seed}, one thread"
+        );
+    }
+}
+
 /// The referee is a function of the board and of nothing else: no hasher order,
 /// no allocation address, no iteration accident.
 #[test]

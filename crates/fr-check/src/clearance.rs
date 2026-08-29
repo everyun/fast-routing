@@ -49,6 +49,7 @@
 //! practice.
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicUsize, Ordering as AtomicOrdering};
 
 use fr_board::item::{Item, ItemId, ItemKind};
 use fr_geometry::planar::{IntBox, Limits};
@@ -156,6 +157,202 @@ pub fn check_clearance_with<V: BoardView + ?Sized>(
 
     out.sort_by_key(|v| v.key());
     out
+}
+
+// ---------------------------------------------------------------------------
+// T2 — the same scan, fanned out
+// ---------------------------------------------------------------------------
+
+/// [`check_clearance_with`] on `threads` worker threads.
+///
+/// `threads <= 1` calls [`check_clearance_with`] itself, so a sequential run
+/// executes exactly the code it always did.
+///
+/// # Why this is exactly the same answer, not merely an equivalent one
+///
+/// The sequential sweep tests the ordered pair `(active_entry, front_entry)`
+/// once, in a fixed order, and the *first* pair to produce a violation for a
+/// given `(min id, max id, layer)` key is the one whose `expected`/`actual` end
+/// up in the output — a pair overlapping on several shape pairs is deduplicated
+/// down to whichever the sweep hit first. Reproducing that under a partitioned
+/// scan needs two facts:
+///
+/// 1. **The active set at any point is recoverable without running the sweep up
+///    to it.** `order` is sorted by `inflated.ll.x` within a layer, so the
+///    retirement test `a.ur.x >= front.ll.x` is monotone: once an entry is
+///    retired it stays retired. The active set when the sweep reaches position
+///    `i` is therefore exactly `{ j < i : entries[j].ur.x >= entries[i].ll.x }`,
+///    which a chunk can rebuild from a prefix scan. That is what
+///    [`seed_active`] does, and it is the only reason chunking a sweep line is
+///    sound at all.
+/// 2. **The sequential encounter order is expressible as a sort key.** It is:
+///    `(front position in `order`, active position in `order`)`, because the
+///    active list is kept in ascending insertion order by `Vec::retain` and
+///    `Vec::push`, and `order` runs layer by layer. Each worker tags every
+///    violation it finds with that pair, the merge sorts by
+///    `(key, ordinal)` and keeps the first of each key — which *is* the one the
+///    sequential scan would have kept.
+///
+/// The one thing that differs is work, not output: without a shared `seen` set a
+/// worker re-evaluates a pair the sequential scan would have short-circuited.
+/// That is bounded by the number of extra shape pairs per violating item pair,
+/// which is small, and it buys a merge with no cross-thread state at all.
+///
+/// `the_parallel_scan_returns_exactly_the_sequential_result` in
+/// `tests/property_test.rs` is the executable half of this argument: 25 random
+/// boards, three thread counts, chunk floor forced down to 8 so that most chunks
+/// have to rebuild an active set, `assert_eq!` on the whole `Vec<Violation>`.
+///
+/// # Measured
+///
+/// Over the 46-fixture suite under `fr-cli --import-only` (import → referee →
+/// session writer, no router), total wall: **7.65 s at one worker, 4.68 s at
+/// four, 4.46 s at eight**; a second one-worker pass measured 7.52 s, so the
+/// baseline is stable to ~2 %. Import and session writing are unaffected by
+/// `--threads` and account for most of what is left, which is why the end-to-end
+/// number is 1.6× rather than 4×: the ~3.1 s that four workers remove is the
+/// scan, and it is very nearly all of the scan.
+pub fn check_clearance_parallel<V: BoardView + ?Sized + Sync>(
+    view: &V,
+    anchors: &AnchorIndex,
+    threads: usize,
+) -> Vec<Violation> {
+    check_clearance_parallel_chunked(view, anchors, threads, MIN_CHUNK_ENTRIES)
+}
+
+/// Fewer entries than this in a chunk and the per-chunk active-set seed — which
+/// is `O(distance from the layer run's start)` — costs more than the sweep it
+/// enables. It only ever *raises* the chunk size, so a big board's chunk count
+/// stays `O(threads)` and the total seeding stays `O(entries · threads)`.
+const MIN_CHUNK_ENTRIES: usize = 512;
+
+/// [`check_clearance_parallel`] with the chunk floor exposed.
+///
+/// Only the differential test needs this: at the real floor a hundred-item
+/// random board is one chunk per layer, which never exercises [`seed_active`] —
+/// the one piece of the parallel scan that has to reconstruct state rather than
+/// merely reorder it.
+#[doc(hidden)]
+pub fn check_clearance_parallel_chunked<V: BoardView + ?Sized + Sync>(
+    view: &V,
+    anchors: &AnchorIndex,
+    threads: usize,
+    min_chunk_entries: usize,
+) -> Vec<Violation> {
+    if threads <= 1 {
+        return check_clearance_with(view, anchors);
+    }
+    let entries = Entries::build(view);
+    let tasks = entries.chunks(threads, min_chunk_entries);
+    if tasks.len() <= 1 {
+        return check_clearance_with(view, anchors);
+    }
+    let workers = threads.min(tasks.len());
+
+    let cursor = AtomicUsize::new(0);
+    let found: Vec<Vec<(u32, u32, Violation)>> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                let cursor = &cursor;
+                let entries = &entries;
+                let tasks = &tasks;
+                scope.spawn(move || {
+                    let mut out: Vec<(u32, u32, Violation)> = Vec::new();
+                    let mut active: Vec<u32> = Vec::new();
+                    loop {
+                        // Work stealing is safe here in a way it is not in the
+                        // optimizer: a chunk's output carries its own position
+                        // in the sequential order, so which worker took it
+                        // cannot reach the answer.
+                        let next = cursor.fetch_add(1, AtomicOrdering::Relaxed);
+                        let Some(chunk) = tasks.get(next) else {
+                            break;
+                        };
+                        scan_chunk(view, anchors, entries, *chunk, &mut active, &mut out);
+                    }
+                    out
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| match handle.join() {
+                Ok(out) => out,
+                Err(payload) => std::panic::resume_unwind(payload),
+            })
+            .collect()
+    });
+
+    let mut all: Vec<(u32, u32, Violation)> = found.into_iter().flatten().collect();
+    // `(key, ordinal)`: the ordinal is the sequential encounter order, so the
+    // first entry of each key run is the record the sequential scan kept.
+    all.sort_unstable_by(|a, b| {
+        a.2.key()
+            .cmp(&b.2.key())
+            .then_with(|| (a.0, a.1).cmp(&(b.0, b.1)))
+    });
+    all.dedup_by(|a, b| a.2.key() == b.2.key());
+    all.into_iter().map(|(_, _, violation)| violation).collect()
+}
+
+/// One `[start, end)` slice of `Entries::order`, all of it inside the layer run
+/// that begins at `run_start`.
+type Chunk = (u32, u32, u32);
+
+/// The sweep over one chunk, seeded with the active set the sequential scan
+/// would have held on entering it.
+///
+/// `active` holds **positions in `Entries::order`**, not entry indices, so that
+/// a hit's ordinal is a field read rather than a search: the position is exactly
+/// the sequential scan's active-list order, because `retain` preserves order and
+/// `push` appends the position just visited.
+fn scan_chunk<V: BoardView + ?Sized>(
+    view: &V,
+    anchors: &AnchorIndex,
+    entries: &Entries,
+    chunk: Chunk,
+    active: &mut Vec<u32>,
+    out: &mut Vec<(u32, u32, Violation)>,
+) {
+    let (run_start, start, end) = chunk;
+    seed_active(entries, run_start as usize, start as usize, active);
+    for front_pos in start as usize..end as usize {
+        let e = &entries.entries[entries.order[front_pos] as usize];
+        active.retain(|&pos| {
+            entries.entries[entries.order[pos as usize] as usize]
+                .inflated
+                .ur
+                .x
+                >= e.inflated.ll.x
+        });
+        for &active_pos in active.iter() {
+            let other = &entries.entries[entries.order[active_pos as usize] as usize];
+            if !other.inflated.intersects(&e.inflated) {
+                continue;
+            }
+            if let Some(violation) = violation_for_pair(view, anchors, other, e) {
+                out.push((front_pos as u32, active_pos, violation));
+            }
+        }
+        active.push(front_pos as u32);
+    }
+}
+
+/// The active set the sequential sweep holds when it reaches `start`.
+///
+/// `{ j in [run_start, start) : entries[order[j]].ur.x >= entries[order[start]].ll.x }`,
+/// in ascending `j` — see [`check_clearance_parallel`] for why that is exact.
+fn seed_active(entries: &Entries, run_start: usize, start: usize, active: &mut Vec<u32>) {
+    active.clear();
+    if start <= run_start {
+        return;
+    }
+    let front_ll_x = entries.entries[entries.order[start] as usize].inflated.ll.x;
+    for pos in run_start..start {
+        if entries.entries[entries.order[pos] as usize].inflated.ur.x >= front_ll_x {
+            active.push(pos as u32);
+        }
+    }
 }
 
 /// The 16-step bisection of `drc-connectivity.md` §2.6, on two raw tile shapes.
@@ -322,6 +519,38 @@ impl Entries {
             .windows(2)
             .map(move |w| &self.order[w[0] as usize..w[1] as usize])
     }
+
+    /// The sweep, cut into pieces one worker can take.
+    ///
+    /// A chunk never straddles a layer run — the sweep line resets at a layer
+    /// boundary and a seeded active set has to reset with it. Within a run the
+    /// cut is by count: `MIN_CHUNK_ENTRIES` keeps a chunk's seed scan (which is
+    /// `O(distance from the run's start)`) from costing more than the sweep it
+    /// enables, and aiming for several chunks per worker is what lets the
+    /// cursor balance layers of wildly different sizes — which matters, because
+    /// 40 of the 46 suite fixtures are two-layer boards and a per-layer split
+    /// alone would cap the scan at 2×.
+    fn chunks(&self, threads: usize, min_chunk_entries: usize) -> Vec<Chunk> {
+        /// Chunks per worker to aim for, so the cursor has something to steal.
+        const CHUNKS_PER_WORKER: usize = 4;
+
+        let target = self
+            .order
+            .len()
+            .div_ceil((threads * CHUNKS_PER_WORKER).max(1))
+            .max(min_chunk_entries.max(1));
+        let mut chunks = Vec::new();
+        for window in self.layer_bounds.windows(2) {
+            let (run_start, run_end) = (window[0] as usize, window[1] as usize);
+            let mut start = run_start;
+            while start < run_end {
+                let end = (start + target).min(run_end);
+                chunks.push((run_start as u32, start as u32, end as u32));
+                start = end;
+            }
+        }
+        chunks
+    }
 }
 
 /// Evaluates both directions of the asymmetric obstacle predicate for one
@@ -353,20 +582,40 @@ fn test_pair<V: BoardView + ?Sized>(
     if seen.contains(&key) {
         return;
     }
+    if let Some(v) = violation_for_pair(view, anchors, x, y) {
+        seen.insert(key);
+        out.push(v);
+    }
+}
 
+/// Both directions of the asymmetric obstacle predicate for one candidate pair,
+/// with no deduplication state — the half of [`test_pair`] the parallel scan
+/// shares, because it has no shared `seen` set to consult.
+///
+/// `None` for a pair of shapes of the same item, which the sweep can produce and
+/// which is never a violation.
+fn violation_for_pair<V: BoardView + ?Sized>(
+    view: &V,
+    anchors: &AnchorIndex,
+    x: &Entry,
+    y: &Entry,
+) -> Option<Violation> {
+    if x.item == y.item {
+        return None;
+    }
+    debug_assert_eq!(x.layer, y.layer);
+    let layer = x.layer;
+    let ids = view.item_ids();
+    let (id_x, id_y) = (ids[x.item as usize], ids[y.item as usize]);
     // Upstream's outer scan is in item order, so the lower id is `self` first.
     let (lo, hi) = if id_x.raw() <= id_y.raw() {
         (x, y)
     } else {
         (y, x)
     };
-    for (this, other) in [(lo, hi), (hi, lo)] {
-        if let Some(v) = evaluate(view, anchors, this, other, layer) {
-            seen.insert(key);
-            out.push(v);
-            return;
-        }
-    }
+    [(lo, hi), (hi, lo)]
+        .into_iter()
+        .find_map(|(this, other)| evaluate(view, anchors, this, other, layer))
 }
 
 /// One ordered direction: is `other` an obstacle to `this`, and if so do their
