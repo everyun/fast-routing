@@ -324,12 +324,27 @@ fn board_units_per_mm(design: &ImportedDesign) -> f64 {
     }
 }
 
-/// The router settings this design routes under: the shipped defaults, sized to the board and
-/// through [`RouterSettings::apply_board_specific_optimizations`] — without which every layer
-/// costs 1.0/1.0 and the maze has no preferred direction.
+/// The router settings this design routes under: the shipped defaults, sized to the board, then
+/// the file's own `(autoroute_settings …)` scope, then
+/// [`RouterSettings::apply_board_specific_optimizations`] — without which every layer costs
+/// 1.0/1.0 and the maze has no preferred direction.
+///
+/// # The order of the last two is upstream's, and it is what decides which DSN fields survive
+///
+/// Upstream merges the scope into the job's settings from inside the DSN read
+/// (`Structure.read_scope:979-987`) and calls `applyBoardSpecificOptimizations` immediately
+/// afterwards, on the loaded board (`HeadlessBoardManager:628`, and again in
+/// `RoutingJobScheduler:108` after the settings merger). That function fills in only the per-layer
+/// entries that are still unset, so the file's `(active …)` and `(preferred_direction …)` survive
+/// it — while it recomputes *both* per-layer trace-cost arrays outright, which is why the file's
+/// `preferred_direction_trace_costs` never reach the maze.
+/// [`fr_io::specctra::autoroute_settings`] carries the evidence and does not apply them.
 fn settings_for(design: &ImportedDesign, options: MazeOptions) -> RouterSettings {
     let mut settings = RouterSettings::default();
     settings.set_layer_count(design.rules.layer_structure.len());
+    if let Some(dsn) = &design.autoroute_settings {
+        specctra::apply_autoroute_settings(&mut settings, dsn);
+    }
     settings.apply_board_specific_optimizations(
         BoardAspectRatio::from_bounding_box(
             f64::from(design.bounds.width()),
@@ -339,6 +354,23 @@ fn settings_for(design: &ImportedDesign, options: MazeOptions) -> RouterSettings
     );
     settings.max_passes = options.max_passes.max(1);
     settings
+}
+
+/// Ratsnest incompletes on the board as it stands — the referee's own count, without the
+/// clearance scan.
+///
+/// Only the `(autoroute off)` path needs it: every other path gets the number from the stage that
+/// last touched the board.
+fn incomplete_count_of(design: &ImportedDesign) -> usize {
+    let board = &design.board;
+    let shapes = shape_store(board);
+    let view = StoreView::new(
+        board.store(),
+        &shapes,
+        &design.rules.clearance_matrix,
+        board.layers().len(),
+    );
+    board_connectivity(&view).incomplete_count
 }
 
 /// Runs [`RouterStage::Maze`] over `design` in place.
@@ -371,7 +403,21 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     // default path through here is byte-identical to the pre-portfolio one; the
     // `total_items_routed` item-cap check below reads the router either way,
     // and a portfolio arm's copy of it is discarded with the losing arms.
-    let outcome = if options.portfolio > 1 {
+    //
+    // `(autoroute off)` in the file's `autoroute_settings` scope skips the batch
+    // loop and nothing else: upstream never constructs the `BatchAutorouter`
+    // (`RoutingJobSchedulerActionThread:96`), falls through to its fanout-only
+    // branch, and still runs the optimizer at `:179` if `postroute` allows it.
+    // `describe_stop(None)` — "not started" — is already the label for it.
+    let outcome = if !settings.run_router() {
+        fr_router::batch::RunOutcome {
+            // The report's incomplete count has to be the one the referee will
+            // re-derive a few lines later, and a run that routed nothing still
+            // owes that number honestly rather than the `0` a default claims.
+            incomplete_count: incomplete_count_of(design),
+            ..fr_router::batch::RunOutcome::default()
+        }
+    } else if options.portfolio > 1 {
         let race = portfolio::race(
             &mut design.board,
             &design.rules,
@@ -789,6 +835,10 @@ impl RoutingJob {
         let import_started = std::time::Instant::now();
         let mut design = self.import()?;
         let import_duration = import_started.elapsed();
+        // Taken here, before anything can move copper. `census` below is the same count over the
+        // *finished* board, and the two differ by exactly what the router added — which is the
+        // whole reason both exist.
+        let import_census = BoardCensus::of(&design.board);
         observe(JobPhase::Imported);
         // The board is known now, so the job's wall budget can finally reserve what its own
         // shutdown will cost (`fr_router::reserve_job_tail`). Before the import there is
@@ -819,6 +869,7 @@ impl RoutingJob {
             design_name: self.design_name.clone(),
             pcb_name: design.design_name.clone(),
             layer_count: design.board.layers().len(),
+            import_census,
             census: BoardCensus::of(&design.board),
             stats: referee.stats,
             score: referee.score,
@@ -847,7 +898,17 @@ pub struct JobReport {
     pub pcb_name: String,
     /// Layers in the board stackup.
     pub layer_count: usize,
-    /// Item counts by kind.
+    /// Item counts by kind **as the DSN was imported**, before any router stage ran.
+    ///
+    /// Kept apart from [`JobReport::census`] for the same reason
+    /// [`JobReport::import_duration`] is kept apart from the caller's wall clock: `fr-cli`'s
+    /// summary opens with a line that says "Imported …", and it was printing the post-routing
+    /// count there, so on a routed board it reported items the importer never saw. A line that
+    /// names a stage has to carry that stage's numbers.
+    pub import_census: BoardCensus,
+    /// Item counts by kind on the **finished** board — after the router stage when one ran, and
+    /// therefore equal to [`JobReport::import_census`] only under
+    /// [`RouterStage::ImportOnly`].
     pub census: BoardCensus,
     /// The five referee quantities the score is computed from.
     pub stats: BoardStats,

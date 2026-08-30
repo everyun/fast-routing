@@ -502,18 +502,37 @@ fn describe(error: &JobError) -> String {
 /// pre-existing line printed the end-to-end elapsed time there, so every routed
 /// run claimed the importer had cost what the router did. `bench/run_bench.py`
 /// reads `Total` for the tool time and falls back to the old line.
+///
+/// The same rule applies to the item counts on that line, and they were breaking
+/// it the same way: they came from [`JobReport::census`], which is taken after
+/// the router stage, so "Imported … 4 617 items" on a routed board counted
+/// copper the importer never read. They now come from
+/// [`JobReport::import_census`], and a routed run gets a second line for the
+/// board it finished with — the delta between the two is the copper we added.
 fn print_summary(report: &JobReport, started: Instant) {
     println!(
         "Imported {} in {:.2}s: {} layers, {} items ({} pins, {} traces, {} vias)",
         report.pcb_name,
         report.import_duration.as_secs_f64(),
         report.layer_count,
-        report.census.total(),
-        report.census.pins,
-        report.census.traces,
-        report.census.vias,
+        report.import_census.total(),
+        report.import_census.pins,
+        report.import_census.traces,
+        report.import_census.vias,
     );
     if let Some(router) = &report.router {
+        println!(
+            // Signed, because the delta is genuinely two-way: a pass that normalizes and
+            // removes tails can leave a pre-routed board with *fewer* trace items than it
+            // found (`Issue103-Board-Routed`, -1).
+            "Board: {} items ({} pins, {} traces, {} vias); router delta {:+} traces, {:+} vias",
+            report.census.total(),
+            report.census.pins,
+            report.census.traces,
+            report.census.vias,
+            report.census.traces as i64 - report.import_census.traces as i64,
+            report.census.vias as i64 - report.import_census.vias as i64,
+        );
         println!(
             "Router: {} passes, {} routed, {} failed, {} ripped, {} pins fanned out",
             router.passes, router.routed, router.not_routed, router.ripped, router.fanouted,

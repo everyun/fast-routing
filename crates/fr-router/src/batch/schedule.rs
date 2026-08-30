@@ -37,6 +37,15 @@
 //! final tail cleanup when the board completed without fanout vias        (:1163-1168)
 //! ```
 //!
+//! # Reading a stop decision
+//!
+//! `FR_PASS_TRACE=<path>` writes one [`trace`] record per pass — the pass's own
+//! counters next to the four stagnation trackers and the history the restore
+//! check reads — and one `stop` record naming the [`StopReason`]. It is the
+//! direct counterpart of upstream's per-pass log line, which is the only way to
+//! answer "where does the release stop that we do not" with evidence rather than
+//! with a re-reading of the transcription. See [`trace`].
+//!
 //! # Two things that read like bugs and are the contract
 //!
 //! * The restore test is **strict** `>` (`:961`). Upstream's own comment records
@@ -83,8 +92,8 @@ use crate::batch::budget::{BudgetMode, BudgetPolicy, ConnectionBudget};
 use crate::batch::history::{
     BoardSnapshotStore, BOARD_RANK_LIMIT, MAXIMUM_TRIES_ON_THE_SAME_BOARD,
 };
-use crate::batch::scoring::BoardScorer;
-use crate::batch::{PassOutcome, StopConnection, START_RIPUP_COSTS};
+use crate::batch::scoring::{BoardScore, BoardScorer};
+use crate::batch::{trace, PassOutcome, StopConnection, START_RIPUP_COSTS};
 
 /// `BatchAutorouter.STOP_AT_PASS_MINIMUM` (`:60`) *(jar-verified)* — no restore
 /// or stagnation check may fire before this pass.
@@ -686,6 +695,15 @@ impl BatchLoop {
         let mut continue_autorouting = true;
         let mut stop_requested = false;
 
+        // The pass trace's own state (`trace`, off unless `FR_PASS_TRACE` is
+        // set). A pass's record has to show the tracker values the stop rules
+        // left behind, and the body leaves through five different `break`s, so
+        // the record is flushed at the bottom of the body *and* once more after
+        // the loop — nothing touches a tracker in between, so the two print the
+        // same numbers.
+        let mut pass_pending = false;
+        let mut pass_elapsed = Duration::ZERO;
+
         // The pre-pass score of pass 1. Every later pass reuses the score it
         // already computed after the previous pass — the same board, so the same
         // number (see `scoring`'s "Cost" note).
@@ -726,7 +744,10 @@ impl BatchLoop {
                 self.config.remove_unconnected_vias,
             )
             .with_deadline(self.config.deadline);
+            let pass_started = trace::is_enabled().then(Instant::now);
             let pass = driver.run_pass(board, &ctx);
+            pass_elapsed = pass_started.map_or(Duration::ZERO, |at| at.elapsed());
+            pass_pending = true;
             // `:947` + `:688` — `autoroute_pass` returns false on an empty work
             // list (the board is complete) and on a pass that attempted nothing.
             continue_autorouting = !pass.board_complete && pass.progressed;
@@ -856,11 +877,39 @@ impl BatchLoop {
             if !continue_autorouting && outcome.stop_reason.is_none() {
                 outcome.stop_reason = Some(stop_reason_if_done);
             }
+            trace_pass(
+                &mut pass_pending,
+                &outcome,
+                pass_elapsed,
+                &current_score,
+                StagnationState {
+                    flat: consecutive_no_improvement,
+                    last_best: last_best_score,
+                    global_best: global_best_score,
+                    best_pass: pass_of_best_score,
+                },
+                &self.history,
+            );
             // `:1132-1135`.
             if continue_autorouting && !stop_requested {
                 current_pass += 1;
             }
         }
+
+        // The record of a pass whose body left through a `break`.
+        trace_pass(
+            &mut pass_pending,
+            &outcome,
+            pass_elapsed,
+            &current_score,
+            StagnationState {
+                flat: consecutive_no_improvement,
+                last_best: last_best_score,
+                global_best: global_best_score,
+                best_pass: pass_of_best_score,
+            },
+            &self.history,
+        );
 
         // `:1141-1159` — finish with the best board ever seen. The history holds
         // pre-pass boards, so this is what recovers a pass that made things
@@ -892,8 +941,83 @@ impl BatchLoop {
 
         outcome.final_score = current_score.normalized;
         outcome.incomplete_count = current_score.incomplete_count;
+        if trace::is_enabled() {
+            trace::line(&format!(
+                "stop, pass={}, reason={:?}, score={:.2}, incomplete={}, violations={}, restores={}, best_restored={}",
+                outcome.passes.len(),
+                outcome.stop_reason,
+                outcome.final_score,
+                outcome.incomplete_count,
+                current_score.violation_count,
+                outcome.restores,
+                outcome.best_board_restored,
+            ));
+        }
         outcome
     }
+}
+
+/// The stagnation trackers as they stand after one pass — the four numbers that
+/// decide, between them, whether the loop takes another one.
+#[derive(Debug, Clone, Copy)]
+struct StagnationState {
+    /// `consecutiveNoImprovementPasses`.
+    flat: i32,
+    /// `lastBestScore`, the pass-local baseline a restore resets.
+    last_best: f64,
+    /// `globalBestScore`, which no restore resets.
+    global_best: f64,
+    /// `passOfBestScore`.
+    best_pass: i32,
+}
+
+/// Emits one [`trace`] record for the pass that just ran, and clears `pending`
+/// so the flush after the loop does not repeat it.
+///
+/// Free rather than a closure because the caller holds every one of these
+/// borrows mutably somewhere else in the same body.
+fn trace_pass(
+    pending: &mut bool,
+    outcome: &RunOutcome,
+    elapsed: Duration,
+    score: &BoardScore,
+    stagnation: StagnationState,
+    history: &BoardSnapshotStore,
+) {
+    if !*pending {
+        return;
+    }
+    *pending = false;
+    let Some(pass) = outcome.passes.last() else {
+        return;
+    };
+    if !trace::is_enabled() {
+        return;
+    }
+    trace::line(&format!(
+        "pass={}, ms={}, queued={}, routed={}, not_routed={}, skipped={}, undone={}, \
+         budget_hits={}, ripped={}, score={:.2}, incomplete={}, violations={}, \
+         flat={}, last_best={:.2}, global_best={:.2}, best_pass={}, history={}/{:.2}, restores={}",
+        pass.pass_no,
+        elapsed.as_millis(),
+        pass.queued,
+        pass.routed,
+        pass.not_routed,
+        pass.skipped,
+        pass.routes_undone,
+        pass.connections_hitting_budget,
+        pass.ripped_item_count,
+        score.normalized,
+        score.incomplete_count,
+        score.violation_count,
+        stagnation.flat,
+        stagnation.last_best,
+        stagnation.global_best,
+        stagnation.best_pass,
+        history.len(),
+        history.max_score(),
+        outcome.restores,
+    ));
 }
 
 #[cfg(test)]
@@ -1326,6 +1450,42 @@ mod tests {
             "every restore lands on the good board: {:?}",
             harness.driver.restores
         );
+    }
+
+    /// The pass trace is flushed at the bottom of the loop body *and* again
+    /// after the loop, because five different `break`s can leave the body with a
+    /// pass unreported. The `pending` flag is what keeps the second flush from
+    /// duplicating a record the first one already wrote — a duplicated pass in
+    /// the trace would read exactly like a stop-rule divergence, which is the
+    /// one thing the trace exists to rule in or out.
+    #[test]
+    fn a_pass_is_traced_at_most_once() {
+        let outcome = RunOutcome {
+            passes: vec![PassOutcome::default()],
+            ..RunOutcome::default()
+        };
+        let stagnation = StagnationState {
+            flat: 0,
+            last_best: 0.0,
+            global_best: 0.0,
+            best_pass: 0,
+        };
+        let history = BoardSnapshotStore::new();
+        let mut pending = true;
+        let flush = |pending: &mut bool| {
+            trace_pass(
+                pending,
+                &outcome,
+                Duration::ZERO,
+                &BoardScore::default(),
+                stagnation,
+                &history,
+            );
+        };
+        flush(&mut pending);
+        assert!(!pending, "the first flush claims the record");
+        flush(&mut pending);
+        assert!(!pending, "the second is a no-op");
     }
 
     /// `:29` — the snapshot store never grows past its cap, whatever the pass

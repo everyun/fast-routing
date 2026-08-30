@@ -712,3 +712,71 @@ fn an_unknown_report_unit_is_rejected() {
     assert!(stderr(&output).contains("unknown unit 'furlong'"));
     assert!(!Path::new(&out).exists());
 }
+
+// =================================================================================================
+// the summary line means what it says
+// =================================================================================================
+
+/// The first word of the first line is "Imported", and the counts after it are the importer's.
+///
+/// They were the *router's*: the summary read `JobReport::census`, which is taken after the
+/// router stage, so a routed run reported items the importer never saw — on `Issue103` the line
+/// claimed 4 617 items for a board the DSN describes with a different number. The two counts are
+/// separate now, and a routing run prints both.
+#[test]
+fn the_imported_line_counts_the_imported_board_not_the_routed_one() {
+    let workspace = Workspace::with_board("census", UNROUTED_BOARD);
+    let ses = workspace.path("routed.ses");
+
+    let import_only = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "--import-only".as_ref(),
+    ]);
+    assert_eq!(code(&import_only), 0, "stderr: {}", stderr(&import_only));
+    let imported_line = imported_counts(&stdout(&import_only));
+
+    let routed = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "-mp".as_ref(),
+        "1".as_ref(),
+    ]);
+    assert_eq!(code(&routed), 0, "stderr: {}", stderr(&routed));
+    let report = stdout(&routed);
+
+    assert_eq!(
+        imported_counts(&report),
+        imported_line,
+        "routing must not change what the import line reports: {report}"
+    );
+    // This board arrives with no wiring at all and leaves with two traces, so the claim is
+    // falsifiable in both directions: the import line must say zero and the board line two.
+    assert!(
+        imported_line.contains("0 traces"),
+        "the input has no wiring: {report}"
+    );
+    assert!(
+        report
+            .contains("Board: 7 items (4 pins, 2 traces, 0 vias); router delta +2 traces, +0 vias"),
+        "{report}"
+    );
+    // …and the board line belongs to the router, so an import-only run does not print it.
+    assert!(
+        !stdout(&import_only).contains("Board:"),
+        "{}",
+        stdout(&import_only)
+    );
+}
+
+/// The `N items (…)` tail of the `Imported` line.
+fn imported_counts(report: &str) -> String {
+    let line = report
+        .lines()
+        .find(|line| line.starts_with("Imported "))
+        .unwrap_or_else(|| panic!("no Imported line in:\n{report}"));
+    let (_, counts) = line.split_once(": ").expect("the line has a colon");
+    counts.to_string()
+}

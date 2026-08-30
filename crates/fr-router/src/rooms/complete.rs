@@ -100,34 +100,50 @@ impl AutorouteEngine<'_> {
         // The box query returns a *superset* of the simplex query's answer —
         // `IntBox::intersects` is inclusive, and any non-empty shape overlap
         // implies a bounds overlap — and every extra entry is provably a no-op:
-        // it fails either the `bounding_box().intersects(&bounding)` guard or
-        // the `dimension() == 2` gate, and `own_net` is unused here.
+        // it fails either the running-bound guard below or the
+        // `dimension() == 2` gate, and `own_net` is unused here.
+        //
+        // `:598` — the leaves are sorted before the carve loop, and with the
+        // *completion* comparator, not the neighbour one, which is why the
+        // query is the `_for_completion` entry point rather than
+        // `overlapping_obstacles_tile` followed by a second sort of the same
+        // list.
         let mut obstacles = Vec::new();
         let mut own_net = Vec::new();
-        self.overlapping_obstacles_tile(
+        self.overlapping_obstacles_tile_for_completion(
             &TileShape::Box(bounding),
             Some(layer),
             self.ctrl.net_no,
             &mut obstacles,
             &mut own_net,
         );
-        // `:598` — the leaves are sorted before the carve loop, and with the
-        // *completion* comparator, not the neighbour one.
-        self.sort_obstacles_for_completion(&mut obstacles);
 
         for obstacle in obstacles {
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {
                 continue;
             }
-            if self.obstacle_layer(obstacle) != Some(layer) {
+            // Layer and bounds first, shape second. The walk above ran against
+            // the *initial* bound, so by now `bounding` has usually shrunk past
+            // most of what it returned — 95.7 % of the layer-matching obstacles
+            // on `Issue230` — and
+            // [`obstacle_layer_and_bounds`](AutorouteEngine::obstacle_layer_and_bounds)
+            // answers both questions off the stored tile, without building the
+            // simplex the rejected ones would immediately drop. It is the same
+            // rejection, not a weaker one; see that method for why the octagon
+            // row's wider box cannot change an answer.
+            let Some((obstacle_layer, obstacle_bounds)) = self.obstacle_layer_and_bounds(obstacle)
+            else {
+                continue;
+            };
+            if obstacle_layer != layer
+                || obstacle_bounds.is_empty()
+                || !obstacle_bounds.intersects(&bounding)
+            {
                 continue;
             }
             let Some(obstacle_shape) = self.obstacle_shape(obstacle) else {
                 continue;
             };
-            if !obstacle_shape.bounding_box().intersects(&bounding) {
-                continue;
-            }
 
             let mut new_result: Vec<CompletedShape> = Vec::new();
             let mut new_bounding: Option<IntBox> = None;
@@ -589,6 +605,7 @@ fn border_segment(shape: &Simplex, index: usize) -> Option<LineSegment> {
 
 #[cfg(test)]
 mod tests {
+    use super::{Obstacle, TileShape};
     use crate::test_support::TestFixture;
     use fr_geometry::planar::IntBox;
 
@@ -704,6 +721,83 @@ mod tests {
                 engine.rooms.room(room).kind,
                 crate::rooms::RoomKind::CompleteFree
             );
+        }
+    }
+
+    /// The carve loop rejects an obstacle on the cheap box from
+    /// [`AutorouteEngine::obstacle_layer_and_bounds`] before it materializes
+    /// [`AutorouteEngine::obstacle_shape`]. That substitution is only sound
+    /// while the cheap box **contains** the materialized shape's own bounding
+    /// box: a superset can only make the guard more permissive, and a more
+    /// permissive guard cannot change an answer (the extra obstacle fails the
+    /// `dimension() == 2` gate and leaves `result` and `bounding` alone). A
+    /// *subset* would silently drop a real obstacle, i.e. route through copper.
+    ///
+    /// Asserted over every obstacle a board-sized query returns on each
+    /// fixture, items and rooms alike, so it covers all three tile flavors the
+    /// accessor switches on.
+    #[test]
+    fn the_cheap_obstacle_box_contains_the_materialised_one() {
+        for fixture in [
+            TestFixture::two_layer_with_pads(),
+            TestFixture::with_foreign_trace(),
+            TestFixture::pure_smd_two_layer(),
+        ] {
+            let mut engine = fixture.engine();
+            // A complete free room in the query's way, so the `Obstacle::Room`
+            // arm is exercised and not just the item ones.
+            let room_shape = IntBox::new(-100, -100, 100, 100).to_simplex();
+            let room = engine.rooms.add_complete_free_room(room_shape, 0);
+            engine.mint_room_id(room);
+            engine.insert_room_in_tree(room);
+
+            let bound = engine.bounds();
+            let mut obstacles = Vec::new();
+            let mut own_net = Vec::new();
+            engine.overlapping_obstacles_tile_for_completion(
+                &TileShape::Box(bound),
+                Some(0),
+                crate::test_support::TEST_NET,
+                &mut obstacles,
+                &mut own_net,
+            );
+            assert!(
+                obstacles.iter().any(|o| matches!(o, Obstacle::Item(_, _)))
+                    && obstacles.contains(&Obstacle::Room(room)),
+                "the probe must see both obstacle kinds on {:?}",
+                obstacles.len()
+            );
+
+            for obstacle in obstacles {
+                let cheap = engine.obstacle_layer_and_bounds(obstacle);
+                let exact = engine.obstacle_shape(obstacle);
+                match (cheap, exact) {
+                    (Some((layer, cheap_box)), Some(shape)) => {
+                        assert_eq!(
+                            Some(layer),
+                            engine.obstacle_layer(obstacle),
+                            "{obstacle:?}: the combined accessor disagrees with obstacle_layer"
+                        );
+                        let exact_box = shape.bounding_box();
+                        if exact_box.is_empty() {
+                            continue;
+                        }
+                        assert!(
+                            cheap_box.contains_box(&exact_box),
+                            "{obstacle:?}: cheap box {cheap_box:?} does not contain the \
+                             materialised {exact_box:?} — the prefilter would drop a real \
+                             obstacle"
+                        );
+                    }
+                    (None, None) => {}
+                    (cheap, exact) => panic!(
+                        "{obstacle:?}: the two accessors disagree on existence \
+                         ({}, {})",
+                        cheap.is_some(),
+                        exact.is_some()
+                    ),
+                }
+            }
         }
     }
 }

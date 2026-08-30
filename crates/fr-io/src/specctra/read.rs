@@ -1061,6 +1061,15 @@ impl<'a> Reader<'a> {
     }
 
     /// Upstream `AutorouteSettings.readScope`.
+    ///
+    /// Three ways this returns `None`, i.e. drops the whole scope — all of them upstream's:
+    /// end of file inside the scope (`:31-34`), a `layer_rule` naming a layer the structure does
+    /// not have (`:52-55` propagating `read_layer_rule`'s `null` at `:82-85`), and, one level up,
+    /// the `layerStructure == null` guard that means this method is never called at all.
+    ///
+    /// `(start_pass_no …)` has **no branch upstream** — `Keyword.START_PASS_NO` exists but
+    /// `read_scope` never tests for it, so the scope goes to `ScopeKeyword.skip_scope` and the
+    /// value is discarded. Reading it as an integer here consumes exactly the same tokens.
     fn read_autoroute_settings(&mut self) -> Option<DsnAutorouteSettings> {
         let mut settings = DsnAutorouteSettings::default();
         let mut next: Option<Token> = None;
@@ -1068,7 +1077,10 @@ impl<'a> Reader<'a> {
             let prev = next;
             next = self.lexer.next_token();
             match &next {
-                None => return Some(settings),
+                None => {
+                    self.warn("AutorouteSettings.read_scope: unexpected end of file");
+                    return None;
+                }
                 Some(Token::Close) => return Some(settings),
                 _ => {}
             }
@@ -1098,9 +1110,13 @@ impl<'a> Reader<'a> {
                     let _ = self.read_integer_scope();
                 }
                 Some(Token::Kw(Kw::LayerRule)) => {
-                    if let Some(layer_setting) = self.read_autoroute_layer_rule() {
-                        settings.layer_settings.push(layer_setting);
-                    }
+                    // `null` from `read_layer_rule` aborts `read_scope` itself, *without* first
+                    // skipping the rest of the rule: the remaining tokens fall out into the
+                    // structure loop and are skipped there one scope at a time, exactly as the
+                    // guard-bug path does.
+                    settings
+                        .layer_settings
+                        .push(self.read_autoroute_layer_rule()?);
                 }
                 _ => self.skip_scope(),
             }
@@ -1123,9 +1139,29 @@ impl<'a> Reader<'a> {
         value
     }
 
+    /// Upstream `AutorouteSettings.read_layer_rule`.
+    ///
+    /// The layer name is resolved here, not at build time, because upstream resolves it here and
+    /// a name that resolves to `-1` is fatal to the *enclosing* scope, not just to this rule
+    /// (`AutorouteSettings.java:82-85`). The caller turns that into a dropped
+    /// `autoroute_settings`.
     fn read_autoroute_layer_rule(&mut self) -> Option<DsnLayerSetting> {
+        let layer_name = self.lexer.next_string(true, b' ');
+        let layer_no = self
+            .layer_structure
+            .as_ref()
+            .map_or(-1, |layers| layers.get_no(&layer_name));
+        let layer_count = self
+            .layer_structure
+            .as_ref()
+            .map_or(0, |layers| layers.layers.len());
+        if layer_no < 0 || layer_no as usize >= layer_count {
+            self.warn("AutorouteSettings.read_layer_rule: layer not found");
+            return None;
+        }
         let mut setting = DsnLayerSetting {
-            layer_name: self.lexer.next_string(true, b' '),
+            layer_name,
+            layer_no: layer_no as usize,
             ..DsnLayerSetting::default()
         };
         let mut next: Option<Token> = None;
@@ -1133,7 +1169,11 @@ impl<'a> Reader<'a> {
             let prev = next;
             next = self.lexer.next_token();
             match &next {
-                None | Some(Token::Close) => return Some(setting),
+                None => {
+                    self.warn("AutorouteSettings.read_layer_rule: unexpected end of file");
+                    return None;
+                }
+                Some(Token::Close) => return Some(setting),
                 _ => {}
             }
             if prev != Some(Token::Open) {

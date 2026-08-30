@@ -57,6 +57,56 @@ pub(crate) fn is_enabled() -> bool {
     sink().is_some()
 }
 
+/// The `conn` record: what routing **one** connection of one batch pass cost,
+/// and what it did to the board's open-connection count.
+///
+/// This is the batch loop's record rather than the optimizer's — `BatchRouter`
+/// emits it whether or not an optimizer stage is above it — but its format
+/// belongs with its two siblings and with the module doc that explains what
+/// `incomplete=a->b` means. So [`crate::batch`] fills a struct instead of
+/// keeping a format string in another module's dialect, and the field list is
+/// checked by the compiler rather than by whoever last edited the two files.
+///
+/// Building the record is not free — the two `incomplete` counts are ratsnest
+/// walks — so the call site still gates them on [`is_enabled`] rather than
+/// evaluating them unconditionally.
+pub(crate) struct Conn {
+    /// The batch pass this connection belongs to.
+    pub pass_no: i32,
+    /// The net being routed.
+    pub net_no: i32,
+    /// How `autoroute_item` ended.
+    pub state: crate::batch::AttemptState,
+    /// How many items the attempt ripped up.
+    pub ripped: usize,
+    /// The connection's allowance (`ConnectionClock::limit_ms`).
+    pub budget_ms: u64,
+    /// How much of that allowance the attempt spent.
+    pub used_ms: u64,
+    /// Whether it spent the whole allowance instead of finding an answer.
+    pub hit_budget: bool,
+    /// The board's open-connection count before and after.
+    pub incomplete: (usize, usize),
+}
+
+impl Conn {
+    /// Writes the record. No-op when the trace is off.
+    pub(crate) fn emit(&self) {
+        line(&format!(
+            "conn, pass={}, net={}, state={:?}, ripped={}, budget_ms={}, used_ms={}, hit_budget={}, incomplete={}->{}",
+            self.pass_no,
+            self.net_no,
+            self.state,
+            self.ripped,
+            self.budget_ms,
+            self.used_ms,
+            self.hit_budget,
+            self.incomplete.0,
+            self.incomplete.1,
+        ));
+    }
+}
+
 /// Writes one record, prefix included. No-op when the trace is off.
 pub(crate) fn line(record: &str) {
     let Some(sink) = sink() else {

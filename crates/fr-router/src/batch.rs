@@ -84,6 +84,7 @@ pub mod portfolio;
 pub mod schedule;
 pub mod scoring;
 pub mod threads;
+pub(crate) mod trace;
 
 use crate::batch::budget::{BudgetMode, BudgetPolicy, ConnectionClock};
 use crate::batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, RequeuePolicy};
@@ -1133,17 +1134,17 @@ impl<'r> BatchRouter<'r> {
             );
             let usage = clock.finish();
             if let Some(incomplete_before) = incomplete_before {
-                crate::optimizer::trace::line(&format!(
-                    "conn, pass={}, net={}, state={:?}, ripped={}, budget_ms={}, used_ms={}, hit_budget={}, incomplete={incomplete_before}->{}",
-                    ctx.pass_no,
-                    entry.net_no,
-                    attempt.state(),
-                    attempt.ripped.len(),
-                    ctx.connection_budget().limit_ms(),
-                    usage.time_used_ms,
-                    usage.hit_budget,
-                    incomplete_count(board),
-                ));
+                crate::optimizer::trace::Conn {
+                    pass_no: ctx.pass_no,
+                    net_no: entry.net_no,
+                    state: attempt.state(),
+                    ripped: attempt.ripped.len(),
+                    budget_ms: ctx.connection_budget().limit_ms(),
+                    used_ms: usage.time_used_ms,
+                    hit_budget: usage.hit_budget,
+                    incomplete: (incomplete_before, incomplete_count(board)),
+                }
+                .emit();
             }
             outcome.time_used_ms += usage.time_used_ms;
             outcome.effort_used += usage.effort_used;

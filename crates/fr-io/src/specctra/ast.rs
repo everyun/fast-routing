@@ -955,6 +955,14 @@ pub struct DsnPlane {
 pub struct DsnLayerSetting {
     /// Layer name.
     pub layer_name: String,
+    /// The layer index [`layer_name`](Self::layer_name) resolved to, through
+    /// `LayerStructure.getNo` and therefore through the Electra `Top`/`Bottom` fallback.
+    ///
+    /// Always in range: upstream's `AutorouteSettings.read_layer_rule` returns `null` when the
+    /// name resolves to `-1`, which makes `read_scope` return `null` too and drops the *whole*
+    /// `autoroute_settings` scope (`AutorouteSettings.java:82-85`, `:52-55`). The reader does
+    /// the same, so an out-of-range index can never reach the AST.
+    pub layer_no: usize,
     /// `(active on|off)`.
     pub active: Option<bool>,
     /// `(preferred_direction horizontal|vertical)`.

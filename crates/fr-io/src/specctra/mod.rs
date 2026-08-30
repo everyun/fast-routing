@@ -19,6 +19,7 @@
 //! | [`transform`] | `io/CoordinateTransform` and `Structure.createBoard`'s scale-factor loop |
 //! | [`jround`] | `java.lang.Math.round` — the half-up rounding every `transformToBoard*` ends in |
 //! | [`build`] | `Structure.createBoard`, `Library.readScope`'s tail, `Network.insertComponent`, `Wiring`'s inserts, and the two `HeadlessBoardManager` post-load overrides |
+//! | [`autoroute_settings`] | `Structure.read_scope:979-987` — `RouterSettings.applyNewValuesFrom`, i.e. what the parsed `(autoroute_settings …)` scope actually does to the job |
 //!
 //! The read/build split is the one structural change `dsn-board-semantics.md` §17.4 asks for:
 //! upstream constructs the board halfway through the structure scope and inserts items halfway
@@ -36,7 +37,9 @@
 //! `layerStructure == null` guard (§6.6), the `class_class` shared-iterator pairing (§7.7), the
 //! `separateHoles` last-writer-wins assignment (§6.3), the integer-division scale-factor
 //! reduction (§3.2), the two different trace-half-width roundings (§3.4), `(type route)` →
-//! `USER_FIXED` (§10.3), and `NetClass.readScope`'s overshoot on a sub-scope-less `(class …)`.
+//! `USER_FIXED` (§10.3), `NetClass.readScope`'s overshoot on a sub-scope-less `(class …)`, and
+//! the two `autoroute_settings` fields upstream parses and then throws away before the router can
+//! read them ([`autoroute_settings`]).
 //!
 //! Known gaps, in the order they are likely to matter to the golden comparator:
 //!
@@ -76,6 +79,7 @@
 //! the names differ.
 
 pub mod ast;
+pub mod autoroute_settings;
 pub mod build;
 pub mod jround;
 pub mod lex;
@@ -86,7 +90,8 @@ pub mod ses_read;
 pub mod ses_write;
 pub mod transform;
 
-pub use ast::{DsnAst, Unit};
+pub use ast::{DsnAst, DsnAutorouteSettings, DsnLayerSetting, Unit};
+pub use autoroute_settings::apply as apply_autoroute_settings;
 pub use build::{
     ImportOptions, ImportedComponent, ImportedDesign, ImportedPackage, ImportedPadstack,
     PadGeometry,

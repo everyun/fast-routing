@@ -443,6 +443,46 @@ impl<'b> AutorouteEngine<'b> {
         obstacles: &mut Vec<Obstacle>,
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
+        self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
+        // One ascending `get_id_no()` key over items *and* rooms together —
+        // `SortedRoomNeighbours.java:139-147`. See
+        // [`sort_obstacles_for_neighbours`](Self::sort_obstacles_for_neighbours)
+        // for why the two kinds interleave instead of items-then-rooms.
+        self.sort_obstacles_for_neighbours(obstacles);
+    }
+
+    /// [`overlapping_obstacles_tile`](Self::overlapping_obstacles_tile) left in
+    /// `ShapeSearchTree.complete_shape`'s order
+    /// ([`sort_obstacles_for_completion`](Self::sort_obstacles_for_completion))
+    /// instead of `SortedRoomNeighbours`'.
+    ///
+    /// The two upstream call sites really do sort differently, and the
+    /// completion one used to pay for both: the query sorted the whole list into
+    /// the neighbour order and `complete_shape` immediately re-sorted it. On
+    /// `Issue230` that list averages 508 obstacles over 205 k completion
+    /// queries — 104 M elements through a comparison sort that nothing reads.
+    pub fn overlapping_obstacles_tile_for_completion(
+        &mut self,
+        query_tile: &fr_board::shape::TileShape,
+        layer: Option<i32>,
+        net_no: i32,
+        obstacles: &mut Vec<Obstacle>,
+        own_net: &mut Vec<(ItemId, u16)>,
+    ) {
+        self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
+        self.sort_obstacles_for_completion(obstacles);
+    }
+
+    /// The body the two ordered entry points share: the tree walk, the
+    /// obstacle/own-net split and the room-tree tail, in no particular order.
+    fn collect_obstacles_tile(
+        &mut self,
+        query_tile: &fr_board::shape::TileShape,
+        layer: Option<i32>,
+        net_no: i32,
+        obstacles: &mut Vec<Obstacle>,
+        own_net: &mut Vec<(ItemId, u16)>,
+    ) {
         obstacles.clear();
         own_net.clear();
         fr_metrics::counters::bump::tree_queries(1);
@@ -510,13 +550,6 @@ impl<'b> AutorouteEngine<'b> {
         obstacles[rooms_from..].sort_unstable();
         let kept = dedup_in_place(&mut obstacles[rooms_from..]);
         obstacles.truncate(rooms_from + kept);
-        // One ascending `get_id_no()` key over items *and* rooms together —
-        // `SortedRoomNeighbours.java:139-147`. See
-        // [`sort_obstacles_for_neighbours`](Self::sort_obstacles_for_neighbours)
-        // for why the two kinds interleave instead of items-then-rooms, and
-        // `complete_shape` for the one caller that needs the *other* upstream
-        // order and re-sorts.
-        self.sort_obstacles_for_neighbours(obstacles);
     }
 
     /// Reorders an obstacle list into the visit order
@@ -588,6 +621,52 @@ impl<'b> AutorouteEngine<'b> {
             Obstacle::Room(room) => {
                 let room = self.rooms.room(room);
                 room.alive.then(|| room.shape.clone())
+            }
+        }
+    }
+
+    /// The layer *and* the bounding box of one obstacle, read straight off the
+    /// stored tile shape — without materializing
+    /// [`obstacle_shape`](Self::obstacle_shape).
+    ///
+    /// `complete_shape` gathers its obstacles with one tree walk against the
+    /// *initial* bound (upstream's `ShapeSearchTree.java:578-595`) and then
+    /// discards almost all of them: on `Issue230` the route stage sees 104.3 M
+    /// obstacles, 72.4 M of them survive the layer test, and **69.3 M of those
+    /// 72.4 M — 95.7 % — are then bounded away** because the running bound has
+    /// shrunk since the walk. Materializing the simplex before that rejection
+    /// cost 60 M `IntOctagon::to_simplex` calls, 18 % of the whole run.
+    ///
+    /// The two answers the rejection needs are both O(1) on the tile:
+    ///
+    /// | tile | bounding box |
+    /// |---|---|
+    /// | `Box(b)` | `b` — `b.to_simplex()`'s corners are exactly `ll`/`ur` |
+    /// | `Oct(o)` | `o.bounding_box()`, i.e. `[left_x, right_x] × [bottom_y, top_y]` |
+    /// | `Simplex(s)` | `s.bounding_box()`, the same call the caller made |
+    ///
+    /// The octagon row is a **superset** of `o.to_simplex().bounding_box()`
+    /// (which floors/ceils float corners that already lie inside those integer
+    /// bounds), never a subset, so the guard it feeds can only become *more*
+    /// permissive. That cannot change an answer: an obstacle that passes the
+    /// wider box but not the narrow one has an empty intersection with every
+    /// surviving candidate, so it fails the `dimension() == 2` gate and leaves
+    /// both `result` and `bounding` exactly as it found them.
+    pub fn obstacle_layer_and_bounds(&self, obstacle: Obstacle) -> Option<(i32, IntBox)> {
+        match obstacle {
+            Obstacle::Item(item, index) => {
+                let slot = self.board.store().slot_of(item)?;
+                let tile = self.tree().item_shapes(slot, item).get(index as usize)?;
+                let bounds = match tile.shape.as_ref()? {
+                    fr_board::shape::TileShape::Box(b) => *b,
+                    fr_board::shape::TileShape::Oct(o) => o.bounding_box(),
+                    fr_board::shape::TileShape::Simplex(s) => s.bounding_box(),
+                };
+                Some((tile.layer, bounds))
+            }
+            Obstacle::Room(room) => {
+                let room = self.rooms.room(room);
+                room.alive.then(|| (room.layer, room.shape.bounding_box()))
             }
         }
     }
@@ -785,6 +864,70 @@ mod tests {
             })
             .collect();
         assert_eq!(hits, rooms, "each room once, in ascending id order");
+    }
+
+    /// The two ordered entry points differ **only** in the final sort. The
+    /// completion one used to be `overlapping_obstacles_tile` followed by
+    /// `sort_obstacles_for_completion` at the call site, which sorted the whole
+    /// list twice; splitting the shared gather out has to leave both the set
+    /// and each entry point's order exactly as they were.
+    #[test]
+    fn the_two_obstacle_orders_are_one_gather_sorted_two_ways() {
+        let fixture = TestFixture::with_foreign_trace();
+        let mut engine = fixture.engine();
+        let room = engine
+            .rooms
+            .add_complete_free_room(IntBox::new(-100, -100, 100, 100).to_simplex(), 0);
+        engine.mint_room_id(room);
+        engine.insert_room_in_tree(room);
+
+        let query = fr_board::shape::TileShape::Box(engine.bounds());
+        let mut neighbour_order = Vec::new();
+        let mut neighbour_own_net = Vec::new();
+        engine.overlapping_obstacles_tile(
+            &query,
+            Some(0),
+            crate::test_support::TEST_NET,
+            &mut neighbour_order,
+            &mut neighbour_own_net,
+        );
+        let mut completion_order = Vec::new();
+        let mut completion_own_net = Vec::new();
+        engine.overlapping_obstacles_tile_for_completion(
+            &query,
+            Some(0),
+            crate::test_support::TEST_NET,
+            &mut completion_order,
+            &mut completion_own_net,
+        );
+
+        assert!(
+            completion_order.len() > 1,
+            "the probe must return more than one obstacle to say anything about order"
+        );
+        assert_eq!(
+            neighbour_own_net, completion_own_net,
+            "the own-net split is part of the shared gather"
+        );
+        let mut a = neighbour_order.clone();
+        let mut b = completion_order.clone();
+        a.sort_unstable();
+        b.sort_unstable();
+        assert_eq!(
+            a, b,
+            "the two entry points must gather the same obstacle set"
+        );
+
+        // And each is its own upstream order, not the other's: rooms lead in the
+        // completion order (`CompleteFreeSpaceExpansionRoom.compareTo`) and
+        // interleave by ascending id in the neighbour one
+        // (`SortedRoomNeighbours.java:139-147`).
+        let mut resorted = neighbour_order.clone();
+        engine.sort_obstacles_for_completion(&mut resorted);
+        assert_eq!(resorted, completion_order);
+        let mut resorted = completion_order.clone();
+        engine.sort_obstacles_for_neighbours(&mut resorted);
+        assert_eq!(resorted, neighbour_order);
     }
 
     #[test]

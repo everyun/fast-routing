@@ -164,6 +164,7 @@ RE_RUST_COMPLETE = re.compile(
 # and every row is classified CRASH.
 #
 #   Imported <name> in 0.42s: 2 layers, 1139 items (278 pins, 217 traces, 27 vias)
+#   Board: 1198 items (278 pins, 276 traces, 27 vias); router delta +59 traces, +0 vias
 #   Router: 1 passes, 392 routed, 20 failed, 275 ripped, 0 pins fanned out
 #   Router stopped on board complete (0 board restores)
 #   Optimizer: 3 passes, 41 of 220 items improved, score 823.12 -> 871.40, ...
@@ -181,7 +182,14 @@ RE_RUST_REFEREE = re.compile(
     re.M,
 )
 RE_RUST_ROUTER = re.compile(r"^Router: (\d+) passes, ", re.M)
-RE_RUST_VIAS = re.compile(r"items \(\d+ pins, \d+ traces, (\d+) vias\)")
+# `vias_reported` is a quality number about the board we *finished*, so it has to
+# come off the `Board:` line. The `Imported` line carries the same shape but the
+# importer's counts: reading vias off it under-reports every board the router put
+# a via on. The legacy pattern stays as the fallback for `--import-only` stdout
+# (where the two counts are the same board) and for sweeps recorded before the
+# `Board:` line existed.
+RE_RUST_VIAS = re.compile(r"^Board: .*, (\d+) vias\)", re.M)
+RE_RUST_VIAS_LEGACY = re.compile(r"items \(\d+ pins, \d+ traces, (\d+) vias\)")
 
 _HEAP_MULT = {"KB": 1024, "MB": 1024**2, "GB": 1024**3}
 
@@ -304,7 +312,7 @@ def parse_rust_log(stdout: str) -> dict:
     total = RE_RUST_TOTAL.search(stdout) or RE_RUST_IMPORTED.search(stdout)
     if total:
         out["tool_time_s"] = float(total.group(1))
-    vias = RE_RUST_VIAS.search(stdout)
+    vias = RE_RUST_VIAS.search(stdout) or RE_RUST_VIAS_LEGACY.search(stdout)
     if vias:
         out["vias_reported"] = int(vias.group(1))
     # A routing run must have printed the `Router:` line; an `--import-only`
