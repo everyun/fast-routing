@@ -6,7 +6,7 @@ performance + quality metrics for each (tool, fixture) pair, cross-checks the
 produced .ses files with the independent coarse checker (check_ses.py), and
 writes results.json + report.md into bench/results/<timestamp>/.
 
-Two rules this harness enforces, from docs/ARCHITECTURE.md "Benchmark
+Three rules this harness enforces, from docs/ARCHITECTURE.md "Benchmark
 discipline" and docs/ROADMAP.md G3.1:
 
   * every row is classified from bench/fixtures-manifest.json
@@ -17,8 +17,31 @@ discipline" and docs/ROADMAP.md G3.1:
     the quality predicate in the same run, and is labelled `quality-filtered`.
     An unfiltered geomean is printed only on explicit request, tagged
     `quality-unfiltered, not comparable`.
+  * **a timing that was taken under contention may not become a ratio.** See
+    below.
 
 Stdlib only. See bench/README.md for metric definitions and caveats.
+
+Serial-perf mode (`--serial-perf`)
+----------------------------------
+This script runs its own fixtures one at a time, but a *sweep* usually runs
+several copies of it at once — the 46-board suite is normally sharded four
+ways, `W=4`, because the quality gate only needs the sessions and four shards
+take a quarter of the wall time. Those two uses are not interchangeable:
+
+  * **quality** (unrouted, violations, session integrity) is a property of the
+    board that comes out, and W does not touch it. Shard away;
+  * **timing** is a property of the machine, and at W=4 every number on a
+    28-core laptop is inflated by contention for cores, memory bandwidth and
+    the page cache — unevenly, so it does not even cancel in a ratio.
+
+So each record carries the `concurrency` it was taken at, the report labels
+every timing row with it, and **rows taken at W > 1 are excluded from the
+geomean** whatever the quality verdict says. `--serial-perf` is the positive
+form of the same rule: it refuses to run at all unless `--concurrency 1`, which
+is what a measurement run should pass so that a mistake is an error rather than
+a number nobody can retract. Declare the real W with `--concurrency N` when
+sharding; the default of 1 is a claim, so declaring it wrongly is on the caller.
 
 Typical usage (from the repo root):
 
@@ -27,6 +50,8 @@ Typical usage (from the repo root):
     python3 bench/run_bench.py --only-rust --passes 5 --timeout 60
     python3 bench/run_bench.py --jar LAB.jar --passes 9999 --config mp9999-lab
     python3 bench/run_bench.py --render-from bench/results/<stamp> --report-out -
+    python3 bench/run_bench.py --serial-perf --fixtures 'Issue026*'   # timings
+    python3 bench/run_bench.py --concurrency 4 --fixtures 'Issue2*'   # a shard
 """
 
 from __future__ import annotations
@@ -57,25 +82,37 @@ DEFAULT_RUST_BIN = os.path.join(REPO_ROOT, "target", "release", "fr-cli")
 DEFAULT_MANIFEST = fixture_manifest.DEFAULT_MANIFEST
 TIME_BIN = "/usr/bin/time"  # `-l` prints max RSS in BYTES on this macOS (verified)
 
-# How far under `--timeout` fr-cli's own `--job-timeout` is set. The gap has to
-# cover everything fr-cli still does after its own budget expires: restore the
-# best board, run the referee, and write the session.
+# How far under `--timeout` fr-cli's own `--job-timeout` is set.
 #
-# It was 10 s, chosen when the worst measured pair was ~2.5 s. M3 wave 1 blew
-# through it — the post-deadline tail on `Issue209-split10` measured 10.9 s, so
-# the process was still writing its SES when the harness cap fired and the run
-# lost the board to a SIGKILL for no routing reason. 15 s restores the ~1.4x
-# headroom the constant is supposed to carry; the harness still kills at
-# `--timeout` if the budget is not honoured, and that is then a real failure.
+# This is a **safety net, not the mechanism**. It used to be the mechanism: the
+# gap had to cover everything fr-cli still did after its own budget expired, and
+# when the post-deadline tail on `Issue209-split10` grew to 11.4 s (the
+# optimizer walking a 50-item failure streak past the deadline, twice) the
+# 10 s gap of the time was not enough, the process was SIGKILLed mid-shutdown,
+# and the run lost a routed board for no routing reason. Widening it to 15 s
+# bought one sweep; at W=4 the same board overran that too.
+#
+# The fix is in the tool: `--job-timeout` now reserves a board-sized slice of
+# its own budget for the shutdown (`fr_router::reserve_job_tail`), so fr-cli
+# finishes *inside* the budget it is given instead of a few seconds past it.
+# This margin stays because a harness that trusts its child completely has no
+# way to notice when the child is wrong — a run that still hits `--timeout` is
+# now a real failure and is recorded as one.
 #
 # `bench/tools/g21_judge.py` reads the resulting `wall_s`, so widening this
-# shortens the routing budget by 5 s rather than lengthening the run.
+# shortens the routing budget rather than lengthening the run.
 RUST_JOB_TIMEOUT_MARGIN_S = 15.0
 
 # results.json layout: {"meta": {...}, "records": [...]}. Bumped whenever the
 # meta block or a record field changes meaning; readers accept the pre-schema
 # bare-list form too (see manifest.load_results).
-RESULTS_SCHEMA = 2
+#
+# 3 adds `concurrency` to every record: the W the run was taken at, without
+# which a timing cannot be told from a timing under contention. A record with
+# no `concurrency` field is from an older run and is treated as "unknown W",
+# which is excluded from ratios exactly as W > 1 is — the numbers those runs
+# produced are the ones this field exists to stop being quoted.
+RESULTS_SCHEMA = 3
 
 # --------------------------------------------------------------------------
 # Log parsers
@@ -394,6 +431,9 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
         "passes": args.passes,
         "timeout_s": args.timeout,
         "config_label": args.config,
+        # The W this timing was taken at — declared by the caller, because only
+        # the caller knows how many shards it started. See the module docstring.
+        "concurrency": args.concurrency,
         "cmd": full_cmd,
         "timed_out": False,
         "crashed": False,
@@ -494,6 +534,41 @@ def _fmt_time(rec):
     return f"{wall:.2f} ({tool:.2f})" if tool is not None else f"{wall:.2f}"
 
 
+def concurrency_of(rec):
+    """The W a record was taken at; `None` when it predates the field.
+
+    `None` is not 1. A run recorded before `concurrency` existed may have been
+    a four-way shard, and the whole point of the field is that a timing whose
+    conditions are unknown may not become a ratio.
+    """
+    if not rec:
+        return None
+    return rec.get("concurrency")
+
+
+def _fmt_w(java, rust):
+    """The W column: one value when both agree, `j/r` when they do not."""
+    def one(rec):
+        w = concurrency_of(rec)
+        return "?" if w is None else str(w)
+
+    present = [rec for rec in (java, rust) if rec]
+    if not present:
+        return "-"
+    labels = {one(rec) for rec in present}
+    return labels.pop() if len(labels) == 1 else f"{one(java)}/{one(rust)}"
+
+
+def is_serial(java, rust):
+    """Whether both timings were taken with nothing else running.
+
+    A missing record is not a problem — a `--only-rust` run has no Java side
+    and its ratios are `None` anyway — but a record that *is* present must say
+    it ran alone.
+    """
+    return all(concurrency_of(rec) == 1 for rec in (java, rust) if rec)
+
+
 def _fmt_chk(rec):
     if rec is None or not rec.get("check"):
         return "-"
@@ -573,6 +648,13 @@ def judge(by_fixture, manifest_index, predicate_name) -> dict:
             "dedup_skip": dedup_skip,
             "wall_ratio": wall_ratio,
             "tool_ratio": tool_ratio,
+            # Quality and timing are judged separately on purpose: a board
+            # sharded four ways is a perfectly good quality result and a
+            # worthless timing. `ok` above is the quality verdict and says
+            # nothing about W; `serial` is the timing one and says nothing
+            # about the board.
+            "serial": is_serial(j, r),
+            "concurrency": _fmt_w(j, r),
         }
     return verdicts
 
@@ -591,6 +673,14 @@ def render_report(records, meta, manifest_index, predicate_name,
                     if meta.get("rendered_from") else ""))
     lines.append(f"- Config label: `{meta.get('config_label') or 'none'}`")
     lines.append(f"- Passes: {meta.get('passes')}, timeout: {meta.get('timeout_s')}s")
+    if meta.get("concurrency") is not None:
+        lines.append(
+            f"- Concurrency: W={meta['concurrency']}"
+            + (" (`--serial-perf`: timings are quotable)"
+               if meta.get("serial_perf") else
+               "" if meta["concurrency"] == 1 else
+               " — **sharded sweep; the timing columns are not comparable**")
+        )
     lines.append(f"- Jar: `{meta.get('jar')}`")
     lines.append(f"- Rust binary: `{meta.get('rust_bin')}`")
     if meta.get("repo_rev"):
@@ -615,15 +705,19 @@ def render_report(records, meta, manifest_index, predicate_name,
         "resident set; `nets(chk)` = check_ses.py, nets-with-routing / "
         "multi-pin nets in the DSN (coarse: no connectivity, no clearance); "
         "`quality` = the run's quality predicate — only `pass` rows feed the "
-        "headline geomean."
+        "headline geomean; `W` = how many bench processes were running at once "
+        "when this row was timed (`?` = a run recorded before the field "
+        "existed). **Every timing on a `W > 1` row is inflated by contention "
+        "and is excluded from the geomean whatever `quality` says** — see "
+        "`--serial-perf`."
     )
     lines.append("")
     lines.append(
-        "| fixture | class | java u/v (self) | java time s | java RSS "
+        "| fixture | class | W | java u/v (self) | java time s | java RSS "
         "| java nets(chk) | rust u/v (self) | rust time s | rust RSS "
         "| rust nets(chk) | wall J/R | in-tool J/R | quality |"
     )
-    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 
     for fx in fixtures:
         j = by_fixture[fx].get("java")
@@ -632,7 +726,7 @@ def render_report(records, meta, manifest_index, predicate_name,
         wall = f"{v['wall_ratio']:.1f}x" if v["wall_ratio"] else "-"
         tool = f"{v['tool_ratio']:.1f}x" if v["tool_ratio"] else "-"
         lines.append(
-            f"| {fx} | {_short_class(v['class'])} "
+            f"| {fx} | {_short_class(v['class'])} | {v['concurrency']} "
             f"| {_fmt_uv(j)} | {_fmt_time(j)} | "
             f"{_fmt_rss(j['max_rss_bytes']) if j else '-'} | {_fmt_chk(j)} | "
             f"{_fmt_uv(r)} | {_fmt_time(r)} | "
@@ -685,15 +779,36 @@ def render_report(records, meta, manifest_index, predicate_name,
         + (f"; {len(dups)} byte-identical duplicate(s) excluded from the "
            f"filtered aggregate" if dups else "")
     )
-    walls = [verdicts[fx]["wall_ratio"] for fx in passed]
-    tools_r = [verdicts[fx]["tool_ratio"] for fx in passed]
+    # Quality decides which boards may be compared; W decides whether their
+    # clocks mean anything. Both filters apply, and the report says which one
+    # dropped what — a number withheld for the wrong reason is as useless as a
+    # wrong number.
+    timed = [fx for fx in passed if verdicts[fx]["serial"]]
+    contended = [fx for fx in passed if not verdicts[fx]["serial"]]
+    if contended:
+        lines.append(
+            f"- **Excluded from the geomean as non-serial** "
+            f"({len(contended)} of {len(passed)} quality-passing fixtures): "
+            + ", ".join(f"{fx} (W={verdicts[fx]['concurrency']})"
+                        for fx in contended)
+            + ". Their quality verdicts stand; their timings do not. Re-measure "
+              "with `--serial-perf`."
+        )
+    walls = [verdicts[fx]["wall_ratio"] for fx in timed]
+    tools_r = [verdicts[fx]["tool_ratio"] for fx in timed]
     gw, gt = _geomean(walls), _geomean(tools_r)
     if gw:
         n_tool = sum(1 for t in tools_r if t)
         lines.append(
-            f"- **Geomean speedup (java/rust), quality-filtered**: "
-            f"wall-clock {gw:.1f}x (n={sum(1 for w in walls if w)})"
+            f"- **Geomean speedup (java/rust), quality-filtered, serial "
+            f"(W=1)**: wall-clock {gw:.1f}x (n={sum(1 for w in walls if w)})"
             + (f", in-tool {gt:.1f}x (n={n_tool})" if gt else ", in-tool n/a")
+        )
+    elif passed and not timed:
+        lines.append(
+            f"- **Geomean speedup, quality-filtered**: n/a — "
+            f"{len(passed)} fixture(s) passed `{predicate_name}` but none was "
+            f"timed serially. No speed claim may be made from this run."
         )
     else:
         lines.append(
@@ -704,8 +819,10 @@ def render_report(records, meta, manifest_index, predicate_name,
         lines.append("- Quality-filtered set: " + ", ".join(passed))
 
     if emit_unfiltered:
-        u_walls = [verdicts[fx]["wall_ratio"] for fx in fixtures]
-        u_tools = [verdicts[fx]["tool_ratio"] for fx in fixtures]
+        u_walls = [verdicts[fx]["wall_ratio"] for fx in fixtures
+                   if verdicts[fx]["serial"]]
+        u_tools = [verdicts[fx]["tool_ratio"] for fx in fixtures
+                   if verdicts[fx]["serial"]]
         uw, ut = _geomean(u_walls), _geomean(u_tools)
         # Separate sample counts, as in the filtered block above: a fixture
         # whose tool-reported time is 0 contributes a wall ratio but no
@@ -713,9 +830,10 @@ def render_report(records, meta, manifest_index, predicate_name,
         n_wall = sum(1 for w in u_walls if w and w > 0)
         n_tool = sum(1 for t in u_tools if t and t > 0)
         lines.append(
-            f"- **quality-unfiltered, not comparable** (every fixture both "
-            f"tools finished, no quality check whatsoever — includes "
-            f"boards where we route a fraction of the nets): wall-clock "
+            f"- **quality-unfiltered, not comparable** (every serially timed "
+            f"fixture both tools finished, no quality check whatsoever — "
+            f"includes boards where we route a fraction of the nets): "
+            f"wall-clock "
             + (f"{uw:.1f}x (n={n_wall})" if uw else "n/a")
             + (f", in-tool {ut:.1f}x (n={n_tool})" if ut else ", in-tool n/a")
         )
@@ -729,7 +847,9 @@ def render_report(records, meta, manifest_index, predicate_name,
         "columns are coarse completion counts — neither is a DRC verdict, so "
         "the quality filter above is a floor, not a gate. `degenerate` = Java "
         "finished with score 0.00 / no nets to route; those boards look like "
-        "clean wins and are excluded by construction."
+        "clean wins and are excluded by construction. Every ratio above is "
+        "from `W=1` rows only; a sharded sweep produces quality verdicts and "
+        "no speed number at all."
     )
     return "\n".join(lines) + "\n"
 
@@ -778,6 +898,24 @@ def resolve_results_path(target: str) -> str:
     return target
 
 
+def check_timing_flags(args) -> str | None:
+    """The `--serial-perf` / `--concurrency` contract, or `None` when it holds.
+
+    Separated from `main` so the rule is testable without a subprocess: it is
+    the one place where a mistyped sweep becomes an error instead of a number
+    that later has to be retracted.
+    """
+    if args.concurrency < 1:
+        return (f"--concurrency {args.concurrency}: at least one process is "
+                f"running, this one")
+    if args.serial_perf and args.concurrency != 1:
+        return (f"--serial-perf with --concurrency {args.concurrency}: a "
+                f"timing run must have the machine to itself. Drop "
+                f"--serial-perf to record this sweep for quality only, or run "
+                f"the shards one at a time")
+    return None
+
+
 def render_only(args) -> int:
     src = resolve_results_path(args.render_from)
     if not os.path.exists(src):
@@ -795,6 +933,7 @@ def render_only(args) -> int:
     meta.setdefault("passes", first.get("passes"))
     meta.setdefault("timeout_s", first.get("timeout_s"))
     meta.setdefault("config_label", first.get("config_label"))
+    meta.setdefault("concurrency", first.get("concurrency"))
     meta.setdefault("jar", next(
         (r["cmd"][r["cmd"].index("-jar") + 1] for r in records
          if r.get("tool") == "java" and "-jar" in (r.get("cmd") or [])), None))
@@ -853,6 +992,16 @@ def main():
                     choices=sorted(QUALITY_PREDICATES),
                     help="which fixtures may feed the headline geomean "
                          f"(default {DEFAULT_QUALITY_PREDICATE})")
+    ap.add_argument("--concurrency", "-W", type=int, default=1, metavar="N",
+                    help="how many bench processes are running at once on this "
+                         "machine, this one included (default 1). Recorded on "
+                         "every record; rows taken at W > 1 are labelled in the "
+                         "report and excluded from every ratio. Declare it when "
+                         "you shard — the default is a claim, not a guess")
+    ap.add_argument("--serial-perf", action="store_true",
+                    help="this run is a timing run: refuse to start unless "
+                         "--concurrency is 1. Quality sweeps do not need it; "
+                         "anything whose numbers will be quoted does")
     ap.add_argument("--emit-unfiltered-geomean", action="store_true",
                     help="also print the geomean over every fixture both "
                          "tools finished, tagged 'quality-unfiltered, not "
@@ -867,6 +1016,11 @@ def main():
                     default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                          "results"))
     args = ap.parse_args()
+
+    problem = check_timing_flags(args)
+    if problem:
+        print(f"error: {problem}", file=sys.stderr)
+        return 2
 
     if args.render_from:
         return render_only(args)
@@ -910,7 +1064,12 @@ def main():
     os.makedirs(out_dir, exist_ok=True)
     print(f"results dir: {out_dir}")
     print(f"{len(fixtures)} fixtures x {tools}, passes={args.passes}, "
-          f"timeout={args.timeout}s, config={args.config or 'none'}")
+          f"timeout={args.timeout}s, config={args.config or 'none'}, "
+          f"W={args.concurrency}"
+          + (" (serial-perf: timings from this run may be quoted)"
+             if args.serial_perf else
+             "" if args.concurrency == 1 else
+             " — timings from this run may NOT be quoted"))
 
     meta = {
         "schema": RESULTS_SCHEMA,
@@ -927,6 +1086,8 @@ def main():
         "manifest": fixture_manifest.repo_rel(args.manifest) if man else None,
         "manifest_generated": (man or {}).get("generated_utc"),
         "quality_predicate": args.quality_predicate,
+        "concurrency": args.concurrency,
+        "serial_perf": args.serial_perf,
         "repo_rev": _git_rev(),
     }
     results_path = os.path.join(out_dir, "results.json")

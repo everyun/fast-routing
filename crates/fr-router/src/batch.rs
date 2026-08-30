@@ -90,8 +90,8 @@ use crate::batch::schedule::{BatchLoop, LoopConfig, PassContext, PassDriver, Req
 use crate::batch::scoring::CheckScorer;
 
 pub use crate::batch::schedule::{
-    arm_job_deadline, job_budget_spent, job_stop_requested, request_job_stop, JobDeadline,
-    RunOutcome, StopCause, StopReason,
+    arm_job_deadline, job_budget_spent, job_stop_requested, job_tail_reserve, request_job_stop,
+    reserve_job_tail, JobDeadline, RunOutcome, StopCause, StopReason,
 };
 
 /// `Item.PROTECT_FANOUT_LENGTH` (`Item.java:39`): a contact trace longer than
@@ -1117,6 +1117,8 @@ impl<'r> BatchRouter<'r> {
             // `batch::budget`. `connection_budget` is upstream's allowance
             // clamped to what the job has left, so one connection cannot
             // overrun the deadline by its own 100 s.
+            let incomplete_before =
+                crate::optimizer::trace::is_enabled().then(|| incomplete_count(board));
             let mut clock = ctx.connection_budget().start();
             let attempt = autoroute_item(
                 board,
@@ -1130,6 +1132,19 @@ impl<'r> BatchRouter<'r> {
                 &mut self.scratch,
             );
             let usage = clock.finish();
+            if let Some(incomplete_before) = incomplete_before {
+                crate::optimizer::trace::line(&format!(
+                    "conn, pass={}, net={}, state={:?}, ripped={}, budget_ms={}, used_ms={}, hit_budget={}, incomplete={incomplete_before}->{}",
+                    ctx.pass_no,
+                    entry.net_no,
+                    attempt.state(),
+                    attempt.ripped.len(),
+                    ctx.connection_budget().limit_ms(),
+                    usage.time_used_ms,
+                    usage.hit_budget,
+                    incomplete_count(board),
+                ));
+            }
             outcome.time_used_ms += usage.time_used_ms;
             outcome.effort_used += usage.effort_used;
             if usage.hit_budget {

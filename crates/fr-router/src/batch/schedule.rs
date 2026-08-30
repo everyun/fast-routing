@@ -65,8 +65,14 @@
 //! and the caller still gets a session. It exists because a harness cap that
 //! `SIGKILL`s the process produces nothing at all, which is strictly less than
 //! the board we were holding.
+//!
+//! The budget covers the shutdown too, which is why [`reserve_job_tail`]
+//! exists: the deadline everything polls ([`JobDeadline::ambient`]) is the
+//! caller's minus a board-sized estimate of what leaving the sweep, writing the
+//! session and judging the board will cost. Without it the run stops *at* the
+//! cap and is killed doing the work that produces the artefact.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -113,31 +119,126 @@ pub const DEFAULT_MAX_PASSES: i32 = 9_999;
 // the job deadline
 // ---------------------------------------------------------------------------
 
-/// The process's job deadline, armed once by [`arm_job_deadline`].
+/// The process's job deadline, armed once by [`arm_job_deadline`]. This is the
+/// **hard** one: the instant the caller's budget is actually gone. What the run
+/// polls is [`JobDeadline::ambient`], which is this minus
+/// [`job_tail_reserve`].
 static JOB_DEADLINE: OnceLock<Instant> = OnceLock::new();
+
+/// The budget [`arm_job_deadline`] was given, in milliseconds. Only
+/// [`reserve_job_tail`] reads it, to cap the reserve at a fraction of the whole.
+static JOB_BUDGET_MS: AtomicU64 = AtomicU64::new(0);
+
+/// The shutdown reserve, in milliseconds — see [`reserve_job_tail`].
+static JOB_TAIL_RESERVE_MS: AtomicU64 = AtomicU64::new(0);
+
+/// One-shot guard for [`reserve_job_tail`], for the same reason
+/// [`arm_job_deadline`] has one: a second caller must not be able to move a
+/// deadline the first one already published.
+static JOB_TAIL_RESERVED: AtomicBool = AtomicBool::new(false);
 
 /// Set by [`request_job_stop`] — the signal handler's half of the deadline.
 static JOB_STOP_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+/// The most of an armed budget [`reserve_job_tail`] will hand to the shutdown
+/// tail: one quarter.
+///
+/// The reserve is sized from the board, and on a board big enough to need
+/// seconds of tail a caller may still have armed a budget of a few seconds. The
+/// cap decides that argument in favour of *routing*: a run that spends most of
+/// its budget shutting down has nothing to shut down. Quarter rather than half
+/// because the tail is a fixed cost and the routing work is what the budget was
+/// bought for.
+const TAIL_RESERVE_BUDGET_DIVISOR: u64 = 4;
 
 /// Arms the process-wide job deadline at `now + after`. Returns `false` when
 /// one was already armed, which never overwrites the first.
 ///
 /// This is the port's equivalent of the release's job timeout
 /// (`RoutingJobScheduler`'s per-job budget): when it expires the batch loop
-/// stops **exactly like a stop rule** — best board restored, referee run,
-/// session written — instead of the caller killing a process that is holding a
+/// stops **exactly like a stop rule** — best board restored, session written,
+/// referee run — instead of the caller killing a process that is holding a
 /// routed board it never wrote.
 ///
 /// `after == 0` arms a deadline that is already expired, which is the cheapest
 /// end-to-end test of the whole path.
+///
+/// The budget covers the **whole** job, shutdown included. Stopping the router
+/// at exactly this instant is therefore too late — the stop itself costs
+/// something — so a caller that knows the board should follow this with
+/// [`reserve_job_tail`].
 pub fn arm_job_deadline(after: Duration) -> bool {
-    JOB_DEADLINE
+    let armed = JOB_DEADLINE
         .set(
             Instant::now()
                 .checked_add(after)
                 .unwrap_or_else(Instant::now),
         )
-        .is_ok()
+        .is_ok();
+    if armed {
+        JOB_BUDGET_MS.store(
+            u64::try_from(after.as_millis()).unwrap_or(u64::MAX),
+            Ordering::Relaxed,
+        );
+    }
+    armed
+}
+
+/// Carves `reserve` off the armed budget for the shutdown tail: from here on,
+/// everything that polls [`JobDeadline::ambient`] stops that much *before* the
+/// caller's deadline.
+///
+/// Returns the reserve actually taken — [`Duration::ZERO`] when no budget was
+/// armed (nothing to carve off), and the clamped value when `reserve` exceeds
+/// [`TAIL_RESERVE_BUDGET_DIVISOR`]'s share of the budget.
+///
+/// # Why the deadline has to budget for its own tail
+///
+/// "Stop when the budget is gone" leaves nothing to *stop with*. The run still
+/// has to leave the item sweep, build the session, write it and judge the
+/// board, and a harness that kills at the same instant the budget ends kills a
+/// process in the middle of exactly that — which is the failure the whole
+/// deadline exists to prevent. `Issue209-split10` measured **11.4 s** of work
+/// past its `--job-timeout` and was `SIGKILL`ed at the bench cap with no
+/// session on disk (`bench/run_bench.py`'s margin was 15 s, and at four
+/// concurrent sweep shards even that was not enough).
+///
+/// The reserve is the honest fix: the *work* deadline retreats by what the
+/// shutdown is expected to cost, so the run finishes inside the budget it was
+/// given instead of relying on the harness to be generous. It is one-shot and
+/// the first caller wins, like [`arm_job_deadline`]; a second call returns the
+/// reserve already in force. It is meant to be called once the board is known —
+/// the tail scales with the board — which is after the import, so the import is
+/// deliberately outside it.
+pub fn reserve_job_tail(reserve: Duration) -> Duration {
+    if JOB_DEADLINE.get().is_none() {
+        return Duration::ZERO;
+    }
+    if JOB_TAIL_RESERVED.swap(true, Ordering::Relaxed) {
+        return job_tail_reserve();
+    }
+    let budget = Duration::from_millis(JOB_BUDGET_MS.load(Ordering::Relaxed));
+    let taken = clamp_tail_reserve(budget, reserve);
+    JOB_TAIL_RESERVE_MS.store(
+        u64::try_from(taken.as_millis()).unwrap_or(u64::MAX),
+        Ordering::Relaxed,
+    );
+    taken
+}
+
+/// [`reserve_job_tail`]'s arithmetic on its own, so the cap can be tested
+/// without arming the process's one-shot clock.
+fn clamp_tail_reserve(budget: Duration, want: Duration) -> Duration {
+    let want_ms = u64::try_from(want.as_millis()).unwrap_or(u64::MAX);
+    let cap_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX)
+        / TAIL_RESERVE_BUDGET_DIVISOR;
+    Duration::from_millis(want_ms.min(cap_ms))
+}
+
+/// The shutdown reserve in force, [`Duration::ZERO`] unless
+/// [`reserve_job_tail`] took one.
+pub fn job_tail_reserve() -> Duration {
+    Duration::from_millis(JOB_TAIL_RESERVE_MS.load(Ordering::Relaxed))
 }
 
 /// Asks every polling loop to stop at its next check.
@@ -203,15 +304,32 @@ impl JobDeadline {
         watch_stop_flag: false,
     };
 
-    /// The process-wide deadline set by [`arm_job_deadline`], which also
-    /// watches the [`request_job_stop`] flag.
+    /// The process-wide deadline set by [`arm_job_deadline`], **minus the
+    /// shutdown reserve** ([`reserve_job_tail`]), and watching the
+    /// [`request_job_stop`] flag.
     ///
     /// This is what [`LoopConfig::default`] and [`PassContext::new`] carry, so
     /// *every* driver — the batch loop, and the optimizer's per-item
     /// [`BatchRouter::autoroute_pass`](crate::batch::BatchRouter::autoroute_pass)
     /// loop, which never goes through [`BatchLoop`] — honours it without being
     /// told.
+    ///
+    /// Subtracting the reserve here rather than at each caller is what makes it
+    /// impossible to forget: there is one clock, everything reads it, and it
+    /// says "stop working" rather than "your time is up".
     pub fn ambient() -> JobDeadline {
+        let reserve = job_tail_reserve();
+        JobDeadline {
+            at: JOB_DEADLINE
+                .get()
+                .map(|at| at.checked_sub(reserve).unwrap_or(*at)),
+            watch_stop_flag: true,
+        }
+    }
+
+    /// The caller's own deadline, reserve included — what the budget actually
+    /// buys, for a report that has to name it.
+    pub fn ambient_hard() -> JobDeadline {
         JobDeadline {
             at: JOB_DEADLINE.get().copied(),
             watch_stop_flag: true,
@@ -1444,6 +1562,34 @@ mod tests {
         assert_eq!(
             deterministic.connection_budget().limit_ms(),
             deterministic.budget.limit_ms()
+        );
+    }
+
+    /// The shutdown reserve never eats the run it is protecting.
+    ///
+    /// The estimate is board-sized, so a big board under a small budget asks
+    /// for a reserve of the same order as the budget itself — and a run that
+    /// spends most of its time shutting down has nothing to shut down. The cap
+    /// resolves that in favour of routing. (The reserve's effect on the ambient
+    /// deadline is `tests/job_tail_reserve.rs`, which needs its own process
+    /// because the clock is armed once per process.)
+    #[test]
+    fn the_tail_reserve_is_capped_at_a_quarter_of_the_budget() {
+        let quarter = |budget: u64| clamp_tail_reserve(Duration::from_secs(budget), Duration::MAX);
+        assert_eq!(quarter(300), Duration::from_secs(75));
+        assert_eq!(quarter(20), Duration::from_secs(5));
+        assert_eq!(quarter(0), Duration::ZERO, "a spent budget reserves nothing");
+
+        // Under the cap the estimate is taken whole — the usual case, where the
+        // tail is a couple of seconds of a 300 s budget.
+        assert_eq!(
+            clamp_tail_reserve(Duration::from_secs(300), Duration::from_millis(2_560)),
+            Duration::from_millis(2_560)
+        );
+        // And a board big enough to want more than its share gets the share.
+        assert_eq!(
+            clamp_tail_reserve(Duration::from_secs(8), Duration::from_secs(6)),
+            Duration::from_secs(2)
         );
     }
 

@@ -11,12 +11,27 @@
 //!                └────────────── or nothing at all ────────────────┘
 //!                                        │
 //!                                        ▼
-//!                          fr_check: clearance + connectivity   [`Referee::judge`]
-//!                          + the v2 score
+//!                          fr_io::specctra::ses_write           [`write_session`]
+//!                          + the file, if one was asked for  [`RoutingJob::with_session_path`]
 //!                                        │
 //!                                        ▼
-//!                          fr_io::specctra::ses_write           [`write_session`]
+//!                          fr_check: clearance + connectivity   [`Referee::judge`]
+//!                          + the v2 score
 //! ```
+//!
+//! # The session is written before the board is judged
+//!
+//! That order is deliberate and it is a contract, not an implementation detail. A run under a
+//! harness cap can be killed at any instant, and of the two things left to do at the end — write
+//! the artefact, and describe it — only one of them is the *product*. A kill between the phases
+//! costs a report; a kill in the other order costs the board. So [`RoutingJob::run`] builds the
+//! session, puts it on disk (atomically: a temporary file in the destination directory, then a
+//! rename, so a kill mid-write cannot leave a truncated `.ses` behind), and only then calls the
+//! referee.
+//!
+//! The referee is not cheap on a large board and it is not the caller's deliverable. Judging
+//! first was measured costing sessions: `bench/run_bench.py` classified `SIGKILL`ed runs as "no
+//! session written" when the file would have existed under this order.
 //!
 //! # The router stage is opt-in, and it is the only thing that may mutate the board
 //!
@@ -448,6 +463,7 @@ fn describe_optimizer_exit(exit: LoopExit) -> &'static str {
         LoopExit::MaxItems => "item limit",
         LoopExit::NearMaximumScore => "near-maximum score",
         LoopExit::BelowImprovementThreshold => "below improvement threshold",
+        LoopExit::JobDeadline => "job deadline",
     }
 }
 
@@ -502,6 +518,92 @@ pub fn job_budget_spent() -> bool {
     fr_router::job_budget_spent()
 }
 
+/// A stage of [`RoutingJob::run_observed`], announced as it completes.
+///
+/// The order is the contract: [`JobPhase::SessionWritten`] always precedes
+/// [`JobPhase::Judged`], because a run that is killed between them still leaves
+/// the caller a session.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobPhase {
+    /// The DSN is a board; the tail reserve has been taken.
+    Imported,
+    /// The router stage is over — or there was none.
+    Routed,
+    /// The session text exists, and is on disk if a path was configured.
+    SessionWritten,
+    /// The referee has judged the board.
+    Judged,
+}
+
+/// What one run is expected to spend after its work deadline: leaving the item
+/// sweep, building the session, writing it, and judging the board.
+///
+/// **Measured, not guessed** (`nice -n 10`, one run at a time, release build,
+/// `-mp 20`):
+///
+/// | board | items | drain | referee | session |
+/// |---|---|---|---|---|
+/// | `Issue209-split05` | 2 687 | 0.33 s | 0.014 s | 0.002 s |
+/// | `Issue209-split10` | 2 755 | 1.36 s | 0.015 s | 0.011 s |
+/// | `Issue103-Board-Routed` | 4 617 | 2.11 s | 0.163 s | 0.013 s |
+/// | `Issue190-processor.Z80` | 10 892 | 1.04 s | 0.191 s | 0.035 s |
+///
+/// The referee and the writer are milliseconds even on the biggest board in the
+/// suite; the drain — the optimizer sweep noticing and leaving — is what costs,
+/// and it tracks item count loosely enough that the estimate is deliberately
+/// generous. `0.25 s + 0.5 ms per item` covers every row above with margin to
+/// spare on the two the estimate is *loosest* on (`Issue209-split05` 0.35 s
+/// measured against 1.59 s budgeted, `Issue190` 1.27 s against 5.70 s) and by
+/// the smallest margin on the two it tracks best: `Issue209-split10` 1.39 s
+/// against 1.63 s and `Issue103` 2.29 s against 2.56 s, i.e. **1.12x on the
+/// tightest board, not 2x** — the constant is sized to cover the worst case,
+/// not to double it. Over-reserving costs routing time on a board that was
+/// going to be cut short anyway; under-reserving costs the whole session to a
+/// `SIGKILL`, so the asymmetry is priced in. [`fr_router::reserve_job_tail`]
+/// then caps it at a quarter of the budget, so this can never eat a short run.
+///
+/// Re-measured on the M3 wave-3 gate (serial, `--job-timeout` sweeps in
+/// `/tmp/gate3/tail-*.json`), the unused part of the reserve — i.e. how early
+/// the run actually finished — was 1.29-1.34 s on `Issue209-split10`, 2.00 s on
+/// `Issue103` and 4.40-4.61 s on `Issue190`. Every one of those is inside the
+/// budget, which is the property that matters; none is negative, which is the
+/// property that would cost a session.
+fn tail_reserve_for(design: &ImportedDesign) -> std::time::Duration {
+    const BASE: std::time::Duration = std::time::Duration::from_millis(250);
+    const PER_ITEM_US: u64 = 500;
+    let items = u64::try_from(design.board.store().len()).unwrap_or(u64::MAX);
+    BASE + std::time::Duration::from_micros(items.saturating_mul(PER_ITEM_US))
+}
+
+/// Writes the session where the caller asked for it, atomically.
+///
+/// A plain `fs::write` truncates first, so a kill in the middle of it leaves a
+/// *shorter* session that still parses — the one failure a harness cannot
+/// detect. Writing a sibling temporary and renaming it makes the file either
+/// the old one or the whole new one; `rename(2)` is atomic within a directory,
+/// which is why the temporary is a sibling rather than one in `/tmp`.
+fn write_session_file(path: &Path, text: &str) -> std::io::Result<()> {
+    let temporary = match path.file_name() {
+        Some(name) => {
+            let mut scratch = name.to_os_string();
+            scratch.push(format!(".{}.tmp", std::process::id()));
+            path.with_file_name(scratch)
+        }
+        // A path with no file name cannot be renamed onto; let the direct write
+        // produce the real error.
+        None => return std::fs::write(path, text),
+    };
+    if let Err(error) = std::fs::write(&temporary, text) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    if let Err(error) = std::fs::rename(&temporary, path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Why a job could not produce a report.
 #[derive(Debug)]
 pub enum JobError {
@@ -509,6 +611,10 @@ pub enum JobError {
     Read(PathBuf, std::io::Error),
     /// The importer rejected it.
     Import(ImportError),
+    /// The session file could not be written. Only a job given a
+    /// [`RoutingJob::with_session_path`] can produce this; a caller that writes
+    /// the report's `ses` itself handles its own IO.
+    Write(PathBuf, std::io::Error),
 }
 
 impl std::fmt::Display for JobError {
@@ -516,6 +622,7 @@ impl std::fmt::Display for JobError {
         match self {
             JobError::Read(path, error) => write!(f, "read {}: {error}", path.display()),
             JobError::Import(error) => write!(f, "{error}"),
+            JobError::Write(path, error) => write!(f, "write {}: {error}", path.display()),
         }
     }
 }
@@ -525,6 +632,7 @@ impl std::error::Error for JobError {
         match self {
             JobError::Read(_, error) => Some(error),
             JobError::Import(error) => Some(error),
+            JobError::Write(_, error) => Some(error),
         }
     }
 }
@@ -545,6 +653,10 @@ pub struct RoutingJob {
     /// `--threads`, so the router and the referee never disagree about how much
     /// of the machine this job may use.
     referee_threads: Threads,
+    /// Where [`RoutingJob::run`] puts the session, before it judges the board.
+    /// `None` leaves the caller to write [`JobReport::ses`] itself, which then
+    /// necessarily happens *after* the referee.
+    session_path: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for RoutingJob {
@@ -556,6 +668,7 @@ impl std::fmt::Debug for RoutingJob {
             .field("weights", &self.weights)
             .field("stage", &self.stage)
             .field("referee_threads", &self.referee_threads)
+            .field("session_path", &self.session_path)
             .finish()
     }
 }
@@ -574,6 +687,7 @@ impl RoutingJob {
             weights: ScoreWeights::V2,
             stage: RouterStage::default(),
             referee_threads: Threads::single(),
+            session_path: None,
         }
     }
 
@@ -620,6 +734,17 @@ impl RoutingJob {
         self
     }
 
+    /// Asks [`RoutingJob::run`] to write the session to `path` itself — *before*
+    /// it judges the board (see the module docs).
+    ///
+    /// This is the only way to get the ordering guarantee. A caller that writes
+    /// [`JobReport::ses`] after `run` returns necessarily writes it after the
+    /// referee, and a kill in between costs it the file.
+    pub fn with_session_path(mut self, path: impl Into<PathBuf>) -> RoutingJob {
+        self.session_path = Some(path.into());
+        self
+    }
+
     /// The `(base_design …)` token this job will write.
     pub fn design_name(&self) -> &str {
         &self.design_name
@@ -646,9 +771,30 @@ impl RoutingJob {
 
     /// The whole pipeline.
     pub fn run(&self) -> Result<JobReport, JobError> {
+        self.run_observed(&mut |_| {})
+    }
+
+    /// [`RoutingJob::run`], announcing each phase as it completes.
+    ///
+    /// The observer exists so that the *order* of the phases is testable from
+    /// outside: "the session is on disk before the referee starts" is a
+    /// promise about a run that gets killed, and the only honest way to check
+    /// it without killing anything is to look at the world between the phases.
+    /// It is not a progress API — the callback runs on the job's own thread and
+    /// blocks it.
+    pub fn run_observed(
+        &self,
+        observe: &mut dyn FnMut(JobPhase),
+    ) -> Result<JobReport, JobError> {
         let import_started = std::time::Instant::now();
         let mut design = self.import()?;
         let import_duration = import_started.elapsed();
+        observe(JobPhase::Imported);
+        // The board is known now, so the job's wall budget can finally reserve what its own
+        // shutdown will cost (`fr_router::reserve_job_tail`). Before the import there is
+        // nothing to size it from, and after the router stage it is too late — the stage is
+        // what has to stop early.
+        let reserved = fr_router::reserve_job_tail(tail_reserve_for(&design));
         // The router stage. `ImportOnly` is a no-op *by construction*: its arm does not receive
         // `&mut design`, so no future edit to it can start mutating the board by accident.
         let router = match self.stage {
@@ -656,9 +802,20 @@ impl RoutingJob {
             RouterStage::Maze(options) => Some(run_maze_stage(&mut design, options)),
         };
         let routed = router.is_some();
-        let referee = Referee::judge_with_threads(&design, &self.weights, self.referee_threads);
+        observe(JobPhase::Routed);
+        // Session first, referee second — the module docs argue the order. Everything below
+        // this line is a description of a board that is already on disk.
         let session = write_session(&design, &self.design_name);
+        if let Some(path) = &self.session_path {
+            write_session_file(path, &session.text)
+                .map_err(|error| JobError::Write(path.clone(), error))?;
+        }
+        observe(JobPhase::SessionWritten);
+        let referee = Referee::judge_with_threads(&design, &self.weights, self.referee_threads);
+        observe(JobPhase::Judged);
         Ok(JobReport {
+            session_path: self.session_path.clone(),
+            tail_reserve: reserved,
             design_name: self.design_name.clone(),
             pcb_name: design.design_name.clone(),
             layer_count: design.board.layers().len(),
@@ -716,6 +873,13 @@ pub struct JobReport {
     /// end-to-end elapsed time on a line that says "Imported … in", which made
     /// every summary claim the import had cost what the run did.
     pub import_duration: std::time::Duration,
+    /// Where the session was written, when the job wrote it itself
+    /// ([`RoutingJob::with_session_path`]). `None` means the caller still has
+    /// to put `ses` somewhere.
+    pub session_path: Option<PathBuf>,
+    /// What the job took out of its wall budget to pay for its own shutdown
+    /// ([`fr_router::reserve_job_tail`]); zero when no budget was armed.
+    pub tail_reserve: std::time::Duration,
     /// The imported design, kept so a caller can re-read the session against it or emit a
     /// golden dump without importing twice.
     pub design: ImportedDesign,

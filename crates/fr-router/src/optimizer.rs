@@ -25,6 +25,7 @@
 //! run_batch_loop:
 //!     use_increased_ripup_costs := true
 //!     for pass in 1 ..= optimizer.max_passes:
+//!         stop if the job budget is spent                            # (ours)
 //!         stop if score_before * (1 + threshold) >= 1000        # already near-perfect
 //!         opt_route_pass(pass, with_preferred_directions = pass is odd)
 //!         if use_increased_ripup_costs and score did not rise:
@@ -34,6 +35,7 @@
 //! opt_route_pass:
 //!     min_cumulative_trace_length := board weighted length
 //!     for item in ReadSortedRouteItems:                          # (x, y, layer), vias first
+//!         stop if the job budget is spent                            # (ours)
 //!         opt_route_item(item)
 //!         stop after 50 consecutive items that did not improve
 //!
@@ -75,6 +77,7 @@ pub mod improvement;
 pub mod parallel;
 pub mod stats;
 pub mod sweep;
+pub(crate) mod trace;
 
 use fr_board::board::Board;
 use fr_board::item::ItemId;
@@ -198,6 +201,42 @@ pub trait ItemRerouter {
 /// [`LengthMetric`], for 1.2x - 2.7x less wall clock — and on `Issue190` it is
 /// the difference between a 150 s timeout and a finished board. It is recorded
 /// in `docs/PARITY-DIVERGENCES.md`.
+///
+/// # ... and it stops when the passes stop closing connections (divergence)
+///
+/// `routed > 0` is the right rule in the currency of *attempts* and the wrong
+/// one in the currency of *results*, because on a saturated board one connection
+/// is routed by breaking several others. `Issue103-Board-Routed` is that board
+/// end to end — it arrives fully wired, and `FR_OPT_TRACE` over the first
+/// optimizer item (a via, 16 items in its connection) reads:
+///
+/// | inner pass | queued | routed | wall | board incompletes |
+/// |---|---|---|---|---|
+/// | 1 | 2 | 1 | 43.2 s | 1 → 8 |
+/// | 2 | 16 | 2 | 73.3 s | 8 → 13 |
+/// | 3 | 25 | 0 | 0.02 s | 13 → 13 |
+///
+/// Every pass "routed" something and every pass left the board with **more**
+/// open connections than it found, because each insertion into full copper
+/// shatters ten-odd neighbours (the per-connection records show `incomplete=1
+/// ->15`, `8->19`, `19->22`, with `ripped=0` throughout — it is the insertion,
+/// not the maze's ripup). So `routed > 0` holds all the way down and the item
+/// pays 116 s to arrive somewhere strictly worse than it started, at which point
+/// the improvement lattice rejects it and every bit of it is rolled back.
+///
+/// The escalation therefore also requires the pass to have **reduced the board's
+/// incomplete count** against the number the reroute started from. That number
+/// is the one the loop's own javadoc names — it exists to run passes "until the
+/// board is completed" — and [`PassOutcome::incomplete_count`] is already
+/// computed at the end of every pass, so the rule costs one extra ratsnest per
+/// item and nothing per pass.
+///
+/// It cannot suppress a reroute that works: a pass that closes what it was given
+/// drives the count down and earns the next one, which is exactly the
+/// multi-pass repair upstream's escalation is for. What it stops is the
+/// treadmill above, where pass `n + 1` is queued more work than pass `n` was.
+///
+/// [`PassOutcome::incomplete_count`]: crate::batch::PassOutcome::incomplete_count
 #[derive(Debug, Default)]
 pub struct MazeRerouter;
 
@@ -219,11 +258,29 @@ impl ItemRerouter for MazeRerouter {
         // not go through it, so the flag is set directly.
         router.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
         router.set_requeue_active(false);
+        // What the reroute has to drive down: the board as the ripout left it.
+        // One ratsnest per item, against the two `stats::board_key` already
+        // takes.
+        let mut incomplete_floor = crate::batch::incomplete_count(board);
         for pass_no in 1..=request.max_passes {
+            let started = trace::is_enabled().then(std::time::Instant::now);
             let outcome = router.autoroute_pass(board, pass_no);
-            if !escalation_continues(&outcome) {
+            if let Some(started) = started {
+                trace::line(&format!(
+                    "inner, inner={pass_no}, queued={}, routed={}, not_routed={}, skipped={}, budget_hits={}, incomplete={incomplete_floor}->{}, ms={}",
+                    outcome.queued,
+                    outcome.routed,
+                    outcome.not_routed,
+                    outcome.skipped,
+                    outcome.connections_hitting_budget,
+                    outcome.incomplete_count,
+                    started.elapsed().as_millis(),
+                ));
+            }
+            if !escalation_continues(&outcome, incomplete_floor) {
                 break;
             }
+            incomplete_floor = outcome.incomplete_count;
         }
     }
 }
@@ -238,12 +295,21 @@ impl ItemRerouter for MazeRerouter {
 /// * `progressed` — `routed > 0 || not_routed > 0` (`:688`), the value upstream
 ///   assigns to `still_unrouted_items`.
 ///
-/// Then the added one: `routed > 0`. A pass that routed nothing has not moved
-/// the board towards the completion this loop exists to reach, and the only
-/// thing the next pass changes is the price of ripping the copper that already
-/// refused to move.
-fn escalation_continues(outcome: &crate::batch::PassOutcome) -> bool {
-    !outcome.board_complete && outcome.progressed && outcome.routed > 0
+/// Then this port's two, both of them the same argument in different currencies
+/// (see [`MazeRerouter`]):
+///
+/// * `routed > 0`. A pass that routed nothing has not moved the board towards
+///   the completion this loop exists to reach, and the only thing the next pass
+///   changes is the price of ripping the copper that already refused to move.
+/// * `incomplete_count < incomplete_floor`, where the floor is what the board
+///   carried when the pass began. A pass that routed connections *and left more
+///   of them open than it found* has moved away from completion, however busy it
+///   was; the next pass would be handed that larger backlog at a dearer ripup.
+fn escalation_continues(outcome: &crate::batch::PassOutcome, incomplete_floor: usize) -> bool {
+    !outcome.board_complete
+        && outcome.progressed
+        && outcome.routed > 0
+        && outcome.incomplete_count < incomplete_floor
 }
 
 // ---------------------------------------------------------------------------
@@ -261,6 +327,16 @@ pub enum PassExit {
     ConsecutiveFailures,
     /// `optimizer.maxItems` reached mid-pass (`:236-240`).
     MaxItems,
+    /// The job's wall budget ran out mid-sweep, or a signal handler asked the
+    /// run to stop ([`crate::batch::job_budget_spent`]).
+    ///
+    /// Not an upstream exit. Without it the sweep runs on: a spent budget makes
+    /// every remaining attempt *fail* rather than end the pass, so the pass
+    /// walks its whole 50-item failure streak before
+    /// [`PassExit::ConsecutiveFailures`] stops it — measured at **3.0-5.7 s per
+    /// pass** on `Issue209-split10`, past a deadline the caller set precisely
+    /// so that it would not be killed.
+    JobDeadline,
 }
 
 /// Why [`BatchOptimizer::run_batch_loop`] stopped.
@@ -276,6 +352,10 @@ pub enum LoopExit {
     /// The pass gained less than `optimizer.optimizationImprovementThreshold`
     /// (1 %) of score (`:172-177`).
     BelowImprovementThreshold,
+    /// The job's wall budget ran out, or a signal handler asked the run to stop
+    /// ([`crate::batch::job_budget_spent`]). Not an upstream exit; see
+    /// [`PassExit::JobDeadline`] for what it costs not to have it.
+    JobDeadline,
 }
 
 /// What one pass did.
@@ -533,6 +613,15 @@ impl<'r> BatchOptimizer<'r> {
         let mut current_pass = 0;
 
         let exit = loop {
+            // Ours, and checked before upstream's rules for the same reason the
+            // batch loop checks its own first (`schedule.rs`): whatever the
+            // loop would do next costs at least one more pass, and the budget
+            // exists to leave time to write and judge the board we have. A
+            // process with no budget armed never gets past this line — it is
+            // one relaxed atomic load.
+            if crate::batch::job_budget_spent() {
+                break LoopExit::JobDeadline;
+            }
             if current_pass >= max_passes {
                 break LoopExit::MaxPasses;
             }
@@ -702,6 +791,13 @@ impl<'r> BatchOptimizer<'r> {
         tally: &mut PassTally,
     ) -> PassExit {
         loop {
+            // Ours: a spent budget ends the *pass*, not just the attempt. The
+            // per-item router polls the same flag, so every remaining item
+            // would still be ripped, re-attempted against a zero allowance and
+            // rolled back — the work the deadline is trying to avoid.
+            if crate::batch::job_budget_spent() {
+                break PassExit::JobDeadline;
+            }
             // `:236-240`.
             if tally.item_cap_reached(self.total_items_optimized) {
                 break PassExit::MaxItems;
@@ -742,6 +838,12 @@ impl<'r> BatchOptimizer<'r> {
         let mut window_size = parallel::initial_window_size(threads);
         let mut window: Vec<ItemId> = Vec::with_capacity(parallel::max_window_size(threads));
         loop {
+            // As in the sequential driver: one window is the granularity at
+            // which T1 can stop, and stopping here is what keeps the parallel
+            // mode's post-deadline tail the same size as the sequential one's.
+            if crate::batch::job_budget_spent() {
+                break PassExit::JobDeadline;
+            }
             if tally.item_cap_reached(self.total_items_optimized) {
                 break PassExit::MaxItems;
             }
@@ -768,6 +870,15 @@ impl<'r> BatchOptimizer<'r> {
 
             let improved_before = tally.items_improved;
             for (index, item) in window.iter().copied().enumerate() {
+                // The budget can go while this window is being promoted, and it
+                // is worse here than anywhere else: `parallel::evaluate_one`
+                // cancels the workers the moment it goes, so every item left in
+                // the window comes back `Unevaluated` — which the promoter
+                // re-runs *live*, at full price, one attempt per remaining
+                // item. That is exactly the work the deadline exists to skip.
+                if crate::batch::job_budget_spent() {
+                    return PassExit::JobDeadline;
+                }
                 if tally.item_cap_reached(self.total_items_optimized) {
                     return PassExit::MaxItems;
                 }
@@ -1078,20 +1189,49 @@ mod tests {
             not_routed,
             board_complete: complete,
             progressed: routed > 0 || not_routed > 0,
+            // Below every floor the cases below pass, so this test reads the
+            // three original terms; the incomplete rule has its own test.
+            incomplete_count: 0,
             ..crate::batch::PassOutcome::default()
         };
+        let floor = 9;
 
         // A pass that routed something and left work behind earns the next one.
-        assert!(escalation_continues(&pass(1, 3, false)));
+        assert!(escalation_continues(&pass(1, 3, false), floor));
         // `:437-440` — nothing left to route at all.
-        assert!(!escalation_continues(&pass(2, 0, true)));
+        assert!(!escalation_continues(&pass(2, 0, true), floor));
         // `:688` — upstream's own `still_unrouted_items == false`: every queued
         // connection was skipped.
-        assert!(!escalation_continues(&pass(0, 0, false)));
+        assert!(!escalation_continues(&pass(0, 0, false), floor));
         // This port's rule: connections remain, none of them moved, so the only
         // difference the next pass would make is a dearer ripup on the same
         // copper that already refused.
-        assert!(!escalation_continues(&pass(0, 5, false)));
+        assert!(!escalation_continues(&pass(0, 5, false), floor));
+    }
+
+    /// The second of this port's rules: a pass may route as much as it likes and
+    /// still not earn the next one, if it left the board with more open
+    /// connections than it found. `Issue103-Board-Routed` is where that costs
+    /// 116 s an item — see [`MazeRerouter`].
+    #[test]
+    fn a_pass_that_opened_more_connections_than_it_closed_ends_the_escalation() {
+        let pass = |routed: usize, incomplete_count: usize| crate::batch::PassOutcome {
+            routed,
+            not_routed: 1,
+            board_complete: false,
+            progressed: true,
+            incomplete_count,
+            ..crate::batch::PassOutcome::default()
+        };
+
+        // Closed one of the nine it was given: the escalation is working.
+        assert!(escalation_continues(&pass(1, 8), 9));
+        // Busy and net-destructive — the Issue103 shape, `routed > 0` and the
+        // backlog grew from 1 to 8.
+        assert!(!escalation_continues(&pass(1, 8), 1));
+        // Standing still is not progress either; every tie is a stop, as it is
+        // in the improvement lattice.
+        assert!(!escalation_continues(&pass(3, 9), 9));
     }
 
     #[test]

@@ -289,12 +289,55 @@ Current baseline, re-rendered from the checked-in run with
 ```
 - Quality filter `placeholder-nets-v0`: 5/46 fixtures pass; 1 byte-identical
   duplicate(s) excluded from the filtered aggregate
-- Geomean speedup (java/rust), quality-filtered: wall-clock 42.1x (n=5),
-  in-tool 16.5x (n=5)
+- Excluded from the geomean as non-serial (5 of 5 quality-passing fixtures):
+  … (W=?) … Re-measure with `--serial-perf`.
+- Geomean speedup, quality-filtered: n/a — 5 fixture(s) passed
+  `placeholder-nets-v0` but none was timed serially. No speed claim may be
+  made from this run.
 ```
 
-Five of forty-six. The unfiltered numbers for the same run are 37.6x / 12.3x
-over 29 fixtures — bigger sample, no meaning.
+Five of forty-six pass the quality floor, and **none of the five has a quotable
+timing**: that run predates the `concurrency` field, so its W is unknown and
+unknown is not 1. The numbers it used to print here — 42.1x wall / 16.5x
+in-tool, and 37.6x / 12.3x unfiltered — are withdrawn for that reason, not
+because anything about the boards changed. See the serial rule below.
+
+### The serial rule: `--serial-perf` and the `W` column
+
+The quality filter says *which boards* may be compared. This says *whether the
+clock meant anything* on the row at all, and it is a separate question with a
+separate answer, because the two things the harness produces are gathered
+differently:
+
+- a **quality** sweep runs four shards at once (`W=4`) because the 46-board
+  suite takes hours otherwise, and nothing about the board that comes out
+  depends on how many neighbours the process had;
+- a **timing** run must have the machine to itself. At `W=4` every number is
+  inflated by contention for cores, memory bandwidth and page cache, and
+  unevenly — the JVM has more threads to starve than we do, so the contention
+  does not cancel in a `java/rust` ratio, it *biases* it our way. This is not
+  hypothetical: the retracted 1.56x/3.52x figures in ROADMAP's G2.1 log came
+  from a `W=5` sweep and the serial re-measurement is 1.33x.
+
+So every record carries `concurrency`, the report prints it as a `W` column,
+and:
+
+- rows with `W > 1` (or `?`, meaning a run recorded before the field existed)
+  keep their quality verdict and their per-row ratio — that is data — but are
+  **excluded from every aggregate**, filtered and unfiltered alike, and the
+  report names them and says why;
+- `--concurrency N` declares the real W when you shard. The default of 1 is a
+  claim about the machine, so declaring it wrongly is on the caller;
+- `--serial-perf` refuses to start unless `--concurrency` is 1. Pass it for
+  anything whose numbers will be quoted, so that a mistyped sweep is an error
+  instead of a number that has to be retracted later.
+
+```sh
+# a quality sweep, sharded four ways (no speed number will come out of it)
+python3 bench/run_bench.py --concurrency 4 --fixtures 'Issue0*'
+# a measurement run
+python3 bench/run_bench.py --serial-perf --fixtures 'Issue026*'
+```
 
 ## Metrics
 

@@ -240,6 +240,33 @@ ARCHITECTURE "Budgets".
   two fixtures (`Issue107`, both variants) do come out with different bytes and the same score,
   which is the expected consequence of that metric committing reroutes that changed nothing.
 
+- **... and it also stops at the first pass that opens more connections than it closes**
+  (same function, second added term).
+  *Why*: `routed > 0` is the right rule in the currency of attempts and the wrong one in the
+  currency of results, because on a saturated board a connection is routed by breaking its
+  neighbours. `Issue103-Board-Routed` arrives fully wired (0 unrouted, 63 violations, 982.02)
+  and `FR_OPT_TRACE` over the first optimizer item — a via whose electrical connection is 16
+  items — reads: inner pass 1, 2 queued, 1 routed, 43.2 s, board incompletes 1 → 8; inner pass
+  2, 16 queued, 2 routed, 73.3 s, 8 → 13; inner pass 3, 25 queued, 0 routed. Every pass routes
+  something and every pass leaves more open than it found — the per-connection records read
+  `incomplete=1->15`, `8->19`, `19->22` with `ripped=0` throughout, so it is the *insertion*
+  into full copper that shatters the neighbours, not the maze's ripup. `routed > 0` therefore
+  holds all the way down and one item pays 296.6 s to arrive somewhere strictly worse than it
+  started, at which point the improvement lattice rejects it and all of it is rolled back.
+  *We* additionally require `incomplete_count < incomplete_floor`, the floor being the ratsnest
+  count the pass began with (one extra ratsnest per item, against the two `stats::board_key`
+  already takes). A pass that closes what it was given still earns the next one, so the
+  multi-pass repair the escalation exists for is untouched.
+  *Effect*: on `Issue103-Board-Routed` at a 300 s budget, **1 item / 0 improved → 37 items /
+  7 improved**, and the pathological item costs 41.4 s instead of 296.6 s (7.2x). On
+  `Issue230-CNH_Functional_Tester_1` the result is unchanged (14 of 185 improved, 959.60,
+  16 violations, 5 open) for 195.9 s → 191.5 s. Over a 13-fixture A/B at `-mp 1` no fixture
+  gained a violation or an open connection; `Issue034-Green14SegLED` came out *better*
+  (2 violations → 1, 997.26 → 998.62) in 90.5 s → 61.0 s.
+  *What it does not fix*: those numbers are still tens of seconds because one maze search into
+  saturated copper costs 43 s on this board (`FR_OPT_TRACE` `conn` records), and because the
+  insertion breaks neighbours at all. Both are outside the optimizer.
+
 ## Referee
 
 - **The G2.1 session overlay has no upstream counterpart.** Upstream reads a session back into

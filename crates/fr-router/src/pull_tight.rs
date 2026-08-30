@@ -50,6 +50,17 @@
 //!   whole family's cost lands on: a move edits two or three lines of a polyline
 //!   that routinely has thirty, and re-offsetting the other twenty-seven was the
 //!   port's largest single performance debt.
+//!
+//!   **The id surviving is not free of consequences, and that is the point.**
+//!   The previous shape of this call was `remove_item` +
+//!   `insert_trace_without_cleaning`, so every pull-tight handed the trace a
+//!   fresh, maximal id — and `fr-board` scans the store and sorts every obstacle
+//!   list by *descending* id, so a just-optimized trace jumped to the head of
+//!   both. Restoring upstream's in-place `change` restores upstream's ordering,
+//!   which moves routed results on some boards. The leaf reuse itself is
+//!   result-neutral and is checked to be (`FR_CHANGE_ENTRIES=rebuild`); the id
+//!   is the variable that moves boards. Do not read a board that got worse
+//!   across this change as a bug in the reuse without running that knob first.
 //! * **Fork/end smoothing (`smoothen_end_corners_at_trace`, §6.4) is ported
 //!   for both flavors**, including the improvement round's
 //!   `insert_trace_without_cleaning` + `split_traces` + `normalize_traces`

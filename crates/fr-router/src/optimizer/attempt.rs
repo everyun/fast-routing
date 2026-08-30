@@ -117,8 +117,10 @@ pub fn attempt_item(
     scratch: &mut AttemptScratch,
     disposition: Disposition,
 ) -> ItemRouteResult {
+    let clock = crate::optimizer::trace::is_enabled().then(std::time::Instant::now);
     // `:315-321` — measured *before* the ripout.
     let key_before = stats::board_key(board);
+    let key_before_ms = clock.map_or(0, |clock| clock.elapsed().as_millis());
 
     let Some(item_ref) = board.store().get(item) else {
         return ItemRouteResult::not_attempted();
@@ -188,10 +190,14 @@ pub fn attempt_item(
         with_preferred_directions: cfg.with_preferred_directions,
     };
     // `:376-378`.
+    let reroute_started = clock.map(|_| std::time::Instant::now());
     rerouter.reroute(board, cfg.rules, cfg.pass_settings, &request);
+    let reroute_ms = reroute_started.map_or(0, |started| started.elapsed().as_millis());
 
     // `:381-393`.
+    let key_after_started = clock.map(|_| std::time::Instant::now());
     let key_after = stats::board_key(board);
+    let key_after_ms = key_after_started.map_or(0, |started| started.elapsed().as_millis());
     let result = ItemRouteResult::new(
         &key_before,
         &key_after,
@@ -206,6 +212,15 @@ pub fn attempt_item(
         board.rollback_to(mark);
     }
 
+    if clock.is_some() {
+        crate::optimizer::trace::line(&format!(
+            "item, item={:?}, kind={}, ripped={}, key_before_ms={key_before_ms}, reroute_ms={reroute_ms}, key_after_ms={key_after_ms}, improved={}",
+            item,
+            if is_trace { "trace" } else { "drill" },
+            ripped_connections.len(),
+            result.improved(),
+        ));
+    }
     scratch.ripped_items = ripped_items;
     scratch.ripped_connections = ripped_connections;
     result

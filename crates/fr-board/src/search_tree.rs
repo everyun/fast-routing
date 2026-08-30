@@ -45,8 +45,85 @@
 //! | 9.1 | missing pad ⇒ `Circle(center, ceil(drill_radius))` + `drillHoleClearanceDelta` | the circle's **bounding octagon**; the extra hole-clearance delta is not modelled |
 //! | 3.5 | `area.split_to_convex()` per piece, `enlarge`, `divide_into_sections(50000)` | identical — [`AreaShape::Polygon`] is split by [`fr_geometry::planar::split_to_convex`] on demand; only a corner list that is not a simple polygon (where upstream fails too) falls back to a bounding octagon |
 //! | 3.6 | outline ring: one `offset_shape(BoardOutline.HALF_WIDTH + comp, 0)` per border line per layer | identical, driven off the stored border polylines; the `keepout_outside_outline_generated()` branch is **not** modelled (the generated keepout area has no field on [`crate::item::BoardOutline`] yet) |
-//! | 6 | `change_entries` / `merge_entries_*` reuse leaves in place | [`SearchTree::change_trace_entries`], which `combine` reaches through [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline) as well; `reuse_entries_after_cutout` is still plain remove + insert |
+//! | 6 | `change_entries` / `merge_entries_*` reuse leaves in place | [`SearchTree::change_trace_entries`], which `combine` reaches through [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline) as well; the absorbed half of `merge_entries_*` and all of `reuse_entries_after_cutout` are still plain remove + insert |
 //! | 2.2 | `overlapping_tree_entries_with_clearance` for uncompensated trees | not here — it belongs to the checker, which is not this crate |
+//!
+//! # Is the leaf reuse result-neutral? (yes, and it is checkable)
+//!
+//! The reuse recycles arena leaves; it must not change *what* is indexed. That
+//! is a claim about a whole routing run, so it is settled by running one:
+//! [`CHANGE_ENTRIES_ENV`] (`FR_CHANGE_ENTRIES=rebuild`) forces every tree onto
+//! the remove + insert fallback, and the session file has to come back
+//! byte-identical.
+//!
+//! Measured, M3 wave 3, `-mp 20`, reuse vs `rebuild`, same binary:
+//!
+//! | board | result |
+//! |---|---|
+//! | Issue026-J2_reference, Issue187-processor.Z80, Issue155-CH376_MCP795_Module | byte-identical |
+//! | Issue163-pic_programmer, Issue153-wavefolder, Issue093-interf_u | byte-identical |
+//! | Issue110-testPCBSpecctraFile | byte-identical |
+//!
+//! The knob demonstrably bites rather than silently doing nothing, and the
+//! evidence for that is a **count, not a clock**. An instrumented build of
+//! [`SearchTreeManager::change_trace_entries`] (M3 wave-3 gate) counts the
+//! fallback taken 1 516 times on Issue026-J2_reference and 88 410 times on
+//! Issue110-testPCBSpecctraFile under `rebuild`, against **0 times** in either
+//! board's default run: the in-place path succeeds on every call it is given,
+//! so `rebuild` is the only thing that ever exercises the fallback — and under
+//! it, every call takes it.
+//!
+//! It is *not* measurable on a clock, which is worth writing down rather than
+//! leaving to be rediscovered. Three runs each, serial, `nice -n 10`,
+//! best-of-three `rebuild`/reuse ratio: Issue163-pic_programmer **0.96x**,
+//! Issue026-J2_reference **1.01x**, Issue110-testPCBSpecctraFile **1.00x**
+//! (47.42 s → 47.63 s) *with those 88 410 forced rebuilds*. On this suite the
+//! leaf reuse is therefore worth approximately nothing in wall clock; it is kept
+//! because it is what upstream does and because `combine_trace`'s relabel needs
+//! the same machinery, not because it is a measured win. (An earlier draft of
+//! this comment claimed 3.86 s → 6.33 s on Issue163; that does not reproduce,
+//! and the numbers above replace it.)
+//!
+//! The knob isolates the *tree* half only — the journal's once-per-transaction
+//! pre-image stays on in both arms, because it is a question about
+//! `store.mutate`, not about leaves.
+//!
+//! So when a board's routed result *does* move across the in-place change —
+//! Issue110-RelayModule did — the reuse is not the cause. What moved is the
+//! item id: pull-tight used to remove the trace and re-insert it under a fresh,
+//! maximal id, and this crate scans and sorts by **descending id**. Upstream's
+//! `PolylineTrace.change` mutates the trace object, so the id survives; keeping
+//! it is the parity fix, and the traversal order it restores is board-visible on
+//! purpose. [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline)
+//! has the long form.
+//!
+//! Issue110-RelayModule, `-mp 20 --deterministic`, isolated builds, worked
+//! through:
+//!
+//! | build | stop | wall | result |
+//! |---|---|---|---|
+//! | wave 1 | global stagnation | 197s | 1u / 4v, score 979.53 |
+//! | wave 2, id churn re-armed | global stagnation | 197s | **byte-identical to wave 1** |
+//! | wave 2 | still working at the 600s cap | 600s | 1u / 4v, score 979.53 |
+//!
+//! Re-arming *only* pull-tight's remove + re-insert on top of the whole of
+//! wave 2 — leaf reuse, journal, the `divide_large_room` fix, all still in —
+//! reproduces wave 1's session file byte for byte. One variable, isolated: the
+//! traversal order, and the traversal order is now upstream's.
+//!
+//! Two things that reading the gate row alone gets wrong. The gate reported
+//! wave 2 losing a connection (`1u -> 2u`); it did not. Its budget expired at
+//! 285s and it scored the board wave 2 was holding *mid-flight*. Given a budget
+//! wave 1 never needed, wave 2 reaches the same 1u / 4v and leaves the same
+//! connection open — `Net-(K1-Pad2)`, a two-pin net this port has never routed
+//! on this board and the reference does. The regression that is real is
+//! **convergence**: wave 1 reaches global stagnation and stops, wave 2 never
+//! does, and each of its passes costs roughly three times as much. The board it
+//! carries is more fragmented for the same routing — 165 traces and 47 vias in
+//! the finished board against 154 and 45 — which is the shape of "the same nets,
+//! cut into more pieces", and more pieces is more obstacles is a slower pass.
+//! That is the open item — a cost regression on one board from a correct
+//! ordering change — not a lost net and not a stale index.
 
 use fr_datastructures::arena_shape_tree::{ArenaLeafId, ArenaShapeTree, OctBounds, QueryStack};
 use fr_geometry::planar::{IntBox, IntOctagon, IntPoint, Point, Polyline};
@@ -156,6 +233,38 @@ pub fn tiling_45_mode() -> Tiling45Mode {
         Some("1") | Some("true") | Some("on") | Some("yes") | Some("full") => Tiling45Mode::Full,
         Some("doors") => Tiling45Mode::Doors,
         _ => Tiling45Mode::Off,
+    })
+}
+
+/// Parity knob: set to `rebuild` to make
+/// [`SearchTreeManager::change_trace_entries`] take its remove + insert
+/// fallback for *every* trace instead of reusing leaves.
+///
+/// This exists to settle one question, and it is the question the in-place
+/// change always raises: **is the leaf reuse result-neutral?** The two paths
+/// differ only in which leaves are recycled — the shapes indexed, the items
+/// they belong to and the sorted order every query reports are the same either
+/// way — so a run under `rebuild` must produce a byte-identical session file.
+/// If it does not, the reuse has a bookkeeping bug and the board can see it.
+///
+/// It deliberately does **not** restore the pre-`change_entries` behaviour of
+/// removing the *item* and re-inserting it under a fresh [`ItemId`]. That is a
+/// different variable, it is not upstream's (`PolylineTrace.change` mutates the
+/// trace object in place, so the id survives), and conflating the two is what
+/// made "the in-place change moved the result" look like one finding instead of
+/// two. See [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline).
+pub const CHANGE_ENTRIES_ENV: &str = "FR_CHANGE_ENTRIES";
+
+/// True when [`CHANGE_ENTRIES_ENV`] asks for the rebuild path. Read once per
+/// process.
+fn change_entries_rebuild() -> bool {
+    use std::sync::OnceLock;
+    static REBUILD: OnceLock<bool> = OnceLock::new();
+    *REBUILD.get_or_init(|| {
+        matches!(
+            std::env::var(CHANGE_ENTRIES_ENV).ok().as_deref(),
+            Some("rebuild")
+        )
     })
 }
 
@@ -427,16 +536,17 @@ impl SearchTree {
     /// then falls back to [`remove`](Self::remove) + [`insert`](Self::insert),
     /// which produces the same index.
     ///
-    /// # Where this stops short of upstream
+    /// # The trailing leaves are relabelled, not re-inserted
     ///
     /// A leaf's payload here is the pair `(item, shape index)` stored *inside*
-    /// the arena tree, where upstream's `Leaf` is a heap object it can mutate in
-    /// place (`leaf.shape_index_in_object = new_index`). So when the segment
-    /// count changes, the trailing leaves — whose shapes are unchanged but whose
-    /// index shifts — are re-inserted rather than relabelled. Their **geometry
-    /// is still not recomputed**, which is the expensive half; only `O(shift)`
-    /// tree splices are paid, and when the count is unchanged (the whole
-    /// `reposition_line` family) nothing at all is.
+    /// the arena tree, where upstream's `Leaf` is a heap object it mutates in
+    /// place (`leaf.shape_index_in_object = new_index`, `:140`). When the
+    /// segment count changes, the trailing leaves keep their shape — and
+    /// therefore their bounds, and therefore their place in the tree — and only
+    /// their index shifts, so they are relabelled through
+    /// [`ArenaShapeTree::set_payload`] and never leave the tree. Neither their
+    /// geometry nor their position is recomputed; when the count is unchanged
+    /// (the whole `reposition_line` family) the suffix is not touched at all.
     pub fn change_trace_entries(
         &mut self,
         slot: SlotIndex,
@@ -497,13 +607,11 @@ impl SearchTree {
         for leaf in entry.leaves[keep_start..old_mid_end].iter().copied() {
             self.tree.remove(leaf);
         }
-        // The trailing leaves survive only if their index does not move.
+        // The trailing leaves always survive: their shapes did not move, so
+        // neither did their place in the tree. When the segment count changed
+        // their *index* moved, and that is a relabel, not a re-insert — see
+        // step 4.
         let suffix_shifts = new_shape_count != old_shape_count;
-        if suffix_shifts {
-            for leaf in entry.leaves[old_mid_end..].iter().copied() {
-                self.tree.remove(leaf);
-            }
-        }
 
         // 2. Only the changed segments' geometry is recomputed —
         //    `offset_shapes(p_new_polyline, chw, keep_at_start,
@@ -545,20 +653,24 @@ impl SearchTree {
         entry.hulls.splice(keep_start..old_mid_end, mid_hulls);
         entry.leaves.splice(keep_start..old_mid_end, mid_leaves);
 
-        // 4. The trailing shapes are kept verbatim; only their index moved, and
-        //    only then does the tree have to be told about them again.
+        // 4. The trailing shapes are kept verbatim; only their *index* moved,
+        //    so the leaves are relabelled where they sit —
+        //    `new_leaf_arr[new_index].shape_index_in_object = new_index`
+        //    (`ShapeSearchTree.java:140`). The bounds are unchanged by
+        //    construction (same shape), which is exactly the precondition
+        //    [`ArenaShapeTree::set_payload`] carries.
         if suffix_shifts {
             for index in new_mid_end..new_shape_count {
-                let Some(shape) = entry.shapes[index].shape.as_ref() else {
-                    debug_assert!(false, "a trace tile shape is never absent");
-                    continue;
-                };
-                entry.leaves[index] = self.tree.insert(
-                    shape.bounds(),
+                let relabelled = self.tree.set_payload(
+                    entry.leaves[index],
                     LeafPayload {
                         item: item.id,
                         shape_index: index as u16,
                     },
+                );
+                debug_assert!(
+                    relabelled.is_some(),
+                    "a kept trailing leaf must still be live"
                 );
             }
         }
@@ -934,7 +1046,9 @@ impl SearchTreeManager {
     /// `s` is a function of lines `s..=s+2` in *any* tree, only its offset
     /// width differs — so the same pair is correct for all of them. A tree that
     /// refuses the fast path (it has never seen the item, say) falls back to
-    /// remove + insert, which lands on the same index.
+    /// remove + insert, which lands on the same index — as does every tree when
+    /// [`CHANGE_ENTRIES_ENV`] asks for it, which is how "same index" is checked
+    /// on a real board rather than asserted.
     pub fn change_trace_entries(
         &mut self,
         slot: SlotIndex,
@@ -943,8 +1057,9 @@ impl SearchTreeManager {
         keep_at_end: usize,
         ctx: ShapeContext<'_>,
     ) {
+        let rebuild = change_entries_rebuild();
         for tree in self.trees_mut() {
-            if !tree.change_trace_entries(slot, item, keep_at_start, keep_at_end, ctx) {
+            if rebuild || !tree.change_trace_entries(slot, item, keep_at_start, keep_at_end, ctx) {
                 tree.remove(slot, item.id);
                 tree.insert(slot, item, ctx);
             }

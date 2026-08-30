@@ -226,6 +226,10 @@ Gates (all executable without a router):
   two budget-starved (Issue039 34v9, Issue269), Issue230 5v2. Leads logged: DrillPage
   split_to_convex divergence (Issue110 pair), room-id minting parity, per-exp cost.
   Perf: both-finished in-tool now 1.56x faster than Java default mode / 3.52x no-optimizer.
+  **[RETRACTED 2026-08-30 — both figures were taken inside a sharded sweep (W=5). Neither
+  side's clock is trustworthy under contention and the ratio is not either; the JVM's extra
+  threads make it lose more of the machine than we do, which biases it our way. The serial
+  re-measurement is in the M3 perf log below: 1.33x, not 1.56x.]**
   M2 declared functionally complete; residual 7 fold into M3 (their fix IS the M3 work).
 - 2026-08-29 after deadline/SES-on-stop + optimizer-cost + final-restore fixes: **36/46,
   zero regressions, zero SIGKILLs**. java_finished 22/29, java_timeout 12/14 (absolute
@@ -237,6 +241,7 @@ Gates (all executable without a router):
   one genuine hard-board gap (Issue039 45 vs 9; Issue269 97 vs 92).
   Perf note: with the optimizer fixed the suite runs 0 SIGKILLs; router core without
   optimizer measured 1.28x faster in-tool than Java on commonly-finished boards.
+  **[Same retraction as above: sweep-concurrent, not serial. Do not quote.]**
 - 2026-08-29 gate promoted into the repo + SES fidelity fixed: **37/46** on the same `-mp 20`
   sessions, re-judged. The referee and the judge now live in `bench/tools/g21_referee/` (a
   workspace member) and `bench/tools/g21_judge.py`, with the method normative in
@@ -305,9 +310,15 @@ Gates (all executable without a router):
     clears it from pass 2 on, and the G2.1 gate runs `-mp 20`, where it is 0u/0v.
   - Perf, same run: suite wall 7209 s with 0 SIGKILLs (Java 2.3.0's own capped sweep is 5842 s
     with 14 boards hitting the cap). On the 19 boards `java_finished` *and* finished in both our
-    modes in both runs, in-tool: Java 727 s, ours 467 s default (**1.56×**) and 207 s with
-    `--no-optimizer` (**3.52×**) — 1.25× and 1.41× faster than the same measurement at
-    `eac16d6`. Boards finishing under the cap at `-mp 1`: 23/46 default, 40/46 `--no-optimizer`.
+    modes in both runs, in-tool: Java 727 s, ours 467 s default (1.56×) and 207 s with
+    `--no-optimizer` (3.52×) — 1.25× and 1.41× faster than the same measurement at `eac16d6`.
+    Boards finishing under the cap at `-mp 1`: 23/46 default, 40/46 `--no-optimizer`.
+    **[RETRACTED 2026-08-30. This run was W=5 — five bench processes on one machine — so every
+    number in this bullet is a contended clock, including both sides of every ratio. The
+    completion counts and the SIGKILL count stand (they do not depend on wall time); the ×
+    figures do not. `bench/run_bench.py` now records the W of every row, labels the timing
+    columns with it, and refuses to put a `W > 1` row into a geomean at all, so this class of
+    number cannot be produced again by accident.]**
 
 ## M3 — Speed
 
@@ -328,6 +339,71 @@ Gates:
 - **G3.3** scaling, conditional on T3: ≥3× route-stage time 1→8 workers on the ≥60 s-class
   boards, RSS per worker within class budget. If T3 is not shipped, G3.3 is reported as
   not-applicable — never faked with portfolio numbers.
+
+### M3 perf log
+
+**Method, and why the older numbers above are retracted.** A timing is only a timing if the
+machine was not doing anything else. Every figure in this section was taken **serially** — one
+process at a time, `nice -n 10`, each arm built from its own `git archive HEAD` checkout in
+`/tmp` so that no A/B can be contaminated by a tree somebody is still editing. Where a
+measurement was *not* taken on a quiet machine it says so on the spot, and it is then only
+quoted for quantities contention cannot flatter (a deadline overshoot gets longer under load,
+never shorter, so a loaded machine gives an upper bound). The pre-M3 speed claims were taken inside `W=4`/`W=5` sharded sweeps and are
+withdrawn (annotations in the G2.1 log above). Sharding is right for *quality* — the board that
+comes out does not care how many neighbours the process had — and wrong for *speed*, so the two
+are now separated in the harness itself: `bench/run_bench.py` records `concurrency` on every
+record, prints it as a `W` column, excludes `W > 1` rows from every geomean whatever their
+quality verdict, and `--serial-perf` refuses to start a run whose numbers would not be quotable.
+
+- **Where we stand against Java 2.3.0.** Serial, in-tool, on the boards both tools finish:
+  **1.33× at wave 1** (`1fc943f`) and **1.34× at wave 2** (`4f18886`). That is the honest
+  headline and it replaces the retracted 1.56×/3.52×. Read it as "wave 2 bought quality and
+  robustness, not throughput": the suite-level speed barely moved. Provenance, because it
+  matters more than the number: the Rust side is the serial `/tmp/gate-perf` run below and the
+  Java side is the recorded reference sweep, i.e. the two halves were not taken back to back.
+  The 0.01× between the waves is inside a single run's noise and is *not* a wave-2 improvement
+  — the directly measured wave-1 → wave-2 delta is the next bullet. A single-session
+  serial re-run of both tools is owed before this number goes anywhere near a README (G3.1
+  requires it: the geomean must come from fixtures passing the gate **in the same run**).
+- **Wave 1 → wave 2, measured directly** (`/tmp/gate-perf/run.log`, `/tmp/gate-perf/results.json`,
+  `/tmp/gate-perf/results2.json`; both arms `-mp 20 --job-timeout 285`, 24 boards, serial):
+  on the 19 boards neither arm hit the deadline, in-tool **557.7 s → 551.8 s (1.011× total,
+  1.055× geomean)**. Movers: Issue155 4.53 → 3.30 s, Issue034 23.69 → 18.92 s, Issue217
+  33.12 → 30.85 s. Five boards are deadline-capped in one or both arms and are excluded — a
+  capped board's clock measures the cap, not the router.
+- **Issue026, the expansion collapse.** The `divide_large_room` fix collapsed maze expansions
+  **25.6×** on `Issue026-J2_reference`, and the wall clock followed: at `-mp 1` the same board
+  goes **28.86 s → 2.13 s (13.5×)** between the two arms
+  (`/tmp/gate-perf/i026mp1.base.log`, `i026mp1.wave2.log`). At `-mp 20` the same board is
+  0.90 → 0.58 s, because 20 passes were already finding their way around the problem. This is
+  the largest single-board win in the port so far and it is a *search* win, not a constant
+  factor — which is also why it does not show up in the suite total.
+- **Flagged residuals — wave 2 is not uniformly better.** Four boards came out worse and none
+  of them is noise: `Issue110-RelayModule` 198.0 s/exit 2 → 285.4 s/exit 4 (it stopped
+  finishing at all, 1 → 2 unrouted), `Issue039-bug-design` 35 → 42 unrouted,
+  `Issue102-Mars-64-revE-rot00` 0 → 2 unrouted, `Issue269-caniot-tiny-arm` 94 → 95 unrouted.
+  All four are deadline-capped runs, i.e. boards where the wave-2 router spends its budget
+  differently rather than better. They are the M3 work list, not rounding.
+- **The post-deadline tail is closed** (2026-08-30; profiled on a *busy* machine — see the
+  method note, these are upper bounds). `Issue209-split10` spent **11.4 s past its
+  `--job-timeout`** and was `SIGKILL`ed at the bench cap holding a routed board it had never
+  written. Reproduced at 2.4-9.1 s across `--job-timeout` values of 14-22 s: the overshoot is
+  not a constant, it is however much of an optimizer pass is left when the deadline lands.
+  Profiled, the tail was **not** the referee or the writer — those are 15 ms and 11 ms
+  on that board, and 191 ms / 35 ms on the biggest board in the suite — it was the optimizer:
+  with the budget gone every remaining item still gets ripped, re-attempted against a zero
+  allowance and rolled back, so a pass ends on its 50-item failure streak instead of on the
+  deadline, and the loop then starts another pass. Three changes: the optimizer's pass loop and
+  item sweep now stop on the budget (`PassExit::JobDeadline`, `LoopExit::JobDeadline`); the job
+  deadline reserves a board-sized slice of its own budget for the shutdown
+  (`fr_router::reserve_job_tail`, `0.25 s + 0.5 ms/item`, capped at a quarter of the budget) so
+  the run stops *before* the caller's deadline rather than at it; and the session is written
+  **before** the referee runs, atomically, so a kill between the phases costs a report and not
+  the board. Same board, same `--job-timeout`, overshoot **11.4 s → ≤ 0.35 s**.
+  A/B at W=4 (four concurrent shards, `--timeout 300`, `--job-timeout 285`, the configuration
+  that was failing): `4f18886` → `Issue209-split10` killed at 300.01 s, exit −9, **no session**;
+  with the fix → exit 4 at 283.74 s with a 74 979-byte session, and the other three boards in
+  the sweep also moved from 285.7-287.5 s (past the budget) to 283.1-284.3 s (inside it).
 
 ## M4 — Capability closure & release honesty
 

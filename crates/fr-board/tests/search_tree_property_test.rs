@@ -1319,3 +1319,140 @@ fn an_inner_rollback_retires_the_pre_images_it_drained() {
         assert_trees_match_brute_force(&board, Some(2), &format!("seed {seed}, after rollback"));
     }
 }
+
+/// The kept **suffix** of a segment-count-changing move is relabelled where it
+/// sits, and the relabel has to land on the right index.
+///
+/// This is the one path `an_in_place_change_storm_stores_exactly_what_a_rebuild_would`
+/// reaches only by luck of the dice, and the one where the shipped code and
+/// upstream do the same thing by different means: upstream mutates
+/// `leaf.shape_index_in_object` on a heap `Leaf` (`ShapeSearchTree.java:135`),
+/// this port calls `ArenaShapeTree::set_payload` on a leaf that never leaves the
+/// tree. Both are only correct if the *new* index is right, and an off-by-one
+/// there is invisible to a query-shaped oracle: every shape is still indexed at
+/// the same place, just filed under a neighbouring index — which is exactly the
+/// kind of bookkeeping error a router turns into a shove that reads the wrong
+/// tile.
+///
+/// So the oracle is [`tree_fingerprint`] — every leaf as `(item, shape index)` —
+/// against [`Board::rebuild_trees`], which relabels nothing because it starts
+/// from nothing.
+///
+/// The move is "drop the second line", repeatedly: it leaves `keep_at_start` at
+/// 0 and `keep_at_end` at everything else, so the whole of the trace's suffix
+/// shifts down by one on every step. Twelve steps compound twelve relabels onto
+/// leaves that were themselves already relabelled.
+#[test]
+fn dropping_a_line_relabels_the_kept_suffix_onto_the_right_indices() {
+    for seed in 1..=8u64 {
+        let mut rng = Rng::new(seed.wrapping_mul(0x2545_F491_4F6C_DD1D));
+        let mut board = new_board();
+
+        // Neighbours first, so the arena has structure around the trace under
+        // test and a relabelled leaf has somewhere wrong to end up.
+        for _ in 0..5 {
+            let a = IntPoint::new(rng.coord(), rng.coord());
+            let b = IntPoint::new(rng.coord(), rng.coord());
+            let polyline = Polyline::from_int_points(&[a, b]);
+            if polyline.corner_count() >= 2 {
+                board.insert_trace_without_cleaning(
+                    polyline,
+                    rng.below(LAYER_COUNT as u32) as i32,
+                    120,
+                    NetNos::of(1 + rng.below(NET_COUNT) as i32),
+                    1,
+                    FixedState::Unfixed,
+                );
+            }
+        }
+
+        // One long staircase: sixteen corners, so there is a long suffix to
+        // shift and the dog-ear horizon does not swallow it.
+        let mut corners = Vec::new();
+        let mut at = IntPoint::new(-4000, -4000);
+        for i in 0..16 {
+            corners.push(at);
+            at = if i % 2 == 0 {
+                IntPoint::new(at.x + 500, at.y)
+            } else {
+                IntPoint::new(at.x, at.y + 500)
+            };
+        }
+        let long_trace = board
+            .insert_trace_without_cleaning(
+                Polyline::from_int_points(&corners),
+                0,
+                120,
+                NetNos::of(1),
+                1,
+                FixedState::Unfixed,
+            )
+            .expect("the staircase inserts");
+        board.ensure_compensated_tree(2);
+
+        let mut shrinks = 0;
+        for step in 0..12 {
+            let Some(ItemKind::Trace(trace)) = board.store().get(long_trace).map(|i| &i.kind)
+            else {
+                break;
+            };
+            let lines = &trace.polyline.arr;
+            if lines.len() < 6 {
+                break;
+            }
+            let before = lines.len();
+            // Drop the line just after the start line: `new[0] == old[0]` and
+            // nothing else lines up at the front, so `keep_at_start` is 0 and
+            // every remaining shape is a kept, shifted one.
+            let mut edited = lines.to_vec();
+            edited.remove(1);
+            let polyline = Polyline::new_from_lines(&edited);
+            if polyline.corner_count() < 2 || polyline.first_corner() == polyline.last_corner() {
+                break;
+            }
+            if !board.change_trace_polyline(long_trace, polyline) {
+                break;
+            }
+            let Some(ItemKind::Trace(trace)) = board.store().get(long_trace).map(|i| &i.kind)
+            else {
+                break;
+            };
+            if trace.polyline.arr.len() < before {
+                shrinks += 1;
+            }
+
+            board.assert_consistent();
+            assert_trees_match_brute_force(
+                &board,
+                Some(2),
+                &format!("seed {seed}, relabel step {step}"),
+            );
+        }
+        assert!(
+            shrinks >= 3,
+            "seed {seed}: the suffix-shift path never ran, so this test proved nothing"
+        );
+
+        let leaves_after_incremental = tree_fingerprint(&board);
+        let shapes_after_incremental = all_tree_shape_fingerprint(&board, 2);
+        let geometry_after_incremental = geometry_fingerprint(&board);
+
+        board.rebuild_trees();
+
+        assert_eq!(
+            geometry_fingerprint(&board),
+            geometry_after_incremental,
+            "seed {seed}: rebuilding the index changed the items, which it cannot"
+        );
+        assert_eq!(
+            tree_fingerprint(&board),
+            leaves_after_incremental,
+            "seed {seed}: a relabelled leaf carries an index a rebuild does not agree with"
+        );
+        assert_eq!(
+            all_tree_shape_fingerprint(&board, 2),
+            shapes_after_incremental,
+            "seed {seed}: a relabelled leaf's stored shape is not the rebuilt one"
+        );
+    }
+}

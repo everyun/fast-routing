@@ -61,9 +61,15 @@
 //!   the ripup unit, which belongs with the router. Its absence is why
 //!   [`normalize_traces`](Board::normalize_traces) has no cycle branch
 //!   and why `split` skips self-intersections.
-//! * The `merge_entries_*` / `change_entries` / `reuse_entries_after_cutout`
-//!   leaf-reuse fast paths (`search-tree-obstacles.md` §6). Plain remove +
-//!   insert produces the same index; these are the optimization.
+//! * `reuse_entries_after_cutout`, and the *absorbed* half of the
+//!   `merge_entries_*` pair (`search-tree-obstacles.md` §6). `change_entries`
+//!   and the survivor half of `merge_entries_*` have landed — see
+//!   [`SearchTree::change_trace_entries`](search_tree::SearchTree::change_trace_entries)
+//!   for what they reuse and `Board::combine_trace` for what is left and why.
+//!   Plain remove + insert produces the same index, so these are the
+//!   optimization; but *keeping the item's id* across a polyline change, which
+//!   landed alongside them, is **not** neutral and is not meant to be
+//!   ([`Board::change_trace_polyline`]).
 //! * `overlapping_tree_entries_with_clearance` — the uncompensated
 //!   sorted-clearance query, which only the checker uses.
 //!

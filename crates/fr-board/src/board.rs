@@ -479,7 +479,9 @@ impl Board {
     /// re-insert, which re-offsets every segment of the trace on every call.
     /// What this does instead:
     ///
-    /// * the [`ItemId`] does not change, so no caller has to revalidate ids;
+    /// * the [`ItemId`] does not change, so no caller has to revalidate ids —
+    ///   **and the board can see that it did not**, see "This is not
+    ///   result-neutral" below;
     /// * the two line arrays are compared end-inwards to find the longest equal
     ///   prefix and suffix; `k` equal leading lines yield up to `k - 2` reusable
     ///   leading shapes and their leaves are never touched (`:983-987`). Each
@@ -502,6 +504,46 @@ impl Board {
     /// Returns `false` — having changed nothing at all — when `id` is not a
     /// trace or when the polyline is already the one asked for (upstream's
     /// "both polylines are equal, no change necessary", `:970`).
+    ///
+    /// # This is not result-neutral, and it was never going to be
+    ///
+    /// Two independent things landed here at once, and only one of them is an
+    /// optimization. Keeping them apart is the difference between a defect and
+    /// a parity fix:
+    ///
+    /// 1. **The leaf and shape reuse is index-neutral.** The set of shapes
+    ///    indexed, the item each belongs to, and the order every query reports
+    ///    them in are the same as a full rebuild's; only *which arena leaves*
+    ///    hold them differs, and no query can observe that, because
+    ///    [`SearchTree::overlapping_tree_entries`](crate::search_tree::SearchTree::overlapping_tree_entries)
+    ///    sorts by `(descending item id, ascending shape index)` explicitly
+    ///    rather than reporting traversal order. This is not an assertion:
+    ///    `FR_CHANGE_ENTRIES=rebuild` (see
+    ///    [`CHANGE_ENTRIES_ENV`](crate::search_tree::CHANGE_ENTRIES_ENV))
+    ///    forces the rebuild path on a real board, and the session file must
+    ///    come back byte-identical.
+    ///
+    /// 2. **Keeping the id is board-visible, on purpose.** Before this existed,
+    ///    a pull-tight was `remove_item` + `insert_trace_without_cleaning`, so
+    ///    the moved trace came back with a *fresh, maximal* id. Item id is not
+    ///    decoration here: `ItemStore::iter` walks **descending id**, and so
+    ///    does every obstacle list a query returns. A trace that had just been
+    ///    pulled tight therefore jumped to the front of every obstacle list and
+    ///    to the front of the store scan — which decides which obstacle the
+    ///    shove engine tries first, which item the optimizer sweep picks, and
+    ///    which connection is ripped up. Now it keeps its place.
+    ///
+    ///    That is upstream's behaviour, not a choice: `PolylineTrace.change`
+    ///    assigns `lines = p_new_polyline` on the *same object*, so `get_id_no()`
+    ///    is untouched (`:942-1009`). The remove + insert was the divergence.
+    ///
+    /// So a board's routed result can and does move across this change. It is a
+    /// **re-roll of a chaotic search under a corrected traversal order**, not
+    /// drift from a stale index, and the two are told apart by (1) — not by
+    /// whether the new number is better. Issue110-RelayModule is the worked
+    /// example, and it is worked all the way through in the module docs of
+    /// [`crate::search_tree`]: re-arming the id churn alone reproduces the old
+    /// session byte for byte, so the ordering is the whole of the difference.
     ///
     /// > **One upstream quirk is deliberately not reproduced.** `:966-978`
     /// > compares lines by *reference*, and bails out of `change` entirely when

@@ -2,8 +2,9 @@
 """Self-tests for the bench harness (stdlib unittest, no fixtures needed).
 
 Covers the parts that decide what gets published: the per-net checker
-breakdown, the Java classification rules, the dedup collapse, and the
-quality-filtered geomean discipline.
+breakdown, the Java classification rules, the dedup collapse, the
+quality-filtered geomean discipline, and the serial-timing rule (a number taken
+at W > 1 may not become a ratio).
 
     python3 bench/test_bench.py            # or: python3 -m unittest discover bench
 """
@@ -92,6 +93,9 @@ def rec(tool, fixture, **kw):
         "java_class": "java_finished",
         "dedup_group": "md5:" + fixture,
         "dedup_primary": True,
+        # Serial unless a test says otherwise: the timings in this file are
+        # meant to be quotable, which is the case the report is built for.
+        "concurrency": 1,
     }
     base.update(kw)
     return base
@@ -298,7 +302,7 @@ class GeomeanDiscipline(unittest.TestCase):
         # ratio is still shown (that is data); only the aggregate must drop it.
         self.assertIn("| 100.0x |", report)
         summary = report.split("## Summary", 1)[1]
-        self.assertIn("quality-filtered**: wall-clock 10.0x (n=1)", summary)
+        self.assertIn("serial (W=1)**: wall-clock 10.0x (n=1)", summary)
         self.assertNotIn("100.0x", summary)
 
     def test_unfiltered_geomean_absent_unless_requested(self):
@@ -320,6 +324,78 @@ class GeomeanDiscipline(unittest.TestCase):
         report = run_bench.render_report(anon, {}, {}, "placeholder-nets-v0")
         self.assertIn("java_unknown 1", report)
         self.assertIn("n/a — 0 fixtures passed", report)
+
+
+class SerialTimingDiscipline(unittest.TestCase):
+    """W > 1 is a quality result and not a timing (`--serial-perf`).
+
+    The sweep runs four shards at once, so every timing in it is inflated by
+    contention — unevenly, so it does not cancel in a ratio. The report may
+    still judge those boards; it may not put a number on them.
+    """
+
+    good = [rec("java", "a.dsn"), rec("rust", "a.dsn")]
+
+    def sharded(self, w=4):
+        return [dict(r, concurrency=w) for r in self.good]
+
+    def render(self, records, **kw):
+        return run_bench.render_report(records, {}, {}, "placeholder-nets-v0",
+                                       **kw)
+
+    def test_serial_rows_still_produce_the_geomean(self):
+        summary = self.render(self.good).split("## Summary", 1)[1]
+        self.assertIn("serial (W=1)**: wall-clock 10.0x (n=1)", summary)
+        self.assertNotIn("non-serial", summary)
+
+    def test_a_sharded_row_is_labelled_and_withheld(self):
+        report = self.render(self.sharded())
+        # The row keeps its ratio — that is data, and the quality verdict is
+        # unaffected — but the aggregate refuses it and says why.
+        self.assertIn("| 10.0x |", report)
+        summary = report.split("## Summary", 1)[1]
+        self.assertIn("a.dsn (W=4)", summary)
+        self.assertIn("Excluded from the geomean as non-serial", summary)
+        self.assertIn("none was timed serially", summary)
+        self.assertNotIn("wall-clock 10.0x", summary)
+        self.assertIn("**Quality filter** `placeholder-nets-v0`: 1/1 fixtures "
+                      "pass", summary)
+
+    def test_a_record_without_the_field_is_not_assumed_serial(self):
+        # Pre-schema-3 results.json: W unknown, so the timing is unusable. The
+        # numbers those runs produced are exactly what this rule exists for.
+        anonymous = [{k: v for k, v in r.items() if k != "concurrency"}
+                     for r in self.good]
+        report = self.render(anonymous)
+        self.assertIn("| ? |", report)
+        self.assertIn("none was timed serially",
+                      report.split("## Summary", 1)[1])
+
+    def test_the_w_column_shows_a_mismatch_rather_than_hiding_it(self):
+        mixed = [rec("java", "a.dsn", concurrency=4), rec("rust", "a.dsn")]
+        self.assertIn("| 4/1 |", self.render(mixed))
+
+    def test_the_unfiltered_geomean_is_serial_only_too(self):
+        # The escape hatch is not an escape from this rule: an unfiltered
+        # number is already fragile, and a contended one is worthless.
+        report = self.render(self.sharded(), emit_unfiltered=True)
+        self.assertIn("quality-unfiltered, not comparable", report)
+        self.assertNotIn("10.0x (n=1)", report.split("## Summary", 1)[1])
+
+    def test_serial_perf_refuses_a_sharded_run(self):
+        import argparse
+        refused = run_bench.check_timing_flags(
+            argparse.Namespace(concurrency=4, serial_perf=True))
+        self.assertIsNotNone(refused)
+        self.assertIn("--serial-perf", refused)
+        self.assertIsNone(run_bench.check_timing_flags(
+            argparse.Namespace(concurrency=1, serial_perf=True)))
+        # A sharded run without the flag is fine — that is the normal sweep.
+        self.assertIsNone(run_bench.check_timing_flags(
+            argparse.Namespace(concurrency=4, serial_perf=False)))
+        # And "zero processes" is nonsense whoever asked for it.
+        self.assertIsNotNone(run_bench.check_timing_flags(
+            argparse.Namespace(concurrency=0, serial_perf=False)))
 
 
 class ResultsIO(unittest.TestCase):

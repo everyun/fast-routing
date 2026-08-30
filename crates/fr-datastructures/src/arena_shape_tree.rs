@@ -656,6 +656,33 @@ impl<P: Copy> ArenaShapeTree<P> {
         })
     }
 
+    /// Replaces the payload of a live leaf **without moving it**, returning the
+    /// old payload; `None` — and no change — if the handle is stale.
+    ///
+    /// This is upstream's `leaf.object = p_to_trace` /
+    /// `leaf.shape_index_in_object = new_index` (`ShapeSearchTree.java:155-290`,
+    /// the `merge_entries_*` family), which relabels a leaf that already sits at
+    /// the right place in the tree rather than removing and re-inserting it. The
+    /// bounds are deliberately not touched: relabelling is only ever correct
+    /// when the shape the leaf stands for is *the same shape*, so its bounds are
+    /// the same too. A payload change that also moves the shape must go through
+    /// [`remove`](Self::remove) + [`insert`](Self::insert).
+    ///
+    /// The mutation is visible in [`epoch`](Self::epoch), as every mutation is.
+    #[inline]
+    pub fn set_payload(&mut self, id: ArenaLeafId, payload: P) -> Option<P> {
+        let node = self.nodes.get_mut(id.index as usize)?;
+        if node.generation != id.generation {
+            return None;
+        }
+        let NodeKind::Leaf(old) = node.kind else {
+            return None;
+        };
+        node.kind = NodeKind::Leaf(payload);
+        self.epoch = self.epoch.wrapping_add(1);
+        Some(old)
+    }
+
     /// Returns the bounds a live leaf was inserted with.
     #[inline]
     pub fn leaf_bounds(&self, id: ArenaLeafId) -> Option<OctBounds> {
@@ -1225,6 +1252,36 @@ mod tests {
         assert_eq!(tree.remove(c), Some("c"));
         assert!(tree.is_empty());
         assert_eq!(tree.root_bounds(), None);
+        tree.check_invariants().unwrap();
+    }
+
+    #[test]
+    fn set_payload_relabels_without_moving_the_leaf() {
+        let mut tree: ArenaShapeTree<&'static str> = ArenaShapeTree::new();
+        let a = tree.insert(square(0, 0, 10, 10), "a");
+        let b = tree.insert(square(20, 20, 30, 30), "b");
+        let shape = tree.node_count();
+        let root = tree.root_bounds().unwrap();
+        let epoch = tree.epoch();
+
+        assert_eq!(tree.set_payload(a, "a2"), Some("a"));
+        assert_eq!(tree.get(a), Some("a2"));
+        assert_eq!(tree.get(b), Some("b"), "the sibling is untouched");
+        assert_eq!(tree.epoch(), epoch + 1, "a mutation must bump the epoch");
+        assert_eq!(tree.node_count(), shape, "no node is allocated or freed");
+        assert_eq!(tree.root_bounds(), Some(root), "no bounds are disturbed");
+        tree.check_invariants().unwrap();
+
+        // The relabelled leaf answers queries at the same place, under its new
+        // name — which is the whole point of a relabel over a re-insert.
+        let mut out = Vec::new();
+        tree.overlaps(&square(0, 0, 8, 8), &mut out);
+        assert_eq!(out, vec![(a, "a2")]);
+
+        // A stale handle is refused rather than corrupting a recycled slot.
+        assert_eq!(tree.remove(a), Some("a2"));
+        assert_eq!(tree.set_payload(a, "ghost"), None);
+        assert_eq!(tree.get(b), Some("b"));
         tree.check_invariants().unwrap();
     }
 

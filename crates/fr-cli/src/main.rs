@@ -27,10 +27,14 @@
 //! holding a routed board it did not write**. Two things enforce it:
 //!
 //! * `--job-timeout SECS` arms a wall budget for the whole job. The router polls it between
-//!   connections and between passes and, when it is gone, stops the way a stop rule stops it:
-//!   the best retained board is restored, the referee judges it, the session is written. A
-//!   harness with a hard cap should pass a budget a little under its own — `bench/run_bench.py`
-//!   uses `cap - 10 s` — so the process finishes by itself instead of being killed.
+//!   connections, between passes and between optimizer items and, when it is gone, stops the way
+//!   a stop rule stops it: the best retained board is restored, the session is written, the
+//!   referee judges it. **The budget pays for that shutdown itself**: once the board is imported
+//!   the job reserves a board-sized slice of the budget for it
+//!   (`fr_router::reserve_job_tail`), so the whole run — session on disk included — finishes
+//!   inside `SECS` rather than a few seconds past it. A harness with a hard cap should still
+//!   pass a budget under its own (`bench/run_bench.py` uses `cap - 15 s`) as a safety net, but
+//!   the tool no longer relies on that margin to produce a file.
 //! * `SIGINT` / `SIGTERM` set the same flag from the handler, so the run unwinds through the
 //!   same path and still emits a session. A *second* signal is left to the default action, so a
 //!   caller can always insist.
@@ -174,9 +178,10 @@ ROUTING OPTIONS
                                 per-connection allowance is spent in effort-based virtual time
     --job-timeout <SECS>        Wall budget for the whole job (Default: none). When it runs out
                                 the router stops like a stop rule does — best board restored,
-                                referee run, .ses written — and the exit code is 4. 0 arms a
-                                budget that is already spent. Under a harness cap, pass a few
-                                seconds less than the cap.
+                                .ses written, referee run — and the exit code is 4. The budget
+                                covers that shutdown too: a board-sized reserve is taken off it
+                                after the import, so the run ends inside SECS. 0 arms a budget
+                                that is already spent.
 
 --drc-report OPTIONS
     --unit <mm|mil|inch|um>     Report unit (Default: mm, which is what the oracles use)
@@ -374,6 +379,21 @@ fn main() {
         return;
     }
 
+    // Where the session goes, decided *before* the run: the job writes it itself, before it
+    // judges the board, so that a run killed at a harness cap still leaves one (see
+    // `fr_core::pipeline`'s "The session is written before the board is judged").
+    // `--import-only` writes a session only when one was asked for; the default path always
+    // does, because a caller that passed no `-do` still expects `<input>.ses`.
+    let session_path = if args.import_only {
+        args.output.clone()
+    } else {
+        Some(
+            args.output
+                .clone()
+                .unwrap_or_else(|| default_ses(&input_path)),
+        )
+    };
+
     // `--import-only` keeps the M1 contract: no router stage, so the board the referee judges
     // and the session carries is exactly the imported one.
     let job = if args.import_only {
@@ -392,6 +412,10 @@ fn main() {
                 .with_threads(args.threads)
                 .with_portfolio(args.portfolio.unwrap_or(1)),
         ))
+    };
+    let job = match &session_path {
+        Some(path) => job.with_session_path(path),
+        None => job,
     };
 
     let started = Instant::now();
@@ -414,21 +438,10 @@ fn main() {
         eprintln!("warning: {warning}");
     }
 
-    // `--import-only` writes a session only when one was asked for; the default path always
-    // does, because a caller that passed no `-do` still expects `<input>.ses`.
-    let session_path = if args.import_only {
-        args.output.clone()
-    } else {
-        Some(
-            args.output
-                .clone()
-                .unwrap_or_else(|| default_ses(&input_path)),
-        )
-    };
+    // The file itself is already on disk — the job wrote it before the referee ran. This line
+    // only reports it, and it stays where it always was in the output so that a harness parsing
+    // stdout sees the same summary it always did.
     if let Some(path) = &session_path {
-        if let Err(error) = fs::write(path, &report.ses) {
-            fail(&format!("write {path}: {error}"));
-        }
         println!("Exported Specctra SES session file: {path}");
     }
 
@@ -446,10 +459,15 @@ fn main() {
     // the budget can also be spent in the import, the optimizer or the referee, and a caller
     // that asked for one wants to know it was spent however the run ended.
     if fr_core::job_budget_spent() {
+        // The reserve is named because it is the difference between "the budget was too short"
+        // and "the budget was spent shutting down", and only the caller can act on either.
         eprintln!(
             "job budget spent — the session above is the best board the run held \
-             ({} of {} connections incomplete)",
-            report.stats.incomplete_count, report.stats.max_connections
+             ({} of {} connections incomplete; {:.2}s of the budget was reserved for the \
+             shutdown)",
+            report.stats.incomplete_count,
+            report.stats.max_connections,
+            report.tail_reserve.as_secs_f64(),
         );
         process::exit(EXIT_DEADLINE);
     }
@@ -473,7 +491,7 @@ fn default_ses(input: &str) -> String {
 fn describe(error: &JobError) -> String {
     match error {
         JobError::Import(_) => format!("import failed: {error}"),
-        JobError::Read(..) => error.to_string(),
+        JobError::Read(..) | JobError::Write(..) => error.to_string(),
     }
 }
 

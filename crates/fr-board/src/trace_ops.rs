@@ -559,6 +559,11 @@ impl Board {
     /// **Iterative**, which is v2's fix for the `StackOverflowError` v19's
     /// recursion hit on long collinear chains (§11.5 delta). It terminates
     /// because every successful step removes one item from the board.
+    ///
+    /// Each step reaches `merge_entries_in_front` / `merge_entries_at_end`
+    /// through [`Board::change_trace_polyline`]; `combine_trace_at`'s own docs
+    /// carry the mapping, which half of the pair has landed, and why the other
+    /// half is a decision rather than a missing primitive.
     pub fn combine_trace(&mut self, id: ItemId) -> bool {
         let mut changed = false;
         while self.store().contains(id)
@@ -597,11 +602,46 @@ impl Board {
     /// `p_from_entry_no = this_lines.length - 3` (`PolylineTrace.java:404`)
     /// arrived at from the geometry rather than passed down.
     ///
-    /// What upstream additionally does and this cannot is *retarget* the
-    /// absorbed trace's leaves onto the survivor (`leaf.object = p_to_trace`).
-    /// A leaf's `(item, shape index)` payload lives inside the arena tree here
-    /// and is not addressable from outside it, so those segments are re-offset
-    /// and re-inserted instead. The resulting index is the same either way.
+    /// Combining **at the start** shifts every one of the survivor's shape
+    /// indices, and that is a relabel, not a re-insert: the kept trailing leaves
+    /// are rewritten in place through
+    /// [`ArenaShapeTree::set_payload`](fr_datastructures::arena_shape_tree::ArenaShapeTree::set_payload),
+    /// which is `merge_entries_in_front`'s
+    /// `new_leaf_arr[curr_ind].shape_index_in_object = curr_ind` loop
+    /// (`ShapeSearchTree.java:202-205`) reached from the general
+    /// `change_entries` path.
+    ///
+    /// # What upstream still does here and this does not
+    ///
+    /// Upstream also *retargets* the absorbed trace's leaves onto the survivor
+    /// (`leaf.object = p_to_trace`, `:197-198` / `:271-272`); here those
+    /// segments are re-offset and re-inserted. The missing primitive is no
+    /// longer the reason — `set_payload` exists — and two other things are:
+    ///
+    /// * **The index mapping has to be derived, not assumed.** Upstream is
+    ///   handed `p_from_entry_no` / `p_to_entry_no` by the caller, which knows
+    ///   whether `Polyline::combine` dropped a line at the seam and which way
+    ///   round the absorbed trace went. This port deliberately derives the
+    ///   survivor's kept runs from the two line arrays instead (above); doing the
+    ///   same for the absorbed side means a second equal-run scan, against the
+    ///   *oriented* absorbed array, plus the index reversal when the two traces
+    ///   met head-to-head. Sound, but it is arithmetic whose only failure mode is
+    ///   a silently mis-indexed leaf, i.e. routing through copper.
+    /// * **Upstream's version is not clearance-neutral.** `combine_at_start` /
+    ///   `combine_at_end` require equal layer, net array, half width and fixed
+    ///   state — but **not** an equal clearance class
+    ///   (`PolylineTrace.java:223-226` and `:340-343`). Upstream
+    ///   nevertheless reuses the absorbed trace's tile shapes, which were offset
+    ///   by *its* clearance compensation, while the seam shapes it inserts use
+    ///   the survivor's. Re-offsetting, as this does, gives the whole joined
+    ///   trace the survivor's compensation throughout. So "the resulting index
+    ///   is the same either way" is true only when the two classes agree; where
+    ///   they do not, upstream indexes a joined trace under two different
+    ///   compensations and this port does not.
+    ///
+    /// The cost left on the table is therefore `O(absorbed segments)` offset
+    /// computations per combine, and closing it is a call-site change plus a
+    /// decision about that second bullet — not a datastructure gap.
     ///
     /// The v19 bug the v2 fallback fixes — an NPE inside
     /// `merge_entries_in_front` for a trace without tree entries (§11.5 delta) —
