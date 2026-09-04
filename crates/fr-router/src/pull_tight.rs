@@ -1614,13 +1614,19 @@ impl<'b> PullTightAlgo<'b> {
         }
     }
 
-    /// How many of `polyline`'s segments fail the clearance oracle, using the
-    /// working state of the trace currently being optimized.
+    /// How many of `polyline`'s segments violate clearance **in the verdict's
+    /// sense**, using the working state of the trace currently being optimized.
     ///
     /// This is the invariant pull-tight is supposed to preserve: it may leave a
     /// segment that was *already* violating alone, but it must never turn a
     /// clean segment dirty. Tests assert on it, and it is how the phase that
     /// introduces a violation gets identified.
+    ///
+    /// The arithmetic is the DRC's (`Item.clearance_violations`,
+    /// `Item.java:355-415`), not the acceptance oracle's: no safety margin, and
+    /// a boundary touch (dimension < 2) does not count. The oracle is strictly
+    /// stricter — a trace may be *unmovable* (every candidate rejected by the
+    /// margin) while still reading 0 here, which is upstream's reading too.
     ///
     /// Only meaningful between [`PullTightAlgo::trace_pull_tight`]'s working
     /// state being set and the next trace being started.
@@ -1628,16 +1634,79 @@ impl<'b> PullTightAlgo<'b> {
         let mut bad = 0;
         for index in 0..polyline.arr.len().saturating_sub(2) {
             if let Some(shape) = polyline.offset_shape(self.curr_half_width, index) {
-                // The binding cache is a rejection shortcut keyed on the last
-                // candidate; clear it so each segment gets a full, independent
-                // answer.
-                self.binding = None;
-                if !self.check_trace_shape(&shape) {
+                if self.segment_is_dirty(&shape) {
                     bad += 1;
                 }
             }
         }
         bad
+    }
+
+    /// `Item.clearance_violations`' verdict for one segment shape: 2-D overlap
+    /// of the half-enlarged shapes against the default tree, without the safety
+    /// margin (`get_value(..., false)` — the margin only widens upstream's
+    /// *candidate* gather, never the verdict).
+    fn segment_is_dirty(&mut self, shape: &Simplex) -> bool {
+        let layer = self.curr_layer;
+        let cl_type = self.curr_cl_type;
+        let reach = self.max_clearance_on(cl_type, layer);
+        let broad = TileShape::Simplex(shape.offset(f64::from(reach)));
+        let PullTightAlgo {
+            board,
+            scratch_entries,
+            scratch_stack,
+            contact_pins,
+            curr_net_no_arr,
+            ..
+        } = self;
+        let tree = board.default_tree();
+        tree.overlapping_tree_entries(
+            board.store(),
+            &broad,
+            Some(layer),
+            &[],
+            scratch_stack,
+            scratch_entries,
+        );
+        for entry in scratch_entries.iter() {
+            let Some(item) = board.store().get(entry.item) else {
+                continue;
+            };
+            if let Some(pins) = contact_pins.as_ref() {
+                if pins.binary_search(&entry.item).is_ok() {
+                    continue;
+                }
+            }
+            let mut is_obstacle = true;
+            for &net_no in curr_net_no_arr.as_slice() {
+                if !item.is_trace_obstacle(net_no) {
+                    is_obstacle = false;
+                }
+            }
+            if !is_obstacle {
+                continue;
+            }
+            let half = board
+                .clearances()
+                .value(cl_type, item.clearance_class, layer)
+                / 2;
+            let Some(slot) = board.store().slot_of(entry.item) else {
+                continue;
+            };
+            let Some(tile) = tree.tile_shape(slot, entry.item, entry.shape_index) else {
+                continue;
+            };
+            let query = TileShape::Simplex(shape.clone()).enlarge(half);
+            let other = tile.enlarge(half);
+            if crate::geom::tile_to_simplex(&query)
+                .intersection(&crate::geom::tile_to_simplex(&other))
+                .dimension()
+                == 2
+            {
+                return true;
+            }
+        }
+        false
     }
 
     // ---- accessors the 45° rules need ------------------------------------

@@ -284,11 +284,14 @@ fn corner_total(board: &Board, net: i32) -> usize {
         .sum()
 }
 
-/// Runs `rounds` successive tightenings and asserts the clearance oracle reads
+/// Runs `rounds` successive tightenings and asserts the DRC-verdict count reads
 /// zero **after every one of them** — the "clearance is respected after every
 /// move" half of the probe, at the granularity the API exposes.
-/// The violation count of every trace of [`TEST_NET`], through the algorithm's
-/// own oracle — the one each move is supposed to be bounded by.
+/// The violation count of every trace of [`TEST_NET`], in the verdict's
+/// arithmetic (no safety margin; [`PullTightAlgo::trace_polyline_violations`])
+/// — *not* the acceptance oracle's, which carries the margin upstream gives it
+/// and would call a clearance-plus-2-units fixture dirty without any violation
+/// existing.
 fn dirty_count(fixture: &mut TestFixture) -> usize {
     let rules = fixture.rules.clone();
     let ids = traces_of(&fixture.board, TEST_NET);
