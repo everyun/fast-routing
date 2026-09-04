@@ -265,6 +265,96 @@ def pcb_uuids(pcb_path: str) -> set:
         return set(_UUID_RE.findall(f.read()))
 
 
+def _pcb_copper(pcb_path: str):
+    """(segments, vias) geometry of a .kicad_pcb, in mm.
+
+    segments: [((x1, y1), (x2, y2))]; vias: [(x, y)].
+    """
+    with open(pcb_path, "r", encoding="utf-8", errors="replace") as f:
+        tree = check_ses.parse_sexp(f.read())
+    segs = []
+    for s in check_ses.iter_nodes(tree, "segment"):
+        st = next((c for c in s if isinstance(c, list) and c and c[0] == "start"), None)
+        en = next((c for c in s if isinstance(c, list) and c and c[0] == "end"), None)
+        if st and en:
+            segs.append(((float(st[1]), float(st[2])), (float(en[1]), float(en[2]))))
+    vias = []
+    for v in check_ses.iter_nodes(tree, "via"):
+        at = next((c for c in v if isinstance(c, list) and c and c[0] == "at"), None)
+        if at:
+            vias.append((float(at[1]), float(at[2])))
+    return segs, vias
+
+
+def _pcb_geometry_by_uuid(pcb_path: str) -> dict:
+    """uuid -> ("seg", x1, y1, x2, y2) | ("via", x, y) for tracks and vias."""
+    with open(pcb_path, "r", encoding="utf-8", errors="replace") as f:
+        tree = check_ses.parse_sexp(f.read())
+
+    def uuid_of(node):
+        for c in node:
+            if isinstance(c, list) and c and c[0] in ("uuid", "tstamp"):
+                return str(c[1])
+        return None
+
+    out = {}
+    for s in check_ses.iter_nodes(tree, "segment"):
+        u = uuid_of(s)
+        st = next((c for c in s if isinstance(c, list) and c and c[0] == "start"), None)
+        en = next((c for c in s if isinstance(c, list) and c and c[0] == "end"), None)
+        if u and st and en:
+            out[u] = ("seg", float(st[1]), float(st[2]), float(en[1]), float(en[2]))
+    for v in check_ses.iter_nodes(tree, "via"):
+        u = uuid_of(v)
+        at = next((c for c in v if isinstance(c, list) and c and c[0] == "at"), None)
+        if u and at:
+            out[u] = ("via", float(at[1]), float(at[2]))
+    return out
+
+
+class FixtureCopper:
+    """Decides whether a DRC violation item is the fixture's own copper.
+
+    An item is fixture-owned when its UUID survives from the fixture PCB —
+    footprints, pads, zones, Edge.Cuts, locked tracks — **or**, for tracks and
+    vias, when the same geometry existed before the import: KiCad's SES import
+    deletes unlocked wiring and re-creates it from the session with *fresh*
+    UUIDs, so the fixture's own preroute debt round-trips under new identities
+    (REPORT-easyeda caveat). Pads never need the geometric fallback — SES
+    import does not touch footprints.
+    """
+
+    SEG_TOL_MM = 0.01
+    VIA_TOL_MM = 0.01
+
+    def __init__(self, before_pcb: str, after_pcb: str):
+        self.before_uuids = pcb_uuids(before_pcb)
+        self.before_segs, self.before_vias = _pcb_copper(before_pcb)
+        self.after_by_uuid = _pcb_geometry_by_uuid(after_pcb)
+
+    def owns(self, item: dict) -> bool:
+        uuid = item.get("uuid")
+        if not uuid:
+            return False
+        if uuid in self.before_uuids:
+            return True
+        geo = self.after_by_uuid.get(uuid)
+        if geo is None:
+            return False
+        if geo[0] == "via":
+            _, x, y = geo
+            tol = self.VIA_TOL_MM
+            return any(math.hypot(x - vx, y - vy) <= tol for vx, vy in self.before_vias)
+        _, x1, y1, x2, y2 = geo
+        tol = self.SEG_TOL_MM
+        for (ax, ay), (bx, by) in self.before_segs:
+            forward = math.hypot(x1 - ax, y1 - ay) <= tol and math.hypot(x2 - bx, y2 - by) <= tol
+            reverse = math.hypot(x1 - bx, y1 - by) <= tol and math.hypot(x2 - ax, y2 - ay) <= tol
+            if forward or reverse:
+                return True
+        return False
+
+
 def _item_key(item: dict) -> str:
     """Identity of one DRC item: its UUID when present, else rounded position."""
     uuid = item.get("uuid")
@@ -286,26 +376,23 @@ def violation_key(violation: dict):
     )
 
 
-def _is_fixture_debt(violation: dict, before_uuids: set) -> bool:
-    """True iff every item of the violation existed in the fixture PCB."""
+def _is_fixture_debt(violation: dict, fixture: FixtureCopper) -> bool:
+    """True iff every item of the violation is the fixture's own copper."""
     items = violation.get("items") or []
     if not items:
         return False
-    for it in items:
-        uuid = it.get("uuid")
-        if not uuid or uuid not in before_uuids:
-            return False
-    return True
+    return all(fixture.owns(it) for it in items)
 
 
-def classify_violations(after_runs: list, before_report: dict, before_uuids: set) -> dict:
+def classify_violations(after_runs: list, before_report: dict, fixture) -> dict:
     """Split the after-DRC violations into noise / fixture-debt / residual.
 
     `after_runs` are ≥1 DRC reports of the same imported board. A violation
     is *stable* when its physical object pair shows up in every run; the
     rest of the first run is run-to-run noise. Among the stable ones,
-    violations whose items all pre-date the SES import are fixture debt;
-    the remainder is the residual attributable to our routing.
+    violations whose items all pre-date the SES import are fixture debt
+    (`fixture` is a [`FixtureCopper`], or any object with an `owns(item)`
+    predicate); the remainder is the residual attributable to our routing.
     """
     before = count_drc(before_report)
     run_maps = []
@@ -328,7 +415,7 @@ def classify_violations(after_runs: list, before_report: dict, before_uuids: set
     noise_keys = first_keys - stable
     debt, residual = [], []
     for k in sorted(stable):
-        (debt if _is_fixture_debt(first[k], before_uuids) else residual).append(k)
+        (debt if _is_fixture_debt(first[k], fixture) else residual).append(k)
     return {
         "raw_delta": first["_count"] - before["violations"],
         "noise": len(noise_keys),
@@ -450,28 +537,39 @@ def kicad_roundtrip(
     kicad_cli: str,
     kicad_py: str,
     drc_runs: int = DRC_RUNS,
+    reuse_drc: bool = False,
 ) -> dict:
     """DRC before, import SES, refill zones, DRC after ×`drc_runs`.
 
     All artefacts stay in `work_dir`. Returns the raw delta plus the
     noise / fixture-debt / residual split of the after-violations.
+    With `reuse_drc` and a complete set of artefacts already in `work_dir`,
+    no KiCad process is run — the stored DRC JSONs and PCB copies are
+    re-classified in place (DRC runs are expensive; classification is not).
     """
     os.makedirs(work_dir, exist_ok=True)
     before_pcb = os.path.join(work_dir, "before.kicad_pcb")
     after_pcb = os.path.join(work_dir, "after.kicad_pcb")
     prerefill_pcb = os.path.join(work_dir, "after-norefill.kicad_pcb")
-    shutil.copy2(pcb_path, before_pcb)
     before_json = os.path.join(work_dir, "drc-before.json")
-    before = run_drc(kicad_cli, before_pcb, before_json)
-    import_ses(kicad_py, before_pcb, ses_path, after_pcb, prerefill_pcb)
-    after_jsons = []
-    after_runs = []
-    for i in range(max(1, drc_runs)):
-        path = os.path.join(work_dir, f"drc-after-r{i + 1}.json")
-        after_runs.append(run_drc(kicad_cli, after_pcb, path))
-        after_jsons.append(path)
+    after_jsons = [
+        os.path.join(work_dir, f"drc-after-r{i + 1}.json") for i in range(max(1, drc_runs))
+    ]
+    artefacts = [before_pcb, after_pcb, prerefill_pcb, before_json, *after_jsons]
+    if reuse_drc and all(os.path.exists(p) for p in artefacts):
+        with open(before_json, "r", encoding="utf-8") as f:
+            before = json.load(f)
+        after_runs = []
+        for path in after_jsons:
+            with open(path, "r", encoding="utf-8") as f:
+                after_runs.append(json.load(f))
+    else:
+        shutil.copy2(pcb_path, before_pcb)
+        before = run_drc(kicad_cli, before_pcb, before_json)
+        import_ses(kicad_py, before_pcb, ses_path, after_pcb, prerefill_pcb)
+        after_runs = [run_drc(kicad_cli, after_pcb, path) for path in after_jsons]
     delta = drc_delta(before, after_runs[0])
-    cls = classify_violations(after_runs, before, pcb_uuids(before_pcb))
+    cls = classify_violations(after_runs, before, FixtureCopper(before_pcb, after_pcb))
     delta["zone_refill"] = zone_fill_report(prerefill_pcb, after_pcb)
     delta["drc_runs"] = max(1, drc_runs)
     delta["drc_delta_raw"] = cls["raw_delta"]
@@ -505,6 +603,7 @@ def row_for(
     kicad_cli: str,
     kicad_py: str,
     skip_kicad: bool,
+    reuse_drc: bool = False,
 ) -> dict:
     snap = snap_angle_of(dsn) if os.path.exists(dsn) else DEFAULT_SNAP
     have_ses = ses and os.path.exists(ses) and os.path.getsize(ses) > 0
@@ -519,7 +618,7 @@ def row_for(
     if pcb and not skip_kicad and ses and os.path.exists(ses) and os.path.getsize(ses) > 0:
         work = os.path.join(work_root or tempfile.mkdtemp(prefix="g4-"), name)
         try:
-            kicad = kicad_roundtrip(pcb, ses, work, kicad_cli, kicad_py)
+            kicad = kicad_roundtrip(pcb, ses, work, kicad_cli, kicad_py, reuse_drc=reuse_drc)
         except Exception as e:  # noqa: BLE001 — one board must not kill the suite
             kicad = {"error": f"{type(e).__name__}: {e}"}
     elif pcb and skip_kicad:
@@ -602,6 +701,8 @@ def main(argv=None) -> int:
     ap.add_argument("--kicad-py", default=DEFAULT_KICAD_PY)
     ap.add_argument("--skip-kicad", action="store_true",
                     help="angle-check only (used by tests and when KiCad is busy)")
+    ap.add_argument("--reuse-drc", action="store_true",
+                    help="re-classify stored --work artefacts without re-running KiCad")
     args = ap.parse_args(argv)
 
     with open(args.manifest, "r", encoding="utf-8") as f:
@@ -626,6 +727,7 @@ def main(argv=None) -> int:
             row_for(
                 name, dsn, ses, pcb, gate_by.get(name),
                 work_root, args.kicad_cli, args.kicad_py, args.skip_kicad,
+                reuse_drc=args.reuse_drc,
             )
         )
     report(rows)

@@ -221,6 +221,17 @@ def _violation(vtype, uuids):
     }
 
 
+class _UuidsOnly:
+    """Minimal FixtureCopper stand-in: uuid membership only."""
+
+    def __init__(self, uuids):
+        self.uuids = set(uuids)
+
+    def owns(self, item):
+        uuid = item.get("uuid")
+        return bool(uuid) and uuid in self.uuids
+
+
 class ClassifyViolations(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -251,7 +262,7 @@ class ClassifyViolations(unittest.TestCase):
         self.assertEqual(g4_kicad.violation_key(a), g4_kicad.violation_key(b))
 
     def test_stable_split_into_debt_and_residual(self):
-        before_uuids = {"old1", "old2"}
+        fixture = _UuidsOnly({"old1", "old2"})
         before = {"violations": [], "unconnected_items": []}
         after = {
             "violations": [
@@ -262,7 +273,7 @@ class ClassifyViolations(unittest.TestCase):
             "unconnected_items": [],
         }
         # three identical runs -> no noise
-        cls = g4_kicad.classify_violations([after, after, after], before, before_uuids)
+        cls = g4_kicad.classify_violations([after, after, after], before, fixture)
         self.assertEqual(cls["raw_delta"], 3)
         self.assertEqual(cls["noise"], 0)
         self.assertEqual(cls["fixture_debt"], 1)
@@ -270,14 +281,14 @@ class ClassifyViolations(unittest.TestCase):
         self.assertEqual(len(cls["residual_violations"]), 2)
 
     def test_run_noise_is_dropped_from_residual(self):
-        before_uuids = {"old1"}
+        fixture = _UuidsOnly({"old1"})
         before = {"violations": [], "unconnected_items": []}
         flaky = _violation("shorting_items", ["old1", "new9"])
         steady = _violation("clearance", ["old1", "new1"])
         run1 = {"violations": [flaky, steady], "unconnected_items": []}
         run2 = {"violations": [steady], "unconnected_items": []}
         run3 = {"violations": [steady], "unconnected_items": []}
-        cls = g4_kicad.classify_violations([run1, run2, run3], before, before_uuids)
+        cls = g4_kicad.classify_violations([run1, run2, run3], before, fixture)
         self.assertEqual(cls["raw_delta"], 2)
         self.assertEqual(cls["noise"], 1)
         self.assertEqual(cls["fixture_debt"], 0)
@@ -289,9 +300,39 @@ class ClassifyViolations(unittest.TestCase):
         del v["items"][0]["uuid"]
         before = {"violations": [], "unconnected_items": []}
         after = {"violations": [v], "unconnected_items": []}
-        cls = g4_kicad.classify_violations([after], before, {"old1"})
+        cls = g4_kicad.classify_violations([after], before, _UuidsOnly({"old1"}))
         self.assertEqual(cls["fixture_debt"], 0)
         self.assertEqual(cls["residual"], 1)
+
+    def test_fixture_copper_owns_round_tripped_geometry(self):
+        # The fixture's own via/tracks come back from the SES import under
+        # fresh UUIDs: uuid membership alone would call them ours.
+        before = os.path.join(self.dir, "before.kicad_pcb")
+        after = os.path.join(self.dir, "after.kicad_pcb")
+        _write(
+            before,
+            "(kicad_pcb"
+            ' (via (at 10 20) (uuid "aaaaaaaa-0000-0000-0000-000000000001"))'
+            ' (segment (start 1 1) (end 5 5) (uuid "aaaaaaaa-0000-0000-0000-000000000002")))',
+        )
+        _write(
+            after,
+            "(kicad_pcb"
+            ' (via (at 10 20) (uuid "bbbbbbbb-0000-0000-0000-000000000001"))'
+            ' (segment (start 1 1) (end 5 5) (uuid "bbbbbbbb-0000-0000-0000-000000000002"))'
+            ' (via (at 40 40) (uuid "bbbbbbbb-0000-0000-0000-000000000003"))'
+            ' (segment (start 9 9) (end 12 9) (uuid "bbbbbbbb-0000-0000-0000-000000000004")))',
+        )
+        fixture = g4_kicad.FixtureCopper(before, after)
+        self.assertTrue(fixture.owns({"uuid": "aaaaaaaa-0000-0000-0000-000000000001"}))
+        # round-tripped via and segment, same geometry under a fresh uuid
+        self.assertTrue(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000001"}))
+        self.assertTrue(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000002"}))
+        # our fresh copper: positions the fixture never had
+        self.assertFalse(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000003"}))
+        self.assertFalse(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000004"}))
+        self.assertFalse(fixture.owns({"uuid": None}))
+        self.assertFalse(fixture.owns({}))
 
     def test_zone_fill_report_detects_changes(self):
         pre = os.path.join(self.dir, "pre.kicad_pcb")
