@@ -23,6 +23,11 @@ thread_local! {
     static COMPLETE_SHAPE_NS: Cell<u64> = const { Cell::new(0) };
     static COLLECT_NS: Cell<u64> = const { Cell::new(0) };
     static COMPLETION_SORT_NS: Cell<u64> = const { Cell::new(0) };
+    static COLLECT_ROOMS_NS: Cell<u64> = const { Cell::new(0) };
+    static COLLECT_ITEMS_NS: Cell<u64> = const { Cell::new(0) };
+    static ROOM_WALK_NS: Cell<u64> = const { Cell::new(0) };
+    static ROOM_LEAVES: Cell<u64> = const { Cell::new(0) };
+    static ROOM_SURVIVORS: Cell<u64> = const { Cell::new(0) };
     static CARVE_NS: Cell<u64> = const { Cell::new(0) };
     static RESTRAIN_NS: Cell<u64> = const { Cell::new(0) };
     static DOORS_NS: Cell<u64> = const { Cell::new(0) };
@@ -97,6 +102,35 @@ pub(crate) fn add_completion_sort(started: Option<Instant>) {
     add(&COMPLETION_SORT_NS, elapsed_ns(started));
 }
 
+pub(crate) fn add_collect_rooms(started: Option<Instant>) {
+    if started.is_none() {
+        return;
+    }
+    add(&COLLECT_ROOMS_NS, elapsed_ns(started));
+}
+
+pub(crate) fn add_collect_items(started: Option<Instant>) {
+    if started.is_none() {
+        return;
+    }
+    add(&COLLECT_ITEMS_NS, elapsed_ns(started));
+}
+
+pub(crate) fn add_room_walk(started: Option<Instant>, leaves: u64) {
+    if started.is_none() {
+        return;
+    }
+    add(&ROOM_WALK_NS, elapsed_ns(started));
+    add_count(&ROOM_LEAVES, leaves);
+}
+
+pub(crate) fn add_room_survivors(n: u64) {
+    if !is_enabled() {
+        return;
+    }
+    add_count(&ROOM_SURVIVORS, n);
+}
+
 pub(crate) fn add_carve(started: Option<Instant>, hits: u64) {
     if started.is_none() {
         return;
@@ -136,13 +170,20 @@ pub fn flush() {
     }
     let line = format!(
         "FRATTR complete_room_ns={}, complete_shape_ns={}, collect_ns={}, \
-         completion_sort_ns={}, carve_ns={}, restrain_ns={}, doors_ns={}, neighbours_ns={}, \
+         completion_sort_ns={}, collect_rooms_ns={}, collect_items_ns={}, \
+         room_walk_ns={}, room_leaves={}, room_survivors={}, \
+         carve_ns={}, restrain_ns={}, doors_ns={}, neighbours_ns={}, \
          complete_rooms={}, complete_shapes={}, collect_obstacles={}, \
          carve_hits={}, restrains={}, door_calcs={}, neighbour_calls={}",
         COMPLETE_ROOM_NS.with(Cell::get),
         COMPLETE_SHAPE_NS.with(Cell::get),
         COLLECT_NS.with(Cell::get),
         COMPLETION_SORT_NS.with(Cell::get),
+        COLLECT_ROOMS_NS.with(Cell::get),
+        COLLECT_ITEMS_NS.with(Cell::get),
+        ROOM_WALK_NS.with(Cell::get),
+        ROOM_LEAVES.with(Cell::get),
+        ROOM_SURVIVORS.with(Cell::get),
         CARVE_NS.with(Cell::get),
         RESTRAIN_NS.with(Cell::get),
         DOORS_NS.with(Cell::get),

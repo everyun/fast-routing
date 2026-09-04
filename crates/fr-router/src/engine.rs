@@ -130,8 +130,12 @@ pub struct AutorouteEngine<'b> {
     tree_class: i32,
     /// How much of the 45° tiling chain runs — the flavor selector.
     tiling_45: Tiling45Mode,
-    /// The engine-local room tree (see the module docs).
-    room_tree: ArenaShapeTree<RoomId>,
+    /// The engine-local room trees, one per layer (see the module docs). Only
+    /// complete free rooms are indexed, and a room never changes layer, so a
+    /// layered query walks one tree instead of filtering the whole set
+    /// (Issue039: the shared tree handed ~330 leaves per box query, half of
+    /// them on the wrong layer).
+    room_trees: Vec<ArenaShapeTree<RoomId>>,
     /// Reusable DFS stack for the item tree.
     item_stack: QueryStack,
     /// Reusable DFS stack for the room tree.
@@ -343,12 +347,14 @@ impl<'b> AutorouteEngine<'b> {
             rules,
             tree_class: ctrl.trace_clearance_class_no,
             tiling_45: default_tiling_45(board),
+            room_trees: (0..ctrl.layer_count.max(1))
+                .map(|_| ArenaShapeTree::new())
+                .collect(),
             ctrl,
             rooms,
             nodes: NodeArena::new(),
             drills: DrillArena::new(),
             pages,
-            room_tree: ArenaShapeTree::new(),
             item_stack: QueryStack::new(),
             room_stack: QueryStack::new(),
             obstacle_rooms: BTreeMap::new(),
@@ -462,7 +468,9 @@ impl<'b> AutorouteEngine<'b> {
     /// every cached obstacle room, and reset the id counters.
     pub fn clear(&mut self) {
         self.rooms.clear();
-        self.room_tree.clear();
+        for tree in &mut self.room_trees {
+            tree.clear();
+        }
         self.obstacle_rooms.clear();
         self.item_cache = None;
         self.drills.clear();
@@ -675,6 +683,7 @@ impl<'b> AutorouteEngine<'b> {
         self.ensure_item_cache();
         self.scratch_hit_bounds.clear();
 
+        let rooms_started = crate::rooms::attr::start();
         // Rooms first: the completion key sorts every room ahead of every
         // item, so an ordered rooms run followed by an ordered items run is
         // the sorted list. The walk + filter runs against the room tree as
@@ -682,11 +691,17 @@ impl<'b> AutorouteEngine<'b> {
         // descending id_no — the two-room-list sorts are over the few
         // survivors, not the whole candidate set.
         self.scratch_rooms.clear();
-        self.room_tree.overlaps_with_stack(
-            &fr_board::shape::TileShape::Box(query_box).bounds(),
-            &mut self.room_stack,
-            &mut self.scratch_rooms,
-        );
+        let walk_started = crate::rooms::attr::start();
+        // The room's layer is fixed at insertion, so the walk only touches the
+        // query layer's tree.
+        if let Some(room_tree) = self.room_trees.get(layer.max(0) as usize) {
+            room_tree.overlaps_with_stack(
+                &fr_board::shape::TileShape::Box(query_box).bounds(),
+                &mut self.room_stack,
+                &mut self.scratch_rooms,
+            );
+        }
+        crate::rooms::attr::add_room_walk(walk_started, self.scratch_rooms.len() as u64);
         let mut rooms = std::mem::take(&mut self.scratch_rooms);
         rooms.retain(|(_, room)| {
             let room = self.rooms.room(*room);
@@ -706,8 +721,11 @@ impl<'b> AutorouteEngine<'b> {
         }
         rooms.clear();
         self.scratch_rooms = rooms;
+        crate::rooms::attr::add_collect_rooms(rooms_started);
+        crate::rooms::attr::add_room_survivors(obstacles.len() as u64);
 
         // Split borrows: the cache is read, the hit lists are written.
+        let items_started = crate::rooms::attr::start();
         let item_cache = self.item_cache.as_mut().expect("cache just built");
         let hit_bounds: &mut Vec<IntBox> = &mut self.scratch_hit_bounds;
         let store = self.board.store();
@@ -785,6 +803,7 @@ impl<'b> AutorouteEngine<'b> {
                 visit(cached, obstacles, own_net);
             }
         }
+        crate::rooms::attr::add_collect_items(items_started);
     }
 
     fn ensure_item_cache(&mut self) {
@@ -923,11 +942,32 @@ impl<'b> AutorouteEngine<'b> {
             }
         }
         self.scratch_rooms.clear();
-        self.room_tree.overlaps_with_stack(
-            &query_tile.bounds(),
-            &mut self.room_stack,
-            &mut self.scratch_rooms,
-        );
+        // A layered query walks only that layer's tree; an all-layer query
+        // (the drill paths) walks each in turn. A room lives in exactly one
+        // tree, so no cross-tree duplicates appear.
+        match layer {
+            Some(l) => {
+                if let Some(room_tree) = self.room_trees.get(l.max(0) as usize) {
+                    room_tree.overlaps_with_stack(
+                        &query_tile.bounds(),
+                        &mut self.room_stack,
+                        &mut self.scratch_rooms,
+                    );
+                }
+            }
+            None => {
+                // `overlaps_with_stack` clears `out` first, so an all-layer
+                // query accumulates through `visit_overlaps` instead.
+                for room_tree in &self.room_trees {
+                    let out = &mut self.scratch_rooms;
+                    room_tree.visit_overlaps(
+                        &query_tile.bounds(),
+                        &mut self.room_stack,
+                        |id, payload| out.push((id, payload)),
+                    );
+                }
+            }
+        }
         // The room hits are appended in place and de-duplicated as a tail
         // slice, not collected into a `Vec<RoomId>` first: this runs once per
         // tree query — 604k times on Issue034 — and the temporary was one heap
@@ -1173,18 +1213,23 @@ impl<'b> AutorouteEngine<'b> {
         }
     }
 
-    /// Inserts a completed room into the engine-local tree.
+    /// Inserts a completed room into the engine-local tree of its layer.
     pub(crate) fn insert_room_in_tree(&mut self, room_id: RoomId) {
         let bounds =
             fr_board::shape::TileShape::Simplex(self.rooms.room(room_id).shape.clone()).bounds();
-        let leaf = self.room_tree.insert(bounds, room_id);
+        let layer = self.rooms.room(room_id).layer.max(0) as usize;
+        if layer >= self.room_trees.len() {
+            self.room_trees.resize(layer + 1, ArenaShapeTree::new());
+        }
+        let leaf = self.room_trees[layer].insert(bounds, room_id);
         self.rooms.room_mut(room_id).leaf = Some(leaf);
     }
 
-    /// Removes a completed room from the engine-local tree.
+    /// Removes a completed room from the engine-local tree of its layer.
     pub(crate) fn remove_room_from_tree(&mut self, room_id: RoomId) {
         if let Some(leaf) = self.rooms.room_mut(room_id).leaf.take() {
-            self.room_tree.remove(leaf);
+            let layer = self.rooms.room(room_id).layer.max(0) as usize;
+            self.room_trees[layer].remove(leaf);
         }
     }
 

@@ -41,7 +41,8 @@ pub struct CompletedShape {
 
 impl CompletedShape {
     /// `shape.bounding_box()`, computed once per candidate. `None` for an
-    /// unbounded shape, matching `union_into`'s `is_bounded` branch.
+    /// unbounded shape — the same case split the old `union_into` made on
+    /// `is_bounded`.
     pub fn cached_bbox(&self) -> Option<IntBox> {
         if let Some(memo) = self.bbox.get() {
             return memo;
@@ -654,23 +655,9 @@ impl AutorouteEngine<'_> {
     }
 }
 
-fn union_into(bounds: &mut Option<IntBox>, shape: &Simplex) {
-    if !shape.is_bounded() {
-        // An unbounded candidate makes the running bound useless; upstream's
-        // `bounding_shape` would report the coordinate envelope, so do the same.
-        let crit = fr_geometry::planar::Limits::CRIT_INT;
-        *bounds = Some(IntBox::new(-crit, -crit, crit, crit));
-        return;
-    }
-    let bb = shape.bounding_box();
-    *bounds = Some(match bounds.take() {
-        Some(existing) => existing.union(&bb),
-        None => bb,
-    });
-}
-
-/// [`union_into`] for an already-computed bounding box — the
-/// [`CompletedShape::cached_bbox`] form, where `None` is the unbounded case.
+/// The carve loop's running-bound union, fed from
+/// [`CompletedShape::cached_bbox`]; `None` is the unbounded case, matching
+/// the old `union_into`'s `is_bounded` branch.
 fn union_bbox(bounds: &mut Option<IntBox>, bbox: Option<IntBox>) {
     let Some(bb) = bbox else {
         let crit = fr_geometry::planar::Limits::CRIT_INT;
