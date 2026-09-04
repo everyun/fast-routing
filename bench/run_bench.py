@@ -59,6 +59,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import glob
+import hashlib
 import json
 import math
 import os
@@ -66,6 +67,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 import check_ses
@@ -80,6 +82,8 @@ DEFAULT_JAVA = "/opt/homebrew/opt/openjdk/bin/java"
 DEFAULT_JAR = "/tmp/frbase/freerouting-2.3.0.jar"
 DEFAULT_RUST_BIN = os.path.join(REPO_ROOT, "target", "release", "fr-cli")
 DEFAULT_MANIFEST = fixture_manifest.DEFAULT_MANIFEST
+DEFAULT_REFERENCE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "reference.json")
 TIME_BIN = "/usr/bin/time"  # `-l` prints max RSS in BYTES on this macOS (verified)
 
 # How far under `--timeout` fr-cli's own `--job-timeout` is set.
@@ -197,6 +201,141 @@ _HEAP_MULT = {"KB": 1024, "MB": 1024**2, "GB": 1024**3}
 def _num(s: str) -> float:
     """Parse a number that may use ',' as decimal separator (locale safety)."""
     return float(s.replace(",", "."))
+
+
+# --------------------------------------------------------------------------
+# Pinned Java reference jar
+# --------------------------------------------------------------------------
+
+
+def load_jar_reference(path: str = DEFAULT_REFERENCE) -> dict:
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def jar_sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_jar(jar_path: str, reference: dict | None = None, *,
+               allow_unpinned: bool = False,
+               reference_path: str = DEFAULT_REFERENCE) -> dict:
+    """Check `jar_path` against bench/reference.json.
+
+    Returns a dict with `ok` (may proceed), `error` (refuse the run when set),
+    and `meta` (to be stored on results.json). `--allow-unpinned-jar` lets a
+    mismatched jar through but the mismatch is still recorded.
+    """
+    pin = dict(reference) if reference is not None else load_jar_reference(
+        reference_path)
+    expected = pin["sha256"].lower()
+    meta = {
+        "filename": pin.get("filename"),
+        "expected_sha256": expected,
+        "build_revision": pin.get("build_revision"),
+        "published_at": pin.get("published_at"),
+        "download_url": pin.get("download_url"),
+        "jar": jar_path,
+        "allow_unpinned": allow_unpinned,
+    }
+    if not os.path.exists(jar_path):
+        err = f"error: jar not found at {jar_path}"
+        return {"ok": False, "error": err, "meta": meta}
+    actual = jar_sha256(jar_path)
+    meta["actual_sha256"] = actual
+    meta["sha256_ok"] = actual == expected
+    if meta["sha256_ok"]:
+        return {"ok": True, "error": None, "meta": meta}
+    mismatch = (
+        f"error: jar sha256 mismatch for {jar_path}: "
+        f"expected {expected} (pinned {pin.get('filename')}, "
+        f"build {pin.get('build_revision')}), got {actual}. "
+        f"Refusing to run. Pass --allow-unpinned-jar to override "
+        f"(the mismatch is still recorded in results.json meta)."
+    )
+    if allow_unpinned:
+        return {"ok": True, "error": None, "meta": meta}
+    return {"ok": False, "error": mismatch, "meta": meta}
+
+
+def new_java_user_data_dir(parent: str, stem: str) -> str:
+    """Create a fresh empty directory for one Java invocation's --user_data_path.
+
+    The release jar reads `$TMPDIR/freerouting/freerouting.json` unless this is
+    set, and that file has been observed to disable fanout/optimizer (see
+    docs/PARITY-DIVERGENCES.md Optimizer section). Every call gets its own
+    empty dir so a previous run cannot leak settings.
+    """
+    os.makedirs(parent, exist_ok=True)
+    return tempfile.mkdtemp(prefix=f"{stem}.", dir=parent)
+
+
+def build_java_cmd(java: str, jar: str, fixture: str, ses_path: str,
+                   passes: int, user_data_path: str) -> list[str]:
+    """Headless Java command. Always includes `--user_data_path=`."""
+    os.makedirs(user_data_path, exist_ok=True)
+    return [
+        java, "-Djava.awt.headless=true",  # never steal macOS focus
+        "-jar", jar,
+        "-de", fixture, "-do", ses_path,
+        "-mp", str(passes), "-l", "en",
+        f"--user_data_path={user_data_path}",
+    ]
+
+
+def parse_java_settings(stdout: str, cmd: list[str], *,
+                        timed_out: bool, parse_ok: bool) -> dict:
+    """Effective router/fanout/optimizer/max_passes for one Java run.
+
+    The jar does not print the resolved booleans at INFO. We record:
+      * CLI-passed `-mp` / `--user_data_path`
+      * whether each stage actually ran, inferred from the stage log lines
+        (`Fanout stage`, `Auto-routing stage`, `Optimization stage`)
+    A finished run with no stage line means that stage did not run. A timeout
+    or crash before any stage is `null` rather than a guess.
+    """
+    text = stdout.lower()
+    fanout_ran = "fanout stage" in text
+    router_ran = "auto-routing stage" in text
+    opt_ran = "optimization stage" in text
+    finished = bool(parse_ok) and not timed_out
+
+    def flag(ran: bool):
+        if ran:
+            return True
+        if finished:
+            return False
+        return None
+
+    max_passes = None
+    if "-mp" in cmd:
+        idx = cmd.index("-mp")
+        if idx + 1 < len(cmd):
+            try:
+                max_passes = int(cmd[idx + 1])
+            except ValueError:
+                max_passes = None
+    user_data_path = next(
+        (a.split("=", 1)[1] for a in cmd if a.startswith("--user_data_path=")),
+        None,
+    )
+    return {
+        "router.enabled": flag(router_ran),
+        "fanout.enabled": flag(fanout_ran),
+        "optimizer.enabled": flag(opt_ran),
+        "max_passes": max_passes,
+        "user_data_path": user_data_path,
+        "source": "log-stages+cli",
+        "stages_ran": {
+            "fanout": fanout_ran,
+            "router": router_ran,
+            "optimizer": opt_ran,
+        },
+    }
 
 
 def parse_time_footer(stderr: str) -> dict:
@@ -401,10 +540,10 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
     ses_path = os.path.join(ses_dir, f"{stem}.{tool}.ses")
 
     if tool == "java":
-        cmd = [args.java, "-Djava.awt.headless=true",  # never steal macOS focus
-               "-jar", args.jar,
-               "-de", fixture, "-do", ses_path,
-               "-mp", str(args.passes), "-l", "en"]
+        user_data_path = new_java_user_data_dir(
+            os.path.join(out_dir, "java-user-data"), stem)
+        cmd = build_java_cmd(
+            args.java, args.jar, fixture, ses_path, args.passes, user_data_path)
         ok_exit_codes = {0}
     else:
         cmd = [args.rust_bin, "-de", fixture, "-do", ses_path,
@@ -423,7 +562,7 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
         # 4 when the job budget ran out — both are results, not crashes.
         ok_exit_codes = {0, 2, 4}
 
-    full_cmd = [TIME_BIN, "-l"] + cmd
+    full_cmd = ["nice", "-n", "10", TIME_BIN, "-l"] + cmd
 
     rec = {
         "tool": tool,
@@ -484,6 +623,10 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
     rec.update(parse_time_footer(stderr))
     parsed = parse_java_log(stdout) if tool == "java" else parse_rust_log(stdout)
     rec.update(parsed)
+    if tool == "java":
+        rec["java_settings"] = parse_java_settings(
+            stdout, cmd, timed_out=rec["timed_out"],
+            parse_ok=bool(parsed.get("parse_ok")))
 
     if not rec["timed_out"]:
         signalled = rec["exit_code"] is not None and rec["exit_code"] < 0
@@ -987,6 +1130,11 @@ def main():
     ap.add_argument("--java", default=DEFAULT_JAVA)
     ap.add_argument("--jar", default=DEFAULT_JAR,
                     help=f"Freerouting jar under test (default {DEFAULT_JAR})")
+    ap.add_argument(
+        "--allow-unpinned-jar", action="store_true",
+        help="run even when --jar does not match bench/reference.json; "
+             "the mismatch is recorded in results.json meta.jar_pin",
+    )
     ap.add_argument("--rust-bin", default=DEFAULT_RUST_BIN)
     ap.add_argument("--config", default=None, metavar="LABEL",
                     help="free-form label for this configuration (e.g. "
@@ -1061,9 +1209,20 @@ def main():
         print(f"error: rust binary not found at {args.rust_bin} "
               f"(build with: cargo build --release -p fr-cli)", file=sys.stderr)
         return 2
-    if "java" in tools and not os.path.exists(args.jar):
-        print(f"error: jar not found at {args.jar}", file=sys.stderr)
-        return 2
+    jar_pin_meta = None
+    if "java" in tools:
+        pin = verify_jar(args.jar, allow_unpinned=args.allow_unpinned_jar)
+        if not pin["ok"]:
+            print(pin["error"], file=sys.stderr)
+            return 2
+        jar_pin_meta = pin["meta"]
+        if not pin["meta"]["sha256_ok"]:
+            print(
+                f"warning: running unpinned jar {args.jar} "
+                f"(sha256 {pin['meta']['actual_sha256']}; "
+                f"expected {pin['meta']['expected_sha256']})",
+                file=sys.stderr,
+            )
 
     index, man = load_manifest_index(args.manifest)
 
@@ -1097,6 +1256,8 @@ def main():
         "concurrency": args.concurrency,
         "serial_perf": args.serial_perf,
         "repo_rev": _git_rev(),
+        "jar_pin": jar_pin_meta,
+        "allow_unpinned_jar": args.allow_unpinned_jar,
     }
     results_path = os.path.join(out_dir, "results.json")
 

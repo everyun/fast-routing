@@ -460,5 +460,121 @@ class TokenizerQuoteHandling(unittest.TestCase):
         self.assertEqual(got, ["KiCad's Pcbnew"])
 
 
+class JarPin(unittest.TestCase):
+    """Pinned-jar check: a wrong bytes-on-disk must refuse to run."""
+
+    PIN = {
+        "filename": "freerouting-2.3.0.jar",
+        "sha256": None,  # filled in setUp from the bytes we write
+        "build_revision": "2d4de019aa89e9fa3dc1dc44e09bf509760cafc1",
+        "published_at": "2026-08-07T08:36:49Z",
+        "download_url": "https://example.invalid/freerouting-2.3.0.jar",
+    }
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.good = os.path.join(self.tmp.name, "freerouting-2.3.0.jar")
+        with open(self.good, "wb") as f:
+            f.write(b"good-jar-bytes")
+        self.pin = dict(self.PIN)
+        self.pin["sha256"] = run_bench.jar_sha256(self.good)
+
+    def test_matching_sha256_is_ok(self):
+        out = run_bench.verify_jar(self.good, self.pin)
+        self.assertTrue(out["ok"])
+        self.assertIsNone(out["error"])
+        self.assertTrue(out["meta"]["sha256_ok"])
+        self.assertEqual(out["meta"]["actual_sha256"], self.pin["sha256"])
+
+    def test_mismatch_is_rejected(self):
+        bad = os.path.join(self.tmp.name, "wrong.jar")
+        with open(bad, "wb") as f:
+            f.write(b"not-the-pinned-jar")
+        out = run_bench.verify_jar(bad, self.pin)
+        self.assertFalse(out["ok"])
+        self.assertIn("sha256 mismatch", out["error"])
+        self.assertFalse(out["meta"]["sha256_ok"])
+        self.assertNotEqual(out["meta"]["actual_sha256"], self.pin["sha256"])
+
+    def test_allow_unpinned_records_mismatch_and_proceeds(self):
+        bad = os.path.join(self.tmp.name, "wrong.jar")
+        with open(bad, "wb") as f:
+            f.write(b"not-the-pinned-jar")
+        out = run_bench.verify_jar(bad, self.pin, allow_unpinned=True)
+        self.assertTrue(out["ok"])
+        self.assertIsNone(out["error"])
+        self.assertFalse(out["meta"]["sha256_ok"])
+        self.assertTrue(out["meta"]["allow_unpinned"])
+
+    def test_missing_jar_is_rejected(self):
+        missing = os.path.join(self.tmp.name, "no-such.jar")
+        out = run_bench.verify_jar(missing, self.pin)
+        self.assertFalse(out["ok"])
+        self.assertIn("not found", out["error"])
+
+
+class JavaUserDataPath(unittest.TestCase):
+    """Every Java invocation must isolate its settings via --user_data_path."""
+
+    def test_build_java_cmd_carries_user_data_path_and_creates_an_empty_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            udp = os.path.join(tmp, "udp")
+            cmd = run_bench.build_java_cmd(
+                java="/opt/homebrew/opt/openjdk/bin/java",
+                jar="/tmp/frbase/freerouting-2.3.0.jar",
+                fixture="/tmp/x.dsn",
+                ses_path="/tmp/x.ses",
+                passes=20,
+                user_data_path=udp,
+            )
+            self.assertIn("--user_data_path=" + udp, cmd)
+            self.assertTrue(any(a.startswith("--user_data_path=") for a in cmd))
+            self.assertTrue(os.path.isdir(udp))
+            self.assertEqual(os.listdir(udp), [])
+            # -de alone is not enough: it only restores router.enabled.
+            self.assertIn("-de", cmd)
+            self.assertIn("-mp", cmd)
+
+    def test_new_dir_is_unique_and_empty(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            a = run_bench.new_java_user_data_dir(tmp, "Issue026")
+            b = run_bench.new_java_user_data_dir(tmp, "Issue026")
+            self.assertNotEqual(a, b)
+            self.assertEqual(os.listdir(a), [])
+            self.assertEqual(os.listdir(b), [])
+
+    def test_settings_from_log_stages(self):
+        log = (
+            "Fanout stage started on board 'x'\n"
+            "Fanout stage completed: started with 1 total SMD pins, "
+            "completed in 0.1 seconds\n"
+            "Auto-routing stage started on board 'x' for 1 unrouted items.\n"
+            "Auto-routing stage completed: started with 1 unrouted nets, "
+            "completed in 0.2 seconds, final score: 999.99 "
+            "(0 unrouted and 0 violations)\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            udp = os.path.join(tmp, "udp")
+            cmd = run_bench.build_java_cmd(
+                "java", "j.jar", "f.dsn", "f.ses", 20, udp)
+            out = run_bench.parse_java_settings(
+                log, cmd, timed_out=False, parse_ok=True)
+            self.assertTrue(out["fanout.enabled"])
+            self.assertTrue(out["router.enabled"])
+            self.assertFalse(out["optimizer.enabled"])
+            self.assertEqual(out["max_passes"], 20)
+            self.assertEqual(out["user_data_path"], udp)
+
+    def test_timeout_before_stages_does_not_guess_false(self):
+        cmd = ["java", "-jar", "j.jar", "-mp", "20"]
+        out = run_bench.parse_java_settings(
+            "Opening 'x.dsn'...\n", cmd, timed_out=True, parse_ok=False)
+        self.assertIsNone(out["fanout.enabled"])
+        self.assertIsNone(out["router.enabled"])
+        self.assertIsNone(out["optimizer.enabled"])
+        self.assertEqual(out["max_passes"], 20)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -2,6 +2,7 @@
 target/
 **/*.rs.bk
 *.ses
+!bench/results/java-reference/ses/*.ses
 *.tmp
 *.log
 

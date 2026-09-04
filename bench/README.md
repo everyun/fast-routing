@@ -7,7 +7,10 @@ Every future optimization gets judged by it. Python 3, stdlib only.
 | file | role |
 |---|---|
 | `manifest.py` → `fixtures-manifest.json` | what each fixture *is*: md5 dedup, coverage properties, Java classification, 3-run stability |
+| `reference.json` | pinned release jar (filename, sha256, build revision, published date, URL) |
+| `restore_reference.sh` | idempotent restore of jar + release source + 46 fixtures into `~/fr-ref`, `/tmp` symlinks only |
 | `run_bench.py` | runs both tools, classifies every row from the manifest, writes `results.json` + `report.md` |
+| `run_java_stability.py` | 3-run Java stability sweep (`-mp 20`, 300 s, W=4) with a hermetic `--user_data_path` per call |
 | `check_ses.py` | independent (coarse) DSN/SES checker — totals **and per-net** wire length / via count |
 | `tools/g21_referee/` | the real referee: `(dsn, ses)` in, one JSON verdict out, same binary for both tools |
 | `tools/g21_judge.py` | the ROADMAP G2.1 gate — see "Judging a session" below |
@@ -16,6 +19,11 @@ Every future optimization gets judged by it. Python 3, stdlib only.
 ## Quick start
 
 ```sh
+# 0. Restore the pinned Java reference (jar, 2.3.0 source, 46 fixtures)
+#    Real files: ~/fr-ref/{frbase,fr-java-release,freerouting-upstream}
+#    Symlinks:   /tmp/frbase, /tmp/fr-java-release, /tmp/freerouting-upstream
+bash bench/restore_reference.sh
+
 # 1. Build our CLI
 cargo build --release -p fr-cli
 
@@ -61,8 +69,19 @@ Results land in `bench/results/<timestamp>/`:
 
 Defaults (all overridable): fixtures `/tmp/freerouting-upstream/fixtures/*.dsn`
 (top level only), Java `/opt/homebrew/opt/openjdk/bin/java`, jar
-`/tmp/frbase/freerouting-2.3.0.jar`, Rust binary `target/release/fr-cli`,
-manifest `bench/fixtures-manifest.json`.
+`/tmp/frbase/freerouting-2.3.0.jar` (sha256 pinned in `bench/reference.json`;
+`run_bench.py` refuses a mismatch unless `--allow-unpinned-jar`), Rust binary
+`target/release/fr-cli`, manifest `bench/fixtures-manifest.json`.
+
+Every Java invocation creates a fresh empty directory and passes
+`--user_data_path=` pointing at it. Without that flag the release jar reads
+`$TMPDIR/freerouting/freerouting.json`, and that file has been observed to
+turn `router.fanout.enabled` / `router.optimizer.enabled` off; `-de` only
+restores `router.enabled`. See docs/PARITY-DIVERGENCES.md (Optimizer). Each
+results.json Java record stores the effective
+`router.enabled / fanout.enabled / optimizer.enabled / max_passes` under
+`java_settings` (inferred from the stage log lines, because the jar does not
+print the resolved booleans at INFO).
 
 ## Fixture manifest (`manifest.py` → `fixtures-manifest.json`)
 

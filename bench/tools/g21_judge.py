@@ -119,7 +119,7 @@ REPO_ROOT = os.path.dirname(BENCH_DIR)
 
 DEFAULT_FIXTURES = "/tmp/freerouting-upstream/fixtures"
 DEFAULT_MANIFEST = os.path.join(BENCH_DIR, "fixtures-manifest.json")
-DEFAULT_JAVA_SES = os.path.join(BENCH_DIR, "results", "20260828-013025", "ses")
+DEFAULT_JAVA_SES = os.path.join(BENCH_DIR, "results", "java-reference", "ses")
 DEFAULT_REFEREE = os.path.join(REPO_ROOT, "target", "release", "g21-referee")
 
 # `java.class` values that describe a reference run whose result is a number.

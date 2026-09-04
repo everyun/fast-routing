@@ -357,12 +357,18 @@ M0.5's "record 3-run stability per fixture", run as the capped baseline's own
 command line three times over each of the 46 boards, serially, `nice -n 15`:
 
 ```sh
+# Prefer the harness (pins the jar, isolates --user_data_path per call, W=4):
+python3 bench/run_java_stability.py --workers 4 --rounds 3 --passes 20 --timeout 300
+
+# Equivalent shell shape, do not omit --user_data_path= (see PARITY-DIVERGENCES Optimizer):
 for f in /tmp/freerouting-upstream/fixtures/*.dsn; do
   b=$(basename "$f" .dsn)
   for i in 1 2 3; do
-    nice -n 15 timeout 300 java -Djava.awt.headless=true \
+    udp=$(mktemp -d)
+    nice -n 10 /opt/homebrew/opt/openjdk/bin/java -Djava.awt.headless=true \
       -jar /tmp/frbase/freerouting-2.3.0.jar \
       -de "$f" -do "bench/results/java-stability/$b.r$i.ses" -mp 20 -l en \
+      --user_data_path="$udp" \
       > "bench/results/java-stability/$b.r$i.log" 2>&1
   done
 done
