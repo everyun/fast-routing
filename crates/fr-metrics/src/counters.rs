@@ -76,6 +76,13 @@ define_counters! {
     ShoveChecks,          shove_checks,           "Shove feasibility checks (`ShoveTraceAlgo` / `ForcedViaInserter`).";
     RipupChecks,          ripup_checks,           "Ripup feasibility checks in the maze loop.";
     PullTightIterations,  pull_tight_iterations,  "Pull-tight optimisation iterations over a changed area.";
+    OracleChecks,         oracle_checks,          "Pull-tight acceptance checks (`PullTightAlgo::check_trace_shape` calls).";
+    OracleCandidates,     oracle_candidates,      "Broad-phase entries the acceptance oracle examined (default-tree query hits).";
+    OracleSymmetricTests, oracle_symmetric_tests, "Symmetric half-clearance exact tests the acceptance oracle ran (one enlarge pair each).";
+    OracleBindingRejects, oracle_binding_rejects, "Acceptance checks rejected by the binding-constraint cache without a tree query.";
+    OracleBBoxPruned,     oracle_bbox_pruned,     "Oracle candidates discarded by the bounding-box pre-filter before the exact symmetric test.";
+    OracleCheckNanos,     oracle_check_nanos,     "Wall nanoseconds inside the acceptance oracle (`check_trace_shape` body).";
+    OracleExactNanos,     oracle_exact_nanos,     "Wall nanoseconds in the oracle's exact symmetric tests (enlarge + intersects).";
 }
 
 impl Counter {

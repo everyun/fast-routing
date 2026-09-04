@@ -72,6 +72,25 @@ pub trait ClearanceSource {
     /// `ClearanceMatrix.get_value`.
     fn value(&self, class_i: i32, class_j: i32, layer: i32) -> i32;
 
+    /// Upstream `ClearanceMatrix.get_value(class_i, class_j, layer, true)`: the
+    /// pairwise clearance **with** the safety margin. Upstream adds the margin
+    /// unconditionally for in-bounds indices — a zero matrix entry still
+    /// becomes 16 (`ClearanceMatrix.java:137-151`) — and returns 0 only for
+    /// out-of-range indices.
+    #[inline]
+    fn value_with_margin(&self, class_i: i32, class_j: i32, layer: i32) -> i32 {
+        if class_i < 0
+            || class_j < 0
+            || layer < 0
+            || class_i >= self.class_count() as i32
+            || class_j >= self.class_count() as i32
+            || layer >= self.layer_count() as i32
+        {
+            return 0;
+        }
+        self.value(class_i, class_j, layer) + CLEARANCE_SAFETY_MARGIN
+    }
+
     /// Upstream `ClearanceMatrix.clearance_compensation_value(cl, layer)`
     /// (`:211-213`): half the class' self-clearance, rounded up.
     ///

@@ -777,9 +777,10 @@ impl<'b> PullTightAlgo<'b> {
                 if !matches!(item.kind, ItemKind::Pin(_)) || !item.nets.shares_any(nets) {
                     continue;
                 }
-                let half = half_clearance_with_margin(
-                    board.clearances().value(clearance_class, item.clearance_class, layer),
-                );
+                let half = board
+                    .clearances()
+                    .value_with_margin(clearance_class, item.clearance_class, layer)
+                    / 2;
                 let Some(slot) = board.store().slot_of(id) else {
                     continue;
                 };
@@ -1265,6 +1266,14 @@ impl<'b> PullTightAlgo<'b> {
     /// it needs multi-net pins, which no fixture in the gate has. Its absence is
     /// conservative — it can only make a move be rejected, never accepted.
     pub fn check_trace_shape(&mut self, shape: &Simplex) -> bool {
+        fr_metrics::counters::bump::oracle_checks(1);
+        let check_start = Instant::now();
+        let result = self.check_trace_shape_timed(shape);
+        fr_metrics::counters::bump::oracle_check_nanos(check_start.elapsed().as_nanos() as u64);
+        result
+    }
+
+    fn check_trace_shape_timed(&mut self, shape: &Simplex) -> bool {
         if !shape_is_contained_in(shape, &self.bounds) {
             return false;
         }
@@ -1272,19 +1281,30 @@ impl<'b> PullTightAlgo<'b> {
         // previous candidate. Only ever used to prove a rejection.
         if let Some(binding) = self.binding {
             if self.binding_still_blocks(&binding, shape) {
+                fr_metrics::counters::bump::oracle_binding_rejects(1);
                 return false;
             }
         }
 
         let layer = self.curr_layer;
         let cl_type = self.curr_cl_type;
-        // The broad phase on the **default, uncompensated** tree:
-        // `bounds.offset(1.2 * max_clearance)` (`ShapeSearchTree.java:442-454`),
-        // plus the safety margin the exact test adds. The exact test below is
-        // what decides; this only has to be a superset.
+        // The broad phase on the **default, uncompensated** tree, queried with
+        // the shape's bounding octagon offset by upstream's
+        // `bounds.offset(1.2 * max_clearance)` reach
+        // (`ShapeSearchTree.java:442-454`) plus the safety margin the exact
+        // test adds. The query is bounds-only
+        // (`SearchTree::overlapping_tree_entries_bounds_only`): the symmetric
+        // test below re-does the exact geometry per candidate, so the
+        // leaf-level shape test the exact query would run is duplicated cost —
+        // profiling put it at roughly half of this oracle. The octagon
+        // encloses the shape and `offset` preserves that, so no exact-test hit
+        // can be missed; an unbounded simplex falls back to the offset query.
         let reach = (1.2 * f64::from(self.max_clearance_on(cl_type, layer))) as i32
             + CLEARANCE_SAFETY_MARGIN;
-        let broad = TileShape::Simplex(shape.offset(f64::from(reach)));
+        let broad = match shape.bounding_octagon() {
+            Some(octagon) => TileShape::Oct(octagon.offset(f64::from(reach))),
+            None => TileShape::Simplex(shape.offset(f64::from(reach))),
+        };
         fr_metrics::counters::bump::tree_queries(1);
         let PullTightAlgo {
             board,
@@ -1296,7 +1316,7 @@ impl<'b> PullTightAlgo<'b> {
             ..
         } = self;
         let tree = board.default_tree();
-        tree.overlapping_tree_entries(
+        tree.overlapping_tree_entries_bounds_only(
             board.store(),
             &broad,
             Some(layer),
@@ -1304,11 +1324,13 @@ impl<'b> PullTightAlgo<'b> {
             scratch_stack,
             scratch_entries,
         );
-        // The candidate shape enlarged by half the pairwise clearance, rebuilt
-        // only when the clearance bucket changes — upstream's sorted sweep
+        fr_metrics::counters::bump::oracle_candidates(scratch_entries.len() as u64);
+        // The query shape enlarged by half the pairwise clearance, rebuilt only
+        // when the clearance bucket changes — upstream's sorted sweep
         // (`:465-484`) without the sort, because clearance classes repeat
-        // heavily inside one query.
-        let mut cached: Option<(i32, TileShape)> = None;
+        // heavily inside one query. The enlarged shape's bounding box rides
+        // along for the per-candidate pre-filter.
+        let mut cached: Option<(i32, TileShape, IntBox)> = None;
         for entry in scratch_entries.iter() {
             let Some(item) = board.store().get(entry.item) else {
                 continue;
@@ -1316,18 +1338,24 @@ impl<'b> PullTightAlgo<'b> {
             // The exact test (`:476-490`): both shapes enlarged by half the
             // pairwise clearance *with* the safety margin
             // (`get_value(..., true)`), then `intersects`. An entry that
-            // survives the broad phase but not this is merely close.
-            let half = half_clearance_with_margin(
-                board.clearances().value(cl_type, item.clearance_class, layer),
-            );
-            let query_tile = match &cached {
-                Some((cached_half, tile)) if *cached_half == half => tile,
+            // survives the broad phase but not this is merely close. Upstream
+            // adds the margin unconditionally for in-bounds indices
+            // (`ClearanceMatrix.java:137-151`), so a zero matrix entry still
+            // contributes a half clearance of 8.
+            let half = board
+                .clearances()
+                .value_with_margin(cl_type, item.clearance_class, layer)
+                / 2;
+            let (query_tile, query_box) = match &cached {
+                Some((cached_half, tile, query_box)) if *cached_half == half => (tile, query_box),
                 _ => {
-                    cached = Some((
-                        half,
-                        TileShape::Simplex(shape.clone()).enlarge(half),
-                    ));
-                    &cached.as_ref().expect("just stored").1
+                    let query = TileShape::Simplex(shape.clone()).enlarge(half);
+                    let query_box = query.bounding_box();
+                    cached = Some((half, query, query_box));
+                    let Some((_, tile, query_box)) = cached.as_ref() else {
+                        unreachable!("just stored");
+                    };
+                    (tile, query_box)
                 }
             };
             let Some(slot) = board.store().slot_of(entry.item) else {
@@ -1336,7 +1364,20 @@ impl<'b> PullTightAlgo<'b> {
             let Some(tile) = tree.tile_shape(slot, entry.item, entry.shape_index) else {
                 continue;
             };
-            if !query_tile.intersects(&tile.enlarge(half)) {
+            // Bounding-box pre-filter: `enlarge` clips against the bounding
+            // octagon offset by the same distance (`Simplex::enlarge`), so an
+            // enlarged tile never leaves `bounding_box().offset(half)`, and the
+            // boxes are integer-exact — the filter can only drop candidates
+            // the symmetric test would reject anyway.
+            if !query_box.intersects(&tile.bounding_box().offset(f64::from(half))) {
+                fr_metrics::counters::bump::oracle_bbox_pruned(1);
+                continue;
+            }
+            fr_metrics::counters::bump::oracle_symmetric_tests(1);
+            let exact_start = Instant::now();
+            let hits = query_tile.intersects(&tile.enlarge(half));
+            fr_metrics::counters::bump::oracle_exact_nanos(exact_start.elapsed().as_nanos() as u64);
+            if !hits {
                 continue;
             }
             if let Some(pins) = contact_pins.as_ref() {
@@ -1405,11 +1446,20 @@ impl<'b> PullTightAlgo<'b> {
         let Some(item) = self.board.store().get(binding.item) else {
             return false;
         };
-        let half = half_clearance_with_margin(
-            self.board
-                .clearances()
-                .value(self.curr_cl_type, item.clearance_class, self.curr_layer),
-        );
+        let half = self
+            .board
+            .clearances()
+            .value_with_margin(self.curr_cl_type, item.clearance_class, self.curr_layer)
+            / 2;
+        // Same bounding-box pre-filter as the traversal: integer-exact, so a
+        // miss here means the symmetric test below would miss too.
+        if !shape
+            .bounding_box()
+            .offset(f64::from(half))
+            .intersects(&tile.bounding_box().offset(f64::from(half)))
+        {
+            return false;
+        }
         TileShape::Simplex(shape.clone())
             .enlarge(half)
             .intersects(&tile.enlarge(half))
@@ -1800,17 +1850,6 @@ pub(crate) fn signum_as_int(value: f64) -> i32 {
         1
     } else if value < 0.0 {
         -1
-    } else {
-        0
-    }
-}
-
-/// `tmp_entry.clearance / 2` (`ShapeSearchTree.java:467`): half the pairwise
-/// clearance **with** `clearance_safety_margin`, i.e. `get_value(..., true) / 2`.
-/// A zero clearance stays zero — there is nothing to margin.
-fn half_clearance_with_margin(clearance: i32) -> i32 {
-    if clearance > 0 {
-        (clearance + CLEARANCE_SAFETY_MARGIN) / 2
     } else {
         0
     }
