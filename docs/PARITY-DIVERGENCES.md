@@ -390,6 +390,19 @@ ARCHITECTURE "Budgets".
   `fr_geometry/tests/exact_corners_test.rs`,
   `fr_io/tests/ses_format_test.rs::a_half_unit_corner_is_written_with_a_decimal_and_reads_back_exactly`.
 
+## Session output
+
+- **Empty identifiers are quoted** (`fr_io::specctra::ses_write::needs_quotes`). *Upstream*
+  (`IdentifierType.write`, `IdentifierType.java:27-68`) writes an empty name as zero bytes: no
+  reserved char, no non-ASCII byte, and `"".matches("^-?\\d.*")` is false. On a design whose DSN
+  declares an empty-named image (`(image ""` — cla45-compute-hdi6cs, a real KiCad 10.0.5 export)
+  the jar therefore emits `(component ` with no name, a session KiCad's specctra parser rejects
+  outright (`ImportSpecctraSES` returns False, losing the whole import). *We* quote it:
+  `(component "")`, which KiCad parses. *Why not "fix" it the other way* (dropping the component
+  scope): the placement records are real and the importer needs them. Effect: sessions for
+  designs with empty-named packages import into KiCad; byte-divergence from the jar is confined
+  to files the jar itself renders unimportable.
+
 ## Referee
 
 - **The G2.1 session overlay has no upstream counterpart.** Upstream reads a session back into
