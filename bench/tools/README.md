@@ -28,6 +28,14 @@ late"*).
 
 Stdlib Python 3 only, like the rest of `bench/`.
 
+M4 scoreboards (generated; notes column is the only handwritten input):
+
+```sh
+python3 bench/tools/settings_scoreboard.py --write   # docs/SETTINGS.md
+python3 bench/tools/cli_compat.py --write            # docs/CLI.md
+python3 -m unittest discover -s bench/tools/tests
+```
+
 ## Quick start
 
 ```sh
