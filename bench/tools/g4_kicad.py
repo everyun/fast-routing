@@ -467,6 +467,9 @@ def zone_fill_report(prerefill_pcb: str, refilled_pcb: str) -> dict:
 # --------------------------------------------------------------------------
 
 
+KICAD_TIMEOUT_S = 300  # one wedged kicad-cli/pcbnew child must not wedge the suite
+
+
 def run_drc(kicad_cli: str, pcb_path: str, out_json: str) -> dict:
     cmd = [
         kicad_cli, "pcb", "drc",
@@ -475,7 +478,9 @@ def run_drc(kicad_cli: str, pcb_path: str, out_json: str) -> dict:
         "-o", out_json,
         pcb_path,
     ]
-    done = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+    done = subprocess.run(
+        cmd, capture_output=True, text=True, errors="replace", timeout=KICAD_TIMEOUT_S
+    )
     if not os.path.exists(out_json):
         raise RuntimeError(
             f"kicad-cli pcb drc produced no report (exit {done.returncode}): "
@@ -518,7 +523,7 @@ def import_ses(
     )
     done = subprocess.run(
         [kicad_py, "-c", script],
-        capture_output=True, text=True, errors="replace",
+        capture_output=True, text=True, errors="replace", timeout=KICAD_TIMEOUT_S,
     )
     if done.returncode != 0:
         raise RuntimeError(
@@ -543,9 +548,11 @@ def kicad_roundtrip(
 
     All artefacts stay in `work_dir`. Returns the raw delta plus the
     noise / fixture-debt / residual split of the after-violations.
-    With `reuse_drc` and a complete set of artefacts already in `work_dir`,
-    no KiCad process is run — the stored DRC JSONs and PCB copies are
-    re-classified in place (DRC runs are expensive; classification is not).
+    With `reuse_drc`, each step whose artefacts already exist in `work_dir`
+    is skipped and the stored files are loaded instead — DRC runs and the
+    wx import are expensive; classification is not. A step with incomplete
+    artefacts is re-run (so a board whose import wedged after saving can
+    reuse the saved PCBs and only re-run its DRCs).
     """
     os.makedirs(work_dir, exist_ok=True)
     before_pcb = os.path.join(work_dir, "before.kicad_pcb")
@@ -555,19 +562,25 @@ def kicad_roundtrip(
     after_jsons = [
         os.path.join(work_dir, f"drc-after-r{i + 1}.json") for i in range(max(1, drc_runs))
     ]
-    artefacts = [before_pcb, after_pcb, prerefill_pcb, before_json, *after_jsons]
-    if reuse_drc and all(os.path.exists(p) for p in artefacts):
-        with open(before_json, "r", encoding="utf-8") as f:
-            before = json.load(f)
-        after_runs = []
-        for path in after_jsons:
-            with open(path, "r", encoding="utf-8") as f:
-                after_runs.append(json.load(f))
+
+    def load_json(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    if reuse_drc and os.path.exists(before_pcb) and os.path.exists(before_json):
+        before = load_json(before_json)
     else:
         shutil.copy2(pcb_path, before_pcb)
         before = run_drc(kicad_cli, before_pcb, before_json)
+    imported = os.path.exists(after_pcb) and os.path.exists(prerefill_pcb)
+    if not (reuse_drc and imported):
         import_ses(kicad_py, before_pcb, ses_path, after_pcb, prerefill_pcb)
-        after_runs = [run_drc(kicad_cli, after_pcb, path) for path in after_jsons]
+    after_runs = []
+    for path in after_jsons:
+        if reuse_drc and imported and os.path.exists(path):
+            after_runs.append(load_json(path))
+        else:
+            after_runs.append(run_drc(kicad_cli, after_pcb, path))
     delta = drc_delta(before, after_runs[0])
     cls = classify_violations(after_runs, before, FixtureCopper(before_pcb, after_pcb))
     delta["zone_refill"] = zone_fill_report(prerefill_pcb, after_pcb)
