@@ -471,9 +471,110 @@ fn accuracy_below_the_floor_is_raised_to_it() {
 }
 
 // ---------------------------------------------------------------------------
-// the stall guard (M3 gate: "unbounded rounds hang the router")
+// the oracle's clearance model (fanout034 / Issue034)
 // ---------------------------------------------------------------------------
 
+/// Two parallel 45° traces at Issue034's knife-edge separation: centre lines at
+/// `x+y = 109525` and `x+y = 115892`, half width 1250 each, clearance 2002.
+/// Euclidean gap 2002.15 — legal by a hair — but the octagon enlargement rounds
+/// outward, so the DRC (and upstream's DRC) measure 2001.8: a violation.
+///
+/// The compensated tree the maze searches with disagrees by one rounding step:
+/// its pre-inflated diagonal border sits at `round(2251·√2) = 3183` from the
+/// centre line while the DRC's two-step enlargement reaches
+/// `round(1250·√2) + round(1001·√2) = 1768 + 1416 = 3184`. An oracle reading
+/// the compensated tree calls this position clean and pull-tight's bisection
+/// commits it; the referee then charges the board one violation. Upstream
+/// headless never takes that branch (`SearchTreeManager.java:34`): the
+/// acceptance check is the symmetric `with_clearance` enlargement on the
+/// default tree, with the safety margin on top.
+///
+/// The discriminating power is exact: the compensated model finds the
+/// knife-edge clean, the symmetric model must count it.
+#[test]
+fn the_oracle_uses_the_symmetric_drc_enlargement_not_the_compensated_tree() {
+    use fr_board::board::{Board, Layer, LayerStructure};
+    use fr_board::clearance::ClearanceTable;
+
+    const HALF_WIDTH: i32 = 1250;
+    let layers = LayerStructure::new(vec![Layer::signal("L0")]);
+    let mut board = Board::new(layers, ClearanceTable::uniform(2, 1, 2002));
+    // Only the nets/net-classes tables are consulted on this path; the oracle
+    // reads the board's own clearance table.
+    let rules = {
+        let rules_layers = fr_rules::layer::LayerStructure::new(vec![fr_rules::layer::Layer::new(
+            "L0".to_string(),
+            true,
+        )]);
+        fr_rules::board_rules::BoardRules::new(
+            rules_layers.clone(),
+            fr_rules::clearance_matrix::ClearanceMatrix::default_instance(rules_layers, 2002),
+        )
+    };
+
+    // The obstacle: /F's diagonal on `x+y = 109525`.
+    board
+        .insert_trace_points(
+            &[IntPoint::new(787400, -677875), IntPoint::new(766303, -656778)],
+            0,
+            HALF_WIDTH,
+            NetNos::of(2),
+            1,
+            FixedState::Unfixed,
+            None,
+        )
+        .expect("obstacle trace inserts");
+
+    let victim_at = |board: &mut Board, intercept: i32| {
+        // A trace on `x + y = intercept`, well clear of the obstacle's ends.
+        board
+            .insert_trace_points(
+                &[
+                    IntPoint::new(790000, intercept - 790000),
+                    IntPoint::new(770000, intercept - 770000),
+                ],
+                0,
+                HALF_WIDTH,
+                NetNos::of(TEST_NET),
+                1,
+                FixedState::Unfixed,
+                None,
+            )
+            .expect("victim trace inserts")
+    };
+
+    // The knife-edge position itself: 2001.8 < 2002 under the DRC's
+    // enlargement. The compensated model called this clean; the symmetric
+    // oracle must not.
+    let dirty = victim_at(&mut board, 115892);
+    // 24 intercept units further out the position clears the margin too.
+    let clean = victim_at(&mut board, 115892 + 24);
+
+    let mut algo = PullTightAlgo::new(
+        &mut board,
+        &rules,
+        &[],
+        None,
+        DEFAULT_PULL_TIGHT_ACCURACY,
+        None,
+        None,
+        0,
+    );
+    assert_eq!(
+        algo.trace_polyline_violations(dirty),
+        Some(1),
+        "the knife-edge position is a violation under the DRC's arithmetic"
+    );
+    assert_eq!(
+        algo.trace_polyline_violations(clean),
+        Some(0),
+        "24 units further out clears even the safety margin"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// the stall guard (M3 gate: "unbounded rounds hang the router")
+// ---------------------------------------------------------------------------
 /// `ARCHITECTURE.md` "Budgets" says the default mode keeps upstream's
 /// wall-clock constants *verbatim* — "pull-tight 1000/2000 ms" — and that
 /// `--deterministic` replaces wall checks with effort-based virtual time. That

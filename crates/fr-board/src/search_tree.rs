@@ -102,7 +102,7 @@
 //! | 3.5 | `area.split_to_convex()` per piece, `enlarge`, `divide_into_sections(50000)` | identical — [`AreaShape::Polygon`] is split by [`fr_geometry::planar::split_to_convex`] on demand; only a corner list that is not a simple polygon (where upstream fails too) falls back to a bounding octagon |
 //! | 3.6 | outline ring: one `offset_shape(BoardOutline.HALF_WIDTH + comp, 0)` per border line per layer | identical, driven off the stored border polylines; the `keepout_outside_outline_generated()` branch is **not** modelled (the generated keepout area has no field on [`crate::item::BoardOutline`] yet) |
 //! | 6 | `change_entries` / `merge_entries_*` reuse leaves in place | [`SearchTree::change_trace_entries`], which `combine` reaches through [`Board::change_trace_polyline`](crate::board::Board::change_trace_polyline) as well; the absorbed half of `merge_entries_*` and all of `reuse_entries_after_cutout` are still plain remove + insert |
-//! | 2.2 | `overlapping_tree_entries_with_clearance` for uncompensated trees | not here — it belongs to the checker, which is not this crate |
+//! | 2.2 | `overlapping_tree_entries_with_clearance` for uncompensated trees | the broad phase is this crate's plain overlap query; the symmetric half-clearance enlargement lives at the callers — `fr_check`'s sweep and `fr_router::pull_tight`'s acceptance oracle (the headless branch, `fanout034`) — plus `shove::geom::overlapping_items_with_clearance` |
 //!
 //! # Is the leaf reuse result-neutral? (yes, and it is checkable)
 //!

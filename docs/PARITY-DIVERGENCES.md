@@ -96,23 +96,26 @@ ARCHITECTURE "Budgets".
   Fanout-only is an explicit mode (`--fanout` with the router stage off), never a magic pass
   count, per `batch-orchestration.md` §11.1.
 
-- **Fork/end smoothing (`smoothen_start/end_corner_at_trace`) checks its candidate shapes with the
-  *compensated* half width** (`fr_router::pull_tight`, `PullTightAlgo::smoothen_end_corners_at_trace`).
-  The rule itself **is** ported now, for both flavors, including the
-  `insert_trace_without_cleaning` + `split_traces` + `normalize_traces` triple per improvement
-  round; this entry is what is left of the divergence.
-  *Upstream* sets `curr_half_width = p_trace.get_half_width()` in the wrapper
-  (`PullTightAlgo.java:352`) — the trace's raw half width — where `pull_tight(Polyline, …)` sets
-  `p_half_width + clearance_compensation_value` (`:141`). The two are the same number upstream
-  because a headless run leaves clearance compensation off (`SearchTreeManager.java:34`).
-  *We* keep them apart (`curr_half_width` compensated, `curr_raw_half_width` raw): our compensated
-  tree is real, so re-using the raw width in the oracle checks every candidate shape one
-  compensation too thin.
-  *Why not replicate*: measured. With the raw width the `bend` branch slid three traces into
-  foreign pads on `Issue230` — judged 19 violations against a 16-violation input, i.e. **+3 added**,
-  which is a G2.1 failure. The raw width is still what the re-inserted trace and the
-  `(√2 − 1)·half_width` chamfer use, so the geometry upstream produces is unchanged.
-  *Effect*: none on any board where compensation is 0, which is every board upstream runs.
+- **~~Fork/end smoothing checks its candidate shapes with the compensated half width~~ —
+  RETIRED (fanout034).** The whole compensated-oracle divergence is gone, not just the §6.4
+  half of it: `PullTightAlgo`'s clearance oracle now runs upstream's headless branch —
+  `overlapping_tree_entries_with_clearance` on the default, uncompensated tree, both shapes
+  enlarged by half the pairwise clearance *plus* `clearance_safety_margin`
+  (`ShapeSearchTree.java:430-480`, dispatched at `BasicBoard.java:1174-1178`;
+  `SearchTreeManager.clearance_compensation_used` is `false` outside the GUI,
+  `SearchTreeManager.java:34`). `curr_half_width` is the raw half width everywhere, exactly
+  what `:141` computes when the default tree's compensation is 0.
+  *Why the compensated oracle was wrong*: its pre-inflated diagonal borders are one rounding
+  step inside the DRC's two-step enlargement (`round(2251·√2) = 3183` vs
+  `round(1250·√2) + round(1001·√2) = 3184` at half width 1250 / clearance 2002), so a
+  pull-tight bisection could commit a trace at compensated tangency that the referee then
+  flagged — Issue034's +1 violation with fanout on (trace /G2 vs /F, 2001.8 < 2002, and the
+  jar's own `-drc` on our session flags the same pair). The old entry's Issue230 "+3 with the
+  raw width" measurement was taken against the compensated tree — raw width *and* a tree that
+  expected compensated queries — and does not apply to the symmetric oracle, which is strictly
+  stricter than the compensated check (margin 16 plus touch-counts-as-overlap).
+  *Effect*: pull-tight can no longer commit a position the DRC flags; the maze's compensated
+  trees are untouched (search guidance only, as upstream).
 
 - **A reported route must have copper to show for it** (`fr_router::batch`,
   `BatchRouter::discount_routes_that_left_no_copper` and the `board_changed` arm of

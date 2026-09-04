@@ -69,6 +69,22 @@
 //!   already off the board. §6.4 is also why a *round* is not a unit of bounded
 //!   work — one of its rounds normalizes a whole net — and therefore why the
 //!   driver arms a [`StallGuard`] as well as the round counter; see that type.
+//! * **The clearance oracle is the DRC's own arithmetic.** Upstream dispatches
+//!   `BasicBoard.check_trace_shape` on `is_clearance_compensation_used()`, which
+//!   is `false` in every headless run (`SearchTreeManager.java:34`; only the GUI
+//!   flips it). So the acceptance check runs against the **default,
+//!   uncompensated** tree via `overlapping_tree_entries_with_clearance`
+//!   (`ShapeSearchTree.java:430-480`): both the candidate and the stored shape
+//!   are enlarged by half the pairwise clearance **plus
+//!   `clearance_safety_margin`** (`get_value(..., true)`), "to create symmetry".
+//!   That is exactly the checker's enlargement with a margin on top, so a move
+//!   this oracle accepts cannot come back as a clearance violation. The
+//!   compensated tree the maze searches against is a *rounding-different* model
+//!   (its pre-inflated diagonal borders land up to one intercept unit inside the
+//!   symmetric enlargement), and a pull-tight bisection that homes to compensated
+//!   tangency commits a trace the referee then flags — that was Issue034's +1
+//!   violation with fanout on (`fanout034`). The compensated tree remains the
+//!   maze's guide; it is never the acceptance oracle here.
 //! * **90° mode shares the 45° rules**, which is upstream's own dispatch:
 //!   `get_instance` returns `PullTightAlgo45` for `NINETY_DEGREE` as well as for
 //!   `FORTYFIVE_DEGREE` (`:71-85`), and the rules read the restriction back
@@ -77,7 +93,7 @@
 use std::time::{Duration, Instant};
 
 use fr_board::board::Board;
-use fr_board::clearance::ClearanceSource;
+use fr_board::clearance::{ClearanceSource, CLEARANCE_SAFETY_MARGIN};
 use fr_board::item::{ItemId, ItemKind};
 use fr_board::net_nos::NetNos;
 use fr_board::search_tree::TreeEntry;
@@ -279,18 +295,17 @@ pub struct PullTightAlgo<'b> {
 
     // ---- per-trace working state (`pull_tight(Polyline,…)`, `:140-148`) ----
     curr_layer: i32,
+    /// The half width every check shape is built with — the trace's **raw** half
+    /// width, because the oracle adds the clearance itself
+    /// (`overlapping_tree_entries_with_clearance`). Upstream's
+    /// `curr_half_width = p_half_width + search_tree.clearance_compensation_value(...)`
+    /// (`PullTightAlgo.java:143`) reads the **default** tree, whose compensation
+    /// is 0 in every headless run (`SearchTreeManager.java:34`), so upstream's
+    /// number is the raw half width too.
     curr_half_width: i32,
-    /// The trace's **uncompensated** half width, which §6.4 needs separately.
-    ///
-    /// Upstream conflates the two: `smoothen_end_corners_at_trace` sets
-    /// `curr_half_width = p_trace.get_half_width()` (`PullTightAlgo.java:352`)
-    /// while `pull_tight(Polyline, …)` sets it to
-    /// `half_width + clearance_compensation_value` (`:141`). Those are the same
-    /// number upstream, because a headless run leaves clearance compensation off
-    /// (`SearchTreeManager.java:34`) and the value is always 0. Here the
-    /// compensated tree is real, so the two uses have to be told apart: the
-    /// oracle shape must carry the compensation or it is checked against a tree
-    /// that already expects it, and the re-inserted trace must not.
+    /// Kept in sync with `curr_half_width`; the two fields exist because an
+    /// earlier revision of this port checked against the compensated tree and
+    /// had to tell the compensated and raw widths apart.
     curr_raw_half_width: i32,
     curr_net_no_arr: NetNos,
     curr_cl_type: i32,
@@ -663,28 +678,13 @@ impl<'b> PullTightAlgo<'b> {
             nets,
         };
 
-        // The oracle must query a tree that has this trace's clearance baked
-        // into its obstacles. The driver optimizes **every** net in the region
-        // (upstream passes `new int[0]`, `BatchAutorouter.java:1330`), so the
-        // class here is routinely one the maze engine never built a tree for —
-        // and falling back to the *uncompensated* default tree would silently
-        // check with zero clearance and accept violating moves.
-        //
-        // Upstream's escape from the same corner is
-        // `overlapping_tree_entries_with_clearance` (`BasicBoard.java:1176`);
-        // building the class' tree once is the same answer, and it is cached
-        // for every later trace of the class.
-        self.board.ensure_compensated_tree(prep.clearance_class);
-
-        // `:140-148` — the working state, with the tree's clearance
-        // compensation folded into the half width.
+        // `:140-148` — the working state. The half width stays **raw**: the
+        // oracle is the default tree's symmetric `with_clearance` check, which
+        // adds the clearance itself (see the module docs, "The clearance
+        // oracle is the DRC's own arithmetic").
         self.curr_layer = prep.layer;
         self.curr_raw_half_width = prep.half_width;
-        self.curr_half_width = prep.half_width
-            + self
-                .board
-                .clearances()
-                .compensation_value(prep.clearance_class, prep.layer);
+        self.curr_half_width = prep.half_width;
         self.curr_net_no_arr = prep.nets.clone();
         self.curr_cl_type = prep.clearance_class;
         self.contact_pins = Some(self.touching_pins_at_end_corners(
@@ -735,33 +735,60 @@ impl<'b> PullTightAlgo<'b> {
         clearance_class: i32,
     ) -> Vec<ItemId> {
         let mut result = Vec::new();
+        // Upstream queries `overlapping_items_with_clearance` on the default
+        // tree (`Trace.java:396-400`): the end-corner octagon, enlarged by the
+        // raw half width, is then enlarged again by half the pairwise clearance
+        // plus the safety margin — and so is the candidate pin's shape.
+        let reach = half_width + self.max_clearance_on(clearance_class, layer);
         for corner in [polyline.first_corner(), polyline.last_corner()] {
             let octagon = corner.surrounding_octagon().offset(f64::from(half_width));
-            let query = TileShape::Simplex(octagon.to_simplex());
+            let query = TileShape::Oct(octagon);
+            // The broad phase must cover everything the exact test can still
+            // reach: the query grows by another half clearance plus margin.
+            let broad = TileShape::Oct(
+                corner
+                    .surrounding_octagon()
+                    .offset(f64::from(reach + CLEARANCE_SAFETY_MARGIN)),
+            );
             let PullTightAlgo {
                 board,
                 scratch_ids,
                 scratch_stack,
                 ..
             } = self;
-            let tree = board
-                .trees()
-                .compensated_tree(clearance_class)
-                .unwrap_or_else(|| board.default_tree());
             fr_metrics::counters::bump::tree_queries(1);
-            tree.overlapping_items(
+            board.default_tree().overlapping_items(
                 board.store(),
-                &query,
+                &broad,
                 Some(layer),
                 &[],
                 scratch_stack,
                 scratch_ids,
             );
             for &id in scratch_ids.iter() {
-                if let Some(item) = board.store().get(id) {
-                    if matches!(item.kind, ItemKind::Pin(_)) && item.nets.shares_any(nets) {
-                        result.push(id);
-                    }
+                let Some(item) = board.store().get(id) else {
+                    continue;
+                };
+                if !matches!(item.kind, ItemKind::Pin(_)) || !item.nets.shares_any(nets) {
+                    continue;
+                }
+                let half = half_clearance_with_margin(
+                    board.clearances().value(clearance_class, item.clearance_class, layer),
+                );
+                let Some(slot) = board.store().slot_of(id) else {
+                    continue;
+                };
+                let touching = board
+                    .default_tree()
+                    .item_shapes(slot, id)
+                    .iter()
+                    .filter(|tile| tile.layer == layer)
+                    .filter_map(|tile| tile.shape.as_ref())
+                    .any(|tile| {
+                        query.enlarge(half).intersects(&tile.enlarge(half))
+                    });
+                if touching {
+                    result.push(id);
                 }
             }
         }
@@ -814,10 +841,11 @@ impl<'b> PullTightAlgo<'b> {
     ///
     /// * the net filter is `nets_equal(only_net_no_arr)` — the same equality the
     ///   per-trace guard uses, not a subset test (`:348`);
-    /// * `curr_half_width` here is the trace's **raw** half width (`:352`), not
-    ///   the clearance-compensated one [`PullTightAlgo::prepare_trace`]
-    ///   installs. It is what the new trace is re-inserted with, so compensating
-    ///   it would fatten every smoothed trace;
+    /// * `curr_half_width` here is the trace's **raw** half width (`:352`) —
+    ///   the same value [`PullTightAlgo::prepare_trace`] installs, because the
+    ///   oracle adds the clearance at query time in both. It is also what the
+    ///   new trace is re-inserted with, so compensating it would fatten every
+    ///   smoothed trace;
     /// * `contact_pins` is forced to `None` for the whole loop (`:369-371`) so
     ///   the trace may slide onto a contact trace that ends at a pin, and
     ///   restored afterwards. `_2` sets it back to the *new* trace's touching
@@ -851,19 +879,9 @@ impl<'b> PullTightAlgo<'b> {
         self.curr_raw_half_width = raw_half_width;
         self.curr_net_no_arr = item.nets.clone();
         self.curr_cl_type = item.clearance_class;
-        // The oracle `reposition_line` reaches through must see this trace's
-        // class compensated into the tree, exactly as `prepare_trace` arranges
-        // it for the pull-tight path — and the check shape must then carry the
-        // same compensation. Upstream can get away with the raw half width at
-        // `:352` only because its compensation is identically 0; using it here
-        // under-inflates every candidate shape by exactly one compensation and
-        // lets the `bend` branch slide a trace that far into a foreign pin.
-        self.board.ensure_compensated_tree(self.curr_cl_type);
-        self.curr_half_width = raw_half_width
-            + self
-                .board
-                .clearances()
-                .compensation_value(self.curr_cl_type, layer);
+        // `:352` — the raw half width, exactly as upstream installs it here;
+        // the oracle adds the clearance at query time.
+        self.curr_half_width = raw_half_width;
         self.binding = None;
 
         let saved_contact_pins = self.contact_pins.take();
@@ -1167,8 +1185,8 @@ impl<'b> PullTightAlgo<'b> {
         let translate_line =
             Line::new_from_point_and_dir(end_corner.to_float().round(), &new_line_dir);
         // `(√2 − 1) · half_width` is the cut that turns a right angle of a trace
-        // this wide into a 45° chamfer, so it is the **raw** width, not the
-        // oracle's compensated one.
+        // this wide into a 45° chamfer — the geometric half width, with no
+        // clearance involved.
         let mut translate_dist = (Limits::SQRT2 - 1.0) * f64::from(self.curr_raw_half_width);
         let prev_corner_dist = translate_line
             .signed_distance(&prev_end_corner.to_float())
@@ -1221,6 +1239,15 @@ impl<'b> PullTightAlgo<'b> {
     /// 3. otherwise an item is an obstacle unless `is_trace_obstacle` is false
     ///    for one of the routed nets.
     ///
+    /// The tree query is upstream's **headless** branch:
+    /// `is_clearance_compensation_used()` is `false` outside the GUI
+    /// (`SearchTreeManager.java:34`), so the dispatcher at
+    /// `BasicBoard.java:1174-1178` takes
+    /// `overlapping_tree_entries_with_clearance` on the default tree — the
+    /// symmetric enlargement the DRC itself uses, plus the safety margin. See
+    /// the module docs for what the compensated-tree variant of this check
+    /// used to let through (Issue034).
+    ///
     /// The tie-pin tolerance of `:1198-1217` (a foreign-net trace overlapping
     /// only inside a shared tie pin's pad is not an obstacle) is not ported:
     /// it needs multi-net pins, which no fixture in the gate has. Its absence is
@@ -1238,8 +1265,14 @@ impl<'b> PullTightAlgo<'b> {
         }
 
         let layer = self.curr_layer;
-        let tree_class = self.curr_cl_type;
-        let query = TileShape::Simplex(shape.clone());
+        let cl_type = self.curr_cl_type;
+        // The broad phase on the **default, uncompensated** tree:
+        // `bounds.offset(1.2 * max_clearance)` (`ShapeSearchTree.java:442-454`),
+        // plus the safety margin the exact test adds. The exact test below is
+        // what decides; this only has to be a superset.
+        let reach = (1.2 * f64::from(self.max_clearance_on(cl_type, layer))) as i32
+            + CLEARANCE_SAFETY_MARGIN;
+        let broad = TileShape::Simplex(shape.offset(f64::from(reach)));
         fr_metrics::counters::bump::tree_queries(1);
         let PullTightAlgo {
             board,
@@ -1250,22 +1283,50 @@ impl<'b> PullTightAlgo<'b> {
             binding,
             ..
         } = self;
-        let tree = board
-            .trees()
-            .compensated_tree(tree_class)
-            .unwrap_or_else(|| board.default_tree());
+        let tree = board.default_tree();
         tree.overlapping_tree_entries(
             board.store(),
-            &query,
+            &broad,
             Some(layer),
             &[],
             scratch_stack,
             scratch_entries,
         );
+        // The candidate shape enlarged by half the pairwise clearance, rebuilt
+        // only when the clearance bucket changes — upstream's sorted sweep
+        // (`:465-484`) without the sort, because clearance classes repeat
+        // heavily inside one query.
+        let mut cached: Option<(i32, TileShape)> = None;
         for entry in scratch_entries.iter() {
             let Some(item) = board.store().get(entry.item) else {
                 continue;
             };
+            // The exact test (`:476-490`): both shapes enlarged by half the
+            // pairwise clearance *with* the safety margin
+            // (`get_value(..., true)`), then `intersects`. An entry that
+            // survives the broad phase but not this is merely close.
+            let half = half_clearance_with_margin(
+                board.clearances().value(cl_type, item.clearance_class, layer),
+            );
+            let query_tile = match &cached {
+                Some((cached_half, tile)) if *cached_half == half => tile,
+                _ => {
+                    cached = Some((
+                        half,
+                        TileShape::Simplex(shape.clone()).enlarge(half),
+                    ));
+                    &cached.as_ref().expect("just stored").1
+                }
+            };
+            let Some(slot) = board.store().slot_of(entry.item) else {
+                continue;
+            };
+            let Some(tile) = tree.tile_shape(slot, entry.item, entry.shape_index) else {
+                continue;
+            };
+            if !query_tile.intersects(&tile.enlarge(half)) {
+                continue;
+            }
             if let Some(pins) = contact_pins.as_ref() {
                 if pins.binary_search(&entry.item).is_ok() {
                     continue;
@@ -1302,6 +1363,17 @@ impl<'b> PullTightAlgo<'b> {
         true
     }
 
+    /// `ClearanceMatrix.max_value(cl_type, layer)` — the largest clearance the
+    /// current class asks of any class on `layer`.
+    fn max_clearance_on(&self, cl_type: i32, layer: i32) -> i32 {
+        let clearances = self.board.clearances();
+        let mut max = 0;
+        for other in 0..clearances.class_count() as i32 {
+            max = max.max(clearances.value(cl_type, other, layer));
+        }
+        max
+    }
+
     /// True when the cached blocker still exists unchanged **and** still
     /// overlaps `shape`, i.e. the candidate is rejected without a traversal.
     fn binding_still_blocks(&self, binding: &BindingObstacle, shape: &Simplex) -> bool {
@@ -1311,19 +1383,24 @@ impl<'b> PullTightAlgo<'b> {
         let Some(slot) = self.board.store().slot_of(binding.item) else {
             return false;
         };
-        let tree_class = self.curr_cl_type;
-        let tree = self
-            .board
-            .trees()
-            .compensated_tree(tree_class)
-            .unwrap_or_else(|| self.board.default_tree());
+        let tree = self.board.default_tree();
         if tree.shape_layer(slot, binding.item, binding.shape_index) != Some(self.curr_layer) {
             return false;
         }
         let Some(tile) = tree.tile_shape(slot, binding.item, binding.shape_index) else {
             return false;
         };
-        TileShape::Simplex(shape.clone()).intersects(tile)
+        let Some(item) = self.board.store().get(binding.item) else {
+            return false;
+        };
+        let half = half_clearance_with_margin(
+            self.board
+                .clearances()
+                .value(self.curr_cl_type, item.clearance_class, self.curr_layer),
+        );
+        TileShape::Simplex(shape.clone())
+            .enlarge(half)
+            .intersects(&tile.enlarge(half))
     }
 
     // ---- §6.1 base moves shared by every angle mode ----------------------
@@ -1565,7 +1642,8 @@ impl<'b> PullTightAlgo<'b> {
 
     // ---- accessors the 45° rules need ------------------------------------
 
-    /// The compensated half width the current trace is checked at.
+    /// The half width the current trace's check shapes are built with — the
+    /// raw width; the oracle adds the clearance (`with_clearance`) itself.
     #[inline]
     pub(crate) fn curr_half_width(&self) -> i32 {
         self.curr_half_width
@@ -1646,9 +1724,19 @@ pub(crate) fn signum_as_int(value: f64) -> i32 {
     }
 }
 
+/// `tmp_entry.clearance / 2` (`ShapeSearchTree.java:467`): half the pairwise
+/// clearance **with** `clearance_safety_margin`, i.e. `get_value(..., true) / 2`.
+/// A zero clearance stays zero — there is nothing to margin.
+fn half_clearance_with_margin(clearance: i32) -> i32 {
+    if clearance > 0 {
+        (clearance + CLEARANCE_SAFETY_MARGIN) / 2
+    } else {
+        0
+    }
+}
+
 /// `TileShape.is_contained_in(bounding_box)` for a simplex.
-fn shape_is_contained_in(shape: &Simplex, bounds: &IntBox) -> bool {
-    for index in 0..shape.border_line_count() {
+fn shape_is_contained_in(shape: &Simplex, bounds: &IntBox) -> bool {    for index in 0..shape.border_line_count() {
         if !shape.corner_is_bounded(index) {
             return false;
         }
