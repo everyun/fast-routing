@@ -50,6 +50,20 @@ impl AutorouteEngine<'_> {
         ignore_room: Option<RoomId>,
         ignore_shape: Option<&Simplex>,
     ) -> Vec<CompletedShape> {
+        let started = crate::rooms::attr::start();
+        let result = self.complete_shape_inner(shape, contained, layer, ignore_room, ignore_shape);
+        crate::rooms::attr::add_complete_shape(started);
+        result
+    }
+
+    fn complete_shape_inner(
+        &mut self,
+        shape: Option<&Simplex>,
+        contained: &Simplex,
+        layer: i32,
+        ignore_room: Option<RoomId>,
+        ignore_shape: Option<&Simplex>,
+    ) -> Vec<CompletedShape> {
         // `AutorouteEngine.java:70` picks the tree, and the tree's subclass is
         // what decides which `complete_shape` runs. The dispatch lives here so
         // the whole lifecycle below — `complete_expansion_room`, the re-completion
@@ -110,6 +124,7 @@ impl AutorouteEngine<'_> {
         // list.
         let mut obstacles = Vec::new();
         let mut own_net = Vec::new();
+        let collect_started = crate::rooms::attr::start();
         self.overlapping_obstacles_tile_for_completion(
             &TileShape::Box(bounding),
             Some(layer),
@@ -117,28 +132,30 @@ impl AutorouteEngine<'_> {
             &mut obstacles,
             &mut own_net,
         );
+        crate::rooms::attr::add_collect(collect_started, obstacles.len());
 
-        for obstacle in obstacles {
+        let carve_started = crate::rooms::attr::start();
+        let mut carve_hits = 0u64;
+        let paired_bounds = self.scratch_hit_bounds.len() == obstacles.len();
+        for (index, obstacle) in obstacles.into_iter().enumerate() {
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {
                 continue;
             }
             // Layer and bounds first, shape second. The walk above ran against
             // the *initial* bound, so by now `bounding` has usually shrunk past
             // most of what it returned — 95.7 % of the layer-matching obstacles
-            // on `Issue230` — and
-            // [`obstacle_layer_and_bounds`](AutorouteEngine::obstacle_layer_and_bounds)
-            // answers both questions off the stored tile, without building the
-            // simplex the rejected ones would immediately drop. It is the same
-            // rejection, not a weaker one; see that method for why the octagon
-            // row's wider box cannot change an answer.
-            let Some((obstacle_layer, obstacle_bounds)) = self.obstacle_layer_and_bounds(obstacle)
-            else {
-                continue;
+            // on `Issue230`. The box-query collect already filtered by layer
+            // and stashed each hit's box in `scratch_hit_bounds`; reading that
+            // is one integer-box test instead of `slot_of` + tile load.
+            let obstacle_bounds = if paired_bounds {
+                self.scratch_hit_bounds[index]
+            } else {
+                match self.obstacle_layer_and_bounds(obstacle) {
+                    Some((obstacle_layer, bounds)) if obstacle_layer == layer => bounds,
+                    _ => continue,
+                }
             };
-            if obstacle_layer != layer
-                || obstacle_bounds.is_empty()
-                || !obstacle_bounds.intersects(&bounding)
-            {
+            if obstacle_bounds.is_empty() || !obstacle_bounds.intersects(&bounding) {
                 continue;
             }
             let Some(obstacle_shape) = self.obstacle_shape(obstacle) else {
@@ -160,6 +177,7 @@ impl AutorouteEngine<'_> {
                             .unwrap_or(false);
                     if !ignore_expansion_room {
                         something_changed = true;
+                        carve_hits += 1;
                         let restrained = self.restrain_shape(candidate, &obstacle_shape);
                         for room in restrained {
                             union_into(&mut new_bounding, &room.shape);
@@ -175,9 +193,13 @@ impl AutorouteEngine<'_> {
             result = new_result;
             match new_bounding {
                 Some(bb) => bounding = bb,
-                None => return Vec::new(),
+                None => {
+                    crate::rooms::attr::add_carve(carve_started, carve_hits);
+                    return Vec::new();
+                }
             }
         }
+        crate::rooms::attr::add_carve(carve_started, carve_hits);
 
         self.divide_large_rooms(result)
     }
@@ -203,6 +225,13 @@ impl AutorouteEngine<'_> {
         if !self.enter_restrain() {
             return result;
         }
+        // Nested splits would otherwise charge the child's wall twice: once
+        // in the child and once in the parent that called it.
+        let restrain_started = if self.restrain_nesting() == 1 {
+            crate::rooms::attr::start()
+        } else {
+            None
+        };
         let obstacle_simplex = obstacle_shape.clone();
         let room_shape = &room.shape;
         let shape_to_be_contained = &room.contained;
@@ -233,6 +262,7 @@ impl AutorouteEngine<'_> {
                     oct: None,
                 });
             }
+            crate::rooms::attr::add_restrain(restrain_started);
             self.leave_restrain();
             return result;
         }
@@ -240,6 +270,7 @@ impl AutorouteEngine<'_> {
         // No line has the whole contained shape on its right.
         if shape_to_be_contained.dimension() < 1 {
             // There is already a completed room around it (`:723-726`).
+            crate::rooms::attr::add_restrain(restrain_started);
             self.leave_restrain();
             return result;
         }
@@ -259,6 +290,7 @@ impl AutorouteEngine<'_> {
         }
         let Some(split_line) = split_line else {
             // Parts of the room may already be occupied from somewhere else.
+            crate::rooms::attr::add_restrain(restrain_started);
             self.leave_restrain();
             return result;
         };
@@ -284,6 +316,7 @@ impl AutorouteEngine<'_> {
             };
             result.extend(self.restrain_shape(&rest, obstacle_shape));
         }
+        crate::rooms::attr::add_restrain(restrain_started);
         self.leave_restrain();
         result
     }
@@ -362,6 +395,13 @@ impl AutorouteEngine<'_> {
     /// silently dropped.
     pub fn complete_expansion_room(&mut self, room_id: RoomId) -> Vec<RoomId> {
         fr_metrics::counters::bump::room_completions(1);
+        let started = crate::rooms::attr::start();
+        let result = self.complete_expansion_room_inner(room_id);
+        crate::rooms::attr::add_complete_room(started);
+        result
+    }
+
+    fn complete_expansion_room_inner(&mut self, room_id: RoomId) -> Vec<RoomId> {
         let mut result = Vec::new();
         if !self.rooms.room(room_id).alive
             || self.rooms.room(room_id).kind != RoomKind::IncompleteFree
@@ -457,7 +497,9 @@ impl AutorouteEngine<'_> {
                 .add_complete_free_room(candidate.shape.clone(), layer),
         };
         self.rooms.room_mut(room_id).contained_shape = candidate.contained.clone();
+        let doors_started = crate::rooms::attr::start();
         self.calculate_doors(room_id);
+        crate::rooms::attr::add_doors(doors_started);
         if !self.rooms.room(room_id).alive || self.rooms.room(room_id).shape.dimension() != 2 {
             self.rooms.room_mut(room_id).alive = false;
             return None;
@@ -762,7 +804,7 @@ mod tests {
                 &mut own_net,
             );
             assert!(
-                obstacles.iter().any(|o| matches!(o, Obstacle::Item(_, _)))
+                obstacles.iter().any(|o| matches!(o, Obstacle::Item(_, _, _)))
                     && obstacles.contains(&Obstacle::Room(room)),
                 "the probe must see both obstacle kinds on {:?}",
                 obstacles.len()

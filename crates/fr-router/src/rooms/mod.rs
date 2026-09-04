@@ -36,6 +36,7 @@ use fr_geometry::planar::{FloatLine, IntBox, IntOctagon, Limits, Simplex};
 use crate::geom;
 use crate::maze::nodes::{NodeArena, NodeIndex};
 
+pub mod attr;
 pub mod complete;
 pub mod complete45;
 pub mod neighbours;

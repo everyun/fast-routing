@@ -506,6 +506,7 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     if let Some(optimizer) = &report.optimizer {
         report.incomplete_count = optimizer.incomplete_count;
     }
+    fr_router::rooms::attr::flush();
     report
 }
 

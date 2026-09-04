@@ -71,6 +71,7 @@ use fr_board::board::Board;
 use fr_board::item::{ItemId, ItemKind};
 use fr_board::search_tree::{SearchTree, Tiling45Mode, TreeAngleFamily};
 use fr_board::shape::AngleRestriction;
+use fr_board::store::SlotIndex;
 use fr_datastructures::arena_shape_tree::{ArenaShapeTree, QueryStack};
 use fr_geometry::planar::{IntBox, IntOctagon, Simplex};
 use fr_rules::board_rules::BoardRules;
@@ -101,8 +102,9 @@ fn dedup_in_place<T: PartialEq + Copy>(items: &mut [T]) -> usize {
 /// One obstacle the room machinery has to tile around.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Obstacle {
-    /// A board item's tile shape.
-    Item(ItemId, u16),
+    /// A board item's tile shape, plus the store slot the tree walk already
+    /// resolved so the carve loop can read the tile without `slot_of`.
+    Item(ItemId, u16, SlotIndex),
     /// A completed free-space room.
     Room(RoomId),
 }
@@ -145,6 +147,15 @@ pub struct AutorouteEngine<'b> {
     scratch_entries: Vec<fr_board::search_tree::TreeEntry>,
     /// Scratch buffer for the room-tree overlap list.
     scratch_rooms: Vec<(fr_datastructures::arena_shape_tree::ArenaLeafId, RoomId)>,
+    /// Per-layer item shapes of the compensated tree, built once per
+    /// connection. The maze does not mutate the board, so this is valid for
+    /// every `complete_shape` / neighbour query of the search. A box query
+    /// then filters by `IntBox::intersects` instead of walking the item tree
+    /// (Issue039: ~888 nodes per board-sized query, millions of queries).
+    item_cache: Option<Vec<Vec<CachedItem>>>,
+    /// Bounding boxes parallel to the last box-path collect, so the carve
+    /// loop can reject on `IntBox::intersects` without `slot_of`.
+    pub(crate) scratch_hit_bounds: Vec<IntBox>,
     /// Guard against unbounded recursion in `restrain_shape`.
     restrain_depth: u32,
     /// This connection's allowance, when the caller armed one.
@@ -157,6 +168,15 @@ pub struct AutorouteEngine<'b> {
     /// attempt — search, insert and the per-connection pull-tight — and reads
     /// the usage back out after the engine is gone.
     clock: Option<&'b mut ConnectionClock>,
+}
+
+/// One compensated-tree tile, ready for a box-filtered collect.
+#[derive(Clone, Copy)]
+struct CachedItem {
+    item: ItemId,
+    index: u16,
+    slot: SlotIndex,
+    bounds: IntBox,
 }
 
 /// The recursion cap on `restrain_shape`'s split branch.
@@ -205,6 +225,8 @@ impl<'b> AutorouteEngine<'b> {
             bounds,
             scratch_entries: Vec::new(),
             scratch_rooms: Vec::new(),
+            item_cache: None,
+            scratch_hit_bounds: Vec::new(),
             restrain_depth: 0,
             clock: None,
         }
@@ -311,6 +333,7 @@ impl<'b> AutorouteEngine<'b> {
         self.rooms.clear();
         self.room_tree.clear();
         self.obstacle_rooms.clear();
+        self.item_cache = None;
         self.drills.clear();
         self.pages.reset_all();
         self.nodes.reset();
@@ -353,6 +376,10 @@ impl<'b> AutorouteEngine<'b> {
     /// One tile shape of an item in the compensated tree.
     pub fn item_tile(&self, item: ItemId, index: u16) -> Option<Simplex> {
         let slot = self.board.store().slot_of(item)?;
+        self.item_tile_at(slot, item, index)
+    }
+
+    fn item_tile_at(&self, slot: SlotIndex, item: ItemId, index: u16) -> Option<Simplex> {
         self.tree()
             .item_shapes(slot, item)
             .get(index as usize)?
@@ -364,6 +391,10 @@ impl<'b> AutorouteEngine<'b> {
     /// The layer of one tile shape of an item.
     pub fn item_tile_layer(&self, item: ItemId, index: u16) -> Option<i32> {
         let slot = self.board.store().slot_of(item)?;
+        self.item_tile_layer_at(slot, item, index)
+    }
+
+    fn item_tile_layer_at(&self, slot: SlotIndex, item: ItemId, index: u16) -> Option<i32> {
         Some(
             self.tree()
                 .item_shapes(slot, item)
@@ -479,8 +510,123 @@ impl<'b> AutorouteEngine<'b> {
         obstacles: &mut Vec<Obstacle>,
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
+        self.scratch_hit_bounds.clear();
         self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
-        self.sort_obstacles_for_completion(obstacles);
+        self.sort_obstacles_for_completion_paired(obstacles);
+    }
+
+    /// Box-query collect: scan the per-layer item cache and the complete-room
+    /// list. Equivalent to a bounds-only tree walk — extras fail the carve
+    /// loop's `dimension() == 2` gate or the neighbour loop's `dimension() < 0`
+    /// continue — and skips the DFS of an item tree the board-sized completion
+    /// query contains entirely.
+    fn collect_obstacles_box(
+        &mut self,
+        query_box: IntBox,
+        layer: i32,
+        net_no: i32,
+        obstacles: &mut Vec<Obstacle>,
+        own_net: &mut Vec<(ItemId, u16)>,
+    ) {
+        self.ensure_item_cache();
+        self.scratch_hit_bounds.clear();
+        if let Some(items) = self
+            .item_cache
+            .as_ref()
+            .and_then(|layers| layers.get(layer as usize))
+        {
+            for cached in items {
+                if !query_box.intersects(&cached.bounds) {
+                    continue;
+                }
+                let Some(item) = self.board.store().item_at_slot(cached.slot) else {
+                    continue;
+                };
+                if item.id != cached.item {
+                    continue;
+                }
+                if item.is_trace_obstacle(net_no) {
+                    obstacles.push(Obstacle::Item(cached.item, cached.index, cached.slot));
+                    self.scratch_hit_bounds.push(cached.bounds);
+                } else {
+                    own_net.push((cached.item, cached.index));
+                }
+            }
+        }
+        self.scratch_rooms.clear();
+        self.room_tree.overlaps_with_stack(
+            &fr_board::shape::TileShape::Box(query_box).bounds(),
+            &mut self.room_stack,
+            &mut self.scratch_rooms,
+        );
+        let rooms_from = obstacles.len();
+        obstacles.extend(
+            self.scratch_rooms
+                .iter()
+                .map(|(_, room)| *room)
+                .filter(|room| {
+                    let room = self.rooms.room(*room);
+                    room.alive
+                        && room.kind == RoomKind::CompleteFree
+                        && room.layer == layer
+                        && (query_box.contains_box(&room.octagon().bounding_box())
+                            || room.shape.intersects_box(&query_box))
+                })
+                .map(Obstacle::Room),
+        );
+        obstacles[rooms_from..].sort_unstable();
+        let kept = dedup_in_place(&mut obstacles[rooms_from..]);
+        obstacles.truncate(rooms_from + kept);
+        self.scratch_hit_bounds.truncate(rooms_from);
+        for obstacle in &obstacles[rooms_from..] {
+            let Obstacle::Room(room) = *obstacle else {
+                continue;
+            };
+            self.scratch_hit_bounds
+                .push(self.rooms.room(room).octagon().bounding_box());
+        }
+    }
+
+    fn ensure_item_cache(&mut self) {
+        if self.item_cache.is_some() {
+            return;
+        }
+        let tree = self
+            .board
+            .trees()
+            .compensated_tree(self.tree_class)
+            .unwrap_or_else(|| self.board.default_tree());
+        let mut layers: Vec<Vec<CachedItem>> =
+            vec![Vec::new(); (self.ctrl.layer_count.max(0) as usize).max(1)];
+        for (id, _item) in self.board.store().iter_ascending() {
+            let Some(slot) = self.board.store().slot_of(id) else {
+                continue;
+            };
+            for (index, tile) in tree.item_shapes(slot, id).iter().enumerate() {
+                let Some(shape) = tile.shape.as_ref() else {
+                    continue;
+                };
+                if tile.layer < 0 {
+                    continue;
+                }
+                let layer = tile.layer as usize;
+                if layer >= layers.len() {
+                    layers.resize(layer + 1, Vec::new());
+                }
+                let bounds = match shape {
+                    fr_board::shape::TileShape::Box(b) => *b,
+                    fr_board::shape::TileShape::Oct(o) => o.bounding_box(),
+                    fr_board::shape::TileShape::Simplex(s) => s.bounding_box(),
+                };
+                layers[layer].push(CachedItem {
+                    item: id,
+                    index: index as u16,
+                    slot,
+                    bounds,
+                });
+            }
+        }
+        self.item_cache = Some(layers);
     }
 
     /// The body the two ordered entry points share: the tree walk, the
@@ -499,6 +645,11 @@ impl<'b> AutorouteEngine<'b> {
         obstacles.clear();
         own_net.clear();
         fr_metrics::counters::bump::tree_queries(1);
+
+        if let (fr_board::shape::TileShape::Box(query_box), Some(layer)) = (query_tile, layer) {
+            self.collect_obstacles_box(*query_box, layer, net_no, obstacles, own_net);
+            return;
+        }
 
         let tree = self
             .board
@@ -522,11 +673,19 @@ impl<'b> AutorouteEngine<'b> {
             &mut self.scratch_entries,
         );
         for entry in &self.scratch_entries {
-            let Some(item) = self.board.store().get(entry.item) else {
+            // The walk already proved `entry.slot` is this item: `visit` checks
+            // `SlotEntry::id` and `item_at_slot`. Indexing by slot here is the
+            // same proof without `store.get`'s binary search over the ordered
+            // index — which the completion carve then used to repeat per
+            // obstacle (76 M times on a 25 s Issue039 slice).
+            let Some(item) = self.board.store().item_at_slot(entry.slot) else {
                 continue;
             };
+            if item.id != entry.item {
+                continue;
+            }
             if item.is_trace_obstacle(net_no) {
-                obstacles.push(Obstacle::Item(entry.item, entry.shape_index));
+                obstacles.push(Obstacle::Item(entry.item, entry.shape_index, entry.slot));
             } else {
                 own_net.push((entry.item, entry.shape_index));
             }
@@ -617,10 +776,28 @@ impl<'b> AutorouteEngine<'b> {
     /// already-completed neighbour rooms had settled, which strands sliver
     /// tiles and multiplies the door count along a corridor.
     pub(crate) fn sort_obstacles_for_completion(&self, obstacles: &mut [Obstacle]) {
-        obstacles.sort_unstable_by_key(|obstacle| match *obstacle {
+        obstacles.sort_unstable_by_key(|obstacle| self.completion_key(*obstacle));
+    }
+
+    fn completion_key(&self, obstacle: Obstacle) -> (u8, i64, u16) {
+        match obstacle {
             Obstacle::Room(room) => (0u8, -self.rooms.room(room).id_no, 0u16),
-            Obstacle::Item(item, index) => (1u8, -(i64::from(item.raw())), index),
-        });
+            Obstacle::Item(item, index, _) => (1u8, -(i64::from(item.raw())), index),
+        }
+    }
+
+    fn sort_obstacles_for_completion_paired(&mut self, obstacles: &mut Vec<Obstacle>) {
+        if self.scratch_hit_bounds.len() != obstacles.len() {
+            self.sort_obstacles_for_completion(obstacles);
+            return;
+        }
+        let bounds = std::mem::take(&mut self.scratch_hit_bounds);
+        let mut paired: Vec<(Obstacle, IntBox)> = obstacles.drain(..).zip(bounds).collect();
+        paired.sort_unstable_by_key(|(obstacle, _)| self.completion_key(*obstacle));
+        for (obstacle, bounds) in paired {
+            obstacles.push(obstacle);
+            self.scratch_hit_bounds.push(bounds);
+        }
     }
 
     /// Reorders an obstacle list into the visit order
@@ -649,14 +826,14 @@ impl<'b> AutorouteEngine<'b> {
             // built — visiting them before the board items keeps a freshly
             // completed neighbour from being re-cut by an item of the same id.
             Obstacle::Room(room) => (self.rooms.room(room).id_no, 0u8, 0u16),
-            Obstacle::Item(item, index) => (i64::from(item.raw()), 1u8, index),
+            Obstacle::Item(item, index, _) => (i64::from(item.raw()), 1u8, index),
         });
     }
 
     /// The shape of one obstacle.
     pub fn obstacle_shape(&self, obstacle: Obstacle) -> Option<Simplex> {
         match obstacle {
-            Obstacle::Item(item, index) => self.item_tile(item, index),
+            Obstacle::Item(item, index, slot) => self.item_tile_at(slot, item, index),
             Obstacle::Room(room) => {
                 let room = self.rooms.room(room);
                 room.alive.then(|| room.shape.clone())
@@ -693,8 +870,7 @@ impl<'b> AutorouteEngine<'b> {
     /// both `result` and `bounding` exactly as it found them.
     pub fn obstacle_layer_and_bounds(&self, obstacle: Obstacle) -> Option<(i32, IntBox)> {
         match obstacle {
-            Obstacle::Item(item, index) => {
-                let slot = self.board.store().slot_of(item)?;
+            Obstacle::Item(item, index, slot) => {
                 let tile = self.tree().item_shapes(slot, item).get(index as usize)?;
                 let bounds = match tile.shape.as_ref()? {
                     fr_board::shape::TileShape::Box(b) => *b,
@@ -727,6 +903,15 @@ impl<'b> AutorouteEngine<'b> {
     /// otherwise — which is what upstream pays on every read.
     pub fn item_tile_octagon(&self, item: ItemId, index: u16) -> Option<IntOctagon> {
         let slot = self.board.store().slot_of(item)?;
+        self.item_tile_octagon_at(slot, item, index)
+    }
+
+    fn item_tile_octagon_at(
+        &self,
+        slot: SlotIndex,
+        item: ItemId,
+        index: u16,
+    ) -> Option<IntOctagon> {
         let tile = self
             .tree()
             .item_shapes(slot, item)
@@ -739,7 +924,7 @@ impl<'b> AutorouteEngine<'b> {
     /// [`obstacle_shape`](Self::obstacle_shape) in the octagon flavor.
     pub fn obstacle_octagon(&self, obstacle: Obstacle) -> Option<IntOctagon> {
         match obstacle {
-            Obstacle::Item(item, index) => self.item_tile_octagon(item, index),
+            Obstacle::Item(item, index, slot) => self.item_tile_octagon_at(slot, item, index),
             Obstacle::Room(room) => {
                 let room = self.rooms.room(room);
                 room.alive.then(|| room.octagon())
@@ -750,7 +935,7 @@ impl<'b> AutorouteEngine<'b> {
     /// The layer of one obstacle.
     pub fn obstacle_layer(&self, obstacle: Obstacle) -> Option<i32> {
         match obstacle {
-            Obstacle::Item(item, index) => self.item_tile_layer(item, index),
+            Obstacle::Item(item, index, slot) => self.item_tile_layer_at(slot, item, index),
             Obstacle::Room(room) => Some(self.rooms.room(room).layer),
         }
     }
@@ -776,6 +961,10 @@ impl<'b> AutorouteEngine<'b> {
         }
         self.restrain_depth += 1;
         true
+    }
+
+    pub(crate) fn restrain_nesting(&self) -> u32 {
+        self.restrain_depth
     }
 
     pub(crate) fn leave_restrain(&mut self) {
@@ -858,6 +1047,7 @@ mod tests {
     use super::{AutorouteEngine, Obstacle, RoomId};
     use crate::test_support::TestFixture;
     use fr_board::item::ItemId;
+    use fr_board::store::SlotIndex;
     use fr_geometry::planar::{IntBox, IntOctagon, Simplex};
 
     #[test]
@@ -1140,11 +1330,11 @@ mod tests {
             "`generate_room_id_no` is upstream's `++count`, so it starts at 1"
         );
         vec![
-            Obstacle::Item(ItemId::from_raw(2), 1),
+            Obstacle::Item(ItemId::from_raw(2), 1, SlotIndex::from_raw(0)),
             Obstacle::Room(rooms[1]),
-            Obstacle::Item(ItemId::from_raw(1), 0),
+            Obstacle::Item(ItemId::from_raw(1), 0, SlotIndex::from_raw(0)),
             Obstacle::Room(rooms[2]),
-            Obstacle::Item(ItemId::from_raw(2), 0),
+            Obstacle::Item(ItemId::from_raw(2), 0, SlotIndex::from_raw(0)),
             Obstacle::Room(rooms[0]),
         ]
     }
@@ -1163,7 +1353,7 @@ mod tests {
             .iter()
             .map(|obstacle| match *obstacle {
                 Obstacle::Room(room) => (0, engine.rooms.room(room).id_no, 0),
-                Obstacle::Item(item, index) => (1, i64::from(item.raw()), index),
+                Obstacle::Item(item, index, _) => (1, i64::from(item.raw()), index),
             })
             .collect();
         assert_eq!(
@@ -1193,7 +1383,7 @@ mod tests {
             .iter()
             .map(|obstacle| match *obstacle {
                 Obstacle::Room(room) => (engine.rooms.room(room).id_no, 0, 0),
-                Obstacle::Item(item, index) => (i64::from(item.raw()), 1, index),
+                Obstacle::Item(item, index, _) => (i64::from(item.raw()), 1, index),
             })
             .collect();
         assert_eq!(

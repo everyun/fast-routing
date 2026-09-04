@@ -370,6 +370,9 @@ pub struct TreeEntry {
     pub item: ItemId,
     /// Index of the shape inside that item's shape array.
     pub shape_index: u16,
+    /// Store slot the tree walk already resolved. Lets a caller index
+    /// [`SearchTree::item_shapes`] without [`ItemStore::slot_of`].
+    pub slot: SlotIndex,
 }
 
 /// Leaf payload. `Copy` and 16 bytes, so the arena tree stores it inline.
@@ -961,6 +964,7 @@ impl SearchTree {
                 out.push(TreeEntry {
                     item: payload.item,
                     shape_index: payload.shape_index,
+                    slot: payload.slot,
                 });
             },
         );
@@ -2221,7 +2225,8 @@ mod tests {
             out,
             vec![TreeEntry {
                 item: b,
-                shape_index: 0
+                shape_index: 0,
+                slot,
             }]
         );
         tree.assert_consistent(&store);

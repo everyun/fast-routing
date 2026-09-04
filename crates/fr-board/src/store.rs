@@ -96,6 +96,13 @@ impl SlotIndex {
     pub const fn index(self) -> usize {
         self.0 as usize
     }
+
+    /// Reconstruct from a raw slot index. Tests and the router cache the
+    /// value the tree walk already resolved; it is not an identity.
+    #[inline]
+    pub const fn from_raw(index: u32) -> Self {
+        SlotIndex(index)
+    }
 }
 
 /// One entry of the ordered index: an id and the slot it currently lives in.

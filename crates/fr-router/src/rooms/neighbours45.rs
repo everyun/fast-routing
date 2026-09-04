@@ -715,7 +715,14 @@ impl AutorouteEngine<'_> {
             // obstacle room they are ordinary neighbours.
             let mut promoted: Vec<Obstacle> = own_net
                 .drain(..)
-                .map(|(item, index)| Obstacle::Item(item, index))
+                .map(|(item, index)| {
+                    let slot = self
+                        .board
+                        .store()
+                        .slot_of(item)
+                        .unwrap_or(fr_board::store::SlotIndex::from_raw(0));
+                    Obstacle::Item(item, index, slot)
+                })
                 .collect();
             promoted.append(&mut obstacles);
             promoted.sort_unstable();
@@ -733,7 +740,7 @@ impl AutorouteEngine<'_> {
             if obstacle == Obstacle::Room(room_id) {
                 continue;
             }
-            if let (Obstacle::Item(item, index), Some((room_item, room_index))) =
+            if let (Obstacle::Item(item, index, _), Some((room_item, room_index))) =
                 (obstacle, self.rooms.room(room_id).item)
             {
                 if item == room_item && index == room_index {
@@ -748,7 +755,7 @@ impl AutorouteEngine<'_> {
 
             if dimension > 1 && is_obstacle_room {
                 // `:117-127`: only an obstacle room may swallow a 2-dim overlap.
-                if let Obstacle::Item(item, index) = obstacle {
+                if let Obstacle::Item(item, index, _) = obstacle {
                     self.create_overlap_door(room_id, item, index);
                 }
                 continue;
@@ -775,7 +782,7 @@ impl AutorouteEngine<'_> {
                 // `:133-152`: make sure there is a door to the neighbour room.
                 let neighbour_room = match obstacle {
                     Obstacle::Room(other) => Some(other),
-                    Obstacle::Item(item, index) => {
+                    Obstacle::Item(item, index, _) => {
                         let routable = self
                             .board
                             .store()

@@ -536,7 +536,7 @@ impl AutorouteEngine<'_> {
         self.overlapping_obstacles(query, layer, 0, &mut obstacles, &mut own_net);
         out.clear();
         out.extend(obstacles.into_iter().filter_map(|obstacle| match obstacle {
-            crate::engine::Obstacle::Item(item, index) => Some((item, index)),
+            crate::engine::Obstacle::Item(item, index, _) => Some((item, index)),
             crate::engine::Obstacle::Room(_) => None,
         }));
         out.extend(own_net);

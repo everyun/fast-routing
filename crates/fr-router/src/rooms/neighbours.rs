@@ -23,6 +23,7 @@
 //!   jar on a 45° board even before the id remapping. See the crate docs.
 
 use fr_board::item::{ItemClass, ItemId};
+use fr_board::shape::TileShape;
 use fr_datastructures::Signum;
 use fr_geometry::planar::{Line, Point, Side, Simplex};
 
@@ -70,7 +71,9 @@ impl AutorouteEngine<'_> {
         // bounded by the strict area increase the removal is gated on.
         loop {
             self.mint_room_id(room_id);
+            let neighbours_started = crate::rooms::attr::start();
             let (neighbours, own_net_objects) = self.calculate_neighbours(room_id);
+            crate::rooms::attr::add_neighbours(neighbours_started);
             if self.try_remove_edge(room_id, &neighbours) {
                 self.remove_all_doors(room_id);
                 continue;
@@ -130,19 +133,39 @@ impl AutorouteEngine<'_> {
         // Upstream queries with no net filter and splits inside the loop; our
         // tree query already splits, and for an obstacle room the own-net
         // deferral does not apply (`:156`, guarded on `IncompleteFreeSpaceExpansionRoom`).
-        self.overlapping_obstacles(
-            &room_shape,
+        // Query with the room's bounding box, not the simplex. The loop below
+        // already runs an exact `intersection`; the tree-side simplex test was
+        // the same construction a second time. Extra bounds-only hits fail
+        // `dimension() < 0` and are no-ops. `own_net` is exact-filtered after,
+        // because `calculate_target_doors` sets `net_dependent` from the list
+        // being non-empty.
+        self.overlapping_obstacles_tile(
+            &TileShape::Box(room_shape.bounding_box()),
             Some(layer),
             self.ctrl.net_no,
             &mut obstacles,
             &mut own_net_objects,
         );
+        if !is_obstacle_room {
+            own_net_objects.retain(|(item, index)| {
+                self.item_tile(*item, *index)
+                    .map(|shape| !room_shape.intersection(&shape).is_empty())
+                    .unwrap_or(false)
+            });
+        }
         if is_obstacle_room {
             // `:156` only defers for a free room being completed; for an
             // obstacle room the same-net items are ordinary neighbours.
             let mut promoted: Vec<Obstacle> = own_net_objects
                 .drain(..)
-                .map(|(item, index)| Obstacle::Item(item, index))
+                .map(|(item, index)| {
+                    let slot = self
+                        .board
+                        .store()
+                        .slot_of(item)
+                        .unwrap_or(fr_board::store::SlotIndex::from_raw(0));
+                    Obstacle::Item(item, index, slot)
+                })
                 .collect();
             promoted.append(&mut obstacles);
             // The promoted own-net items have to take their place in the one
@@ -158,7 +181,7 @@ impl AutorouteEngine<'_> {
             if obstacle == Obstacle::Room(room_id) {
                 continue;
             }
-            if let (Obstacle::Item(item, index), Some((room_item, room_index))) =
+            if let (Obstacle::Item(item, index, _), Some((room_item, room_index))) =
                 (obstacle, self.rooms.room(room_id).item)
             {
                 if item == room_item && index == room_index {
@@ -175,7 +198,7 @@ impl AutorouteEngine<'_> {
                 // `:164-176`: only an obstacle room may have a 2-dim overlap,
                 // and only with another routable item of the same net.
                 if is_obstacle_room {
-                    if let Obstacle::Item(item, index) = obstacle {
+                    if let Obstacle::Item(item, index, _) = obstacle {
                         self.create_overlap_door(room_id, item, index);
                     }
                 }
@@ -203,7 +226,7 @@ impl AutorouteEngine<'_> {
                 // `:188-205`: make sure there is a door to the neighbour room.
                 let neighbour_room = match obstacle {
                     Obstacle::Room(other) => Some(other),
-                    Obstacle::Item(item, index) => {
+                    Obstacle::Item(item, index, _) => {
                         let routable = self
                             .board
                             .store()
@@ -328,7 +351,7 @@ impl AutorouteEngine<'_> {
     /// `(item << 10) | index` id is not in this space.
     pub(super) fn obstacle_id(&self, obstacle: Obstacle) -> i64 {
         match obstacle {
-            Obstacle::Item(item, index) => ((item.raw() as i64) << 10) | index as i64,
+            Obstacle::Item(item, index, _) => ((item.raw() as i64) << 10) | index as i64,
             Obstacle::Room(room) => (1i64 << 48) + self.rooms.room(room).id_no,
         }
     }

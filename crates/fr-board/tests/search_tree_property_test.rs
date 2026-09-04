@@ -144,6 +144,7 @@ fn brute_force_entries(
                 out.push(TreeEntry {
                     item: id,
                     shape_index: index as u16,
+                    slot: board.store().slot_of(id).expect("live item has a slot"),
                 });
             }
         }

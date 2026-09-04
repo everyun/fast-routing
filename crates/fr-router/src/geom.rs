@@ -198,24 +198,66 @@ pub fn is_intersected_interior_by(shape: &Simplex, segment: &LineSegment) -> boo
     let float_end = point_to_float(&end_point);
 
     let line_count = shape.border_line_count();
-    let mut side_of_start = Vec::with_capacity(line_count);
-    let mut side_of_end = Vec::with_capacity(line_count);
+    // Room tiles are almost always ≤ 8 lines. Two heap `Vec`s per edge of
+    // every restrain was the allocation tax of this predicate; the heap
+    // fallback is only for a degenerate many-line simplex.
+    const INLINE: usize = 16;
+    if line_count <= INLINE {
+        let mut side_of_start = [Side::Collinear; INLINE];
+        let mut side_of_end = [Side::Collinear; INLINE];
+        is_intersected_interior_by_with(
+            shape,
+            &start_point,
+            &end_point,
+            &segment_line,
+            &float_start,
+            &float_end,
+            &mut side_of_start[..line_count],
+            &mut side_of_end[..line_count],
+        )
+    } else {
+        let mut side_of_start = vec![Side::Collinear; line_count];
+        let mut side_of_end = vec![Side::Collinear; line_count];
+        is_intersected_interior_by_with(
+            shape,
+            &start_point,
+            &end_point,
+            &segment_line,
+            &float_start,
+            &float_end,
+            &mut side_of_start,
+            &mut side_of_end,
+        )
+    }
+}
+
+fn is_intersected_interior_by_with(
+    shape: &Simplex,
+    start_point: &Point,
+    end_point: &Point,
+    segment_line: &Line,
+    float_start: &FloatPoint,
+    float_end: &FloatPoint,
+    side_of_start: &mut [Side],
+    side_of_end: &mut [Side],
+) -> bool {
+    let line_count = side_of_start.len();
     for i in 0..line_count {
         let border = shape.border_line(i);
-        let mut s = border.side_of_float_tol(&float_start, 1.0);
+        let mut s = border.side_of_float_tol(float_start, 1.0);
         if s == Side::Collinear {
-            s = border.side_of_point(&start_point);
+            s = border.side_of_point(start_point);
         }
-        let mut e = border.side_of_float_tol(&float_end, 1.0);
+        let mut e = border.side_of_float_tol(float_end, 1.0);
         if e == Side::Collinear {
-            e = border.side_of_point(&end_point);
+            e = border.side_of_point(end_point);
         }
         if s != Side::OnTheRight && e != Side::OnTheRight {
             // Both endpoints outside this border line: no intersection possible.
             return false;
         }
-        side_of_start.push(s);
-        side_of_end.push(e);
+        side_of_start[i] = s;
+        side_of_end[i] = e;
     }
     if side_of_start.iter().all(|s| *s == Side::OnTheRight) {
         return true;
