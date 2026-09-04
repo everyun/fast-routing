@@ -714,11 +714,15 @@ impl<'b> AutorouteEngine<'b> {
         let mut rooms = std::mem::take(&mut self.scratch_rooms);
         rooms.retain(|(_, room)| {
             let room = self.rooms.room(*room);
+            // The shape-exact `intersects_box` is replaced by the memoized
+            // octagon's bounding box: an extra room here is a carve no-op —
+            // its shape misses the query box, and every candidate lives
+            // inside the query box, so the `dimension() == 2` gate can never
+            // fire for it (the same superset argument the item side makes).
             room.alive
                 && room.kind == RoomKind::CompleteFree
                 && room.layer == layer
-                && (query_box.contains_box(&room.octagon().bounding_box())
-                    || room.shape.intersects_box(&query_box))
+                && query_box.intersects(&room.octagon().bounding_box())
         });
         // One sort, not two: duplicate leaves of one room read the same
         // current `id_no`, so keying on `(-id_no, RoomId)` makes duplicates
