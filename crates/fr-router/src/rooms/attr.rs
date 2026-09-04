@@ -22,6 +22,7 @@ thread_local! {
     static COMPLETE_ROOM_NS: Cell<u64> = const { Cell::new(0) };
     static COMPLETE_SHAPE_NS: Cell<u64> = const { Cell::new(0) };
     static COLLECT_NS: Cell<u64> = const { Cell::new(0) };
+    static COMPLETION_SORT_NS: Cell<u64> = const { Cell::new(0) };
     static CARVE_NS: Cell<u64> = const { Cell::new(0) };
     static RESTRAIN_NS: Cell<u64> = const { Cell::new(0) };
     static DOORS_NS: Cell<u64> = const { Cell::new(0) };
@@ -89,6 +90,13 @@ pub(crate) fn add_collect(started: Option<Instant>, obstacles: usize) {
     add_count(&COLLECT_OBSTACLES, obstacles as u64);
 }
 
+pub(crate) fn add_completion_sort(started: Option<Instant>) {
+    if started.is_none() {
+        return;
+    }
+    add(&COMPLETION_SORT_NS, elapsed_ns(started));
+}
+
 pub(crate) fn add_carve(started: Option<Instant>, hits: u64) {
     if started.is_none() {
         return;
@@ -128,12 +136,13 @@ pub fn flush() {
     }
     let line = format!(
         "FRATTR complete_room_ns={}, complete_shape_ns={}, collect_ns={}, \
-         carve_ns={}, restrain_ns={}, doors_ns={}, neighbours_ns={}, \
+         completion_sort_ns={}, carve_ns={}, restrain_ns={}, doors_ns={}, neighbours_ns={}, \
          complete_rooms={}, complete_shapes={}, collect_obstacles={}, \
          carve_hits={}, restrains={}, door_calcs={}, neighbour_calls={}",
         COMPLETE_ROOM_NS.with(Cell::get),
         COMPLETE_SHAPE_NS.with(Cell::get),
         COLLECT_NS.with(Cell::get),
+        COMPLETION_SORT_NS.with(Cell::get),
         CARVE_NS.with(Cell::get),
         RESTRAIN_NS.with(Cell::get),
         DOORS_NS.with(Cell::get),

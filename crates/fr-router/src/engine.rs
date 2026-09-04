@@ -152,10 +152,13 @@ pub struct AutorouteEngine<'b> {
     /// every `complete_shape` / neighbour query of the search. A box query
     /// then filters by `IntBox::intersects` instead of walking the item tree
     /// (Issue039: ~888 nodes per board-sized query, millions of queries).
-    item_cache: Option<Vec<Vec<CachedItem>>>,
+    item_cache: Option<ItemCache>,
     /// Bounding boxes parallel to the last box-path collect, so the carve
     /// loop can reject on `IntBox::intersects` without `slot_of`.
     pub(crate) scratch_hit_bounds: Vec<IntBox>,
+    /// Grid-query hit indices, sorted ascending to emit the presorted cache
+    /// in completion order.
+    scratch_grid_hits: Vec<u32>,
     /// Guard against unbounded recursion in `restrain_shape`.
     restrain_depth: u32,
     /// This connection's allowance, when the caller armed one.
@@ -177,6 +180,133 @@ struct CachedItem {
     index: u16,
     slot: SlotIndex,
     bounds: IntBox,
+    /// `is_trace_obstacle(net_no)` for the connection's net, resolved once at
+    /// build time. Every box-query caller passes `ctrl.net_no`; a query for
+    /// any other net recomputes instead of reading this.
+    obstacle: bool,
+}
+
+/// The per-connection item cache: one [`LayerItems`] per layer, plus the
+/// generation stamps the grid query uses to emit each item once.
+struct ItemCache {
+    layers: Vec<LayerItems>,
+    /// The net the `obstacle` flags were resolved for.
+    net_no: i32,
+    /// One stamp slot per item of the largest layer; a slot holding the
+    /// current `gen` means the item already went into the result.
+    marks: Vec<u32>,
+    gen: u32,
+}
+
+/// One layer's cached tiles, with a uniform grid over their bounding boxes
+/// once the layer is big enough for a linear scan to hurt.
+struct LayerItems {
+    items: Vec<CachedItem>,
+    grid: Option<LayerGrid>,
+}
+
+/// Uniform grid over a layer's item bounding boxes, in CSR form: cell `c`'s
+/// items are `indices[offsets[c]..offsets[c + 1]]`, each an index into
+/// [`LayerItems::items`]. An item is listed in every cell its bounds touch,
+/// so a query that reads its overlapped cells cannot miss a hit; duplicates
+/// are filtered by the [`ItemCache::marks`] stamps.
+///
+/// The grid only ever *narrows* the scan — the per-item `IntBox::intersects`
+/// test still decides membership, so the collected set is exactly the linear
+/// scan's, in a different (but order-insignificant) sequence: both ordered
+/// entry points re-sort.
+struct LayerGrid {
+    min_x: i32,
+    min_y: i32,
+    cell_w: i64,
+    cell_h: i64,
+    cols: usize,
+    rows: usize,
+    offsets: Vec<u32>,
+    indices: Vec<u32>,
+}
+
+/// Layers smaller than this scan linearly; grid bookkeeping costs more than
+/// the handful of `intersects` tests it saves.
+const GRID_MIN_ITEMS: usize = 64;
+
+impl LayerGrid {
+    fn build(items: &[CachedItem], board: IntBox) -> Option<Self> {
+        let width = i64::from(board.ur.x) - i64::from(board.ll.x);
+        let height = i64::from(board.ur.y) - i64::from(board.ll.y);
+        if width <= 0 || height <= 0 {
+            return None;
+        }
+        // Roughly one cell per item, scaled to the board aspect.
+        let n = items.len() as f64;
+        let cols = ((n * width as f64 / height as f64).sqrt().ceil() as usize).clamp(1, 256);
+        let rows = (n as usize / cols).clamp(1, 256);
+        let cell_w = (width / cols as i64).max(1);
+        let cell_h = (height / rows as i64).max(1);
+        let mut grid = LayerGrid {
+            min_x: board.ll.x,
+            min_y: board.ll.y,
+            cell_w,
+            cell_h,
+            cols,
+            rows,
+            offsets: vec![0; cols * rows + 1],
+            indices: Vec::new(),
+        };
+        // Counting sort into CSR.
+        let mut counts = vec![0u32; cols * rows];
+        for cached in items {
+            let Some((x0, y0, x1, y1)) = grid.cell_range(&cached.bounds) else {
+                continue;
+            };
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    counts[y * cols + x] += 1;
+                }
+            }
+        }
+        let mut total = 0u32;
+        for cell in 0..cols * rows {
+            grid.offsets[cell] = total;
+            total += counts[cell];
+        }
+        grid.offsets[cols * rows] = total;
+        let mut indices = vec![0u32; total as usize];
+        let mut cursor = vec![0u32; cols * rows];
+        for (index, cached) in items.iter().enumerate() {
+            let Some((x0, y0, x1, y1)) = grid.cell_range(&cached.bounds) else {
+                continue;
+            };
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let cell = y * cols + x;
+                    indices[(grid.offsets[cell] + cursor[cell]) as usize] = index as u32;
+                    cursor[cell] += 1;
+                }
+            }
+        }
+        grid.indices = indices;
+        Some(grid)
+    }
+
+    /// The cell range `bounds` overlaps, clamped to the grid. `None` for an
+    /// empty box; an out-of-board box clamps to the edge cells, matching the
+    /// linear scan (an out-of-board item still intersects an out-of-board
+    /// query and stays reachable).
+    fn cell_range(&self, bounds: &IntBox) -> Option<(usize, usize, usize, usize)> {
+        if bounds.is_empty() {
+            return None;
+        }
+        let cell_of = |v: i32, min: i32, cell: i64, max: usize| -> usize {
+            (((i64::from(v) - i64::from(min)) / cell).max(0) as usize).min(max)
+        };
+        Some((
+            cell_of(bounds.ll.x, self.min_x, self.cell_w, self.cols - 1),
+            cell_of(bounds.ll.y, self.min_y, self.cell_h, self.rows - 1),
+            cell_of(bounds.ur.x, self.min_x, self.cell_w, self.cols - 1),
+            cell_of(bounds.ur.y, self.min_y, self.cell_h, self.rows - 1),
+        ))
+    }
 }
 
 /// The recursion cap on `restrain_shape`'s split branch.
@@ -227,6 +357,7 @@ impl<'b> AutorouteEngine<'b> {
             scratch_rooms: Vec::new(),
             item_cache: None,
             scratch_hit_bounds: Vec::new(),
+            scratch_grid_hits: Vec::new(),
             restrain_depth: 0,
             clock: None,
         }
@@ -511,8 +642,13 @@ impl<'b> AutorouteEngine<'b> {
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
         self.scratch_hit_bounds.clear();
-        self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
-        self.sort_obstacles_for_completion_paired(obstacles);
+        let ordered =
+            self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
+        if !ordered {
+            let sort_started = crate::rooms::attr::start();
+            self.sort_obstacles_for_completion_paired(obstacles);
+            crate::rooms::attr::add_completion_sort(sort_started);
+        }
     }
 
     /// Box-query collect: scan the per-layer item cache and the complete-room
@@ -520,6 +656,14 @@ impl<'b> AutorouteEngine<'b> {
     /// loop's `dimension() == 2` gate or the neighbour loop's `dimension() < 0`
     /// continue — and skips the DFS of an item tree the board-sized completion
     /// query contains entirely.
+    ///
+    /// Returns with `obstacles` already in completion order: rooms first by
+    /// descending `id_no`, then items by descending id, ascending shape index
+    /// — the order `sort_obstacles_for_completion` would impose, produced
+    /// without a per-query sort of the whole list (that sort was 42 % of the
+    /// collect time on Issue039). The item cache is presorted into that order
+    /// at build time, so the linear scan emits it directly; the grid path
+    /// sorts only its (small) hit slice.
     fn collect_obstacles_box(
         &mut self,
         query_box: IntBox,
@@ -530,60 +674,116 @@ impl<'b> AutorouteEngine<'b> {
     ) {
         self.ensure_item_cache();
         self.scratch_hit_bounds.clear();
-        if let Some(items) = self
-            .item_cache
-            .as_ref()
-            .and_then(|layers| layers.get(layer as usize))
-        {
-            for cached in items {
-                if !query_box.intersects(&cached.bounds) {
-                    continue;
-                }
-                let Some(item) = self.board.store().item_at_slot(cached.slot) else {
-                    continue;
-                };
-                if item.id != cached.item {
-                    continue;
-                }
-                if item.is_trace_obstacle(net_no) {
-                    obstacles.push(Obstacle::Item(cached.item, cached.index, cached.slot));
-                    self.scratch_hit_bounds.push(cached.bounds);
-                } else {
-                    own_net.push((cached.item, cached.index));
-                }
-            }
-        }
+
+        // Rooms first: the completion key sorts every room ahead of every
+        // item, so an ordered rooms run followed by an ordered items run is
+        // the sorted list. The walk + filter runs against the room tree as
+        // before, then sorts by RoomId only to dedup, and finally by
+        // descending id_no — the two-room-list sorts are over the few
+        // survivors, not the whole candidate set.
         self.scratch_rooms.clear();
         self.room_tree.overlaps_with_stack(
             &fr_board::shape::TileShape::Box(query_box).bounds(),
             &mut self.room_stack,
             &mut self.scratch_rooms,
         );
-        let rooms_from = obstacles.len();
-        obstacles.extend(
-            self.scratch_rooms
-                .iter()
-                .map(|(_, room)| *room)
-                .filter(|room| {
-                    let room = self.rooms.room(*room);
-                    room.alive
-                        && room.kind == RoomKind::CompleteFree
-                        && room.layer == layer
-                        && (query_box.contains_box(&room.octagon().bounding_box())
-                            || room.shape.intersects_box(&query_box))
-                })
-                .map(Obstacle::Room),
-        );
-        obstacles[rooms_from..].sort_unstable();
-        let kept = dedup_in_place(&mut obstacles[rooms_from..]);
-        obstacles.truncate(rooms_from + kept);
-        self.scratch_hit_bounds.truncate(rooms_from);
-        for obstacle in &obstacles[rooms_from..] {
-            let Obstacle::Room(room) = *obstacle else {
-                continue;
-            };
+        let mut rooms = std::mem::take(&mut self.scratch_rooms);
+        rooms.retain(|(_, room)| {
+            let room = self.rooms.room(*room);
+            room.alive
+                && room.kind == RoomKind::CompleteFree
+                && room.layer == layer
+                && (query_box.contains_box(&room.octagon().bounding_box())
+                    || room.shape.intersects_box(&query_box))
+        });
+        rooms.sort_unstable_by_key(|(_, room)| *room);
+        rooms.dedup_by_key(|(_, room)| *room);
+        rooms.sort_unstable_by_key(|(_, room)| -self.rooms.room(*room).id_no);
+        for (_, room) in &rooms {
+            obstacles.push(Obstacle::Room(*room));
             self.scratch_hit_bounds
-                .push(self.rooms.room(room).octagon().bounding_box());
+                .push(self.rooms.room(*room).octagon().bounding_box());
+        }
+        rooms.clear();
+        self.scratch_rooms = rooms;
+
+        // Split borrows: the cache is read, the hit lists are written.
+        let item_cache = self.item_cache.as_mut().expect("cache just built");
+        let hit_bounds: &mut Vec<IntBox> = &mut self.scratch_hit_bounds;
+        let store = self.board.store();
+        let net_matches = net_no == item_cache.net_no;
+        let mut visit = |cached: &CachedItem,
+                         obstacles_out: &mut Vec<Obstacle>,
+                         own_net_out: &mut Vec<(ItemId, u16)>| {
+            if !query_box.intersects(&cached.bounds) {
+                return;
+            }
+            let obstacle = if net_matches {
+                cached.obstacle
+            } else {
+                match store.item_at_slot(cached.slot) {
+                    Some(item) if item.id == cached.item => item.is_trace_obstacle(net_no),
+                    _ => return,
+                }
+            };
+            if obstacle {
+                obstacles_out.push(Obstacle::Item(cached.item, cached.index, cached.slot));
+                hit_bounds.push(cached.bounds);
+            } else {
+                own_net_out.push((cached.item, cached.index));
+            }
+        };
+        let ItemCache { layers, marks, gen, .. } = item_cache;
+        let Some(layer_items) = layers.get(layer as usize) else {
+            return;
+        };
+        let grid_and_range = layer_items
+            .grid
+            .as_ref()
+            .and_then(|grid| grid.cell_range(&query_box).map(|range| (grid, range)));
+        let use_grid = grid_and_range
+            .map(|(grid, (x0, y0, x1, y1))| {
+                // The grid pays off only when it skips a real fraction of the
+                // layer; a box covering half the cells is scanned linearly,
+                // which also emits the items in completion order directly.
+                (x1 - x0 + 1) * (y1 - y0 + 1) * 2 <= grid.cols * grid.rows
+            })
+            .unwrap_or(false);
+        if let Some((grid, (x0, y0, x1, y1))) = grid_and_range.filter(|_| use_grid) {
+            *gen = (*gen).wrapping_add(1);
+            if *gen == 0 {
+                marks.fill(0);
+                *gen = 1;
+            }
+            let gen = *gen;
+            let mut hits = std::mem::take(&mut self.scratch_grid_hits);
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let cell = y * grid.cols + x;
+                    for index in
+                        &grid.indices[grid.offsets[cell] as usize..grid.offsets[cell + 1] as usize]
+                    {
+                        let index = *index as usize;
+                        if marks[index] == gen {
+                            continue;
+                        }
+                        marks[index] = gen;
+                        hits.push(index as u32);
+                    }
+                }
+            }
+            // The cache is presorted in completion order, so emitting the
+            // grid hits by ascending cache index reproduces it exactly.
+            hits.sort_unstable();
+            for index in &hits {
+                visit(&layer_items.items[*index as usize], obstacles, own_net);
+            }
+            hits.clear();
+            self.scratch_grid_hits = hits;
+        } else {
+            for cached in &layer_items.items {
+                visit(cached, obstacles, own_net);
+            }
         }
     }
 
@@ -598,10 +798,12 @@ impl<'b> AutorouteEngine<'b> {
             .unwrap_or_else(|| self.board.default_tree());
         let mut layers: Vec<Vec<CachedItem>> =
             vec![Vec::new(); (self.ctrl.layer_count.max(0) as usize).max(1)];
-        for (id, _item) in self.board.store().iter_ascending() {
+        let net_no = self.ctrl.net_no;
+        for (id, item) in self.board.store().iter_ascending() {
             let Some(slot) = self.board.store().slot_of(id) else {
                 continue;
             };
+            let obstacle = item.is_trace_obstacle(net_no);
             for (index, tile) in tree.item_shapes(slot, id).iter().enumerate() {
                 let Some(shape) = tile.shape.as_ref() else {
                     continue;
@@ -623,10 +825,36 @@ impl<'b> AutorouteEngine<'b> {
                     index: index as u16,
                     slot,
                     bounds,
+                    obstacle,
                 });
             }
         }
-        self.item_cache = Some(layers);
+        let board = self.bounds;
+        let mut marks = 0usize;
+        let layers = layers
+            .into_iter()
+            .map(|mut items| {
+                // Completion visit order (`Leaf.compareTo`): descending item
+                // id, ascending shape index. The linear scan then emits an
+                // ordered run and the grid only has to sort its hit indices.
+                items.sort_unstable_by_key(|cached| {
+                    (std::cmp::Reverse(i64::from(cached.item.raw())), cached.index)
+                });
+                marks = marks.max(items.len());
+                let grid = if items.len() >= GRID_MIN_ITEMS {
+                    LayerGrid::build(&items, board)
+                } else {
+                    None
+                };
+                LayerItems { items, grid }
+            })
+            .collect();
+        self.item_cache = Some(ItemCache {
+            layers,
+            net_no,
+            marks: vec![0; marks],
+            gen: 0,
+        });
     }
 
     /// The body the two ordered entry points share: the tree walk, the
@@ -634,6 +862,10 @@ impl<'b> AutorouteEngine<'b> {
     ///
     /// `own_net` is left unsorted; the entry point whose caller reads it sorts
     /// it.
+    ///
+    /// Returns `true` when `obstacles` is already in completion visit order
+    /// (the box path emits it directly), so the completion entry point can
+    /// skip its re-sort.
     fn collect_obstacles_tile(
         &mut self,
         query_tile: &fr_board::shape::TileShape,
@@ -641,14 +873,14 @@ impl<'b> AutorouteEngine<'b> {
         net_no: i32,
         obstacles: &mut Vec<Obstacle>,
         own_net: &mut Vec<(ItemId, u16)>,
-    ) {
+    ) -> bool {
         obstacles.clear();
         own_net.clear();
         fr_metrics::counters::bump::tree_queries(1);
 
         if let (fr_board::shape::TileShape::Box(query_box), Some(layer)) = (query_tile, layer) {
             self.collect_obstacles_box(*query_box, layer, net_no, obstacles, own_net);
-            return;
+            return true;
         }
 
         let tree = self
@@ -748,6 +980,7 @@ impl<'b> AutorouteEngine<'b> {
         obstacles[rooms_from..].sort_unstable();
         let kept = dedup_in_place(&mut obstacles[rooms_from..]);
         obstacles.truncate(rooms_from + kept);
+        false
     }
 
     /// Reorders an obstacle list into the visit order
