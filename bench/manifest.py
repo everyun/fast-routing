@@ -59,7 +59,12 @@ import check_ses
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BENCH_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_FIXTURES_DIR = "/tmp/freerouting-upstream/fixtures"
-DEFAULT_RESULTS = os.path.join(BENCH_DIR, "results", "20260828-013025", "results.json")
+# Round 1 of the hermetic 3-run stability sweep (`run_java_stability.py`),
+# i.e. the capped baseline re-measured with a fresh `--user_data_path` per
+# call. The pre-isolation baseline `results/20260828-013025/` was measured
+# with fanout/optimizer disabled by a leaked $TMPDIR freerouting.json and is
+# archived under `results/java-reference-contaminated-20260829/`.
+DEFAULT_RESULTS = os.path.join(BENCH_DIR, "results", "java-reference", "results.json")
 DEFAULT_MANIFEST = os.path.join(BENCH_DIR, "fixtures-manifest.json")
 DEFAULT_UNCAPPED_DIR = os.path.join(BENCH_DIR, "results", "java-uncapped")
 DEFAULT_STABILITY_DIR = os.path.join(BENCH_DIR, "results", "java-stability")

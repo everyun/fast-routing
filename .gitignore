@@ -5,6 +5,8 @@ target/
 !bench/results/java-reference/ses/*.ses
 *.tmp
 *.log
+# per-run temp out-dirs of the stability sweep (canonical output: sweep.json)
+bench/results/java-stability/*/
 
 # Cargo home & caches
 .cargo-home/

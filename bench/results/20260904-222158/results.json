@@ -1,0 +1,118 @@
+{
+  "meta": {
+    "schema": 3,
+    "generated": "2026-09-04T22:21:58",
+    "config_label": "smoke-user-data",
+    "tools": [
+      "java"
+    ],
+    "passes": 20,
+    "timeout_s": 90.0,
+    "java": "/opt/homebrew/opt/openjdk/bin/java",
+    "jar": "/tmp/frbase/freerouting-2.3.0.jar",
+    "rust_bin": "/Users/chiqingzhen/fr-work/infra/target/release/fr-cli",
+    "fixtures_dir": "/tmp/freerouting-upstream/fixtures",
+    "fixture_count": 1,
+    "manifest": "bench/fixtures-manifest.json",
+    "manifest_generated": "2026-08-29T00:01:45Z",
+    "quality_predicate": "placeholder-nets-v0",
+    "concurrency": 1,
+    "serial_perf": false,
+    "repo_rev": "9876171",
+    "jar_pin": {
+      "filename": "freerouting-2.3.0.jar",
+      "expected_sha256": "3cf18d608437740bc497db6b8ef5888e2e60a08de0def20691d1bad0c0e0ee24",
+      "build_revision": "2d4de019aa89e9fa3dc1dc44e09bf509760cafc1",
+      "published_at": "2026-08-07T08:36:49Z",
+      "download_url": "https://github.com/freerouting/freerouting/releases/download/v2.3.0/freerouting-2.3.0.jar",
+      "jar": "/tmp/frbase/freerouting-2.3.0.jar",
+      "allow_unpinned": false,
+      "actual_sha256": "3cf18d608437740bc497db6b8ef5888e2e60a08de0def20691d1bad0c0e0ee24",
+      "sha256_ok": true
+    },
+    "allow_unpinned_jar": false
+  },
+  "records": [
+    {
+      "tool": "java",
+      "fixture": "Issue026-J2_reference.dsn",
+      "fixture_path": "/tmp/freerouting-upstream/fixtures/Issue026-J2_reference.dsn",
+      "fixture_bytes": 7925,
+      "java_class": "java_finished",
+      "dedup_group": "md5:a0117ec54246",
+      "dedup_primary": true,
+      "variant_family": "family:Issue026-J2_reference.dsn",
+      "passes": 20,
+      "timeout_s": 90.0,
+      "config_label": "smoke-user-data",
+      "concurrency": 1,
+      "cmd": [
+        "nice",
+        "-n",
+        "10",
+        "/usr/bin/time",
+        "-l",
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-Djava.awt.headless=true",
+        "-jar",
+        "/tmp/frbase/freerouting-2.3.0.jar",
+        "-de",
+        "/tmp/freerouting-upstream/fixtures/Issue026-J2_reference.dsn",
+        "-do",
+        "/Users/chiqingzhen/fr-work/infra/bench/results/20260904-222158/ses/Issue026-J2_reference.java.ses",
+        "-mp",
+        "20",
+        "-l",
+        "en",
+        "--user_data_path=/Users/chiqingzhen/fr-work/infra/bench/results/20260904-222158/java-user-data/Issue026-J2_reference.57p0v2e_"
+      ],
+      "timed_out": false,
+      "crashed": false,
+      "exit_code": 0,
+      "wall_s": 3.844,
+      "ses_path": "/Users/chiqingzhen/fr-work/infra/bench/results/20260904-222158/ses/Issue026-J2_reference.java.ses",
+      "ses_bytes": 16235,
+      "check": {
+        "dsn_nets_total": 24,
+        "dsn_nets_multi_pin": 12,
+        "ses_nets_present": 12,
+        "ses_nets_routed": 12,
+        "ses_nets_routed_and_declared": 12,
+        "via_count": 21,
+        "wire_length_mm": 379.743
+      },
+      "check_per_net_path": "/Users/chiqingzhen/fr-work/infra/bench/results/20260904-222158/nets/Issue026-J2_reference.java.nets.json",
+      "check_error": null,
+      "max_rss_bytes": 2999255040,
+      "time_real_s": 3.83,
+      "time_user_s": 10.11,
+      "time_sys_s": 0.75,
+      "tool_time_s": 1.69,
+      "tool_cpu_s": 1.59,
+      "peak_heap_bytes": 1473878425,
+      "unrouted": 0,
+      "violations": 0,
+      "score": 999.99,
+      "passes_run": 2,
+      "stages": {
+        "fanout": 0.68,
+        "auto-routing": 0.99,
+        "optimization": 0.02
+      },
+      "parse_ok": true,
+      "java_settings": {
+        "router.enabled": true,
+        "fanout.enabled": true,
+        "optimizer.enabled": true,
+        "max_passes": 20,
+        "user_data_path": "/Users/chiqingzhen/fr-work/infra/bench/results/20260904-222158/java-user-data/Issue026-J2_reference.57p0v2e_",
+        "source": "log-stages+cli",
+        "stages_ran": {
+          "fanout": true,
+          "router": true,
+          "optimizer": true
+        }
+      }
+    }
+  ]
+}

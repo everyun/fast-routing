@@ -1,0 +1,19 @@
+(session "Issue229-display-8-digit-hc595"
+  (base_design "Issue229-display-8-digit-hc595")
+  (placement
+    (resolution um 10)
+  )
+  (was_is
+  )
+  (routes 
+    (resolution um 10)
+    (parser
+      (host_cad "KiCad's Pcbnew")
+      (host_version "4.0.7")
+    )
+    (library_out 
+    )
+    (network_out 
+    )
+  )
+)

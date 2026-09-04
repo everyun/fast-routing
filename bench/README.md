@@ -127,7 +127,8 @@ That table is the argument for the mandatory out-of-sample tier in ROADMAP
 G2.4: the upstream suite is a 2-layer KiCad monoculture.
 
 **3. What did Java do with it?** `java.class`, read off a real bench run
-(`--results`, default `bench/results/20260828-013025/results.json`):
+(`--results`, default `bench/results/java-reference/results.json` — round 1 of
+the hermetic stability sweep):
 
 | class | rule |
 |---|---|
@@ -137,8 +138,13 @@ G2.4: the upstream suite is a 2-layer KiCad monoculture.
 | `java_finished` | everything else |
 | `java_unknown` | fixture absent from the source results (or no manifest loaded) |
 
-On the `-mp 20` / 300 s baseline checked in at `bench/results/20260828-013025`:
-29 `java_finished`, 14 `java_timeout`, 1 `java_crash`, 2 `java_degenerate`.
+On the hermetic `-mp 20` / 300 s re-baseline checked in at
+`bench/results/java-reference/` (2026-09-04, `--user_data_path` isolated):
+27 `java_finished`, 17 `java_timeout`, 1 `java_crash`, 1 `java_degenerate`.
+The pre-isolation baseline (`bench/results/20260828-013025`, 29/14/1/2) was
+measured with fanout/optimizer disabled by a leaked `$TMPDIR` freerouting.json;
+it is archived at `bench/results/java-reference-contaminated-20260829/` and
+`bench/compare_java_reference.py` prints the per-board old-vs-new table.
 **Regenerate the manifest after the `-mp 9999` re-baseline (ROADMAP M0.5)** or
 the classes describe a config nobody runs any more. `manifest.py --check`
 exits 1 when the checked-in manifest differs from a fresh generation (CI).
