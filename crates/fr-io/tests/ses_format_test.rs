@@ -401,6 +401,93 @@ fn an_endpoint_already_on_the_pad_centre_is_left_alone() {
 }
 
 #[test]
+fn a_half_unit_corner_is_written_with_a_decimal_and_reads_back_exactly() {
+    // A deliberate divergence from upstream, pinned down: `Polyline` corners can sit on the
+    // half-integer grid (pull-tight's diagonal∩diagonal intersections), and `(int) Math.round`
+    // moves them by up to 0.5 board units — enough to turn a clearance-exact gap into a
+    // violation on re-import (Issue102-Mars-64-revE-rot00, +1v). The writer emits such a corner
+    // with one decimal, and the reader rebuilds the exact polyline from it
+    // (`Polyline::from_exact_corners`). Everything else still writes as an integer.
+    use fr_board::{FixedState, ItemKind, NetNos};
+    use fr_geometry::planar::Polyline;
+    use fr_io::specctra::{
+        ses_read::{read_session, SesTarget},
+        strip_session_copper, SesLibrary,
+    };
+    use fr_rules::ItemClass;
+
+    // The stripped board: the golden wire would cross the trace inserted below (same net), and
+    // the read-back normalization would merge the two — this test asserts the corners of one
+    // trace, not merge behaviour.
+    let stripped = strip_session_copper(GOLDEN_DSN.as_bytes());
+    let mut design = import(stripped.as_slice()).unwrap();
+    // A→B is -45° (y + x = 0), B→C is +45° (y - x = -30001): B is a genuine
+    // diagonal∩diagonal corner that cannot be written as an integer.
+    let corners = [(10000.0, -10000.0), (15000.5, -15000.5), (20000.0, -10001.0)];
+    let polyline =
+        Polyline::from_exact_corners(&corners).expect("the half-unit corner is representable");
+    let original = polyline.clone();
+    let net_no = design.rules.nets.get_by_name("/CLK")[0].net_number();
+    let clearance_class = design
+        .rules
+        .get_default_net_class()
+        .default_item_clearance_classes
+        .get(ItemClass::Trace);
+    design
+        .board
+        .insert_trace_without_cleaning(
+            polyline,
+            0,
+            1000,
+            NetNos::of(net_no),
+            clearance_class,
+            FixedState::Unfixed,
+        )
+        .expect("the trace should insert");
+
+    let session = write_session(&SesInput::from_design(&design, "golden.dsn"));
+    assert!(
+        session.contains("            15000.5 -15000.5\n"),
+        "the half-unit corner should carry one decimal; got:\n{session}"
+    );
+    // …and only that corner: everything else stays on the upstream integer bytes.
+    assert!(
+        session.contains("            10000 -10000\n"),
+        "integer corners should still be written as integers; got:\n{session}"
+    );
+
+    let mut target = import(strip_session_copper(GOLDEN_DSN.as_bytes()).as_slice()).unwrap();
+    let library = SesLibrary::from_design(&target);
+    let summary = read_session(
+        session.as_bytes(),
+        SesTarget::for_design(&mut target, &library),
+    )
+    .expect("the session should read back");
+    assert_eq!(summary.errors_encountered, 0, "{:?}", summary.warnings);
+
+    let read_back: Vec<Polyline> = target
+        .board
+        .store()
+        .iter()
+        .filter_map(|(_, item)| match &item.kind {
+            ItemKind::Trace(trace) if trace.polyline.corner_count() == 3 => {
+                Some(trace.polyline.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(read_back.len(), 1, "expected exactly one 3-corner trace");
+    assert_eq!(read_back[0].corner_count(), original.corner_count());
+    for index in 0..original.corner_count() {
+        assert_eq!(
+            read_back[0].corner(index),
+            original.corner(index),
+            "corner {index} moved in the round trip"
+        );
+    }
+}
+
+#[test]
 fn an_endpoint_inside_the_pad_is_not_snapped_because_it_is_not_a_contact() {
     // §12.3 says `snappedEndpoint` snaps a trace end that lies inside the pad's inradius onto
     // the pad centre, and that failing to do so makes KiCad report spurious unconnecteds.

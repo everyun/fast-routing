@@ -14,8 +14,11 @@
 //! KiCad's `SPECCTRA_DB::LoadSESSION` reads `(routes (network_out (net … (wire (path …)) (via …))))`
 //! plus `(placement …)`, and it is unforgiving about four things (§12.2):
 //!
-//! 1. **Every coordinate and width is an integer** — `(int) Math.round`, which is
-//!    [`jround`], not Rust's `f64::round`.
+//! 1. **Coordinates and widths are integers, except exact half-unit corners** — upstream rounds
+//!    everything through `(int) Math.round` ([`jround`], not Rust's `f64::round`); this writer
+//!    keeps that for everything that fits, and writes a pull-tight `.5` corner as one decimal
+//!    so the round trip cannot move copper into a clearance-exact gap (see
+//!    [`SesFileWriter::coordinate_text`]).
 //! 2. **Layer names inside `(path …)` are the DSN's**, byte for byte.
 //! 3. **Via padstacks are declared in `library_out` before use**, by name, deduplicated.
 //! 4. **Trace endpoints must land on pad centres** where they legitimately can, or KiCad reports
@@ -25,10 +28,10 @@
 //! ([`SES_RESERVED_CHARS`]) and `SYSTEM_FIXED` items are omitted, which is how DSN-imported
 //! keepouts and locked component copper stay out of the session.
 //!
-//! # Not wired into `fr-cli`
+//! # Wired into `fr-cli`
 //!
-//! `fr-core` still drives the pre-rewrite [`crate::ses_writer`]. This module is the replacement
-//! and takes the new [`fr_board::Board`]; the switch happens when `fr-core` moves over.
+//! `fr-core`'s pipeline drives this module (`write_session_verbose`); the
+//! pre-rewrite [`crate::ses_writer`] remains for older callers only.
 
 use std::fmt::Write as _;
 
@@ -280,6 +283,33 @@ impl SesFileWriter<'_, '_> {
     /// Rounds a board length into the session's integer grid.
     fn coordinate(&self, board_value: f64) -> i64 {
         jround(self.scale.board_to_ses(board_value))
+    }
+
+    /// Session-coordinate text for an exact board-space value.
+    ///
+    /// Integers write as integers — the upstream bytes. A value exactly on the
+    /// half grid writes with one decimal: `Polyline` corners can sit between
+    /// lattice points (diagonal∩diagonal intersections survive pull-tight),
+    /// and `(int) Math.round` — what upstream writes, [`Self::coordinate`] —
+    /// moves them by up to 0.5 board units, which turned a clearance-exact
+    /// gap into a re-import violation on Issue102-Mars-64-revE-rot00. The
+    /// reader reconstructs the exact polyline from the decimal
+    /// (`Polyline::from_exact_corners`); upstream's reader rounds it the same
+    /// way it rounds its own sessions, so the file stays compatible.
+    ///
+    /// On a board whose session scale factor is not 1 the half unit is not
+    /// the kernel's representability boundary anyway, and for fractions finer
+    /// than a half the kernel cannot hold the line at all — both keep the
+    /// legacy rounded integer.
+    fn coordinate_text(&self, ses_value: f64) -> String {
+        let rounded = jround(ses_value);
+        if ses_value == rounded as f64 {
+            return rounded.to_string();
+        }
+        if self.scale.factor() == 1.0 && (ses_value * 2.0).fract() == 0.0 {
+            return format!("{ses_value:.1}");
+        }
+        rounded.to_string()
     }
 
     fn identifier(&mut self, name: &str) {
@@ -681,27 +711,35 @@ impl SesFileWriter<'_, '_> {
             .write_identifier(layer_name, self.input.string_quote);
         self.out.write(" ");
         self.out.write_int(width);
-        let mut previous: Option<(i64, i64)> = None;
+        let mut previous: Option<(f64, f64)> = None;
         for index in 0..corner_count {
+            // The exact corner, not `corner_approx`: pull-tight's
+            // diagonal∩diagonal corners sit on the half-integer grid, and
+            // rounding them to the session's integers can move copper by 0.5
+            // board units — enough to turn a clearance-exact gap into a
+            // violation on re-import (Issue102-Mars-64-revE-rot00, +1v).
             let corner = if index == 0 {
-                start_snap.unwrap_or_else(|| trace.polyline.corner_approx(index))
+                start_snap.unwrap_or_else(|| trace.polyline.corner(index).to_float())
             } else if index == corner_count - 1 {
-                end_snap.unwrap_or_else(|| trace.polyline.corner_approx(index))
+                end_snap.unwrap_or_else(|| trace.polyline.corner(index).to_float())
             } else {
-                trace.polyline.corner_approx(index)
+                trace.polyline.corner(index).to_float()
             };
-            let point = (self.coordinate(corner.x), self.coordinate(corner.y));
-            // §12.3: consecutive-duplicate elision, *after* rounding. Two distinct board
-            // corners can collapse onto one session corner, and some importers choke on the
-            // zero-length segment that would leave behind.
+            // §12.3: consecutive-duplicate elision, on the exact corners. Two
+            // genuinely distinct corners — even 0.5 units apart — are kept;
+            // only a true duplicate would leave a zero-length segment.
+            let point = (
+                self.scale.board_to_ses(corner.x),
+                self.scale.board_to_ses(corner.y),
+            );
             if previous == Some(point) {
                 continue;
             }
             previous = Some(point);
             self.out.new_line();
-            self.out.write_int(point.0);
+            self.out.write(&self.coordinate_text(point.0));
             self.out.write(" ");
-            self.out.write_int(point.1);
+            self.out.write(&self.coordinate_text(point.1));
         }
         self.out.end_scope();
 

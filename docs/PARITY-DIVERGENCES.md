@@ -363,6 +363,33 @@ ARCHITECTURE "Budgets".
   saturated copper costs 43 s on this board (`FR_OPT_TRACE` `conn` records), and because the
   insertion breaks neighbours at all. Both are outside the optimizer.
 
+## Session file format
+
+- **Half-unit trace corners are written with one decimal, not rounded away.**
+  *Upstream* writes every SES coordinate as `(int) Math.round(...)` (`SesWriter.java`,
+  `IndentFileWriter.write(Integer)`), and a `Polyline` corner is the intersection of two
+  integer-coefficient `Line`s — which for two diagonals sits on the half-integer grid.
+  Pull-tight produces exactly such corners, so upstream's writer (and a naive copy of it)
+  moves that copper by up to 0.5 board units on the way out. Measured on
+  `Issue102-Mars-64-revE-rot00`: a GND trace corner at (664434.5, -706045.5) rounded to
+  (664435, -706045) narrowed a clearance-exact gap against a /VSS trace (layer 1, required
+  2002) to 2001.9, i.e. the written-back session carried **one violation the in-memory board
+  did not have** (65v vs 64v).
+  *We* write an exact half-unit corner as one decimal (`15000.5`) when the session scale
+  factor is 1 — every other value, and every value on a board with a coarser session scale,
+  keeps the upstream rounded integer — and the reader rebuilds the exact polyline from the
+  decimals (`Polyline::from_exact_corners`, falling back to upstream rounding for anything
+  the kernel's `Vec<Line>` cannot hold).
+  *Compatibility*: the file stays readable upstream — `SesReader` rounds each coordinate the
+  same way it rounds its own sessions, so the jar/KiCad sees exactly what it would have seen
+  from a jar-written file. The divergence is visible only as `0.5`-carrying coordinates in
+  the text and as byte diffs against jar sessions on boards with half-unit corners.
+  *Effect*: our own session round trip is now lossless for every polyline the router can
+  produce; the G2.1 referee's "SES round-trip fidelity" check (in-memory referee vs
+  file-based referee) goes to 0 moved boards. Regression tests:
+  `fr_geometry/tests/exact_corners_test.rs`,
+  `fr_io/tests/ses_format_test.rs::a_half_unit_corner_is_written_with_a_decimal_and_reads_back_exactly`.
+
 ## Referee
 
 - **The G2.1 session overlay has no upstream counterpart.** Upstream reads a session back into

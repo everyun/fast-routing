@@ -65,6 +65,88 @@ impl Polyline {
         Polyline::new_from_points(&pts)
     }
 
+    /// Creates a polyline from exact corner coordinates that may lie on the
+    /// half-integer grid — the `.5` intersections of two diagonal lines, which
+    /// the session writer/reader round-trip (a `Polyline` stores lines, and
+    /// two integer-coefficient diagonals can meet between lattice points).
+    ///
+    /// Every segment must be a multiple of 45° and every line involved — the
+    /// segments' and the two perpendiculars closing the ends — must pass
+    /// through an integer point, which is exactly what this representation can
+    /// hold. Both hold for every polyline the router can produce: a `.5`
+    /// corner is a diagonal∩diagonal intersection, so its coordinates are
+    /// half-integral together and `x ± y` stay integral. Returns `None` when
+    /// the corners violate either condition; callers fall back to rounding.
+    pub fn from_exact_corners(corners: &[(f64, f64)]) -> Option<Polyline> {
+        // Collapse exact consecutive duplicates first: a zero-length segment
+        // has no direction.
+        let mut pts: Vec<(f64, f64)> = Vec::with_capacity(corners.len());
+        for &corner in corners {
+            if pts.last() != Some(&corner) {
+                pts.push(corner);
+            }
+        }
+        if pts.len() < 2 {
+            return None;
+        }
+
+        fn segment_direction(a: (f64, f64), b: (f64, f64)) -> Option<Direction> {
+            let dx = b.0 - a.0;
+            let dy = b.1 - a.1;
+            Some(if dx == 0.0 {
+                if dy > 0.0 { Direction::UP } else { Direction::DOWN }
+            } else if dy == 0.0 {
+                if dx > 0.0 { Direction::RIGHT } else { Direction::LEFT }
+            } else if dx == dy {
+                if dx > 0.0 { Direction::RIGHT45 } else { Direction::LEFT45 }
+            } else if dx == -dy {
+                if dx > 0.0 { Direction::DOWN45 } else { Direction::UP45 }
+            } else {
+                return None; // not a multiple of 45°
+            })
+        }
+
+        // A line of direction `dir` through `p` is representable iff its
+        // coefficient is integral; the anchor is that integer point on it.
+        fn anchored_line(dir: Direction, p: (f64, f64)) -> Option<Line> {
+            let (x, y) = p;
+            let anchor = match (dir.x, dir.y) {
+                (0, _) => {
+                    if x.fract() != 0.0 {
+                        return None;
+                    }
+                    IntPoint::new(x as i32, 0)
+                }
+                (_, 0) => {
+                    if y.fract() != 0.0 {
+                        return None;
+                    }
+                    IntPoint::new(0, y as i32)
+                }
+                (dx, dy) => {
+                    let c = if dx == dy { y - x } else { y + x };
+                    if c.fract() != 0.0 {
+                        return None;
+                    }
+                    IntPoint::new(0, c as i32)
+                }
+            };
+            Some(Line::new_from_point_and_dir(anchor, &dir))
+        }
+
+        let dir_start = segment_direction(pts[0], pts[1])?;
+        let mut arr = Vec::with_capacity(pts.len() + 1);
+        arr.push(anchored_line(dir_start.turn_45_degree(2), pts[0])?);
+        for i in 1..pts.len() {
+            let dir = segment_direction(pts[i - 1], pts[i])?;
+            arr.push(anchored_line(dir, pts[i - 1])?);
+        }
+        let last = pts.len() - 1;
+        let dir_end = segment_direction(pts[last], pts[last - 1])?;
+        arr.push(anchored_line(dir_end.turn_45_degree(2), pts[last])?);
+        Some(Polyline::new_from_lines(&arr))
+    }
+
     /// Creates a polyline connecting two corners.
     pub fn new_from_two_points(from_corner: &Point, to_corner: &Point) -> Self {
         if from_corner == to_corner {

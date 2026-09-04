@@ -395,13 +395,36 @@ impl SesFileReader<'_, '_> {
             return false;
         }
 
-        let mut corners: Vec<IntPoint> = Vec::with_capacity(coordinates.len() / 2);
-        for pair in coordinates.chunks_exact(2) {
-            corners.push(IntPoint::new(
-                jround(self.scale.ses_to_board(pair[0])) as i32,
-                jround(self.scale.ses_to_board(pair[1])) as i32,
-            ));
-        }
+        let corners: Vec<(f64, f64)> = coordinates
+            .chunks_exact(2)
+            .map(|pair| (self.scale.ses_to_board(pair[0]), self.scale.ses_to_board(pair[1])))
+            .collect();
+        // Corners carrying an exact half unit (the writer's
+        // `SesFileWriter::coordinate_text`) rebuild the polyline they came
+        // from — a diagonal∩diagonal corner rounded to the integer lattice
+        // here would move copper by up to 0.5 board units, the Issue102
+        // round-trip violation. Anything else is rounded exactly as
+        // upstream's `SesReader` rounds it.
+        let all_integral = corners
+            .iter()
+            .all(|&(x, y)| x.fract() == 0.0 && y.fract() == 0.0);
+        let polyline = if all_integral {
+            Polyline::from_int_points(
+                &corners
+                    .iter()
+                    .map(|&(x, y)| IntPoint::new(x as i32, y as i32))
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            Polyline::from_exact_corners(&corners).unwrap_or_else(|| {
+                Polyline::from_int_points(
+                    &corners
+                        .iter()
+                        .map(|&(x, y)| IntPoint::new(jround(x) as i32, jround(y) as i32))
+                        .collect::<Vec<_>>(),
+                )
+            })
+        };
         let half_width = jround(self.scale.ses_to_board(width) / 2.0) as i32;
         let clearance_class = self.item_clearance_class(net_class_index, ItemClass::Trace);
         let fixed = match self.options.compat {
@@ -409,7 +432,6 @@ impl SesFileReader<'_, '_> {
             SesCompat::Lossless => fixed,
         };
 
-        let polyline = Polyline::from_int_points(&corners);
         let inserted = match self.options.compat {
             // `SesReader.java:323` uses the *cleaning* insert.
             SesCompat::Upstream => self.target.board.insert_trace(
