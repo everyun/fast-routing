@@ -37,6 +37,17 @@ class SegmentOk(unittest.TestCase):
         self.assertFalse(g4_kicad.segment_ok(10, 1, "ninety_degree"))
         self.assertTrue(g4_kicad.segment_ok(10, 1, "none"))
 
+    def test_rounding_slack_absorbs_half_integer_diagonal_corners(self):
+        # The jar's own sessions carry these: per-coordinate rounding of a
+        # half-integer 45° corner (Issue187-processor.Z80.java.ses ×20).
+        self.assertTrue(g4_kicad.segment_ok(6016, -6015, "fortyfive_degree"))
+        self.assertTrue(g4_kicad.segment_ok(101, 100, "fortyfive_degree"))
+        # …but a genuine off-angle segment is still caught.
+        self.assertFalse(g4_kicad.segment_ok(1200, 3900, "fortyfive_degree"))
+        self.assertFalse(g4_kicad.segment_ok(10, 8, "fortyfive_degree"))
+        # The slack is a diagonal-rounding concept; 90° boards stay strict.
+        self.assertFalse(g4_kicad.segment_ok(6016, -6015, "ninety_degree"))
+
     def test_zero_length_is_ignored_as_legal(self):
         self.assertTrue(g4_kicad.segment_ok(0, 0, "ninety_degree"))
 

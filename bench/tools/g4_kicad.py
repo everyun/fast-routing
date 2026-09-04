@@ -49,6 +49,14 @@ DEFAULT_KICAD_PY = os.path.join(
 
 DEFAULT_SNAP = "fortyfive_degree"
 ANGLE_EPS = 1e-6  # relative to segment length
+# Per-coordinate rounding of a half-integer 45° corner (upstream's
+# `smoothen_non_integer_corner` produces them legitimately) shifts each axis by
+# ≤ 0.5 session units per endpoint, so a faithful diagonal can land with
+# ||dx| − |dy|| ≤ 2. The 2.3.0 jar's own sessions contain such segments — e.g.
+# Issue187-processor.Z80.java.ses has 20, at the same coordinates as ours — so
+# the gate absorbs that slack (capped at ~1.1° of arc, so short segments stay
+# strict) instead of demanding the router beat the jar.
+DIAG_ROUNDING_SLACK = 2.0  # session units, applied to the |dx| == |dy| test
 
 
 # --------------------------------------------------------------------------
@@ -91,8 +99,11 @@ def segment_ok(dx: float, dy: float, snap: str, eps: float = ANGLE_EPS) -> bool:
     axis = abs(dx) <= eps * length or abs(dy) <= eps * length
     if snap in ("ninety_degree", "ninety", "90"):
         return axis
-    # fortyfive_degree (reader default) and anything we don't recognise.
-    diag = abs(abs(dx) - abs(dy)) <= eps * length
+    # fortyfive_degree (reader default) and anything we don't recognise. The
+    # slack absorbs coordinate rounding (≤ 2 session units) but only where it
+    # is actually rounding-scale: within ~1.1° of the exact diagonal.
+    slack = min(DIAG_ROUNDING_SLACK, 0.02 * length)
+    diag = abs(abs(dx) - abs(dy)) <= max(eps * length, slack)
     return axis or diag
 
 
