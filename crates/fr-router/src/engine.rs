@@ -724,7 +724,9 @@ impl<'b> AutorouteEngine<'b> {
         // current `id_no`, so keying on `(-id_no, RoomId)` makes duplicates
         // adjacent (the dedup) while ordering survivors exactly like the
         // completion key's rooms row (`-id_no`; ids are unique across rooms).
-        rooms.sort_unstable_by_key(|(_, room)| {
+        // The cached-key sort chases `rooms.room()` once per leaf, not once
+        // per comparison.
+        rooms.sort_by_cached_key(|(_, room)| {
             let room = *room;
             (-self.rooms.room(room).id_no, room)
         });
@@ -1092,7 +1094,9 @@ impl<'b> AutorouteEngine<'b> {
     /// already-completed neighbour rooms had settled, which strands sliver
     /// tiles and multiplies the door count along a corridor.
     pub(crate) fn sort_obstacles_for_completion(&self, obstacles: &mut [Obstacle]) {
-        obstacles.sort_unstable_by_key(|obstacle| self.completion_key(*obstacle));
+        // `sort_by_cached_key`: the key chases `rooms.room()` — once per
+        // element here, not once per comparison.
+        obstacles.sort_by_cached_key(|obstacle| self.completion_key(*obstacle));
     }
 
     fn completion_key(&self, obstacle: Obstacle) -> (u8, i64, u16) {
@@ -1109,7 +1113,7 @@ impl<'b> AutorouteEngine<'b> {
         }
         let bounds = std::mem::take(&mut self.scratch_hit_bounds);
         let mut paired: Vec<(Obstacle, IntBox)> = obstacles.drain(..).zip(bounds).collect();
-        paired.sort_unstable_by_key(|(obstacle, _)| self.completion_key(*obstacle));
+        paired.sort_by_cached_key(|(obstacle, _)| self.completion_key(*obstacle));
         for (obstacle, bounds) in paired {
             obstacles.push(obstacle);
             self.scratch_hit_bounds.push(bounds);
@@ -1135,7 +1139,7 @@ impl<'b> AutorouteEngine<'b> {
     /// is not a `SearchTreeObject` (`autoroute/ObstacleExpansionRoom.java:19`)
     /// — so their `(item << 10) | index` ids play no part in this order.
     pub(crate) fn sort_obstacles_for_neighbours(&self, obstacles: &mut [Obstacle]) {
-        obstacles.sort_unstable_by_key(|obstacle| match *obstacle {
+        obstacles.sort_by_cached_key(|obstacle| match *obstacle {
             // The room arm sorts first on an exact id tie: upstream's sort is
             // stable over a tree walk we do not reproduce, so the tie needs
             // *some* rule, and the rooms are the objects this connection just
