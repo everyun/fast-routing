@@ -450,6 +450,14 @@ ARCHITECTURE "Budgets".
   semantics and no fixture gates on it; recorded so the next golden compare does not
   re-investigate. Worth an `fr-io` look only if G1.1 ever gates this fixture.
 
+- **Copper text is a KiCad-only obstacle class** (gate calibration, not a code divergence).
+  KiCad DRC checks copper against `gr_text`/`fp_text` on copper layers (coldfire-unrouted:
+  our `/CLKMOD1` trace vs text 'MOD1', actual 0.0000). The DSN carries no text at all, so
+  neither the jar nor we can avoid it — unmodelable from the input, not a routing mistake.
+  Dispatcher decision (TASK-short-hdi): exempt in the G4 hard-gate accounting.
+  `bench/tools/g4_kicad.py` counts violations touching a text object as `kicad_only`,
+  separate from `residual`.
+
 ## Rejected divergences (things we deliberately do NOT fix)
 
 - **`SesReader` counting a wire it could not insert.** `SesReader.processWireScope` calls the

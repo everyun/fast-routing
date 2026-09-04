@@ -29,8 +29,12 @@ The DRC-violation delta is reported in four columns:
                      not ours);
   * `noise`        — violations of the first run that do not reproduce in
                      all three runs;
+  * `kicad_only`   — stable violations touching an object only KiCad has
+                     (copper text; the DSN carries no text), exempted per
+                     dispatcher decision (REPORT-g4-pipeline leftover 3);
   * `residual`     — stable violations involving at least one object the
-                     fixture did not contain. This is the gate number.
+                     fixture did not contain and none that are KiCad-only.
+                     This is the gate number.
 
 The G4 4-tuple is (unrouted, added violations, angle violations, KiCad-DRC
 residual). The first two numbers come from a G2.1 `gate.json` when one is
@@ -268,7 +272,7 @@ def pcb_uuids(pcb_path: str) -> set:
 def _pcb_copper(pcb_path: str):
     """(segments, vias) geometry of a .kicad_pcb, in mm.
 
-    segments: [((x1, y1), (x2, y2))]; vias: [(x, y)].
+    segments: [(x1, y1, x2, y2, layer)]; vias: [(x, y)].
     """
     with open(pcb_path, "r", encoding="utf-8", errors="replace") as f:
         tree = check_ses.parse_sexp(f.read())
@@ -276,14 +280,37 @@ def _pcb_copper(pcb_path: str):
     for s in check_ses.iter_nodes(tree, "segment"):
         st = next((c for c in s if isinstance(c, list) and c and c[0] == "start"), None)
         en = next((c for c in s if isinstance(c, list) and c and c[0] == "end"), None)
+        ly = next((c for c in s if isinstance(c, list) and c and c[0] == "layer"), None)
         if st and en:
-            segs.append(((float(st[1]), float(st[2])), (float(en[1]), float(en[2]))))
+            segs.append(
+                (
+                    float(st[1]),
+                    float(st[2]),
+                    float(en[1]),
+                    float(en[2]),
+                    str(ly[1]) if ly else "",
+                )
+            )
     vias = []
     for v in check_ses.iter_nodes(tree, "via"):
         at = next((c for c in v if isinstance(c, list) and c and c[0] == "at"), None)
         if at:
             vias.append((float(at[1]), float(at[2])))
     return segs, vias
+
+
+def _pcb_text_uuids(pcb_path: str) -> set:
+    """UUIDs of text objects (gr_text / fp_text) — copper text exists only in
+    KiCad; the DSN does not carry it, so our router cannot avoid it."""
+    with open(pcb_path, "r", encoding="utf-8", errors="replace") as f:
+        tree = check_ses.parse_sexp(f.read())
+    out = set()
+    for kind in ("gr_text", "fp_text"):
+        for t in check_ses.iter_nodes(tree, kind):
+            for c in t:
+                if isinstance(c, list) and c and c[0] in ("uuid", "tstamp"):
+                    out.add(str(c[1]))
+    return out
 
 
 def _pcb_geometry_by_uuid(pcb_path: str) -> dict:
@@ -302,8 +329,16 @@ def _pcb_geometry_by_uuid(pcb_path: str) -> dict:
         u = uuid_of(s)
         st = next((c for c in s if isinstance(c, list) and c and c[0] == "start"), None)
         en = next((c for c in s if isinstance(c, list) and c and c[0] == "end"), None)
+        ly = next((c for c in s if isinstance(c, list) and c and c[0] == "layer"), None)
         if u and st and en:
-            out[u] = ("seg", float(st[1]), float(st[2]), float(en[1]), float(en[2]))
+            out[u] = (
+                "seg",
+                float(st[1]),
+                float(st[2]),
+                float(en[1]),
+                float(en[2]),
+                str(ly[1]) if ly else "",
+            )
     for v in check_ses.iter_nodes(tree, "via"):
         u = uuid_of(v)
         at = next((c for c in v if isinstance(c, list) and c and c[0] == "at"), None)
@@ -320,8 +355,16 @@ class FixtureCopper:
     vias, when the same geometry existed before the import: KiCad's SES import
     deletes unlocked wiring and re-creates it from the session with *fresh*
     UUIDs, so the fixture's own preroute debt round-trips under new identities
-    (REPORT-easyeda caveat). Pads never need the geometric fallback — SES
-    import does not touch footprints.
+    (REPORT-easyeda caveat). The track test is collinear **coverage**, not
+    endpoint equality, on the same layer: the import also merges collinear
+    fixture segments, so a 2.0 mm session trace can be two 1.0+0.5 mm segments
+    in the fixture (sensor-hdi, REPORT-short-hdi). Pads never need the
+    geometric fallback — SES import does not touch footprints.
+
+    Separately, [`FixtureCopper::is_kicad_only`] flags text objects: copper
+    text exists only in KiCad (the DSN carries no text), so a violation
+    against one is a KiCad-only semantic — dispatcher-accepted exemption
+    (REPORT-g4-pipeline leftover 3), counted as `kicad_only`, never residual.
     """
 
     SEG_TOL_MM = 0.01
@@ -331,6 +374,12 @@ class FixtureCopper:
         self.before_uuids = pcb_uuids(before_pcb)
         self.before_segs, self.before_vias = _pcb_copper(before_pcb)
         self.after_by_uuid = _pcb_geometry_by_uuid(after_pcb)
+        self.text_uuids = _pcb_text_uuids(after_pcb)
+
+    def is_kicad_only(self, item: dict) -> bool:
+        """True iff the item is a text object (gr_text / fp_text)."""
+        uuid = item.get("uuid")
+        return bool(uuid) and uuid in self.text_uuids
 
     def owns(self, item: dict) -> bool:
         uuid = item.get("uuid")
@@ -345,14 +394,48 @@ class FixtureCopper:
             _, x, y = geo
             tol = self.VIA_TOL_MM
             return any(math.hypot(x - vx, y - vy) <= tol for vx, vy in self.before_vias)
-        _, x1, y1, x2, y2 = geo
+        _, x1, y1, x2, y2, layer = geo
+        return self._covered(x1, y1, x2, y2, layer)
+
+    def _covered(self, x1: float, y1: float, x2: float, y2: float, layer: str) -> bool:
+        """Is the segment (x1,y1)-(x2,y2) collinearly covered by fixture
+        segments on the same layer? Exact endpoint match is the common case;
+        coverage absorbs the SES round-trip's collinear merges/splits."""
         tol = self.SEG_TOL_MM
-        for (ax, ay), (bx, by) in self.before_segs:
-            forward = math.hypot(x1 - ax, y1 - ay) <= tol and math.hypot(x2 - bx, y2 - by) <= tol
-            reverse = math.hypot(x1 - bx, y1 - by) <= tol and math.hypot(x2 - ax, y2 - ay) <= tol
-            if forward or reverse:
-                return True
-        return False
+        dx, dy = x2 - x1, y2 - y1
+        length = math.hypot(dx, dy)
+        if length == 0.0:
+            return any(
+                math.hypot(x1 - ax, y1 - ay) <= tol
+                for ax, ay, bx, by, _ly in self.before_segs
+                if math.hypot(bx - ax, by - ay) <= tol
+            )
+        ux, uy = dx / length, dy / length  # unit axis
+        # Project fixture segments onto the axis; collect covered intervals.
+        intervals = []
+        for ax, ay, bx, by, bly in self.before_segs:
+            if bly != layer:
+                continue
+            # Perpendicular distance of both endpoints from the segment's line.
+            da = abs((ax - x1) * uy - (ay - y1) * ux)
+            db = abs((bx - x1) * uy - (by - y1) * ux)
+            if da > tol or db > tol:
+                continue
+            ta = (ax - x1) * ux + (ay - y1) * uy
+            tb = (bx - x1) * ux + (by - y1) * uy
+            lo, hi = min(ta, tb), max(ta, tb)
+            if hi >= -tol and lo <= length + tol:
+                intervals.append((max(0.0, lo), min(length, hi)))
+        if not intervals:
+            return False
+        # Interval cover of [0, length] with tolerance bridges.
+        intervals.sort()
+        covered_to = 0.0
+        for lo, hi in intervals:
+            if lo > covered_to + tol:
+                return False
+            covered_to = max(covered_to, hi)
+        return covered_to >= length - tol
 
 
 def _item_key(item: dict) -> str:
@@ -392,7 +475,10 @@ def classify_violations(after_runs: list, before_report: dict, fixture) -> dict:
     rest of the first run is run-to-run noise. Among the stable ones,
     violations whose items all pre-date the SES import are fixture debt
     (`fixture` is a [`FixtureCopper`], or any object with an `owns(item)`
-    predicate); the remainder is the residual attributable to our routing.
+    predicate); a violation touching a KiCad-only object (copper text, which
+    the DSN does not carry — dispatcher-accepted exemption) is counted as
+    `kicad_only`, never as ours; the remainder is the residual attributable
+    to our routing.
     """
     before = count_drc(before_report)
     run_maps = []
@@ -413,13 +499,25 @@ def classify_violations(after_runs: list, before_report: dict, fixture) -> dict:
     for m in run_maps[1:]:
         stable &= {k for k in m if k != "_count"}
     noise_keys = first_keys - stable
-    debt, residual = [], []
+
+    def kicad_only(v):
+        is_ko = getattr(fixture, "is_kicad_only", None)
+        return bool(is_ko) and any(is_ko(it) for it in v.get("items") or [])
+
+    debt, kicad_only_keys, residual = [], [], []
     for k in sorted(stable):
-        (debt if _is_fixture_debt(first[k], fixture) else residual).append(k)
+        v = first[k]
+        if _is_fixture_debt(v, fixture):
+            debt.append(k)
+        elif kicad_only(v):
+            kicad_only_keys.append(k)
+        else:
+            residual.append(k)
     return {
         "raw_delta": first["_count"] - before["violations"],
         "noise": len(noise_keys),
         "fixture_debt": len(debt),
+        "kicad_only": len(kicad_only_keys),
         "residual": len(residual),
         "residual_violations": [
             {
@@ -588,6 +686,7 @@ def kicad_roundtrip(
     delta["drc_delta_raw"] = cls["raw_delta"]
     delta["drc_noise"] = cls["noise"]
     delta["drc_fixture_debt"] = cls["fixture_debt"]
+    delta["drc_kicad_only"] = cls["kicad_only"]
     delta["drc_residual"] = cls["residual"]
     delta["residual_violations"] = cls["residual_violations"]
     delta["noise_examples"] = cls["noise_examples"]
@@ -660,6 +759,7 @@ def row_for(
         "kicad_drc_raw": kicad["drc_delta_raw"] if kicad_ok else None,
         "kicad_drc_fixture_debt": kicad["drc_fixture_debt"] if kicad_ok else None,
         "kicad_drc_noise": kicad["drc_noise"] if kicad_ok else None,
+        "kicad_drc_kicad_only": kicad["drc_kicad_only"] if kicad_ok else None,
         "unconnected_delta": kicad["unconnected_delta"] if kicad_ok else None,
         "snap_angle": snap,
         "angles": angles,
@@ -673,7 +773,7 @@ def row_for(
 def report(rows, stream=sys.stdout):
     print(
         f"{'fixture':36s} {'tuple (u, +v, ang, drc)':28s} "
-        f"{'rawΔ':>6s} {'debt':>5s} {'noise':>6s} {'resid':>6s} {'unconnΔ':>8s} snap",
+        f"{'rawΔ':>6s} {'debt':>5s} {'noise':>6s} {'ko':>4s} {'resid':>6s} {'unconnΔ':>8s} snap",
         file=stream,
     )
     for row in rows:
@@ -683,7 +783,8 @@ def report(rows, stream=sys.stdout):
         print(
             f"{row['fixture'][:34]:36s} {str(t):28s} "
             f"{str(row['kicad_drc_raw']):>6s} {str(row['kicad_drc_fixture_debt']):>5s} "
-            f"{str(row['kicad_drc_noise']):>6s} {str(row['kicad_drc_residual']):>6s} "
+            f"{str(row['kicad_drc_noise']):>6s} {str(row['kicad_drc_kicad_only']):>4s} "
+            f"{str(row['kicad_drc_residual']):>6s} "
             f"{str(row['unconnected_delta']):>8s} {row['snap_angle']}{tag}",
             file=stream,
         )

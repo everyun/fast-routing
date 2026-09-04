@@ -334,6 +334,71 @@ class ClassifyViolations(unittest.TestCase):
         self.assertFalse(fixture.owns({"uuid": None}))
         self.assertFalse(fixture.owns({}))
 
+    def test_fixture_copper_owns_collinearly_merged_segment(self):
+        # KiCad's SES import merges collinear fixture segments: the fixture has
+        # 1.5 + 0.5 mm pieces, the session brings one 2.0 mm trace. It is the
+        # fixture's copper either way (sensor-hdi shorting, REPORT-short-hdi).
+        before = os.path.join(self.dir, "before.kicad_pcb")
+        after = os.path.join(self.dir, "after.kicad_pcb")
+        _write(
+            before,
+            "(kicad_pcb"
+            ' (segment (start 100 113.2875) (end 99.5 113.2875) (layer "B.Cu")'
+            '  (uuid "aaaaaaaa-0000-0000-0000-000000000010"))'
+            ' (segment (start 99.5 113.2875) (end 98 113.2875) (layer "B.Cu")'
+            '  (uuid "aaaaaaaa-0000-0000-0000-000000000011")))',
+        )
+        _write(
+            after,
+            "(kicad_pcb"
+            ' (segment (start 100 113.2875) (end 98 113.2875) (layer "B.Cu")'
+            '  (uuid "bbbbbbbb-0000-0000-0000-000000000010"))'
+            # same line, different layer: NOT covered
+            ' (segment (start 100 113.2875) (end 98 113.2875) (layer "F.Cu")'
+            '  (uuid "bbbbbbbb-0000-0000-0000-000000000011"))'
+            # same layer, parallel offset beyond tolerance: NOT covered
+            ' (segment (start 100 113.39) (end 98 113.39) (layer "B.Cu")'
+            '  (uuid "bbbbbbbb-0000-0000-0000-000000000012"))'
+            # extends past the fixture coverage: NOT covered
+            ' (segment (start 101 113.2875) (end 98 113.2875) (layer "B.Cu")'
+            '  (uuid "bbbbbbbb-0000-0000-0000-000000000013")))',
+        )
+        fixture = g4_kicad.FixtureCopper(before, after)
+        self.assertTrue(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000010"}))
+        self.assertFalse(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000011"}))
+        self.assertFalse(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000012"}))
+        self.assertFalse(fixture.owns({"uuid": "bbbbbbbb-0000-0000-0000-000000000013"}))
+
+    def test_text_items_are_kicad_only_and_exempt_from_residual(self):
+        before = os.path.join(self.dir, "before.kicad_pcb")
+        after = os.path.join(self.dir, "after.kicad_pcb")
+        _write(
+            before,
+            "(kicad_pcb"
+            ' (gr_text "MOD1" (at 112 94) (layer "F.Cu")'
+            '  (uuid "aaaaaaaa-0000-0000-0000-000000000020")))',
+        )
+        _write(
+            after,
+            "(kicad_pcb"
+            ' (gr_text "MOD1" (at 112 94) (layer "F.Cu")'
+            '  (uuid "aaaaaaaa-0000-0000-0000-000000000020"))'
+            ' (segment (start 110 94) (end 114 94) (layer "F.Cu")'
+            '  (uuid "bbbbbbbb-0000-0000-0000-000000000020")))',
+        )
+        fixture = g4_kicad.FixtureCopper(before, after)
+        self.assertTrue(fixture.is_kicad_only({"uuid": "aaaaaaaa-0000-0000-0000-000000000020"}))
+        self.assertFalse(fixture.is_kicad_only({"uuid": "bbbbbbbb-0000-0000-0000-000000000020"}))
+        # our fresh trace crossing the copper text: exempt, not residual
+        v = _violation("clearance", ["aaaaaaaa-0000-0000-0000-000000000020",
+                                     "bbbbbbbb-0000-0000-0000-000000000020"])
+        before_rep = {"violations": [], "unconnected_items": []}
+        after_rep = {"violations": [v], "unconnected_items": []}
+        cls = g4_kicad.classify_violations([after_rep], before_rep, fixture)
+        self.assertEqual(cls["kicad_only"], 1)
+        self.assertEqual(cls["fixture_debt"], 0)
+        self.assertEqual(cls["residual"], 0)
+
     def test_zone_fill_report_detects_changes(self):
         pre = os.path.join(self.dir, "pre.kicad_pcb")
         post = os.path.join(self.dir, "post.kicad_pcb")
