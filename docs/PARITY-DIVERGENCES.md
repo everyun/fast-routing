@@ -20,6 +20,21 @@ An empty section means "no divergences yet", not "nobody checked".
 Budget policy is intentionally NOT divergent: upstream wall-clock constants are the default, see
 ARCHITECTURE "Budgets".
 
+- **Fanout is on by default on the CLI** (`fr-cli`, `--no-fanout` to skip).
+  *Upstream* `DefaultSettings.fanout.enabled = true` (`DefaultSettings.java:113`); the
+  headless entry gates the pre-pass on `isFanoutEnabled()` (`BatchAutorouter.java:798`).
+  *We* used to leave it off (`MazeOptions.fanout` still defaults false for in-process
+  tests) because a bad escape via was expensive to undo before the insert wave. Measured
+  on the 285 s budget burners: Issue110-RelayModule without fanout is 4 unrouted at 45 s
+  and still routing at the cap; with fanout it is 1 unrouted in 28 s (20 cheap tail
+  passes). Issue209-split10 *route* completes in 13 s either way; its 284 s burn is the
+  optimizer (handed to opt-cost). The library default stays off so `MazeOptions::with_passes`
+  tests do not grow a fanout stage they never asked for.
+  *Why now*: the insert wave has landed, and matching the release default is the stop-rule
+  for the boards that never finished a route pass in the budget.
+  *Effect*: CLI `-de … -mp 20` now runs fanout then route then optimizer, as the jar does.
+  `--no-fanout` restores the previous CLI.
+
 - **Fanout no-progress stop** (`fr_router::fanout`, `NO_PROGRESS_PASS_LIMIT = 2`).
   *Upstream* (`autoroute/BatchFanout.java:82-144`) stops a fanout run on three conditions only:
   `routed_count == 0` (`:111-113`), three consecutive **bit-identical** `(routed_count << 32) ^

@@ -152,6 +152,8 @@ fn help_and_version_still_work() {
     assert!(text.contains("--import-only"));
     assert!(text.contains("--golden-dump"));
     assert!(text.contains("--drc-report"));
+    assert!(text.contains("--no-fanout"));
+    assert!(text.contains("--fanout"));
 
     let version = run(&["-v"]);
     assert_eq!(code(&version), 0);
@@ -263,6 +265,30 @@ fn an_unfinishable_board_exits_two_with_the_session_still_written() {
         stderr(&output)
     );
     assert!(ses.is_file(), "the session is written even when incomplete");
+}
+
+/// `--no-fanout` is the off switch for the CLI's Java-matching default. This board has no
+/// single-layer SMD pins, so both settings fan out 0 pins; the flag still has to parse.
+#[test]
+fn no_fanout_is_accepted_and_reports_zero_escapes() {
+    let workspace = Workspace::with_board("nofanout", UNROUTED_BOARD);
+    let ses = workspace.path("routed.ses");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "-mp".as_ref(),
+        "1".as_ref(),
+        "--no-fanout".as_ref(),
+        "--no-optimizer".as_ref(),
+    ]);
+    let report = stdout(&output);
+    assert_eq!(code(&output), 0, "stdout: {report}\nstderr: {}", stderr(&output));
+    assert!(
+        report.contains("0 pins fanned out"),
+        "{report}"
+    );
 }
 
 // =================================================================================================

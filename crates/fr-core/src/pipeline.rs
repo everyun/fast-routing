@@ -104,10 +104,12 @@ pub struct MazeOptions {
     pub max_passes: i32,
     /// Run the SMD pin-escape pre-pass first.
     ///
-    /// **Off by default, unlike upstream** (`router.fanout.enabled` defaults `true`,
-    /// `DefaultSettings.java:113`): the escape via is placed by the same M2a stand-in locator as
-    /// every other connection, and a fanout that escapes into a bad via placement is much harder
-    /// to undo than a connection that simply fails. It is opt-in until the insert wave lands.
+    /// Library default is **off** so in-process tests stay on the cheap no-escape path.
+    /// The drop-in CLI turns it **on**, matching `DefaultSettings.fanout.enabled = true`
+    /// (`DefaultSettings.java:113`). `--no-fanout` is the off switch. The insert path that
+    /// used to make a bad escape via expensive to undo has landed; leaving the CLI off was
+    /// the Issue110-RelayModule 284 s budget burn (route never finished) vs 28 s / 1
+    /// incomplete with fanout.
     pub fanout: bool,
     /// Spend the per-connection budget in effort-based virtual time instead of wall time, so no
     /// routing decision can depend on machine load (`fr_router::batch::budget`, gate G2.2).

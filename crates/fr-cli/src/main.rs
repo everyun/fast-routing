@@ -168,7 +168,10 @@ ROUTING OPTIONS
     -mp, --max-passes <N>       Ripup-and-reroute passes (Default: 1). Pass n rips at 100*n.
                                 Must be >= 0; a negative value is an error (upstream runs it
                                 uncapped instead — see docs/PARITY-DIVERGENCES.md)
-    --fanout                    Run the SMD pin-escape pre-pass first (off by default in M2a)
+    --fanout                    Run the SMD pin-escape pre-pass first (ON by default, matching
+                                upstream DefaultSettings.fanout.enabled). Kept as an explicit
+                                flag so scripts that already pass it stay valid.
+    --no-fanout                 Skip the SMD pin-escape pre-pass.
     --no-optimizer              Skip the post-routing optimization stage (it is ON by default,
                                 as it is upstream: router.optimizer.enabled defaults to true)
     --deterministic             Never read the wall clock for budget decisions: the
@@ -294,6 +297,10 @@ fn main() {
 
     let mut args = Args {
         unit: "mm".to_string(),
+        // Match `DefaultSettings.fanout.enabled = true`. The library
+        // `MazeOptions` default stays off so in-process tests keep the cheap
+        // no-escape path; the drop-in CLI is the Java-compatible entry.
+        fanout: true,
         ..Args::default()
     };
     let mut index = 1;
@@ -332,6 +339,7 @@ fn main() {
                 args.portfolio = Some(parse_count("--portfolio", &next!("--portfolio")))
             }
             "--fanout" => args.fanout = true,
+            "--no-fanout" => args.fanout = false,
             "--no-optimizer" => args.no_optimizer = true,
             "--deterministic" => args.deterministic = true,
             "--job-timeout" => args.job_timeout = Some(parse_job_timeout(&next!("--job-timeout"))),
