@@ -147,8 +147,12 @@ ARCHITECTURE "Budgets".
 - **A job wall budget, and a stop on it** (`fr_router::batch::schedule::JobDeadline`,
   `fr-cli --job-timeout`). *Upstream* has a per-job timeout in the scheduler; the headless entry
   point does not expose one, and `-mp` is the only bound a caller has. *We* add an optional wall
-  budget, polled between connections, between passes, and — since the M3 gate — inside
-  `PullTightAlgo::is_stop_requested`. It ends the run through the same tail as every stop rule —
+  budget, polled between connections, between passes, inside
+  `PullTightAlgo::is_stop_requested`, and — since the G4-pipeline task — between the fanout
+  stage's passes and pins (`FanoutConfig::deadline`, `FanoutStop::JobDeadline`; upstream arms
+  no `TimeLimit` anywhere in `BatchFanout`, so a slow fanout stage used to run the budget to
+  zero and beyond — 455.7 s wall on a 240 s budget measured on the easyeda-pcb1 neckdown
+  repro). It ends the run through the same tail as every stop rule —
   best retained board restored, referee run, session written — and clamps each connection's
   `TimeLimit` to what the job has left so one connection cannot overrun it by its own 100 s. Off
   by default: a run without `--job-timeout` reads no clock and is unchanged (an unarmed
