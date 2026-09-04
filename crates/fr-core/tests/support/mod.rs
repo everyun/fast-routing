@@ -14,10 +14,10 @@
 //! | 3 | `/tmp/freerouting-upstream` |
 //! | 4 | `<repo>/upstream-freerouting` |
 //!
-//! Callers that find nothing skip **loudly** rather than failing: these are `fr_core::legacy`
-//! tests, frozen until M2 deletes them, and a hard failure on a missing legacy corpus would
-//! train people to ignore red. The new stack's own corpus tests
-//! (`all_fixtures_parity_harness`, `pipeline_e2e_test`) do fail loudly, which is gate G1.3.
+//! Callers that find nothing skip **loudly** rather than failing, so a missing
+//! corpus does not turn optional fixture coverage into a hard red. The pipeline
+//! corpus tests (`all_fixtures_parity_harness`, `pipeline_e2e_test`) do fail
+//! loudly, which is gate G1.3.
 
 #![allow(dead_code)] // each test binary uses a different subset
 

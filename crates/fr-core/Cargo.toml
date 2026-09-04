@@ -5,14 +5,6 @@ edition.workspace = true
 license.workspace = true
 description = "The headless pipeline (DSN import -> referee -> SES) and the gate emitters for the freerouting Rust port."
 
-# `legacy` is default-**on** so that `cargo test --workspace` still runs the pre-rewrite fixture
-# tests rather than silently skipping them; a feature-gated test nobody runs is worse than no
-# test. `--no-default-features` is the M1 stack alone — no `fr-autoroute`, no `fr-drc` — and is
-# the configuration M2 makes the only one.
-[features]
-default = ["legacy"]
-legacy = ["dep:fr-autoroute", "dep:fr-drc", "dep:rayon"]
-
 [dependencies]
 fr-geometry = { path = "../fr-geometry" }
 fr-board = { path = "../fr-board" }
@@ -20,6 +12,3 @@ fr-rules = { path = "../fr-rules" }
 fr-io = { path = "../fr-io" }
 fr-check = { path = "../fr-check" }
 fr-router = { path = "../fr-router" }
-fr-autoroute = { path = "../fr-autoroute", optional = true }
-fr-drc = { path = "../fr-drc", optional = true }
-rayon = { workspace = true, optional = true }

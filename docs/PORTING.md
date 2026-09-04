@@ -2,7 +2,9 @@
 
 ## Parity Baseline & Architecture
 
-This repository is a complete, modular, high-performance rewrite of **Freerouting** in modern Rust, supporting multi-core CPU parallelism (Rayon) and GPU/CUDA acceleration hooks, with drop-in parity for headless PCB autorouting.
+This repository is a rewrite of **Freerouting** in Rust. The reference is the
+released 2.3.0 jar. There is no GPU path: the CUDA stub and the pre-rewrite
+`fr-autoroute` / `fr-drc` crates were deleted.
 
 ---
 
@@ -15,9 +17,9 @@ This repository is a complete, modular, high-performance rewrite of **Freeroutin
 | `fr-board` | `app.freerouting.board` | ✅ **Complete** | `ItemHeader`, `FixedState`, `Pin`, `Via`, `PolylineTrace`, `ObstacleArea`, `ConductionArea`, `BasicBoard` |
 | `fr-rules` | `app.freerouting.rules` | ✅ **Complete** | `ClearanceMatrix` (NxN with per-layer values & safety margins), `NetClass`, `NetClasses`, `Net`, `Nets`, `ViaRule`, `ViaInfo`, `ViaInfos`, `BoardRules`, `Padstack`, `DefaultItemClearanceClasses` |
 | `fr-io` | `app.freerouting.io.specctra` | ✅ **Complete** | `DsnReader`, `DsnLexer`, `Keyword`, `DsnDocument`, `SesWriter` |
-| `fr-autoroute` | `app.freerouting.autoroute` | ✅ **Complete** | `MazeSearchAlgo` (45° modified A* path search), `BatchAutorouter` (multi-pass rip-up & reroute with Rayon parallelism), `CudaClearanceChecker` |
-| `fr-drc` | `app.freerouting.drc` | ✅ **Complete** | `DesignRulesChecker::get_all_clearance_violations`, `NetIncompletes`, `AirLine` |
-| `fr-core` | `app.freerouting.core` | ✅ **Complete** | `RoutingJob` end-to-end pipeline (DSN -> BasicBoard -> BatchAutorouter -> DRC -> SES), `BoardStatistics` scoring |
+| `fr-autoroute` | `app.freerouting.autoroute` | **Deleted** (M4) | Pre-rewrite toy maze. Replaced by `fr-router`. CUDA stub removed. |
+| `fr-drc` | `app.freerouting.drc` | **Deleted** (M4) | Pre-rewrite checker. Replaced by `fr-check`. |
+| `fr-core` | `app.freerouting.core` | in progress | `RoutingJob` pipeline: DSN → `fr_board::Board` → `fr-router` → `fr-check` → SES |
 | `fr-cli` | `app.freerouting.Freerouting` | ✅ **Complete** | CLI executable with `-de`, `-do`, `-mp`, `-us`, `--help`, `--version` |
 
 ---

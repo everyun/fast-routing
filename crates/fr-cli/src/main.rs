@@ -1,14 +1,11 @@
-//! Headless Freerouting, in Rust — the drop-in CLI, driving the M2a pipeline.
+//! Headless Freerouting, in Rust — the CLI driving the routing pipeline.
 //!
 //! # What a plain run does
 //!
-//! `-de board.dsn -do board.ses` runs [`fr_core::RoutingJob`] v2 end to end: `fr_io::specctra`
+//! `-de board.dsn -do board.ses` runs [`fr_core::RoutingJob`] end to end: `fr_io::specctra`
 //! import → [`fr_board::Board`] + `fr_rules` → **`fr_router`, `-mp` passes of it, then the
 //! optimization stage** → `fr_check` referee → `fr_io` SES writer v2. The optimizer is on by
 //! default, as it is upstream; `--no-optimizer` is the way off. The session carries our copper.
-//! The pre-rewrite
-//! `DsnDocument` → `BasicBoard` → `fr-autoroute` chain is not reachable from here at all; it
-//! survives as `fr_core::legacy` for its own tests until M2 deletes it.
 //!
 //! | exit | meaning |
 //! |---|---|

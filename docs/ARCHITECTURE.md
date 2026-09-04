@@ -190,14 +190,16 @@ fr-board           item store: slotmap slots + a separate monotonic semantic Ite
 fr-io              DSN reader (lexer keeps raw token spelling; full KiCad trap list), SES writer
                    (pad-center snapping, reserved chars, integer coords), rules import,
                    golden-dump comparator (vs Java's -do dump)
-fr-router          replaces fr-autoroute: v19-semantics maze engine (room/door/drill arenas,
+fr-router          v19-semantics maze engine (room/door/drill arenas,
                    generation-stamped node state, lazy-deletion BinaryHeap, cached door shapes),
                    shove, locate/insert (ok-point trichotomy), pull-tight (worklists, region
                    sharding), fanout (with a no-progress detector for the Issue219 pathology),
-                   batch loop (as shipped in the jar, verified by conformance pass)
-fr-check           replaces fr-drc: the referee — DRC (octagon-norm, isObstacle table),
+                   batch loop (as shipped in the jar, verified by conformance pass).
+                   The pre-rewrite `fr-autoroute` crate (incl. the CUDA stub) is deleted.
+fr-check           the referee — DRC (octagon-norm, isObstacle table),
                    connectivity/ratsnest, v2 score. Calibrated against `java -drc` JSON on input
-                   boards (multiset equality). Judges BOTH tools' outputs in bench
+                   boards (multiset equality). Judges BOTH tools' outputs in bench.
+                   The pre-rewrite `fr-drc` crate is deleted.
 fr-core            pipeline: DSN → board → fanout/route/optimize → check → SES
 fr-cli             CLI, Java-compatible flags where meaningful; exit codes preserved
 ```

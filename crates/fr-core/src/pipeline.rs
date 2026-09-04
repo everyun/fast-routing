@@ -1,7 +1,7 @@
 //! **The pipeline.** DSN bytes in, judged board and session file out.
 //!
-//! This is `RoutingJob` v2 — the M1 replacement for [`crate::legacy::routing_job`], and the
-//! thing `fr-cli` actually runs. Four stages, each owned by the crate that specialises in it:
+//! This is `RoutingJob` — the thing `fr-cli` actually runs. Four stages, each owned by the
+//! crate that specialises in it:
 //!
 //! ```text
 //! bytes ──▶ fr_io::specctra::import ──▶ Board + BoardRules      [`RoutingJob::import`]
@@ -44,10 +44,7 @@
 //! [`fr_router::BatchRouter`], then [`fr_router::optimizer::run_optimization_stage`],
 //! writing into the imported board in place — the release's own sequencing
 //! (`management/RoutingJobSchedulerActionThread.thread_action`, `:96`, `:118`,
-//! `:179-189`). The pre-rewrite
-//! `fr-autoroute` toy is still not reachable from here — it is written against
-//! [`fr_board::BasicBoard`], a second item model the importer never produces, and its output has
-//! never been judged by [`fr_check`]. It stays behind [`crate::legacy`] and nowhere else.
+//! `:179-189`).
 //!
 //! # What "SES passthrough" means
 //!

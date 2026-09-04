@@ -81,12 +81,11 @@
 //! # Legacy compatibility
 //!
 //! [`BasicBoard`] and its per-type `Vec`s are the pre-rewrite model, kept in
-//! [`legacy`] only until `fr-core`, `fr-autoroute` and `fr-drc` are replaced.
-//! The crate root re-exports them under their old names so those crates compile
-//! unchanged; the new payload types with colliding names live in [`item`]
-//! (`fr_board::item::Pin`, `fr_board::item::Via`, …). When the last consumer of
-//! the legacy model is gone the module is deleted and the root re-exports move
-//! to the [`item`] ones.
+//! [`legacy`]. The crates that consumed it (`fr-autoroute`, `fr-drc`,
+//! `fr-core::legacy`) were deleted in M4; the module remains only so existing
+//! root re-exports of those names still compile. The new payload types with
+//! colliding names live in [`item`] (`fr_board::item::Pin`, `fr_board::item::Via`,
+//! …).
 
 pub mod board;
 pub mod clearance;

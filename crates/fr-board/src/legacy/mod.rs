@@ -1,13 +1,10 @@
-//! The pre-rewrite board model, kept only so the crates that still consume it
-//! keep compiling.
+//! The pre-rewrite board model.
 //!
-//! `fr-core`, `fr-autoroute` and `fr-drc` are slated for replacement by
-//! `fr-core` (rewired), `fr-router` and `fr-check` (`ARCHITECTURE.md`, crate
-//! architecture). Until then they import [`BasicBoard`] and its per-type
-//! `Vec`s, which is a shape the new model deliberately does not have: the real
-//! model is one heterogeneous [`ItemStore`](crate::store::ItemStore) with
-//! descending-id iteration, not five parallel arrays with `Vec` positions for
-//! identity.
+//! Its last consumers (`fr-autoroute`, `fr-drc`, `fr-core::legacy`) were deleted
+//! in M4. The module remains only because the crate root still re-exports
+//! [`BasicBoard`] and its per-type `Vec`s; the real model is one heterogeneous
+//! [`ItemStore`](crate::store::ItemStore) with descending-id iteration, not five
+//! parallel arrays with `Vec` positions for identity.
 //!
 //! Everything here is the old code verbatim, with one change: [`ItemHeader`]
 //! now carries the new [`FixedState`](crate::item::FixedState), whose variants

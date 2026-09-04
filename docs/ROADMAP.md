@@ -118,9 +118,9 @@ Gate results (2026-08-28):
 - G1.2b ✅ internal-consistency property tests; G1.2c ✅ round-trip fixed point incl. Referee
   judgement equality
 - G1.3 ✅ workspace fully green (600 passed / 0 failed; the ≥140 assert is manifest-driven now);
-  clippy clean except legacy crates slated for M2 deletion
+  clippy clean except the then-legacy crates (deleted in M4)
 - Pipeline switched: fr-cli default = import → check → SES passthrough (exit 3 until M2);
-  fr-drc retired behind the legacy feature
+  `fr-drc` deleted (M4)
 
 Gates (all executable without a router):
 - **G1.0** golden-dump harness runs: our importer loads all 46 fixtures and emits a comparable
@@ -459,7 +459,8 @@ quality verdict, and `--serial-perf` refuses to start a run whose numbers would 
   rejected, per knob. CLI compatibility table.
 - CI: build + clippy + tests + fixture fetch + jar-package audit + 6-board bench smoke with
   regression thresholds + spec-consistency lint over the nine specs' constant tables.
-- `docs/PARITY-DIVERGENCES.md` complete; dead surface deleted (CUDA stub, fake bench bins).
+- `docs/PARITY-DIVERGENCES.md` complete; dead surface deleted (CUDA stub, fake bench bins,
+  `crates/fr-autoroute`, `crates/fr-drc`).
 
 ## Standing risks
 
