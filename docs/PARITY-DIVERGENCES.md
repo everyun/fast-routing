@@ -418,6 +418,34 @@ ARCHITECTURE "Budgets".
   `bench/README.md`, "Judging a session"; the module docs of `fr_io::specctra::overlay` carry
   the fixture evidence.
 
+## Candidates (recorded ahead of any code change; **no behaviour change yet**)
+
+- **Edge.Cuts inner cutouts arrive in the DSN as zero-clearance keepouts, and KiCad
+  judges the same geometry at 0.5 mm copper_edge** (candidate owner: `fr-io`).
+  *Data* (REPORT-easyeda class (b), evidence `~/fr-work/reports/drc-delta-classification.md`):
+  29 of the stable added violations in the OOS G4 KiCad-DRC delta — cla45-sensor-l6 13,
+  cla45-sensor-hdi 16 — are `copper_edge_clearance` against **inner** cutouts, actual
+  0.13–0.5 mm vs the required 0.5000 mm.
+  *Upstream behaviour*: KiCad exports Edge.Cuts inner cutouts into the Specctra file as
+  `(keepout (polygon signal …))` whose bbox is the cutout (measured). The release router
+  treats a keepout as a hard obstacle at **zero** clearance — traces may run flush against
+  it — and the synthesized `board_edge` 500 µm clearance class covers only the outer
+  `(boundary)`. KiCad, on the same geometry, enforces its built-in `copper_edge` default of
+  0.5 mm (the fixture `(setup …)` declares no constraint fields). Same object, genuinely
+  different rule semantics on both sides of the comparison.
+  *Possible mapping*: `fr-io` could route inner-cutout keepouts into the `board_edge`
+  clearance class instead of the zero-clearance keepout path — the DSN carries the geometry
+  and the `(boundary)` synthesis already exists. Whether that is parity (closer to what
+  KiCad meant by the cutout) or a new divergence (further from the jar's zero-clearance
+  keepout) is a dispatcher decision; this entry changes nothing until then.
+
+- **Cosmetic: `(board_edge, board_edge)` diagonal clearance cells are materialized by our
+  import where the Java dump leaves them absent.** easyeda-pcb1 G1.0 golden compare
+  (REPORT-easyeda §1): exactly 4 cells differ — `(board_edge,board_edge)` diagonal on
+  layers 1/2/15/16, ours 19.686, Java absent. Edge-vs-edge self-clearance has no routing
+  semantics and no fixture gates on it; recorded so the next golden compare does not
+  re-investigate. Worth an `fr-io` look only if G1.1 ever gates this fixture.
+
 ## Rejected divergences (things we deliberately do NOT fix)
 
 - **`SesReader` counting a wire it could not insert.** `SesReader.processWireScope` calls the
