@@ -1,0 +1,99 @@
+{
+  "notes": [
+    "Out-of-sample G2.4 catalog. DSN files are produced by export_oos.py.",
+    "CLA45 .kicad_pcb files are copied out of the vault; the vault is never written.",
+    "Current CLA45 production is 6-layer through-hole (HDI forbidden). HDI boards are the earlier generation; both are included because ROADMAP G2.4 names 'CLA45 threeboard 6-layer HDI exports'."
+  ],
+  "boards": [
+    {
+      "stem": "cla45-computeboard",
+      "kind": "kicad_pcb",
+      "origin": "computeboard/computeboard.kicad_pcb",
+      "origin_root": "vault",
+      "strip_copper": false,
+      "plane_patch": [],
+      "snap_angle_patch": null,
+      "why": "8-layer CLA45 compute floorplan, already unrouted, 4 signal + 4 power in the PCB file"
+    },
+    {
+      "stem": "cla45-sensor-hdi",
+      "kind": "kicad_pcb",
+      "origin": "sensorboard/sensorboard-hdi.kicad_pcb",
+      "origin_root": "vault",
+      "strip_copper": false,
+      "plane_patch": [],
+      "snap_angle_patch": null,
+      "why": "CLA45 sensor 6-layer HDI export (earlier generation)"
+    },
+    {
+      "stem": "cla45-compute-hdi6cs",
+      "kind": "kicad_pcb",
+      "origin": "threeboard-m3/workstreams/compute-production/ecad/compute-core-hdi6cs.kicad_pcb",
+      "origin_root": "vault",
+      "strip_copper": false,
+      "plane_patch": [],
+      "snap_angle_patch": null,
+      "why": "CLA45 compute 6-layer HDI (threeboard HDI generation)"
+    },
+    {
+      "stem": "cla45-power-io-l6",
+      "kind": "kicad_pcb",
+      "origin": "threeboard-m3/workstreams/l6-l-production-v1/kicad/power-io-l6-80-freerouting-seed-v1.kicad_pcb",
+      "origin_root": "vault",
+      "strip_copper": false,
+      "plane_patch": [],
+      "snap_angle_patch": null,
+      "why": "CLA45 Power-I/O L6 through-hole seed; KiCad already marks In1/In3/In4 as power"
+    },
+    {
+      "stem": "cla45-sensor-l6",
+      "kind": "kicad_pcb",
+      "origin": "threeboard-m3/workstreams/l6-l-production-v1/kicad/sensor-l6-freerouting-seed-v1.kicad_pcb",
+      "origin_root": "vault",
+      "strip_copper": false,
+      "plane_patch": ["In1.GND", "In4.GND"],
+      "snap_angle_patch": null,
+      "why": "CLA45 Sensor L6 through-hole freerouting seed (0 tracks). Inner In1.GND/In4.GND patched from signal to power so the DSN has planes while keeping 4 signal layers"
+    },
+    {
+      "stem": "kicad-coldfire",
+      "kind": "kicad_pcb",
+      "origin": "kit-dev-coldfire-xilinx_5213/kit-dev-coldfire-xilinx_5213.kicad_pcb",
+      "origin_root": "demos",
+      "strip_copper": false,
+      "plane_patch": [],
+      "snap_angle_patch": null,
+      "why": "Official KiCad demo, 4 copper layers, as-exported"
+    },
+    {
+      "stem": "kicad-coldfire-unrouted",
+      "kind": "kicad_pcb",
+      "origin": "kit-dev-coldfire-xilinx_5213/kit-dev-coldfire-xilinx_5213.kicad_pcb",
+      "origin_root": "demos",
+      "strip_copper": true,
+      "plane_patch": [],
+      "snap_angle_patch": "ninety_degree",
+      "why": "Same demo with tracks/vias deleted (clean unrouted) and snap_angle ninety_degree patched into the DSN"
+    },
+    {
+      "stem": "kicad-tutorial",
+      "kind": "kicad_pcb",
+      "origin": "examples/tutorial_board/tutorial_board.kicad_pcb",
+      "origin_root": "fr-java-release",
+      "strip_copper": true,
+      "plane_patch": [],
+      "snap_angle_patch": "none",
+      "why": "Freerouting tutorial board re-exported from its .kicad_pcb, copper stripped, snap_angle none"
+    },
+    {
+      "stem": "easyeda-pcb1",
+      "kind": "dsn_copy",
+      "origin": "fixtures/Issue684-Autorouter_PCB1_2026-5-8.dsn",
+      "origin_root": "fr-java-release",
+      "strip_copper": false,
+      "plane_patch": [],
+      "snap_angle_patch": null,
+      "why": "Non-KiCad export: EasyEDA Pro 2.2.47.7, 4 signal layers, not in the upstream 46-fixture suite"
+    }
+  ]
+}

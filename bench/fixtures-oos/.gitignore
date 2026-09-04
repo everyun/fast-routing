@@ -1,0 +1,4 @@
+# Downloaded KiCad demo originals (re-fetched by export_oos.py).
+demos/
+*.kicad_prl
+
