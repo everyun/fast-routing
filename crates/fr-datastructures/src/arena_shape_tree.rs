@@ -831,23 +831,37 @@ impl<P: Copy> ArenaShapeTree<P> {
 
     // --------------------------------------------------------------- queries
 
-    /// Calls `visit` for every leaf whose bounds overlap `query`.
+    /// Calls `visit` for every leaf whose bounds overlap `query`, and returns
+    /// the number of nodes whose bounds the walk had to test.
     ///
     /// The zero-allocation query primitive: `stack` is caller-owned and reused,
     /// `visit` decides what to keep. Reports leaves in traversal order, which
     /// depends on the insertion history — callers that need determinism must
     /// sort by their own `(id, shape_index)` key (spec §10).
-    pub fn visit_overlaps<F>(&self, query: &OctBounds, stack: &mut QueryStack, mut visit: F)
+    ///
+    /// # Why the node count comes back instead of being counted here
+    ///
+    /// "Nodes touched per query" is the cost proxy a router wants in its
+    /// metrics (`fr_metrics::counters::Counter::TreeNodesVisited`), and only
+    /// the walk can know it. Counting it *here* would mean this crate — which
+    /// every other one sits on top of — taking a dependency on the metrics
+    /// crate, or carrying a counter trait through a `FnMut` hot loop. Returning
+    /// a `u64` the caller may ignore costs one register and lets the board
+    /// layer bump its counter **once per query** instead of once per node,
+    /// which is the difference between an accumulator in a register and half a
+    /// billion thread-local read-modify-writes on a board like Issue230.
+    pub fn visit_overlaps<F>(&self, query: &OctBounds, stack: &mut QueryStack, mut visit: F) -> u64
     where
         F: FnMut(ArenaLeafId, P),
     {
         stack.clear();
         if self.root == NONE {
-            return;
+            return 0;
         }
+        let mut nodes_tested = 1u64;
         let mut idx = self.root;
         if !self.nodes[idx as usize].bounds.intersects(query) {
-            return;
+            return nodes_tested;
         }
         // Descend into one child and defer the other, instead of pushing both
         // and popping one back: the common node stays in a register and only
@@ -858,6 +872,7 @@ impl<P: Copy> ArenaShapeTree<P> {
                 NodeKind::Inner { left, right } => {
                     let hit_left = self.nodes[left as usize].bounds.intersects(query);
                     let hit_right = self.nodes[right as usize].bounds.intersects(query);
+                    nodes_tested += 2;
                     if hit_left {
                         if hit_right {
                             stack.push(right);
@@ -884,13 +899,17 @@ impl<P: Copy> ArenaShapeTree<P> {
                 None => break,
             }
         }
+        nodes_tested
     }
 
     /// Collects every leaf overlapping `query` into `out`, which is cleared
     /// first and reused, so a warmed-up caller allocates nothing per query.
-    pub fn overlaps(&self, query: &OctBounds, out: &mut Vec<(ArenaLeafId, P)>) {
+    ///
+    /// Returns the node-test count, as [`visit_overlaps`](Self::visit_overlaps)
+    /// does.
+    pub fn overlaps(&self, query: &OctBounds, out: &mut Vec<(ArenaLeafId, P)>) -> u64 {
         let mut stack = QueryStack::new();
-        self.overlaps_with_stack(query, &mut stack, out);
+        self.overlaps_with_stack(query, &mut stack, out)
     }
 
     /// [`ArenaShapeTree::overlaps`] with a caller-owned DFS stack — fully
@@ -900,9 +919,9 @@ impl<P: Copy> ArenaShapeTree<P> {
         query: &OctBounds,
         stack: &mut QueryStack,
         out: &mut Vec<(ArenaLeafId, P)>,
-    ) {
+    ) -> u64 {
         out.clear();
-        self.visit_overlaps(query, stack, |id, payload| out.push((id, payload)));
+        self.visit_overlaps(query, stack, |id, payload| out.push((id, payload)))
     }
 
     /// Iterates every live leaf in slab order.
@@ -1354,6 +1373,81 @@ mod tests {
         let mut out = Vec::new();
         tree.overlaps(&square(0, 0, 0, 0), &mut out);
         assert_eq!(out.len(), n as usize);
+    }
+
+    #[test]
+    fn the_walk_reports_how_many_nodes_it_tested() {
+        let mut tree: ArenaShapeTree<u32> = ArenaShapeTree::new();
+        let mut out = Vec::new();
+
+        // Empty tree: nothing is tested, and nothing is reported.
+        assert_eq!(tree.overlaps(&square(0, 0, 1, 1), &mut out), 0);
+
+        // One leaf: the root is the leaf, so exactly one bounds test either way.
+        tree.insert(square(0, 0, 10, 10), 0);
+        assert_eq!(tree.overlaps(&square(0, 0, 1, 1), &mut out), 1);
+        assert_eq!(out.len(), 1);
+        assert_eq!(tree.overlaps(&square(500, 500, 501, 501), &mut out), 1);
+        assert!(out.is_empty(), "a rejected root still counts as one test");
+
+        // Two disjoint leaves under one inner node: the root plus both children.
+        tree.insert(square(1000, 1000, 1010, 1010), 1);
+        assert_eq!(tree.overlaps(&square(0, 0, 1, 1), &mut out), 3);
+        assert_eq!(out.len(), 1, "only the near leaf is reported");
+
+        // The count is a cost proxy, so it must grow with the part of the tree
+        // the query actually reaches, and never exceed the whole tree.
+        for i in 2..200u32 {
+            tree.insert(square(i as i32 * 20, 0, i as i32 * 20 + 5, 5), i);
+        }
+        let everything = tree.overlaps(&square(-10_000, -10_000, 10_000, 10_000), &mut out);
+        assert_eq!(out.len(), tree.len());
+        assert!(everything <= (2 * tree.node_count()) as u64);
+        let nothing = tree.overlaps(&square(-10_000, -10_000, -9_999, -9_999), &mut out);
+        assert!(out.is_empty());
+        assert!(
+            nothing < everything,
+            "a pruned query must test fewer nodes ({nothing} vs {everything})"
+        );
+    }
+
+    /// The generation guard is a property of the slot, not of what the slot
+    /// carries: a payload wide enough to change `Node`'s layout must not change
+    /// which handles resolve.
+    #[test]
+    fn a_wide_payload_keeps_the_aba_guarantee() {
+        // Same shape as the board's leaf payload after the fast-reject change:
+        // ids, a slot index, a shape index and a layer.
+        type Wide = (u32, u32, u16, i32);
+        let mut tree: ArenaShapeTree<Wide> = ArenaShapeTree::new();
+        let a = tree.insert(square(0, 0, 10, 10), (1, 7, 0, 3));
+        let b = tree.insert(square(20, 20, 30, 30), (2, 8, 1, 4));
+        assert_eq!(tree.get(a), Some((1, 7, 0, 3)));
+
+        // Free the slots and let a new insert reuse both of them — removing a
+        // leaf frees the leaf *and* its parent, so a slab that does not grow is
+        // the proof that `a`'s slot is back in service.
+        let slab = tree.slab_len();
+        assert_eq!(tree.remove(a), Some((1, 7, 0, 3)));
+        let c = tree.insert(square(0, 0, 10, 10), (3, 7, 0, 3));
+        assert_eq!(tree.slab_len(), slab, "both freed slots were recycled");
+
+        // The stale handle is dead in every way, however the slot is now used.
+        assert_eq!(tree.get(a), None);
+        assert!(!tree.contains_leaf(a));
+        assert_eq!(tree.leaf_bounds(a), None);
+        assert_eq!(tree.set_payload(a, (9, 9, 9, 9)), None);
+        assert_eq!(tree.remove(a), None);
+        assert_eq!(tree.get(c), Some((3, 7, 0, 3)));
+        assert_eq!(tree.get(b), Some((2, 8, 1, 4)));
+        tree.check_invariants().unwrap();
+
+        // And the payload really does travel to the visitor by value.
+        let mut seen = Vec::new();
+        tree.visit_overlaps(&square(0, 0, 1, 1), &mut QueryStack::new(), |_, p| {
+            seen.push(p)
+        });
+        assert_eq!(seen, vec![(3, 7, 0, 3)]);
     }
 
     #[test]

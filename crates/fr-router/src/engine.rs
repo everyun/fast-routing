@@ -395,11 +395,8 @@ impl<'b> AutorouteEngine<'b> {
             ItemKind::Pin(pin) => Some(pin.center.surrounding_box().to_simplex()),
             ItemKind::Via(via) => Some(via.center.surrounding_box().to_simplex()),
             ItemKind::Trace(trace) => {
-                fr_geometry::planar::LineSegment::from_polyline(
-                    &trace.polyline,
-                    index as usize + 1,
-                )
-                .map(|segment| segment.to_simplex())
+                fr_geometry::planar::LineSegment::from_polyline(&trace.polyline, index as usize + 1)
+                    .map(|segment| segment.to_simplex())
             }
             _ => self.item_tile(item, index),
         }
@@ -444,6 +441,13 @@ impl<'b> AutorouteEngine<'b> {
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
         self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
+        // Upstream sorts *one* list — items, rooms and own-net entries together
+        // (`SortedRoomNeighbours.java:139-147`) — and then splits it, so the
+        // own-net entries reach `calculate_target_doors` in ascending
+        // `(id_no, shape_index)`. Our tree query splits first, so the own-net
+        // half needs its own sort, and it needs it only here: this is the entry
+        // point whose caller reads `own_net`.
+        own_net.sort_unstable();
         // One ascending `get_id_no()` key over items *and* rooms together —
         // `SortedRoomNeighbours.java:139-147`. See
         // [`sort_obstacles_for_neighbours`](Self::sort_obstacles_for_neighbours)
@@ -461,6 +465,12 @@ impl<'b> AutorouteEngine<'b> {
     /// the neighbour order and `complete_shape` immediately re-sorted it. On
     /// `Issue230` that list averages 508 obstacles over 205 k completion
     /// queries — 104 M elements through a comparison sort that nothing reads.
+    ///
+    /// `own_net` comes back **unsorted** here, for the same reason: nothing on
+    /// this path reads it (`ShapeSearchTree.complete_shape` has no own-net
+    /// concept at all — it filters on `is_trace_obstacle` inline and drops the
+    /// rest), and on `Issue039` the sort it used to run was 36.4 M entries over
+    /// 3.74 M completion queries.
     pub fn overlapping_obstacles_tile_for_completion(
         &mut self,
         query_tile: &fr_board::shape::TileShape,
@@ -475,6 +485,9 @@ impl<'b> AutorouteEngine<'b> {
 
     /// The body the two ordered entry points share: the tree walk, the
     /// obstacle/own-net split and the room-tree tail, in no particular order.
+    ///
+    /// `own_net` is left unsorted; the entry point whose caller reads it sorts
+    /// it.
     fn collect_obstacles_tile(
         &mut self,
         query_tile: &fr_board::shape::TileShape,
@@ -492,7 +505,15 @@ impl<'b> AutorouteEngine<'b> {
             .trees()
             .compensated_tree(self.tree_class)
             .unwrap_or_else(|| self.board.default_tree());
-        tree.overlapping_tree_entries(
+        // Both ordered entry points re-sort the result
+        // (`sort_obstacles_for_completion` / `sort_obstacles_for_neighbours`),
+        // so the TreeSet order `overlapping_tree_entries` would impose is
+        // thrown away. Upstream matches: `complete_shape` walks then
+        // `Collections.sort`s with `Leaf.compareTo`, and
+        // `SortedRoomNeighbours.calculate_neighbours` re-sorts after the query
+        // (`:173-179`). `insert_forced` / `pull_tight` still use the sorted
+        // walk — they consume in query order.
+        tree.overlapping_tree_entries_unsorted(
             self.board.store(),
             query_tile,
             layer,
@@ -510,8 +531,6 @@ impl<'b> AutorouteEngine<'b> {
                 own_net.push((entry.item, entry.shape_index));
             }
         }
-        own_net.sort_unstable();
-
         self.scratch_rooms.clear();
         self.room_tree.overlaps_with_stack(
             &query_tile.bounds(),
@@ -537,7 +556,27 @@ impl<'b> AutorouteEngine<'b> {
                             // simplex>)`, so the room set is the same whichever
                             // flavor the caller handed in.
                             fr_board::shape::TileShape::Simplex(s) => room.shape.intersects(s),
-                            fr_board::shape::TileShape::Box(b) => room.shape.intersects_box(b),
+                            // A box query answers itself off the room's
+                            // *memoized* octagon: a room the box already
+                            // contains overlaps it, and the shape test is
+                            // skipped. This is not a heuristic — the room is a
+                            // non-empty 2-dimensional tile inside its own
+                            // bounding box — and it is the whole cost of this
+                            // filter on the completion path, where the query
+                            // box starts as the board bounding box and
+                            // therefore contains every room there is.
+                            // `Simplex::intersects_box` has the same
+                            // short-circuit inside it, but only after
+                            // `bounded_bounding_box` has walked the room's
+                            // border lines and intersected each consecutive
+                            // pair; `Room::octagon` walks them once per room
+                            // per connection instead of once per query.
+                            // Measured on `Issue039`: 770 M room candidates
+                            // reach this test over one 285 s run.
+                            fr_board::shape::TileShape::Box(b) => {
+                                b.contains_box(&room.octagon().bounding_box())
+                                    || room.shape.intersects_box(b)
+                            }
                             fr_board::shape::TileShape::Oct(o) => room.shape.intersects_octagon(o),
                         }
                 })
@@ -666,7 +705,15 @@ impl<'b> AutorouteEngine<'b> {
             }
             Obstacle::Room(room) => {
                 let room = self.rooms.room(room);
-                room.alive.then(|| (room.layer, room.shape.bounding_box()))
+                // `Room::octagon` is the memoized bounding octagon, and its
+                // `[left_x, right_x] × [bottom_y, top_y]` is the same box
+                // `shape.bounding_box()` computes — from the same corners, once
+                // per room instead of once per carve-loop visit. The unbounded
+                // case answers the coordinate envelope, which is what
+                // `Simplex::bounding_box` answers for an unbounded simplex too;
+                // and the table above already sanctions a wider box here.
+                room.alive
+                    .then(|| (room.layer, room.octagon().bounding_box()))
             }
         }
     }
@@ -808,10 +855,10 @@ const BOUNDS_MARGIN: i32 = 1000;
 
 #[cfg(test)]
 mod tests {
-    use super::{Obstacle, RoomId};
+    use super::{AutorouteEngine, Obstacle, RoomId};
     use crate::test_support::TestFixture;
     use fr_board::item::ItemId;
-    use fr_geometry::planar::IntBox;
+    use fr_geometry::planar::{IntBox, IntOctagon, Simplex};
 
     #[test]
     fn dedup_in_place_is_vec_dedup_over_a_slice() {
@@ -905,9 +952,15 @@ mod tests {
             completion_order.len() > 1,
             "the probe must return more than one obstacle to say anything about order"
         );
+        let mut sorted_completion_own_net = completion_own_net.clone();
+        sorted_completion_own_net.sort_unstable();
         assert_eq!(
-            neighbour_own_net, completion_own_net,
-            "the own-net split is part of the shared gather"
+            neighbour_own_net, sorted_completion_own_net,
+            "the own-net split is part of the shared gather; only the sort is not"
+        );
+        assert!(
+            neighbour_own_net.windows(2).all(|pair| pair[0] <= pair[1]),
+            "the neighbour entry point owes `calculate_target_doors` ascending order"
         );
         let mut a = neighbour_order.clone();
         let mut b = completion_order.clone();
@@ -928,6 +981,89 @@ mod tests {
         let mut resorted = completion_order.clone();
         engine.sort_obstacles_for_neighbours(&mut resorted);
         assert_eq!(resorted, neighbour_order);
+    }
+
+    /// A room shape whose corners are *not* its bounding box's corners, so the
+    /// two claims the octagon memo rests on are actually exercised.
+    ///
+    /// `[-100,100]²` with the four corners clipped at `|x ± y| ≤ 150`: the
+    /// extreme x is still ±100 (reached at `|y| ≤ 50`), so the bounding box is
+    /// the whole square, but `(95, 95)` — inside that box — is outside the room.
+    fn clipped_square() -> Simplex {
+        IntOctagon::new(-100, -100, 100, 100, -150, 150, -150, 150).to_simplex()
+    }
+
+    /// [`AutorouteEngine::obstacle_layer_and_bounds`] answers a room off
+    /// `Room::octagon`, which is memoized; the claim that makes that legal is
+    /// that the octagon's box *is* the shape's bounding box.
+    #[test]
+    fn a_rooms_obstacle_bounds_are_its_shape_bounding_box() {
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        let shape = clipped_square();
+        let room = engine.rooms.add_complete_free_room(shape.clone(), 0);
+        let (layer, bounds) = engine
+            .obstacle_layer_and_bounds(Obstacle::Room(room))
+            .expect("a live room has bounds");
+        assert_eq!(layer, 0);
+        assert_eq!(bounds, shape.bounding_box());
+        // Twice, because the second call is the memoized one and a memo that
+        // answers differently is the whole risk.
+        assert_eq!(
+            engine.obstacle_layer_and_bounds(Obstacle::Room(room)),
+            Some((0, shape.bounding_box()))
+        );
+    }
+
+    /// The box arm's containment short circuit accepts a room the query box
+    /// contains without asking the geometry — and, crucially, does **not**
+    /// accept a room that only overlaps the box's *bounds*.
+    #[test]
+    fn a_box_query_short_circuits_containment_without_widening_the_room_set() {
+        let fixture = TestFixture::two_layer_with_pads();
+        let mut engine = fixture.engine();
+        let shape = clipped_square();
+        let room = engine.rooms.add_complete_free_room(shape.clone(), 0);
+        engine.mint_room_id(room);
+        engine.insert_room_in_tree(room);
+
+        let rooms_for = |engine: &mut AutorouteEngine<'_>, query: &fr_board::shape::TileShape| {
+            let mut obstacles = Vec::new();
+            let mut own_net = Vec::new();
+            engine.overlapping_obstacles_tile_for_completion(
+                query,
+                Some(0),
+                crate::test_support::TEST_NET,
+                &mut obstacles,
+                &mut own_net,
+            );
+            obstacles
+                .into_iter()
+                .filter_map(|obstacle| match obstacle {
+                    Obstacle::Room(room) => Some(room),
+                    Obstacle::Item(..) => None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        // The whole board contains the room: the short circuit fires.
+        let bounds = engine.bounds();
+        assert_eq!(
+            rooms_for(&mut engine, &fr_board::shape::TileShape::Box(bounds)),
+            vec![room]
+        );
+        // The clipped corner: the box meets the room's *bounding box* and the
+        // tree hands the room over, but no point of the room is in the box, so
+        // the exact test still has to run and still has to say no.
+        let corner = IntBox::new(90, 90, 100, 100);
+        assert!(
+            corner.intersects(&shape.bounding_box()),
+            "the probe only means something if the bounds do overlap"
+        );
+        assert!(
+            rooms_for(&mut engine, &fr_board::shape::TileShape::Box(corner)).is_empty(),
+            "a room the box misses must not survive the containment short circuit"
+        );
     }
 
     #[test]

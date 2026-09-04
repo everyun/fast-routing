@@ -467,8 +467,16 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     // `maxItems` calls `requestStop()` over *all* stages, so hitting the item
     // cap also skips the optimizer (conformance #42). Nothing else about the
     // routing result gates it.
-    let hit_the_item_cap =
-        settings.max_items > 0 && router.total_items_routed() >= settings.max_items;
+    //
+    // Read off the *run's* stop reason rather than off `router.total_items_routed()`:
+    // the portfolio branch races arms on their own `BatchRouter`s and the
+    // `!run_router()` branch never starts one, so the local `router` has routed
+    // nothing on two of the three paths and would report "cap not hit" for a
+    // winning arm that did hit it. `StopReason::ItemLimit` is set from
+    // `PassOutcome::hit_item_cap` (`batch/schedule.rs:759-766`) — the same flag
+    // that carries upstream's `requestStop()` — and it travels with whichever
+    // outcome won.
+    let hit_the_item_cap = outcome.stop_reason == Some(StopReason::ItemLimit);
     // A spent job budget skips the stage outright. The optimizer's own
     // per-item router polls the deadline too, so entering it would terminate —
     // but only after a full sweep of every routed item, each one ripped,
@@ -828,10 +836,7 @@ impl RoutingJob {
     /// it without killing anything is to look at the world between the phases.
     /// It is not a progress API — the callback runs on the job's own thread and
     /// blocks it.
-    pub fn run_observed(
-        &self,
-        observe: &mut dyn FnMut(JobPhase),
-    ) -> Result<JobReport, JobError> {
+    pub fn run_observed(&self, observe: &mut dyn FnMut(JobPhase)) -> Result<JobReport, JobError> {
         let import_started = std::time::Instant::now();
         let mut design = self.import()?;
         let import_duration = import_started.elapsed();
@@ -1171,6 +1176,49 @@ mod tests {
   )
 )"#;
 
+    /// [`BOARD`] plus a second net the router provably cannot close: `P4` sits in a pocket
+    /// sealed by two keepouts and the board edge, on *both* signal layers, so neither a
+    /// detour nor a via escapes it.
+    ///
+    /// It exists to give
+    /// [`the_optimizer_stage_entry_does_not_read_the_routing_result`] a board the router
+    /// leaves incomplete and well below the optimizer's near-maximum-score gate.
+    const BOARD_WITH_A_BLOCKED_NET: &str = r#"(pcb pipeline_blocked
+  (parser (string_quote "))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path signal 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (keepout "" (rect F.Cu 8300 6800 8600 10000))
+    (keepout "" (rect B.Cu 8300 6800 8600 10000))
+    (keepout "" (rect F.Cu 8300 6800 10000 7100))
+    (keepout "" (rect B.Cu 8300 6800 10000 7100))
+    (rule (width 250) (clearance 200))
+  )
+  (placement
+    (component pad2
+      (place P1 1000 1000 front 0)
+      (place P2 6000 1000 front 0)
+      (place P3 1000 8000 front 0)
+      (place P4 9000 8000 front 0)
+    )
+  )
+  (library
+    (image pad2 (pin round_pad 1 0 0))
+    (padstack round_pad (shape (circle F.Cu 400)) (shape (circle B.Cu 400)) (attach off))
+  )
+  (network
+    (net SIG (pins P1-1 P2-1))
+    (net BLK (pins P3-1 P4-1))
+    (class default SIG BLK (rule (width 250) (clearance 200)))
+  )
+  (wiring
+    (wire (path F.Cu 250 1000 1000 6000 1000) (net SIG) (type route))
+  )
+)"#;
+
     fn job() -> RoutingJob {
         RoutingJob::new(BOARD.as_bytes(), "pipeline_smoke.dsn")
     }
@@ -1270,6 +1318,59 @@ mod tests {
             .is_none());
         // Switching a stage that had nothing to do off changes no copper.
         assert_eq!(on.census, off.census);
+    }
+
+    /// The optimizer stage's entry condition is `getRunOptimizer()` and nothing else.
+    ///
+    /// Upstream's headless entry point runs the stage on whatever board the router handed it
+    /// (`RoutingJobSchedulerActionThread:179`, an unguarded `if
+    /// (job.routerSettings.getRunOptimizer())` placed after the routing branch closes). It does
+    /// not ask whether the board came out complete, what it scores, or how long the router took;
+    /// the only routing outcome that reaches the decision is `maxItems`, which stops the *whole*
+    /// job via `requestStop()` (`BatchAutorouter.autoroute_pass:496-505`, and the
+    /// `hit_the_item_cap` term above).
+    ///
+    /// This is the test that has to fail before "the board is not complete, so skip the
+    /// optimizer" or "the score is good enough, so skip the optimizer" can be introduced as a
+    /// wall-clock saving. Both are tempting — the stage is 80-84 % of the wall on the corpus's
+    /// budget-burners — and neither is upstream. The board's own gates (the near-maximum-score
+    /// break, the improvement threshold, `maxPasses`, `maxItems`) all live *inside*
+    /// `runBatchLoop`, where they are already ported, and they are reached only by entering.
+    #[test]
+    fn the_optimizer_stage_entry_does_not_read_the_routing_result() {
+        let report = RoutingJob::new(BOARD_WITH_A_BLOCKED_NET.as_bytes(), "pipeline_blocked.dsn")
+            .with_stage(RouterStage::Maze(MazeOptions::with_passes(1)))
+            .run()
+            .expect("the board imports");
+        let router = report.router.as_ref().expect("the stage reports");
+        assert_eq!(
+            report.stats.max_connections, 2,
+            "one closable connection and one sealed one: {:?}",
+            report.stats
+        );
+        assert_eq!(
+            router.incomplete_count, 1,
+            "the pocket has to stay sealed or this proves nothing: {router:?}"
+        );
+
+        let optimizer = router
+            .optimizer
+            .as_ref()
+            .expect("an incomplete board still enters the optimization stage");
+        // Not the near-maximum-score exit: that one is an entry the loop declines, and it would
+        // hide a stage that had been skipped outright behind an identical-looking report.
+        assert_ne!(
+            optimizer.exit, "near-maximum score",
+            "the score gate must not be what let this board through: {optimizer:?}"
+        );
+        assert!(
+            optimizer.passes >= 1,
+            "the loop ran a real pass on the incomplete board: {optimizer:?}"
+        );
+        assert_eq!(
+            optimizer.incomplete_count, 1,
+            "and it did not close, or lose, the sealed connection: {optimizer:?}"
+        );
     }
 
     /// The import clock is the *import's*, not the run's — the whole point of

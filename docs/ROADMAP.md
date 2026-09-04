@@ -230,6 +230,11 @@ Gates (all executable without a router):
   side's clock is trustworthy under contention and the ratio is not either; the JVM's extra
   threads make it lose more of the machine than we do, which biases it our way. The serial
   re-measurement is in the M3 perf log below: 1.33x, not 1.56x.]**
+  **[Also: the Java "default" arm of that 1.56× / 3.52× pair was running *without* the
+  optimizer — `$TMPDIR/freerouting/freerouting.json` had `router.optimizer.enabled=false`,
+  and `-de` does not restore it. That is a settings contaminant, not an upstream default.
+  See `docs/PARITY-DIVERGENCES.md` Optimizer, "`$TMPDIR/freerouting/freerouting.json` is a
+  measurement contaminant".]**
   M2 declared functionally complete; residual 7 fold into M3 (their fix IS the M3 work).
 - 2026-08-29 after deadline/SES-on-stop + optimizer-cost + final-restore fixes: **36/46,
   zero regressions, zero SIGKILLs**. java_finished 22/29, java_timeout 12/14 (absolute
@@ -319,6 +324,9 @@ Gates (all executable without a router):
     figures do not. `bench/run_bench.py` now records the W of every row, labels the timing
     columns with it, and refuses to put a `W > 1` row into a geomean at all, so this class of
     number cannot be produced again by accident.]**
+    **[Same json contaminant as the 2026-08-29 first-read footnote: the Java arm of
+    "default (1.56×) / `--no-optimizer` (3.52×)" was not running the optimizer.
+    `docs/PARITY-DIVERGENCES.md` Optimizer.]**
 
 ## M3 — Speed
 
@@ -404,6 +412,42 @@ quality verdict, and `--serial-perf` refuses to start a run whose numbers would 
   that was failing): `4f18886` → `Issue209-split10` killed at 300.01 s, exit −9, **no session**;
   with the fix → exit 4 at 283.74 s with a 74 979-byte session, and the other three boards in
   the sweep also moved from 285.7-287.5 s (past the budget) to 283.1-284.3 s (inside it).
+- **Wave 5 (2026-08-30).** Three independent findings, committed together. Isolated-build
+  clocks below are the original A/B (serial, `nice -n 10`, interleaved); they are *not*
+  re-measured on this machine and are logged as the wave's own evidence.
+  - **Optimizer entry = `getRunOptimizer()`, premise retired.** Upstream's headless thread
+    (`RoutingJobSchedulerActionThread.java:179`) is one unguarded flag check after the
+    router. "The jar does not run the optimizer" was `$TMPDIR/freerouting/freerouting.json`
+    having `router.optimizer.enabled=false`; `-de` restores `router.enabled` only. Skipping
+    the stage on an incomplete board or a near-max score is a rejected divergence
+    (`docs/PARITY-DIVERGENCES.md` Optimizer + Rejected divergences). The pipeline now reads
+    the *run's* `StopReason::ItemLimit` rather than a local `BatchRouter`'s item count, so
+    the portfolio winner's cap is honoured.
+  - **Leaf-payload fast reject.** `LeafPayload` carries `slot` and `layer`; the layer filter
+    is one compare against the leaf the walk already loaded, and the slot is a direct index
+    instead of two binary searches. On `Issue230-CNH_Functional_Tester_1` `-mp 2
+    --deterministic`, 3 041 357 825 leaf resolutions, 22.5 % survive the layer test (77.5 %
+    now stop at one compare). Isolated-build wall: Issue230 `-mp 2` 194.98 s → **132.52 s
+    (1.47×)**; Issue034 `-mp 20` 16.33 s → 14.43 s (1.13×); Issue026 `-mp 20` 0.58 s →
+    0.56 s (1.04×). Every run in that table wrote a byte-identical session to its counterpart;
+    seven more boards at `-mp 3 --deterministic` (Issue110-RelayModule, Issue155, Issue187,
+    Issue159, Issue143, Issue163, Issue269) were byte-identical too. `tree_nodes_visited` is
+    now charged (was permanently zero). The hull stays out of the payload (argued, not
+    measured). `overlapping_tree_entries_unsorted` exists for the two callers that re-sort
+    (`complete_shape` / `SortedRoomNeighbours`); the `engine.rs` `collect_obstacles_tile`
+    call is switched to it behind an SES byte-identity gate on Issue230 and Issue034 at
+    `-mp 1 --deterministic`.
+  - **Connection trace (`FR_CONN_TRACE`), premise retired.** Wave 4's "tail pass burns its
+    budget on failing searches" does not hold. On `Issue039-bug-design` at the G2.1 budget
+    (285 s, 740 attempts): `init` is 1.1 s of 274 s (0.4 %); **2 of 740 attempts fail the
+    maze search at all** — the pass's `not_routed` column counts insertions that left no
+    copper, not searches that found no path, so "420 ms per failing connection" was timing
+    *successful* searches whose insertion was then discarded. There is no unreachability
+    pruning to add: the frontier is almost never exhausted. What is left is a flat
+    per-expansion cost — **116 µs against the lab jar's 36 µs** on the same board, at a
+    *lower* expansion count per attempt (3188 vs 3362) — and a `/usr/bin/sample` of the
+    loop puts **~86 % in `complete_expansion_room`** (free-space decomposition, not the
+    maze). Off unless `FR_CONN_TRACE` is set.
 
 ## M4 — Capability closure & release honesty
 

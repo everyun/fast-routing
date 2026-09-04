@@ -8,3 +8,9 @@ description = "Board data model for the freerouting Rust port (items, traces, vi
 [dependencies]
 fr-datastructures = { path = "../fr-datastructures" }
 fr-geometry = { path = "../fr-geometry" }
+# The `tree_nodes_visited` counter, charged once per query in
+# `search_tree::SearchTree::visit`. `fr-metrics` has no dependencies of its own
+# — that is what its `[dependencies]` section being empty is for — so this edge
+# cannot close a cycle, and with its `metrics` feature off every entry point is
+# an empty `const fn`.
+fr-metrics = { path = "../fr-metrics" }

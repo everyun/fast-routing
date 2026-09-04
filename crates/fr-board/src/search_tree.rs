@@ -30,7 +30,63 @@
 //! * **Deterministic result order is explicit.** Upstream gets it from
 //!   `TreeSet<Leaf>` ordered by `Item.compareTo` (descending id) then shape
 //!   index; a tree walk here reports leaves in traversal order, so
-//!   [`SearchTree::overlapping_tree_entries`] sorts by that key itself.
+//!   [`SearchTree::overlapping_tree_entries`] sorts by that key itself — and
+//!   [`SearchTree::overlapping_tree_entries_unsorted`] does not, for the two
+//!   upstream call sites that immediately impose an order of their own.
+//! * **The leaf carries what the query rejects on.** The payload holds the
+//!   shape's layer and the store slot its item is indexed under, so the layer
+//!   filter is one integer compare against a leaf the walk has already loaded
+//!   and the slot table is a direct index. See `LeafPayload` and
+//!   `SearchTree::visit` (both private; `cargo doc --document-private-items`);
+//!   the numbers are below.
+//!
+//! # The leaf-payload fast reject (M3 wave 5)
+//!
+//! A query used to pay a full resolution — `store.slot_of` (a **binary search**
+//! over the ordered index), the slot table, the shape vector, the hull vector,
+//! then `store.get` (a **second** binary search) — before it was allowed to ask
+//! the two cheapest questions there are: *is this shape even on my layer*, and
+//! *which slot is it in*. Both answers fit in one word each and were known at
+//! insert time, so they now ride in the leaf.
+//!
+//! What that is worth, counted rather than timed. `Issue230-CNH_Functional_Tester_1`,
+//! `-mp 2 --deterministic`, from an instrumented build of this file:
+//!
+//! | | |
+//! |---|---|
+//! | tree queries | 1 822 309 |
+//! | leaf resolutions (leaves the walk reported) | 3 041 357 825 |
+//! | of those, surviving the layer test | 683 365 117 (**22.5%**) |
+//!
+//! So **77.5%** of three billion leaf resolutions now end at one compare against
+//! a cache line the walk already owns, and the 22.5% that survive reach their
+//! slot entry and their item by two direct indices instead of two binary
+//! searches.
+//!
+//! And on a clock — isolated builds from one `git archive`, arms interleaved,
+//! serial, `nice -n 10`, best of the reps shown:
+//!
+//! | board | before | after | | reps |
+//! |---|---|---|---|---|
+//! | Issue230, `-mp 2 --deterministic` | 194.98 s | **132.52 s** | 1.47x | 3 |
+//! | Issue034, `-mp 20 --deterministic` | 16.33 s | **14.43 s** | 1.13x | 2 |
+//! | Issue026, `-mp 20 --deterministic` | 0.58 s | 0.56 s | 1.04x | 3 |
+//!
+//! Every run in that table wrote a **byte-identical** session file to its own
+//! arm's counterpart, and every counter in the `FRMETRIC` report except
+//! `tree_nodes_visited` came back identical — the change reorders work, it does
+//! not change what is indexed or what is found. (`tree_nodes_visited` is the
+//! exception on purpose: it was permanently zero and is now charged.) Seven
+//! more boards were run once per arm at `-mp 3 --deterministic` purely to check
+//! that: Issue110-RelayModule, Issue155, Issue187, Issue159, Issue143,
+//! Issue163 and Issue269 all came back byte-identical too.
+//!
+//! Issue034 (`16.33 s`) and Issue026 (`0.58 s`) are the honest small print: the
+//! win scales with how much of a run is spent in the tree, and on a two-layer
+//! board with a couple of hundred items — where the layer test rejects at most
+//! half and the store's ordered index fits in L1 — there is very little to
+//! reject and very little to save. Issue230 is a four-layer board with power
+//! planes; it is the case the change is for.
 //!
 //! # What is simplified, and where the full rule lives
 //!
@@ -316,10 +372,51 @@ pub struct TreeEntry {
     pub shape_index: u16,
 }
 
-/// Leaf payload. `Copy` and 8 bytes, so the arena tree stores it inline.
+/// Leaf payload. `Copy` and 16 bytes, so the arena tree stores it inline.
+///
+/// # Why the layer and the slot travel with the leaf
+///
+/// A tree walk reports every leaf whose *bounds* meet the query; the query then
+/// has to decide whether it wants that leaf. Two of those decisions used to cost
+/// a full pointer chase before they could even be asked:
+///
+/// * the **layer** test — [`ItemStore::slot_of`] (a binary search over the
+///   ordered index), the tree's slot table, the shape vector, and only then
+///   `tile.layer != layer`;
+/// * the **slot** the item is indexed under — [`ItemStore::slot_of`] again,
+///   even though the tree already knew it at insert time.
+///
+/// Both are one word. Carrying them in the payload turns the layer test into a
+/// single integer compare against a field of the leaf node the walk has just
+/// read anyway (so it is free — same cache line), and turns the slot lookup
+/// into a direct index. On `Issue230` the M3 wave-4 profile measured
+/// 585 537 908 leaf resolutions over 498 897 queries with ~57% of them rejected
+/// by the layer test *after* the whole chase; those 57% now cost one compare and
+/// touch no memory outside the tree.
+///
+/// The **hull** [`IntBox`] deliberately stays in `SlotEntry::hulls` rather than
+/// joining it, which is a departure from the wave-4 prescription and is
+/// argued rather than measured. It is 16 further bytes on every node of the
+/// arena — 60 bytes per node against 76, and the *descent* reads `bounds` out of
+/// those same nodes, so widening them is paid by every query, hit or miss, and
+/// by every inner node as well as every leaf. What it buys is narrow: the leaf
+/// that survives the layer test has already forced `SlotEntry` into cache for
+/// the `id` guard, so the hull it saves is one index into a vector on the line
+/// next door, and only on the leaves a box query swallows whole. Two words for
+/// a fast reject that fires on 57% of all leaves is a different trade from four
+/// more for one warm load on a fraction of the rest.
+///
+/// `slot` is not an identity — slots are recycled — which is why every read
+/// still checks `SlotEntry::id` against `item` before trusting the entry, the
+/// same guard the `slot_of` version used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct LeafPayload {
     item: ItemId,
+    /// The store slot `item` occupied when the leaf was inserted, i.e. the index
+    /// of its [`SlotEntry`] in [`SearchTree::slots`].
+    slot: SlotIndex,
+    /// `layer` of the [`ItemTileShape`] this leaf stands for — the fast reject.
+    layer: i32,
     shape_index: u16,
 }
 
@@ -457,7 +554,9 @@ impl SearchTree {
 
     /// The layer of one tile shape.
     pub fn shape_layer(&self, slot: SlotIndex, id: ItemId, index: u16) -> Option<i32> {
-        self.item_shapes(slot, id).get(index as usize).map(|s| s.layer)
+        self.item_shapes(slot, id)
+            .get(index as usize)
+            .map(|s| s.layer)
     }
 
     // ---- maintenance -----------------------------------------------------
@@ -509,6 +608,8 @@ impl SearchTree {
                 shape.bounds(),
                 LeafPayload {
                     item: item.id,
+                    slot,
+                    layer: tile.layer,
                     shape_index: index as u16,
                 },
             );
@@ -579,9 +680,11 @@ impl SearchTree {
         // It is also the radius the dog-ear scan below is bounded by, which is
         // why the kept ranges have to be narrowed per tree rather than once.
         let offset_width = trace.half_width
-            + ctx
-                .clearances
-                .tree_compensation(item.clearance_class, self.compensated_class, trace.layer);
+            + ctx.clearances.tree_compensation(
+                item.clearance_class,
+                self.compensated_class,
+                trace.layer,
+            );
 
         // Clamp before use: the two kept ranges must not overlap in either the
         // old or the new shape array, and neither may reach past the dog-ear
@@ -641,6 +744,8 @@ impl SearchTree {
                 shape.bounds(),
                 LeafPayload {
                     item: item.id,
+                    slot,
+                    layer: trace.layer,
                     shape_index: (keep_start + offset) as u16,
                 },
             ));
@@ -665,6 +770,10 @@ impl SearchTree {
                     entry.leaves[index],
                     LeafPayload {
                         item: item.id,
+                        slot,
+                        // A trace has one layer, and a kept trailing shape is
+                        // the same shape it always was — only its index moved.
+                        layer: trace.layer,
                         shape_index: index as u16,
                     },
                 );
@@ -732,6 +841,48 @@ impl SearchTree {
         out: &mut Vec<TreeEntry>,
     ) {
         self.collect_tree_entries::<true>(store, query, layer, ignore_nets, stack, out);
+        sort_entries(out);
+    }
+
+    /// [`overlapping_tree_entries`](SearchTree::overlapping_tree_entries) in
+    /// **tree traversal order** — the same entries, not sorted.
+    ///
+    /// # When the sort is upstream's and when it is not
+    ///
+    /// `ShapeSearchTree.overlapping_tree_entries` (`:369-417`) collects into a
+    /// `TreeSet<Leaf>`, so its result *is* sorted and a caller that consumes it
+    /// in order needs [`overlapping_tree_entries`](Self::overlapping_tree_entries).
+    /// That covers every caller whose first decision depends on which entry
+    /// comes first.
+    ///
+    /// It does not cover a caller that re-sorts. `complete_shape` and
+    /// `SortedRoomNeighbours.calculate_neighbours` each walk the tree and then
+    /// sort the result into *their own* order — the first by `Leaf.compareTo`,
+    /// the second by a single ascending `get_id_no()` key that interleaves
+    /// items with expansion rooms (`fr_router::engine`'s
+    /// `sort_obstacles_for_completion` / `sort_obstacles_for_neighbours`). For
+    /// those, sorting here is a comparison sort over a list nothing reads: on
+    /// `Issue230` the entry list averages 508 elements over 205 k completion
+    /// queries and 1 174 over the neighbour queries, all of it thrown away one
+    /// call later.
+    ///
+    /// The rule, then, is the mirror of the one on
+    /// [`overlapping_tree_entries_bounds_only`](Self::overlapping_tree_entries_bounds_only):
+    /// use this only where the caller imposes its own total order on the result
+    /// before anything reads it. Traversal order depends on the insertion
+    /// history, so a caller that leaks it into a routing decision makes the
+    /// board depend on the tree's shape — which is exactly what
+    /// [`sort_entries`] exists to prevent.
+    pub fn overlapping_tree_entries_unsorted(
+        &self,
+        store: &ItemStore,
+        query: &TileShape,
+        layer: Option<i32>,
+        ignore_nets: &[i32],
+        stack: &mut QueryStack,
+        out: &mut Vec<TreeEntry>,
+    ) {
+        self.collect_tree_entries::<true>(store, query, layer, ignore_nets, stack, out);
     }
 
     /// [`overlapping_tree_entries`](SearchTree::overlapping_tree_entries) with
@@ -774,10 +925,14 @@ impl SearchTree {
         out: &mut Vec<TreeEntry>,
     ) {
         self.collect_tree_entries::<false>(store, query, layer, ignore_nets, stack, out);
+        sort_entries(out);
     }
 
-    /// The body both entry points share; `EXACT` is a const parameter so the
+    /// The body every entry point shares; `EXACT` is a const parameter so the
     /// shape test is compiled away rather than branched on per leaf.
+    ///
+    /// Leaves `out` in traversal order — the sort, where there is one, belongs
+    /// to the caller.
     fn collect_tree_entries<const EXACT: bool>(
         &self,
         store: &ItemStore,
@@ -790,22 +945,25 @@ impl SearchTree {
         out.clear();
         let bounds = query.bounds();
         let contains = QueryContains::of(query);
-        self.visit(store, &bounds, stack, |item, payload, tile, hull| {
-            if !layer_matches(layer, tile.layer) || is_ignored(item, ignore_nets) {
-                return;
-            }
-            let Some(shape) = tile.shape.as_ref() else {
-                return;
-            };
-            if EXACT && !contains.swallows(hull) && !shape.intersects(query) {
-                return;
-            }
-            out.push(TreeEntry {
-                item: payload.item,
-                shape_index: payload.shape_index,
-            });
-        });
-        sort_entries(out);
+        self.visit(
+            store,
+            &bounds,
+            layer,
+            ignore_nets,
+            stack,
+            |payload, tile, hull| {
+                let Some(shape) = tile.shape.as_ref() else {
+                    return;
+                };
+                if EXACT && !contains.swallows(hull) && !shape.intersects(query) {
+                    return;
+                }
+                out.push(TreeEntry {
+                    item: payload.item,
+                    shape_index: payload.shape_index,
+                });
+            },
+        );
     }
 
     /// [`overlapping_tree_entries`](SearchTree::overlapping_tree_entries)
@@ -824,17 +982,21 @@ impl SearchTree {
         out.clear();
         let bounds = query.bounds();
         let contains = QueryContains::of(query);
-        self.visit(store, &bounds, stack, |item, payload, tile, hull| {
-            if !layer_matches(layer, tile.layer) || is_ignored(item, ignore_nets) {
-                return;
-            }
-            let Some(shape) = tile.shape.as_ref() else {
-                return;
-            };
-            if contains.swallows(hull) || shape.intersects(query) {
-                out.push(payload.item);
-            }
-        });
+        self.visit(
+            store,
+            &bounds,
+            layer,
+            ignore_nets,
+            stack,
+            |payload, tile, hull| {
+                let Some(shape) = tile.shape.as_ref() else {
+                    return;
+                };
+                if contains.swallows(hull) || shape.intersects(query) {
+                    out.push(payload.item);
+                }
+            },
+        );
         // Descending id, then deduplicate — upstream's `TreeSet<SearchTreeObject>`.
         // Unstable: the elements are plain ids, so equal ones are
         // indistinguishable and `dedup` collapses them anyway. It also keeps the
@@ -844,42 +1006,96 @@ impl SearchTree {
         out.dedup();
     }
 
-    /// The shared broad-phase walk: resolve every hit leaf to its item and tile
-    /// shape, and hand both to `visit`.
+    /// The shared broad-phase walk: reject every hit leaf the cheapest way
+    /// available, and hand the survivors' tile shape and hull to `visit`.
     ///
     /// The DFS stack is caller-owned (so the tree itself stays `&self` and the
     /// query allocates nothing once warm); the closure holds a second immutable
     /// borrow of `self` for the slot table, which is why the two are separate
     /// parameters.
+    ///
+    /// # The order of the tests is the optimization
+    ///
+    /// The layer and net filters are applied *here*, before the tile shape is
+    /// resolved, because each one can be answered more cheaply than the
+    /// resolution it used to follow (see [`LeafPayload`]):
+    ///
+    /// 1. **layer** — one integer compare against a field of the leaf node the
+    ///    walk has already loaded. Nothing else is touched. This is where ~57%
+    ///    of `Issue230`'s 585 M leaf resolutions stop.
+    /// 2. **slot entry** — a direct index into [`SearchTree::slots`], guarded by
+    ///    `entry.id == payload.item`, where it used to be
+    ///    [`ItemStore::slot_of`]'s binary search over the ordered index.
+    /// 3. **the item** — [`ItemStore::item_at_slot`], another direct index,
+    ///    where it used to be a second binary search through
+    ///    [`ItemStore::get`]. The id re-check is what makes it equivalent: a
+    ///    slot the store has since recycled holds a different id, and a freed
+    ///    one holds nothing, so "the leaf's item is still on the board, in this
+    ///    slot" is decided by one comparison.
+    /// 4. **net** — [`is_ignored`], which needs the item and nothing else.
+    ///
+    /// Only then are `shapes` and `hulls` indexed. That is upstream's own order
+    /// of business, not a reordering:
+    /// `ShapeSearchTree.overlapping_tree_entries` (`:383-395`) tests
+    /// `curr_object.shape_layer(shape_index) != p_layer` first, the ignore-net
+    /// loop second, and `curr_shape.intersects(p_shape)` only for what survives
+    /// both. What moved is where the layer comes *from*, not when it is asked.
+    ///
+    /// # `tree_nodes_visited`
+    ///
+    /// Every query in this crate funnels through here, so this is where
+    /// [`fr_metrics::counters::Counter::TreeNodesVisited`] is charged — once per
+    /// query, with the total [`ArenaShapeTree::visit_overlaps`] accumulated in a
+    /// register, never once per node. Half a billion thread-local
+    /// read-modify-writes would be a cost of measuring rather than a
+    /// measurement, which is why the counter sat at zero until now: there was no
+    /// affordable place to bump it from.
+    ///
+    /// The dependency runs `fr-board → fr-metrics`, which is acyclic —
+    /// `fr-metrics` has no dependencies at all, by design — and it is the same
+    /// direction `fr-router` already takes.
     fn visit(
         &self,
         store: &ItemStore,
         bounds: &OctBounds,
+        layer: Option<i32>,
+        ignore_nets: &[i32],
         stack: &mut QueryStack,
-        mut visit: impl FnMut(&Item, LeafPayload, &ItemTileShape, Option<&IntBox>),
+        mut visit: impl FnMut(LeafPayload, &ItemTileShape, Option<&IntBox>),
     ) {
-        self.tree.visit_overlaps(bounds, stack, |_leaf, payload| {
-            let Some(slot) = store.slot_of(payload.item) else {
+        let nodes = self.tree.visit_overlaps(bounds, stack, |_leaf, payload| {
+            if !layer_matches(layer, payload.layer) {
                 return;
-            };
-            let Some(entry) = self.slots.get(slot.index()) else {
+            }
+            let Some(entry) = self.slots.get(payload.slot.index()) else {
                 return;
             };
             if entry.id != payload.item {
                 return;
             }
+            // The store still has the last word on whether the item is on the
+            // board — but by slot, not by id.
+            let Some(item) = store.item_at_slot(payload.slot) else {
+                return;
+            };
+            if item.id != payload.item || is_ignored(item, ignore_nets) {
+                return;
+            }
             let Some(tile) = entry.shapes.get(payload.shape_index as usize) else {
                 return;
             };
+            debug_assert_eq!(
+                tile.layer, payload.layer,
+                "leaf payload layer is stale for item {} shape {}",
+                payload.item, payload.shape_index
+            );
             let hull = entry
                 .hulls
                 .get(payload.shape_index as usize)
                 .and_then(Option::as_ref);
-            let Some(item) = store.get(payload.item) else {
-                return;
-            };
-            visit(item, payload, tile, hull);
+            visit(payload, tile, hull);
         });
+        fr_metrics::counters::bump::tree_nodes_visited(nodes);
     }
 
     /// Panics unless every leaf, slot entry and store item agree.
@@ -938,6 +1154,38 @@ impl SearchTree {
                     .get(*leaf)
                     .unwrap_or_else(|| panic!("item {} holds a stale leaf handle", entry.id));
                 assert_eq!(payload.item, entry.id, "leaf points at a different item");
+                // The slot and the layer in the payload are what every query
+                // decides on before it touches anything else, so a stale one is
+                // a silently wrong answer rather than a crash. They are derived
+                // state exactly like `hulls`, and checked the same way.
+                assert_eq!(
+                    payload.slot.index(),
+                    slot_index,
+                    "item {} has a leaf pointing at the wrong slot",
+                    entry.id
+                );
+                let tile = entry
+                    .shapes
+                    .get(payload.shape_index as usize)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "item {} has a leaf for shape {} of {}",
+                            entry.id,
+                            payload.shape_index,
+                            entry.shapes.len()
+                        )
+                    });
+                assert_eq!(
+                    payload.layer, tile.layer,
+                    "item {} shape {} has a stale layer in its leaf payload",
+                    entry.id, payload.shape_index
+                );
+                assert!(
+                    tile.shape.is_some(),
+                    "item {} has a leaf for the unoccupied shape index {}",
+                    entry.id,
+                    payload.shape_index
+                );
             }
         }
         assert_eq!(
@@ -1224,7 +1472,11 @@ const DOGEAR_SCAN_LIMIT: usize = 64;
 /// The last shape of the run is always dropped: its scan starts at the first
 /// line that changed, so nothing shared can prove it stopped in time. One
 /// segment per end is a rounding error against the whole polyline.
-fn dogear_safe_keep_at_start(polyline: &Polyline, offset_width: i32, keep_at_start: usize) -> usize {
+fn dogear_safe_keep_at_start(
+    polyline: &Polyline,
+    offset_width: i32,
+    keep_at_start: usize,
+) -> usize {
     if keep_at_start == 0 {
         return 0;
     }
@@ -1434,8 +1686,10 @@ pub fn calculate_tree_shapes(
 ) {
     out.clear();
     let item_class = item.clearance_class;
-    let compensation =
-        |layer: i32| ctx.clearances.tree_compensation(item_class, tree_class, layer);
+    let compensation = |layer: i32| {
+        ctx.clearances
+            .tree_compensation(item_class, tree_class, layer)
+    };
 
     match &item.kind {
         // §3.1 — one shape per polyline segment, with the joint border lines
@@ -1544,7 +1798,10 @@ fn area_shapes(
 ) {
     let grow = compensation(layer);
     for piece in placed_area_pieces(area) {
-        for section in piece.enlarge(grow).divide_into_sections(ctx.max_tree_shape_width) {
+        for section in piece
+            .enlarge(grow)
+            .divide_into_sections(ctx.max_tree_shape_width)
+        {
             let section = section.to_flavor(ctx.angle_restriction);
             if section.is_empty() {
                 continue;
@@ -1585,11 +1842,7 @@ pub fn placed_area_pieces(area: &PlacedArea) -> Vec<TileShape> {
         AreaShape::Box(b) => vec![TileShape::Box(*b)],
         AreaShape::Octagon(o) => vec![TileShape::Oct(*o)],
         AreaShape::Simplex(s) => vec![TileShape::Simplex(s.clone())],
-        AreaShape::Convex(pieces) => pieces
-            .iter()
-            .cloned()
-            .map(TileShape::Simplex)
-            .collect(),
+        AreaShape::Convex(pieces) => pieces.iter().cloned().map(TileShape::Simplex).collect(),
         AreaShape::Polygon(polygon) => {
             let corners = polygon.corner_array();
             if corners.len() < 3 {
@@ -1846,7 +2099,10 @@ mod tests {
         area.translation = IntVector::new(1000, 2000);
         let pieces = placed_area_pieces(&area);
         assert_eq!(pieces.len(), 1);
-        assert_eq!(pieces[0].bounding_box(), IntBox::new(1000, 2000, 1100, 2100));
+        assert_eq!(
+            pieces[0].bounding_box(),
+            IntBox::new(1000, 2000, 1100, 2100)
+        );
     }
 
     #[test]
@@ -1887,6 +2143,151 @@ mod tests {
         assert!(out.windows(2).all(|w| {
             w[0].item > w[1].item || (w[0].item == w[1].item && w[0].shape_index < w[1].shape_index)
         }));
+        tree.assert_consistent(&store);
+    }
+
+    /// The payload is copied out of every leaf the walk reaches, and the leaf
+    /// nodes are what the *descent* reads its bounds from, so its width is a
+    /// cost every query pays whether it hits anything or not. Two extra words
+    /// bought the layer and slot fast reject; the four the cached hull would add
+    /// are argued against in [`LeafPayload`]'s docs, and this is the tripwire
+    /// that makes adding them a deliberate act with a measurement attached.
+    #[test]
+    fn the_leaf_payload_stays_two_words_wider_than_the_pair_it_replaced() {
+        assert_eq!(std::mem::size_of::<LeafPayload>(), 16);
+    }
+
+    /// The leaf payload's `slot` is a hint, never an identity, and the store is
+    /// what decides whether the item behind it is still on the board.
+    ///
+    /// This is the guard the fast reject rewrote: it used to be
+    /// `store.slot_of(payload.item)` returning `None`, and it is now
+    /// `store.item_at_slot(payload.slot)` returning a different id (or nothing).
+    /// A leaf the tree still holds for an item the store has dropped must stay
+    /// invisible either way — including after the slot has been handed to
+    /// somebody else, which is the case the id check exists for.
+    #[test]
+    fn a_leaf_outliving_its_item_in_the_store_is_invisible() {
+        let fixture = Fixture::new();
+        let mut store = ItemStore::new();
+        let mut tree = SearchTree::new(0);
+
+        let a = store.insert(trace_item(
+            &[1],
+            &[
+                IntPoint::new(0, 0),
+                IntPoint::new(1000, 0),
+                IntPoint::new(1000, 1000),
+            ],
+            0,
+            50,
+        ));
+        let slot = store.slot_of(a).unwrap();
+        tree.insert(slot, store.get(a).unwrap(), fixture.ctx());
+        assert_eq!(tree.leaf_count(), 2);
+
+        let query = TileShape::Box(IntBox::new(-10_000, -10_000, 10_000, 10_000));
+        let mut stack = QueryStack::new();
+        let mut out = Vec::new();
+        tree.overlapping_tree_entries(&store, &query, Some(0), &[], &mut stack, &mut out);
+        assert_eq!(out.len(), 2, "both segments are indexed and visible");
+
+        // The store drops the item; the tree has not been told yet. The leaves
+        // are still there — and must answer nothing.
+        store.remove(a);
+        tree.overlapping_tree_entries(&store, &query, Some(0), &[], &mut stack, &mut out);
+        assert!(out.is_empty(), "a leaf without a live item reports nothing");
+        assert_eq!(
+            tree.leaf_count(),
+            2,
+            "the leaves really are still in the tree"
+        );
+
+        // Now somebody else takes the slot, still without the tree being told.
+        // The slot table says item `a`, the store says item `b`: the id check is
+        // the only thing between that mismatch and a wrong answer.
+        let b = store.insert(via_item(&[2], IntPoint::new(500, 500)));
+        assert_eq!(store.slot_of(b), Some(slot), "the slot really is recycled");
+        tree.overlapping_tree_entries(&store, &query, Some(0), &[], &mut stack, &mut out);
+        assert!(out.is_empty(), "the newcomer must not inherit a's leaves");
+
+        // Resynchronizing restores the ordinary state, and the board is
+        // consistent again.
+        tree.remove(slot, a);
+        assert_eq!(tree.leaf_count(), 0);
+        tree.insert(slot, store.get(b).unwrap(), fixture.ctx());
+        tree.overlapping_tree_entries(&store, &query, Some(0), &[], &mut stack, &mut out);
+        assert_eq!(
+            out,
+            vec![TreeEntry {
+                item: b,
+                shape_index: 0
+            }]
+        );
+        tree.assert_consistent(&store);
+    }
+
+    /// The unsorted variant is the same query with the tail cut off: same
+    /// entries, no order promise.
+    #[test]
+    fn the_unsorted_walk_reports_exactly_what_the_sorted_one_does() {
+        let fixture = Fixture::new();
+        let mut store = ItemStore::new();
+        let mut tree = SearchTree::new(0);
+        for net in [1, 2, 3] {
+            let id = store.insert(trace_item(
+                &[net],
+                &[
+                    IntPoint::new(0, 0),
+                    IntPoint::new(1000, 0),
+                    IntPoint::new(1000, 1000),
+                ],
+                0,
+                50,
+            ));
+            tree.insert(
+                store.slot_of(id).unwrap(),
+                store.get(id).unwrap(),
+                fixture.ctx(),
+            );
+        }
+        // A via, so the layer filter has something to reject on layer 1 too.
+        let via = store.insert(via_item(&[4], IntPoint::new(500, 500)));
+        tree.insert(
+            store.slot_of(via).unwrap(),
+            store.get(via).unwrap(),
+            fixture.ctx(),
+        );
+
+        let query = TileShape::Box(IntBox::new(-10_000, -10_000, 10_000, 10_000));
+        let mut stack = QueryStack::new();
+        let (mut sorted, mut unsorted) = (Vec::new(), Vec::new());
+        for (layer, ignore) in [
+            (None, &[][..]),
+            (Some(0), &[][..]),
+            (Some(1), &[][..]),
+            (Some(0), &[1][..]),
+            (Some(0), &[1, 2][..]),
+        ] {
+            tree.overlapping_tree_entries(&store, &query, layer, ignore, &mut stack, &mut sorted);
+            tree.overlapping_tree_entries_unsorted(
+                &store,
+                &query,
+                layer,
+                ignore,
+                &mut stack,
+                &mut unsorted,
+            );
+            assert_eq!(
+                unsorted.len(),
+                sorted.len(),
+                "layer {layer:?}, ignore {ignore:?}"
+            );
+            let mut resorted = unsorted.clone();
+            sort_entries(&mut resorted);
+            assert_eq!(resorted, sorted, "layer {layer:?}, ignore {ignore:?}");
+        }
+        assert!(!sorted.is_empty(), "the sweep never hit anything");
         tree.assert_consistent(&store);
     }
 
@@ -2047,7 +2448,11 @@ mod tests {
             0,
             120,
         ));
-        tree.insert(store.slot_of(trace).unwrap(), store.get(trace).unwrap(), ctx);
+        tree.insert(
+            store.slot_of(trace).unwrap(),
+            store.get(trace).unwrap(),
+            ctx,
+        );
         let keepout = store.insert(Item::new(
             NetNos::EMPTY,
             1,
@@ -2184,7 +2589,11 @@ mod tests {
                 0,
                 50,
             ));
-            manager.insert(store.slot_of(id).unwrap(), store.get(id).unwrap(), fixture.ctx());
+            manager.insert(
+                store.slot_of(id).unwrap(),
+                store.get(id).unwrap(),
+                fixture.ctx(),
+            );
         }
         assert_eq!(manager.tree_count(), 1);
         manager.ensure_compensated_tree(1, &store, fixture.ctx());

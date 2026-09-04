@@ -190,6 +190,36 @@ ARCHITECTURE "Budgets".
 
 ## Optimizer
 
+- **Entry is `getRunOptimizer()` and nothing else**
+  (`fr_core::pipeline::run_maze_stage`, `fr_router::optimizer`).
+  *Upstream* (`gui/RoutingJobSchedulerActionThread.java:179`) runs the stage with an unguarded
+  `if (job.routerSettings.getRunOptimizer())` after the routing branch closes. It does not ask
+  whether the board came out complete, what it scores, or how long the router took. The only
+  routing outcome that reaches the decision is `maxItems`, which stops the *whole* job via
+  `requestStop()` (`BatchAutorouter.autoroute_pass:496-505`, conformance #42).
+  *We* match that: the stage runs when `MazeOptions::optimize` is on (the shipped default),
+  unless the run stopped on `StopReason::ItemLimit` or the job budget is already spent. The
+  board's own gates (near-maximum-score, improvement threshold, `maxPasses`, `maxItems`) live
+  *inside* `runBatchLoop` and are reached only by entering.
+  *Why this is recorded here*: skipping the stage on an incomplete board, or on a "good enough"
+  score, is a tempting wall-clock saving — the stage is 80–84 % of the wall on the corpus's
+  budget-burners — and it is not upstream. The test
+  `the_optimizer_stage_entry_does_not_read_the_routing_result` has to fail before either skip
+  can be introduced. See **Rejected divergences** below.
+
+- **`$TMPDIR/freerouting/freerouting.json` is a measurement contaminant, not an upstream
+  default.** The jar's `GlobalSettings.load()` reads `freerouting.json` from the user-data
+  directory (`settings/sources/JsonFileSettings`). On this machine that file lived at
+  `$TMPDIR/freerouting/freerouting.json` and had `router.fanout.enabled` and
+  `router.optimizer.enabled` set to `false`. `-de` restores `router.enabled` only, so every
+  Java invocation that did not pass a fresh `--user_data_path=` ran **without fanout and
+  without the optimizer**, whatever the CLI flags said. That is why earlier campaign notes
+  read "upstream does not run the optimizer": they were measuring a polluted settings file,
+  not `getRunOptimizer()`. The entry condition above is what the release actually does.
+  Bench Java calls must pass `--user_data_path=<empty dir>` (see `bench/README.md`); numbers
+  taken without it are void. The G2.1 progress log's Java-side "default vs no-optimizer"
+  ratios were taken under this contamination and must not be quoted as optimizer-on Java.
+
 - **The improvement lattice compares weighted length against weighted length**
   (`fr_router::optimizer::LengthMetric`, default `WeightedBoth`).
   *Upstream* (`autoroute/BatchOptimizer.java:225`, `:381-393`; conformance #87) seeds
@@ -302,3 +332,17 @@ ARCHITECTURE "Budgets".
 - `ignore_net_classes` no-op headless: replicated as intentionally dead.
 - `ClearanceMatrix.getValue` out-of-range → 0: replicated.
 - `splitInsideDrillPadProhibited` `&&`/`||` precedence bug: replicated (routing-visible).
+
+- **Skipping the optimizer because the board is incomplete, or because the score is already
+  near the maximum.** Tempting: the stage is most of the wall on the budget-burners, and a
+  board that still has open connections will not be "finished" by a length-only optimizer.
+  Rejected. Upstream's headless entry is one unguarded `getRunOptimizer()` after the router
+  (`RoutingJobSchedulerActionThread.java:179`); the near-maximum-score break is an *inner*
+  loop exit, not a reason not to enter. A skip here would be a real divergence, not a
+  constant-factor, and it would make every incomplete G2.1 board incomparable to the jar.
+  The clean-pipeline check on three boards (Issue026, Issue034, Issue230) under a fresh
+  `--user_data_path` is that the jar *does* enter the stage whenever `optimizer.enabled` is
+  true — including on boards the router did not complete. The earlier "jar never ran the
+  optimizer" reading is the `$TMPDIR/freerouting/freerouting.json` contaminant above, not
+  an entry-condition difference. `fr_core::pipeline::the_optimizer_stage_entry_does_not_read_the_routing_result`
+  is the tripwire.

@@ -128,6 +128,9 @@ pub struct MazeSearch<'e, 'b> {
     expansion_limit: Option<u64>,
     /// Settled elements so far.
     expansions: u64,
+    /// The `FRCONN` record under construction; `None` unless
+    /// [`crate::maze::trace`] is on.
+    conn_record: Option<crate::maze::trace::ConnRecord>,
 }
 
 impl<'e, 'b> MazeSearch<'e, 'b> {
@@ -160,9 +163,20 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             via_candidate_scratch: Vec::new(),
             expansion_limit: None,
             expansions: 0,
+            conn_record: None,
         };
-        search.init()?;
-        Ok(search)
+        match search.init() {
+            Ok(()) => Ok(search),
+            // An attempt that never reaches the loop is still an attempt, and
+            // on a tail pass it is most of them; the trace has to see it or the
+            // per-connection cost it reports is a survivor's average.
+            Err(failure) => {
+                if let Some(record) = search.conn_record {
+                    crate::maze::trace::connection(&record, failure_name(failure), 0, 0, 0);
+                }
+                Err(failure)
+            }
+        }
     }
 
     /// Turns the in-memory settle recording on. The `FRMETRIC settle` trace to
@@ -205,13 +219,41 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         &mut self,
         detours: &dyn DetourSource,
     ) -> Result<FoundConnection, SearchFailure> {
+        let started = self.conn_record.map(|_| std::time::Instant::now());
+        let rooms_before = self.engine.rooms.complete.len();
+        let mut stopped = None;
         loop {
             match self.occupy_next_element(detours) {
                 Ok(true) => continue,
                 Ok(false) => break,
-                Err(failure) => return Err(failure),
+                Err(failure) => {
+                    stopped = Some(failure);
+                    break;
+                }
             }
         }
+        let outcome = match (stopped, self.destination_door) {
+            (Some(failure), _) => Err(failure),
+            (None, Some(_)) => Ok(()),
+            (None, None) => Err(SearchFailure::Exhausted),
+        };
+        if let (Some(record), Some(started)) = (self.conn_record, started) {
+            crate::maze::trace::connection(
+                &record,
+                match outcome {
+                    Ok(()) => "routed",
+                    Err(failure) => failure_name(failure),
+                },
+                self.expansions,
+                self.engine
+                    .rooms
+                    .complete
+                    .len()
+                    .saturating_sub(rooms_before),
+                started.elapsed().as_micros(),
+            );
+        }
+        outcome?;
         match self.destination_door {
             Some((door, section)) => Ok(self.build_result(door, section)),
             None => Err(SearchFailure::Exhausted),
@@ -229,6 +271,32 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
     /// mutation; a tie pin is therefore reachable here only through the
     /// ordinary door machinery.
     fn init(&mut self) -> Result<(), SearchFailure> {
+        let Some(started) = ({
+            if crate::maze::trace::is_enabled() {
+                self.conn_record = Some(crate::maze::trace::ConnRecord {
+                    net: self.engine.ctrl.net_no,
+                    start_items: self.start_items.len(),
+                    start_rooms: 0,
+                    init_rooms: 0,
+                    init_us: 0,
+                });
+                Some((std::time::Instant::now(), self.engine.rooms.complete.len()))
+            } else {
+                None
+            }
+        }) else {
+            return self.init_inner();
+        };
+        let result = self.init_inner();
+        if let Some(record) = self.conn_record.as_mut() {
+            record.init_rooms = self.engine.rooms.complete.len().saturating_sub(started.1);
+            record.init_us = started.0.elapsed().as_micros();
+        }
+        result
+    }
+
+    /// The body of [`init`](Self::init), so the trace can time it whole.
+    fn init_inner(&mut self) -> Result<(), SearchFailure> {
         // Destinations: join their bounding boxes into the heuristic.
         let mut destination_ok = false;
         for item in self.destination_items.clone() {
@@ -280,6 +348,10 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                         .add_incomplete_room(None, layer, contained),
                 );
             }
+        }
+
+        if let Some(record) = self.conn_record.as_mut() {
+            record.start_rooms = start_rooms.len();
         }
 
         let mut completed_start_rooms = Vec::new();
@@ -725,11 +797,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 // to the connection point — the full recursive shove check,
                 // not a containment test (`shove.md` §10.3).
                 let layer = self.engine.rooms.room(next_room).layer;
-                if !self.check_forced_trace_polyline(
-                    shape_entry_middle,
-                    &connection_point,
-                    layer,
-                ) {
+                if !self.check_forced_trace_polyline(shape_entry_middle, &connection_point, layer) {
                     continue;
                 }
             }
@@ -1881,6 +1949,17 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
     }
 }
 
+/// The `FRCONN` `outcome=` token for a failure, so the trace names the same
+/// four cases [`SearchFailure`] does.
+fn failure_name(failure: SearchFailure) -> &'static str {
+    match failure {
+        SearchFailure::NoDestination => "no_destination",
+        SearchFailure::NoStartDoor => "no_start_door",
+        SearchFailure::Exhausted => "exhausted",
+        SearchFailure::Stopped => "stopped",
+    }
+}
+
 fn push_ripped(list: &mut Vec<RippedItem>, item: ItemId, ripup_cost: i32) {
     if list.iter().any(|entry| entry.item == item) {
         return;
@@ -2045,5 +2124,31 @@ mod tests {
                 "a {shove_to_the_left} shove must block the opposite direction"
             );
         }
+    }
+
+    /// `FRCONN outcome=` has to name every way an attempt can end, distinctly:
+    /// the whole point of the record is that a tail pass's cheap failures and
+    /// its expensive ones are told apart, and a `_` arm folding two variants
+    /// together would hide exactly that.
+    #[test]
+    fn every_search_failure_has_its_own_trace_name() {
+        let failures = [
+            SearchFailure::NoDestination,
+            SearchFailure::NoStartDoor,
+            SearchFailure::Exhausted,
+            SearchFailure::Stopped,
+        ];
+        let mut names: Vec<&str> = failures.iter().map(|f| failure_name(*f)).collect();
+        assert!(
+            names
+                .iter()
+                .all(|name| !name.is_empty()
+                    && name.chars().all(|c| c.is_ascii_lowercase() || c == '_')),
+            "the token is a bare `[a-z_]+` word so a parser can split on `, ` and `=`"
+        );
+        assert_ne!(names, vec!["routed"; 4]);
+        names.sort_unstable();
+        names.dedup();
+        assert_eq!(names.len(), failures.len(), "one name per variant");
     }
 }
