@@ -111,6 +111,7 @@ pub mod maze;
 pub mod optimizer;
 pub mod pull_tight;
 pub mod pull_tight45;
+pub mod pull_tight90;
 pub mod pull_tight_any;
 pub mod result;
 pub mod rooms;

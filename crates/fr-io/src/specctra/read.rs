@@ -1015,13 +1015,14 @@ impl<'a> Reader<'a> {
     }
 
     /// Upstream `Structure.readSnapAngle`, encoded as the `AngleRestriction` ordinal
-    /// (`0 = ninety`, `1 = fortyfive`, `2 = none`).
+    /// (`0 = none`, `1 = fortyfive`, `2 = ninety`) — the declaration order of
+    /// `board/AngleRestriction.java:8` (`NONE, FORTYFIVE_DEGREE, NINETY_DEGREE`).
     fn read_snap_angle(&mut self) -> Option<i32> {
         let token = self.lexer.next_token()?;
         let angle = match token {
-            Token::Kw(Kw::NinetyDegree) => 0,
+            Token::Kw(Kw::NinetyDegree) => 2,
             Token::Kw(Kw::FortyfiveDegree) => 1,
-            Token::Kw(Kw::None) => 2,
+            Token::Kw(Kw::None) => 0,
             _ => {
                 self.warn("Structure.read_snap_angle_scope: unexpected token");
                 return None;

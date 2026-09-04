@@ -19,6 +19,7 @@
 //! | [`PullTightAlgo::trace_pull_tight`] | `PolylineTrace.pull_tight` (`:827-875`) |
 //! | `PullTightAlgo::pull_tight_flavor` | `get_instance`'s angle dispatch (`:71-85`) |
 //! | [`crate::pull_tight45`] | `PullTightAlgo45` — `reduce_corners`, `smoothen_corners` |
+//! | [`crate::pull_tight90`] | `PullTightAlgo90` — `try_skip_second_corner`, `try_skip_corners` |
 //! | [`crate::pull_tight_any`] | `PullTightAlgoAnyAngle` — the `NONE`-mode rules |
 //!
 //! # Deliberate deltas from the Java text
@@ -85,10 +86,13 @@
 //!   tangency commits a trace the referee then flags — that was Issue034's +1
 //!   violation with fanout on (`fanout034`). The compensated tree remains the
 //!   maze's guide; it is never the acceptance oracle here.
-//! * **90° mode shares the 45° rules**, which is upstream's own dispatch:
-//!   `get_instance` returns `PullTightAlgo45` for `NINETY_DEGREE` as well as for
-//!   `FORTYFIVE_DEGREE` (`:71-85`), and the rules read the restriction back
-//!   where they need it. Any-angle mode has its own flavor, see the table above.
+//! * **90° mode has its own rules** ([`crate::pull_tight90`]): upstream's
+//!   `get_instance` maps `NINETY_DEGREE` to `PullTightAlgo90` (`:73-75`), whose
+//!   pipeline is `try_skip_second_corner` / `try_skip_corners` /
+//!   `reposition_lines` — no chamfering — and whose fork-smoothing hooks both
+//!   return `null`. (An earlier revision of this file claimed `NINETY_DEGREE`
+//!   shared the 45° rules; that contradicts the release source and chamfered
+//!   90° boards into diagonals.)
 
 use std::time::{Duration, Instant};
 
@@ -624,7 +628,7 @@ impl<'b> PullTightAlgo<'b> {
     ///
     /// | board angle restriction | upstream class | here |
     /// |---|---|---|
-    /// | `NINETY_DEGREE` | `PullTightAlgo45` | [`crate::pull_tight45`] |
+    /// | `NINETY_DEGREE` | `PullTightAlgo90` | [`crate::pull_tight90`] |
     /// | `FORTYFIVE_DEGREE` | `PullTightAlgo45` | [`crate::pull_tight45`] |
     /// | `NONE` | `PullTightAlgoAnyAngle` | [`crate::pull_tight_any`] |
     ///
@@ -641,7 +645,8 @@ impl<'b> PullTightAlgo<'b> {
             AngleRestriction::None => {
                 self.pull_tight_polyline_any_angle(polyline, changed_area)
             }
-            _ => self.pull_tight_polyline(polyline, changed_area),
+            AngleRestriction::Ninety => self.pull_tight_polyline_90(polyline, changed_area),
+            AngleRestriction::FortyFive => self.pull_tight_polyline(polyline, changed_area),
         }
     }
 
@@ -1001,6 +1006,8 @@ impl<'b> PullTightAlgo<'b> {
     }
 
     /// The angle-mode dispatch of `smoothen_start_corner_at_trace` (`:471`).
+    /// `PullTightAlgo90`'s hook returns `null` (`PullTightAlgo90.java:135-138`)
+    /// — no fork chamfers on a 90° board.
     fn smoothen_start_corner_at_trace(
         &mut self,
         id: ItemId,
@@ -1008,11 +1015,15 @@ impl<'b> PullTightAlgo<'b> {
     ) -> Option<Polyline> {
         match self.board.angle_restriction() {
             AngleRestriction::None => self.smoothen_start_corner_at_trace_any(id, changed_area),
-            _ => self.smoothen_start_corner_at_trace_45(id, changed_area),
+            AngleRestriction::Ninety => None,
+            AngleRestriction::FortyFive => {
+                self.smoothen_start_corner_at_trace_45(id, changed_area)
+            }
         }
     }
 
     /// The angle-mode dispatch of `smoothen_end_corner_at_trace` (`:473`).
+    /// `PullTightAlgo90`'s hook returns `null` (`PullTightAlgo90.java:140-143`).
     fn smoothen_end_corner_at_trace(
         &mut self,
         id: ItemId,
@@ -1020,7 +1031,8 @@ impl<'b> PullTightAlgo<'b> {
     ) -> Option<Polyline> {
         match self.board.angle_restriction() {
             AngleRestriction::None => self.smoothen_end_corner_at_trace_any(id, changed_area),
-            _ => self.smoothen_end_corner_at_trace_45(id, changed_area),
+            AngleRestriction::Ninety => None,
+            AngleRestriction::FortyFive => self.smoothen_end_corner_at_trace_45(id, changed_area),
         }
     }
 

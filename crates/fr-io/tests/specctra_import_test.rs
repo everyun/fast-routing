@@ -1418,3 +1418,74 @@ fn a_concave_keepout_is_stored_as_a_polygon_and_split_for_the_tree() {
         );
     }
 }
+
+// =================================================================================================
+// snap_angle — the ordinal encoding between read.rs and fr-rules (§6.7)
+// =================================================================================================
+
+/// Minimal board whose `(structure …)` carries the given snap angle scope.
+fn snap_board(snap_scope: &str) -> String {
+    format!(
+        r#"(pcb snap
+  (parser (string_quote "))
+  (resolution um 10)
+  (structure
+    (layer F.Cu (type signal))
+    (boundary (rect pcb 0 0 10000 10000))
+    {snap_scope}
+    (rule (width 250) (clearance 200))
+  )
+  (placement)
+  (library)
+  (network)
+  (wiring)
+)"#
+    )
+}
+
+/// §6.7: `(snap_angle ninety_degree)` must reach the board as
+/// `AngleRestriction.NINETY_DEGREE`. Regression: `read_snap_angle` encoded the
+/// keyword as `(0 = ninety, 2 = none)` while `fr_rules::AngleRestriction::from_i32`
+/// decodes the enum's declaration order (`NONE, FORTYFIVE_DEGREE, NINETY_DEGREE`
+/// — `board/AngleRestriction.java:8`), so a 90° board was routed free-angle and
+/// a `none` board 90°. The 46-fixture suite never caught it because its only
+/// declared snap_angle is `fortyfive_degree`, which both mappings get right.
+#[test]
+fn snap_angle_keywords_map_to_the_enum_ordinal() {
+    use fr_board::shape::AngleRestriction as BoardRestriction;
+    use fr_rules::AngleRestriction as RulesRestriction;
+
+    let ninety = synthetic(&snap_board("(snap_angle ninety_degree)"));
+    assert_eq!(
+        ninety.rules.get_trace_angle_restriction(),
+        RulesRestriction::NinetyDegree
+    );
+    assert_eq!(
+        ninety.board.angle_restriction(),
+        BoardRestriction::Ninety
+    );
+
+    let none = synthetic(&snap_board("(snap_angle none)"));
+    assert_eq!(
+        none.rules.get_trace_angle_restriction(),
+        RulesRestriction::None
+    );
+    assert_eq!(none.board.angle_restriction(), BoardRestriction::None);
+
+    let fortyfive = synthetic(&snap_board("(snap_angle fortyfive_degree)"));
+    assert_eq!(
+        fortyfive.rules.get_trace_angle_restriction(),
+        RulesRestriction::FortyFiveDegree
+    );
+    assert_eq!(
+        fortyfive.board.angle_restriction(),
+        BoardRestriction::FortyFive
+    );
+
+    // §6.7: no snap_angle at all defaults to FORTYFIVE_DEGREE.
+    let undeclared = synthetic(&snap_board(""));
+    assert_eq!(
+        undeclared.rules.get_trace_angle_restriction(),
+        RulesRestriction::FortyFiveDegree
+    );
+}
