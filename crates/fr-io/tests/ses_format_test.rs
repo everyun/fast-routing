@@ -291,6 +291,24 @@ fn unfixed_copper_carries_no_type_scope() {
 }
 
 #[test]
+fn an_empty_package_name_is_written_quoted_so_kicad_can_parse_it() {
+    // Regression for cla45-compute-hdi6cs: the DSN declares `(image ""`. Upstream's
+    // `IdentifierType.write("")` emits zero bytes, so both the jar and this writer produced
+    // `(component ` with no name — a session KiCad's specctra parser rejects with a hard
+    // `ImportSpecctraSES` failure. We deviate and quote the empty name.
+    let dsn = GOLDEN_DSN
+        .replace("(component MYPKG", "(component \"\"")
+        .replace("(image MYPKG", "(image \"\"");
+    let design = import(dsn.as_bytes()).expect("the empty-image design should import");
+    let text = write_session(&SesInput::from_design(&design, "golden.dsn"));
+    assert!(
+        text.contains("(component \"\"\n"),
+        "empty package name should be quoted; got:\n{text}"
+    );
+    assert!(!text.contains("(component \n"), "got: {text}");
+}
+
+#[test]
 fn a_net_with_no_routing_gets_no_scope_at_all() {
     // §12.2 rule 6: the `(net <name>` header is written lazily, so a net whose items are all
     // pins produces nothing.

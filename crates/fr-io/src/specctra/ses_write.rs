@@ -240,8 +240,14 @@ impl IndentWriter {
     }
 }
 
-/// The three `need_quotes` triggers, in upstream's order.
+/// The `need_quotes` triggers, in upstream's order, plus one deliberate deviation.
 fn needs_quotes(name: &str) -> bool {
+    // Deviation: upstream writes an empty name as zero bytes, producing `(component ` with no
+    // name — a session KiCad's specctra parser rejects outright (observed on
+    // cla45-compute-hdi6cs, whose DSN declares `(image ""`). Quoting yields `(component "")`.
+    if name.is_empty() {
+        return true;
+    }
     if name.chars().any(|c| SES_RESERVED_CHARS.contains(&c)) {
         return true;
     }
@@ -1058,7 +1064,14 @@ mod tests {
         assert!(needs_quotes("1"));
         assert!(needs_quotes("12V"));
         assert!(!needs_quotes("V12"));
-        assert!(!needs_quotes(""));
+    }
+
+    #[test]
+    fn empty_names_are_quoted_so_kicad_can_parse_them() {
+        // Regression: cla45-compute-hdi6cs.dsn declares `(image ""`; writing the package name as
+        // zero bytes produced `(component `, which KiCad's specctra parser rejects.
+        assert!(needs_quotes(""));
+        assert_eq!(quoted(""), "\"\"");
     }
 
     #[test]
