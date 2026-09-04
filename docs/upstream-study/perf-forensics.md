@@ -1139,7 +1139,7 @@ Compute a full `BoardStatistics` only when the scoring function actually needs i
 | default `AngleRestriction` | **FORTYFIVE_DEGREE** | `BoardRules.java:56` | selects the cheap `IntOctagon` code paths |
 | default `retainAutorouteDatabase` | **false** | `BatchAutorouter.java:154`; v19 `:102` | §4.4 |
 | default `strictDrc` | **false** (`null`) | `RouterSettings.java:52, 533` | when true: full board `serialize()` per connection |
-| fanout escape gate | `maxEscapeLengthMm` default **3000**, `minEscapeLengthMm` default **500** (× µm resolution) | `MazeSearchEngine.java:96-120` | frontier `add()` can silently reject |
+| fanout escape gate | `maxEscapeLengthMm` default **4.5** mm, `minEscapeLengthMm` default **2.5** mm (release `DefaultSettings.java:117-118`; the 3000/500 µm figures previously quoted here came from the git-master source tree and survive in the release only as hardcoded fallbacks when `settings.fanout == null`) | release `MazeSearchAlgo.java:80-108` (jar class `MazeSearchAlgo$1`); git-master `MazeSearchEngine.java:96-120` | frontier `add()` can silently reject |
 | `Simplex` memo fields | `transient` | `Simplex.java:22-26` | lost across `deepCopy` |
 
 ---

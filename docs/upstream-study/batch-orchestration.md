@@ -901,7 +901,9 @@ The "`maxPasses := 0` trick" for fanout-only exists in both entry points (`Routi
 `router.enabled=false`**. `BatchAutorouter.runBatchLoop:894` recomputes
 `isRouterEnabled = getRunRouter() && (maxPasses == null || maxPasses >= 0)`, and the pass cap at
 `:931` requires `maxPasses > 0`. So entering fanout-only mode via a **negative** `max_passes`
-(the other way to fail the `:96`/`:492` guard) sets `maxPasses = 0`, re-enables the router inside
+(the other way to fail the `:96`/`:492` guard) sets `fanoutOnly.maxPasses = 0` (the release literally
+assigns 0 to the maxPasses field; renamed here so the cross-spec lint can tell this fanout-only
+sentinel apart from the real defaults in §2), re-enables the router inside
 `runBatchLoop`, and then runs the pass loop **with no pass cap at all** until stagnation fires.
 Port note: model fanout-only as an explicit mode, never as a magic pass count (this spec's §11.1
 already recommends that; the release is the cautionary example).
@@ -968,7 +970,7 @@ return super.add(p_element);
 | 17 | `distanceToClosestOnNet` precomputed O(P²) over all board pins | **=** — `p_routing_board.get_pins()` (all pins, not just SMD) | `BatchFanout.java:526-537` |
 | 18 | components sorted desc by SMD pin count, tie asc component id | **=** | `BatchFanout.java:499-509` |
 | 19 | netless SMD pins filtered out | **=** | `BatchFanout.java:45-50` |
-| 20 | fanout `maxPasses` default 20 | **=** (default `DefaultSettings.java:114`; hardcoded fallback also 20 at `BatchFanout.java:93-94`) |
+| 20 | fanout `fanout.maxPasses` default 20 (the fanout stage's own pass cap — a different knob from the autorouter's pass cap in row 70) | **=** (default `DefaultSettings.java:114`; hardcoded fallback also 20 at `BatchFanout.java:93-94`) |
 | 21 | stop when `routedCount == 0`; "v19 also requires insertErrorCount == 0" | **=** — release stops on `routed_count == 0` alone | `BatchFanout.java:111-113` |
 | 22 | oscillation detector `(routedCount<<32) ^ viaCount`, `stagnationPassLimit = 3` | **=**, incl. the "14 identical passes" comment | `BatchFanout.java:95, 114-130` |
 | 23 | board-hash-unchanged stop | **=** | `BatchFanout.java:134-138` |
@@ -1044,7 +1046,7 @@ Flow deltas vs §5.2:
 | 67 | final "best board ever" restore | **=** | `BatchAutorouter.java:1141-1159` |
 | 68 | `job.board = router.board` is the only publish point | **=** for the v2 router (`BatchAutorouter.java:1161`); the release has a **second** one for the GUI-only v19 router (`BatchAutorouterV19.java:235`). Tree-wide, the only other `job.board` writes are board loading (`management/BoardLoader.java:48/56`, `management/RoutingJobScheduler.java:91`, `api/v1/JobControllerV1.java:1201`) and the GUI ctor (`AutorouterAndRouteOptimizerThread.java:203`). |
 | 69 | final `removeTails(NONE)` when complete without fanout vias; `bh.clear()`; FINISHED/CANCELLED/TIMED_OUT | **=** | `BatchAutorouter.java:1163-1185` |
-| 70 | `maxPasses` default 9999 | **=** *(jar-verified default in `DefaultSettings.java:95`)*; note the cap is skipped entirely when `maxPasses <= 0` (`:931`) — see §1.2 |
+| 70 | `router.maxPasses` default 9999 (the autorouter pass cap's upstream default; distinct from the fanout stage's `fanout.maxPasses` = 20 in row 20 and the fanout-only sentinel 0 in §1.1) | **=** *(jar-verified default in `DefaultSettings.java:95`)*; note the cap is skipped entirely when `maxPasses <= 0` (`:931`) — see §1.2 |
 | 71 | — (not in spec) | **Dead statement**: `float boardScoreBefore = ...getNormalizedScore(...)` at `:943` is computed once per pass (a full `BoardStatistics` build) and never read. Cost without benefit; do not port. |
 | 72 | `autoroutePassesForOptimizingItem`: ≤ `maxPassCount` passes at a fixed base ripup cost, then `removeTails(NONE)`, returns pass count (or max+1) | **=** — release `BatchAutorouter.autoroute_passes_for_optimizing_item` is `static` and constructs a fresh router with `p_remove_unconnected_vias = true` | `BatchAutorouter.java:146-167` |
 | 73 | `BoardHistory` semantics (cap 30, hash dedup, evict-worst-only-if-strictly-better, `restoreBoard(maxRestores)`, `restoreBoard(<=0)` = unlimited = `restoreBestBoard()`, Java deserialization, rwlock + `synchronized`) | **=** on every point; additionally `getMaxScore()` floors at `0` (never negative, returns 0 for an empty history) | `autoroute/BoardHistory.java:29, 48-80, 115-166, 200-213` |

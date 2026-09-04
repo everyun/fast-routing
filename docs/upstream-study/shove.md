@@ -1006,7 +1006,9 @@ Freerouting.main
 `RoutingJobSchedulerActionThread` at `:103-105` logs "Unknown router algorithm … using default"
 for any algorithm value and then constructs `BatchAutorouter` unconditionally. There is **no
 headless path to `BatchAutorouterV19`.** A fanout-only headless mode (`:163-175`) also uses
-`new BatchAutorouter(job)` with `maxPasses = 0`.
+`new BatchAutorouter(job)` with the fanout-only sentinel `fanoutOnly.maxPasses = 0`
+(the release literally assigns 0 to the maxPasses field as a mode marker, not a pass cap;
+see batch-orchestration §1.1).
 
 #### 1.2 GUI — `BatchAutorouter` vs `BatchAutorouterV19` selection
 
