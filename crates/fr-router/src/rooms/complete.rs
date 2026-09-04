@@ -137,6 +137,10 @@ impl AutorouteEngine<'_> {
         let carve_started = crate::rooms::attr::start();
         let mut carve_hits = 0u64;
         let paired_bounds = self.scratch_hit_bounds.len() == obstacles.len();
+        // Double-buffer: draining `result` moves unchanged candidates instead
+        // of cloning their simplexes, and `new_result` is allocated once per
+        // call instead of once per obstacle (28 M hits on Issue039).
+        let mut new_result: Vec<CompletedShape> = Vec::new();
         for (index, obstacle) in obstacles.into_iter().enumerate() {
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {
                 continue;
@@ -162,9 +166,9 @@ impl AutorouteEngine<'_> {
                 continue;
             };
 
-            let mut new_result: Vec<CompletedShape> = Vec::new();
+            new_result.clear();
             let mut new_bounding: Option<IntBox> = None;
-            for candidate in &result {
+            for candidate in result.drain(..) {
                 let intersection = candidate.shape.intersection(&obstacle_shape);
                 let mut something_changed = false;
                 if intersection.dimension() == 2 {
@@ -178,7 +182,7 @@ impl AutorouteEngine<'_> {
                     if !ignore_expansion_room {
                         something_changed = true;
                         carve_hits += 1;
-                        let restrained = self.restrain_shape(candidate, &obstacle_shape);
+                        let restrained = self.restrain_shape(&candidate, &obstacle_shape);
                         for room in restrained {
                             union_into(&mut new_bounding, &room.shape);
                             new_result.push(room);
@@ -187,10 +191,10 @@ impl AutorouteEngine<'_> {
                 }
                 if !something_changed {
                     union_into(&mut new_bounding, &candidate.shape);
-                    new_result.push(candidate.clone());
+                    new_result.push(candidate);
                 }
             }
-            result = new_result;
+            std::mem::swap(&mut result, &mut new_result);
             match new_bounding {
                 Some(bb) => bounding = bb,
                 None => {
@@ -232,20 +236,19 @@ impl AutorouteEngine<'_> {
         } else {
             None
         };
-        let obstacle_simplex = obstacle_shape.clone();
         let room_shape = &room.shape;
         let shape_to_be_contained = &room.contained;
 
         let mut cut_line: Option<Line> = None;
         let mut cut_line_distance = -1.0f64;
-        for i in 0..obstacle_simplex.border_line_count() {
-            let Some(segment) = border_segment(&obstacle_simplex, i) else {
+        for i in 0..obstacle_shape.border_line_count() {
+            let Some(segment) = border_segment(obstacle_shape, i) else {
                 continue;
             };
             if !geom::is_intersected_interior_by(room_shape, &segment) {
                 continue;
             }
-            let curr_line = obstacle_simplex.border_line(i);
+            let curr_line = obstacle_shape.border_line(i);
             let curr_min_distance = geom::distance_to_the_left(shape_to_be_contained, &curr_line);
             if curr_min_distance > cut_line_distance {
                 cut_line_distance = curr_min_distance;
@@ -275,14 +278,14 @@ impl AutorouteEngine<'_> {
             return result;
         }
         let mut split_line: Option<Line> = None;
-        for i in 0..obstacle_simplex.border_line_count() {
-            let Some(segment) = border_segment(&obstacle_simplex, i) else {
+        for i in 0..obstacle_shape.border_line_count() {
+            let Some(segment) = border_segment(obstacle_shape, i) else {
                 continue;
             };
             if !geom::is_intersected_interior_by(room_shape, &segment) {
                 continue;
             }
-            let curr_line = obstacle_simplex.border_line(i);
+            let curr_line = obstacle_shape.border_line(i);
             if geom::side_of_line(shape_to_be_contained, &curr_line) == Side::Collinear {
                 split_line = Some(curr_line.opposite());
                 break;
