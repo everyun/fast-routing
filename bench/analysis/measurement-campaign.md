@@ -18,7 +18,8 @@ data rather than from this document.
 | campaign | when | config | logs |
 |---|---|---|---|
 | capped baseline | 2026-08-28 01:27–03:17 | `-mp 20`, 300 s cap, one board at a time | `bench/results/20260828-013025/` |
-| uncapped | 05:13–08:33 | `-mp 20`, `timeout 7200`, **4 concurrent workers** | `bench/results/java-uncapped/*.log` |
+| uncapped | 05:13–08:33 | `-mp 20`, `timeout 7200`, **4 concurrent workers** | `bench/results/java-uncapped-contaminated-20260828/*.log` |
+| uncapped hermetic re-run | 2026-09-05 00:07–05:56 | `-mp 20`, 7200 s cap, **W=2**, fresh `--user_data_path` per board | `bench/results/java-uncapped/*.log` |
 | SerialGC | 05:03–05:22 | `-XX:+UseSerialGC -mp 20`, 600 s cap, serial | `bench/results/java-experiments/*.serialgc.log` |
 | DEBUG console | 05:27–05:39 | `-Dfreerouting.logging.console.level=DEBUG -mp 20` | `bench/results/java-experiments/*.profile.log` |
 | 3-run stability | 2026-08-29 03:30–08:0x | the capped baseline's command line, three times per fixture, serial, `nice -n 15` | `bench/results/java-stability/<stem>.r{1,2,3}.log` |
@@ -399,3 +400,67 @@ The one number worth keeping from a `no_result` log is Java's own
 `started with N unrouted` line, which survives even when the run is killed:
 paired with a final count from the same tool it is the only self-consistent way
 to ask "did the reference make progress on this board?".
+
+## 7. Hermetic uncapped re-run (2026-09-05) — the clean-pipeline `T_java(complete)`
+
+Everything above §0–§6 describes the 2026-08-28/29 campaigns, which the
+`$TMPDIR/freerouting/freerouting.json` leak ran with the fanout and optimizer
+stages disabled (§5). This section is the do-over for the uncapped tier:
+`bench/run_java_uncapped.py`, `-mp 20`, 7200 s cap, W=2, `nice -n 10`, one
+fresh empty `--user_data_path` per board, jar sha256-pinned. The target set is
+the *current* manifest's 17 `java_timeout` boards (the old 14, minus
+Issue107-...\_bad which the clean 300 s sweep finishes, plus Issue179, Issue190,
+Issue209-split05, Issue269). Old logs are archived at
+`bench/results/java-uncapped-contaminated-20260828/`; the table below is
+regenerated with `python3 bench/analysis/campaign.py --section uncapped-hermetic`.
+
+| fixture | old wall s | old status | old u | old v | new wall s | new status | new u | new v | new fan/opt |
+|---|---|---|---|---|---|---|---|---|---|
+| Issue015-StackOverflow | 459.75 | completed | 54 | 511 | 535.29 | completed | 53 | 511 | Y/Y |
+| Issue022-AutoRouter_interrupted | 832.30 | completed | 42 | 531 | 911.67 | completed | 41 | 531 | Y/Y |
+| Issue027-zMRETestFixture | 804.34 | completed | 7 | 1138 | 648.22 | completed | 5 | 1138 | Y/Y |
+| Issue029-hw48na | 7200.39 | blocked | - | - | 2731.12 | completed | 109 | 451 | Y/Y |
+| Issue066-Project_GP8B | 850.22 | completed | 5 | 23 | 1402.39 | completed | 8 | 23 | Y/Y |
+| Issue070-Autorouter_FQ101_PCB_2022-05-13 | 4405.40 | completed | 113 | 275 | 4648.56 | completed | 118 | 275 | Y/Y |
+| Issue103-Board-Unrouted | 885.15 | completed | 4 | 60 | 1215.69 | completed | 4 | 60 | Y/Y |
+| Issue113-Protein | 1709.19 | completed | 21 | 44 | 1556.21 | completed | 21 | 44 | Y/Y |
+| Issue145-smoothieboard | 1052.70 | completed | 135 | 112 | 1494.46 | completed | 47 | 112 | Y/Y |
+| Issue178-KeebMaker_Sofle_Choc | 296.21 | completed | 6 | 20 | 440.54 | completed | 5 | 20 | Y/Y |
+| Issue179-Autorouter_PCB1_2023-3-24 | - | - | - | - | 7200.09 | hit_cap | - | - | Y/n |
+| Issue190-processor.Z80 | - | - | - | - | 275.55 | completed | 12 | 1372 | Y/Y |
+| Issue208-freerouting | 7200.38 | hit_cap | - | - | 7200.11 | hit_cap | - | - | Y/n |
+| Issue209-split05 | - | - | - | - | 309.22 | completed | 18 | 182 | Y/Y |
+| Issue214-freerouting | 1087.08 | completed | 64 | 192 | 1025.85 | completed | 58 | 192 | Y/Y |
+| Issue219-LogicBoard_smt | 4675.43 | completed | 2 | 0 | 5571.34 | completed | 1 | 0 | Y/Y |
+| Issue269-caniot-tiny-arm | - | - | - | - | 321.97 | completed | 94 | 4 | Y/Y |
+
+15/17 completed; completed wall sum 23 088.08 s, max 5571.34 s (Issue219). The
+new walls are W=2-contended and include the optimizer the old runs skipped, so
+they are upper bounds, not speed readings; the completion verdicts and
+unrouted/violations are concurrency-independent.
+
+Reading:
+
+- **The modal-dialog blockage is gone.** Issue029, `blocked` for the whole 2 h
+  of the old campaign (§4), completed in 2731 s with 109u/451v. A fresh empty
+  `--user_data_path` does not carry whatever setting made the jar re-open the
+  `.rules` sidecar for confirmation. §4's mechanism analysis stands; the
+  trigger lived in the leaked user profile, not in the fixture.
+- **Only Issue179 and Issue208 still have no `T_java(complete)`** (both
+  hit_cap with no final score; Issue208 again never finished pass #1 — its
+  pathology is pipeline-independent). Suite-level `T_java(complete)` is now
+  known for 44/46 boards; the two exceptions are 2 h lower bounds.
+- **The clean pipeline routes better on 7 of the 11 boards with old data** —
+  unrouted fell on Issue015 (54→53), Issue022 (42→41), Issue027 (7→5),
+  Issue145 (135→**47**, the largest swing), Issue178 (6→5), Issue214 (64→58),
+  Issue219 (2→1) — and worse on two: Issue066 (5→8) and Issue070 (113→118).
+  Violations never changed. Any "we beat the reference" comparison against the
+  old uncapped numbers must be redone against this column.
+- **Three of the four boards that became `java_timeout` under the clean
+  300 s sweep are cap-marginals, not slow boards**: Issue190 (275.6 s),
+  Issue209-split05 (309.2 s) and Issue269 (322.0 s) all complete within ~5.4 min
+  uncapped. Their `java_timeout` class is a 300 s/W=4 artifact; G3.1 should use
+  these uncapped walls for them.
+- Every completed board ran auto-routing and optimization, and fanout was
+  enabled everywhere (on Issue190 it is "enabled but skipped because the board
+  has no SMD pins") — the §5 confound does not apply to this table.

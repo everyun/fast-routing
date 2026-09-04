@@ -10,8 +10,13 @@ diff away from being caught:
 
 Inputs (all read-only):
 
-  bench/results/java-uncapped/*.log        uncapped 2 h runs of the 14 boards
-                                           the 300 s baseline could not finish
+  bench/results/java-uncapped-contaminated-20260828/*.log
+                                           the 2026-08-28 uncapped 2 h runs of
+                                           the 14 boards the 300 s baseline
+                                           could not finish (fanout/optimizer
+                                           off — the pre-isolation pipeline)
+  bench/results/java-uncapped/*.log        the 2026-09-05 hermetic re-run
+                                           (fresh --user_data_path per board)
   bench/results/java-experiments/*.log     SerialGC / DEBUG-console probes
   bench/results/20260828-013025/           the 300 s capped baseline
 
@@ -33,7 +38,9 @@ sys.path.insert(0, BENCH_DIR)
 
 import manifest as fixture_manifest  # noqa: E402
 
-UNCAPPED_DIR = os.path.join(BENCH_DIR, "results", "java-uncapped")
+UNCAPPED_DIR = os.path.join(
+    BENCH_DIR, "results", "java-uncapped-contaminated-20260828")
+HERMETIC_UNCAPPED_DIR = os.path.join(BENCH_DIR, "results", "java-uncapped")
 EXPERIMENTS_DIR = os.path.join(BENCH_DIR, "results", "java-experiments")
 BASELINE_DIR = os.path.join(BENCH_DIR, "results", "20260828-013025")
 STABILITY_DIR = os.path.join(BENCH_DIR, "results", "java-stability")
@@ -160,6 +167,62 @@ def section_gc_surplus() -> str:
         f"\nuser/real range {min(ratios):.3f}–{max(ratios):.3f} "
         f"(mean {sum(ratios) / len(ratios):.3f}) on a single router thread."
     )
+
+
+# --------------------------------------------------------------------------
+# Section 1b: hermetic uncapped re-run (2026-09-05)
+# --------------------------------------------------------------------------
+
+
+def section_uncapped_hermetic() -> str:
+    """Old (contaminated, fanout/optimizer off) vs new (hermetic) uncapped runs.
+
+    New data: bench/results/java-uncapped/<stem>.log +
+    results.json (`java_settings.stages_ran`). Old data: the archive in
+    UNCAPPED_DIR. The fanout/optimizer flags come from the stage lines the new
+    pipeline actually printed, not from CLI intent.
+    """
+    old = fixture_manifest.load_uncapped(UNCAPPED_DIR)
+    new = fixture_manifest.load_uncapped(HERMETIC_UNCAPPED_DIR)
+    settings = {}
+    res_path = os.path.join(HERMETIC_UNCAPPED_DIR, "results.json")
+    if os.path.isfile(res_path):
+        _meta, recs = fixture_manifest.load_results(res_path)
+        settings = {
+            r["fixture"]: (r.get("java_settings") or {}).get("stages_ran") or {}
+            for r in recs
+        }
+    rows = []
+    for name in sorted(new):
+        n = new[name]
+        o = old.get(name) or {}
+        st = settings.get(name) or {}
+        rows.append([
+            name.replace(".dsn", ""),
+            _fmt(o.get("uncapped_wall_s")), o.get("status", "-"),
+            _fmt(o.get("uncapped_unrouted"), "%s"),
+            _fmt(o.get("uncapped_violations"), "%s"),
+            _fmt(n["uncapped_wall_s"]), n["status"],
+            _fmt(n["uncapped_unrouted"], "%s"),
+            _fmt(n["uncapped_violations"], "%s"),
+            ("Y" if st.get("fanout") else "n") + "/" +
+            ("Y" if st.get("optimizer") else "n"),
+        ])
+    completed = [u for u in new.values() if u["status"] == "completed"]
+    summary = f"\n{len(completed)}/{len(new)} completed in the hermetic re-run."
+    if completed:
+        summary += (
+            f" Completed wall sum "
+            f"{sum(u['uncapped_wall_s'] for u in completed):.2f} s, max "
+            f"{max(u['uncapped_wall_s'] for u in completed):.2f} s."
+        )
+    summary += (" Walls are W=2-contended upper bounds; status and u/v are "
+                "concurrency-independent.")
+    return table(
+        ["fixture", "old wall s", "old status", "old u", "old v",
+         "new wall s", "new status", "new u", "new v", "new fan/opt"],
+        rows,
+    ) + summary
 
 
 # --------------------------------------------------------------------------
@@ -472,6 +535,7 @@ def section_stability() -> str:
 
 SECTIONS = {
     "uncapped": section_uncapped,
+    "uncapped-hermetic": section_uncapped_hermetic,
     "stability": section_stability,
     "uncapped-overlap": section_uncapped_overlap,
     "gc-surplus": section_gc_surplus,

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "generated_utc": "2026-09-04T15:44:00Z",
+  "generated_utc": "2026-09-04T21:56:39Z",
   "generator": "bench/manifest.py",
   "fixtures_dir": "/tmp/freerouting-upstream/fixtures",
   "java_source": {
@@ -29,7 +29,7 @@
     "stability.unrouted/violations are Java's self-reported numbers, not the referee's, and are comparable only with each other and with stability.started_unrouted — never with a referee count.",
     "snap_angle_effective falls back to the reader default (fortyfive_degree) when the board declares none.",
     "uncapped.uncapped_wall_s is T_java(complete) ONLY when uncapped.status == 'completed'; 'hit_cap' is a lower bound and 'blocked' measures a modal-dialog hang, not the board.",
-    "the uncapped campaign ran with the fanout stage inactive while java_source.results ran it on 37/46 boards — the two Java columns are not the same pipeline (measurement-campaign.md §5)."
+    "uncapped blocks come from the 2026-09-05 hermetic re-run (fanout+optimizer on); the fanout-inactive 2026-08-28 campaign is archived at bench/results/java-uncapped-contaminated-20260828/ (measurement-campaign.md, hermetic re-run section)."
   ],
   "coverage": {
     "fixtures": 46,
@@ -114,31 +114,16 @@
       "Issue230-CNH_Functional_Tester_1.dsn"
     ],
     "java_finished_not_stable": [],
-    "uncapped_measured": 14,
+    "uncapped_measured": 17,
     "by_uncapped_status": {
-      "completed": 0,
-      "hit_cap": 0,
+      "completed": 15,
+      "hit_cap": 2,
       "blocked": 0,
       "in_flight": 0
     },
     "timeout_without_uncapped_wall": [
-      "Issue015-StackOverflow.dsn",
-      "Issue022-AutoRouter_interrupted.dsn",
-      "Issue027-zMRETestFixture.dsn",
-      "Issue029-hw48na.dsn",
-      "Issue066-Project_GP8B.dsn",
-      "Issue070-Autorouter_FQ101_PCB_2022-05-13.dsn",
-      "Issue103-Board-Unrouted.dsn",
-      "Issue113-Protein.dsn",
-      "Issue145-smoothieboard.dsn",
-      "Issue178-KeebMaker_Sofle_Choc.dsn",
       "Issue179-Autorouter_PCB1_2023-3-24.dsn",
-      "Issue190-processor.Z80.dsn",
-      "Issue208-freerouting.dsn",
-      "Issue209-split05.dsn",
-      "Issue214-freerouting.dsn",
-      "Issue219-LogicBoard_smt.dsn",
-      "Issue269-caniot-tiny-arm.dsn"
+      "Issue208-freerouting.dsn"
     ]
   },
   "fixtures": [
@@ -282,23 +267,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 459.75,
-        "uncapped_unrouted": 54,
+        "uncapped_wall_s": 535.29,
+        "uncapped_unrouted": 53,
         "uncapped_violations": 511,
-        "started_unrouted": 146,
+        "started_unrouted": 133,
         "hit_cap": false,
         "status": "completed",
-        "score": 699.61,
-        "passes_run": 20,
-        "routing_s": 447.39,
+        "score": 701.53,
+        "passes_run": 21,
+        "routing_s": 534.61,
         "stages": {
-          "auto-routing": 447.39
+          "fanout": 2.81,
+          "auto-routing": 516.54,
+          "optimization": 15.26
         },
-        "user_s": 517.38,
-        "sys_s": 31.3,
-        "max_rss_bytes": 3712696320,
+        "user_s": 554.63,
+        "sys_s": 8.92,
+        "max_rss_bytes": 7632322560,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue015-StackOverflow.log"
@@ -396,23 +385,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 832.3,
-        "uncapped_unrouted": 42,
+        "uncapped_wall_s": 911.67,
+        "uncapped_unrouted": 41,
         "uncapped_violations": 531,
-        "started_unrouted": 235,
+        "started_unrouted": 145,
         "hit_cap": false,
         "status": "completed",
-        "score": 731.52,
-        "passes_run": 20,
-        "routing_s": 820.78,
+        "score": 733.33,
+        "passes_run": 22,
+        "routing_s": 911.39,
         "stages": {
-          "auto-routing": 820.78
+          "fanout": 3.55,
+          "auto-routing": 818.58,
+          "optimization": 89.26
         },
-        "user_s": 941.97,
-        "sys_s": 56.34,
-        "max_rss_bytes": 4206968832,
+        "user_s": 870.68,
+        "sys_s": 12.26,
+        "max_rss_bytes": 16282320896,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue022-AutoRouter_interrupted.log"
@@ -603,23 +596,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 804.34,
-        "uncapped_unrouted": 7,
+        "uncapped_wall_s": 648.22,
+        "uncapped_unrouted": 5,
         "uncapped_violations": 1138,
-        "started_unrouted": 938,
+        "started_unrouted": 251,
         "hit_cap": false,
         "status": "completed",
-        "score": 782.37,
-        "passes_run": 20,
-        "routing_s": 791.86,
+        "score": 784.23,
+        "passes_run": 21,
+        "routing_s": 647.12,
         "stages": {
-          "auto-routing": 791.86
+          "fanout": 3.5,
+          "auto-routing": 606.12,
+          "optimization": 37.5
         },
-        "user_s": 902.68,
-        "sys_s": 58.46,
-        "max_rss_bytes": 4059906048,
+        "user_s": 603.57,
+        "sys_s": 8.46,
+        "max_rss_bytes": 15903719424,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue027-zMRETestFixture.log"
@@ -717,21 +714,29 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 7200.39,
-        "uncapped_unrouted": null,
-        "uncapped_violations": null,
-        "started_unrouted": null,
-        "hit_cap": true,
-        "status": "blocked",
-        "score": null,
-        "passes_run": 0,
-        "routing_s": null,
-        "stages": {},
-        "user_s": 12.29,
-        "sys_s": 4.81,
-        "max_rss_bytes": 858472448,
-        "stages_started": [],
-        "rules_sidecar": "Issue029-hw48na.rules",
+        "uncapped_wall_s": 2731.12,
+        "uncapped_unrouted": 109,
+        "uncapped_violations": 451,
+        "started_unrouted": 154,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 567.89,
+        "passes_run": 22,
+        "routing_s": 2736.69,
+        "stages": {
+          "fanout": 10.27,
+          "auto-routing": 2658.3,
+          "optimization": 68.12
+        },
+        "user_s": 2539.4,
+        "sys_s": 28.89,
+        "max_rss_bytes": 11602165760,
+        "stages_started": [
+          "fanout",
+          "auto-routing",
+          "optimization"
+        ],
+        "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue029-hw48na.log"
       },
       "stability": {
@@ -1201,23 +1206,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 850.22,
-        "uncapped_unrouted": 5,
+        "uncapped_wall_s": 1402.39,
+        "uncapped_unrouted": 8,
         "uncapped_violations": 23,
-        "started_unrouted": 733,
+        "started_unrouted": 573,
         "hit_cap": false,
         "status": "completed",
-        "score": 987.33,
-        "passes_run": 18,
-        "routing_s": 838.3,
+        "score": 983.37,
+        "passes_run": 19,
+        "routing_s": 1419.17,
         "stages": {
-          "auto-routing": 838.3
+          "fanout": 21.28,
+          "auto-routing": 1354.35,
+          "optimization": 43.54
         },
-        "user_s": 987.72,
-        "sys_s": 84.22,
-        "max_rss_bytes": 6733676544,
+        "user_s": 1311.41,
+        "sys_s": 18.89,
+        "max_rss_bytes": 17004625920,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue066-Project_GP8B.log"
@@ -1315,23 +1324,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 4405.4,
-        "uncapped_unrouted": 113,
+        "uncapped_wall_s": 4648.56,
+        "uncapped_unrouted": 118,
         "uncapped_violations": 275,
-        "started_unrouted": 254,
+        "started_unrouted": 231,
         "hit_cap": false,
         "status": "completed",
-        "score": 590.24,
-        "passes_run": 18,
-        "routing_s": 4394.75,
+        "score": 578.05,
+        "passes_run": 19,
+        "routing_s": 4704.36,
         "stages": {
-          "auto-routing": 4394.75
+          "fanout": 62.05,
+          "auto-routing": 4618.64,
+          "optimization": 23.67
         },
-        "user_s": 4681.6,
-        "sys_s": 216.24,
-        "max_rss_bytes": 10232594432,
+        "user_s": 4535.84,
+        "sys_s": 61.64,
+        "max_rss_bytes": 15549513728,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue070-Autorouter_FQ101_PCB_2022-05-13.log"
@@ -1708,23 +1721,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 885.15,
+        "uncapped_wall_s": 1215.69,
         "uncapped_unrouted": 4,
         "uncapped_violations": 60,
-        "started_unrouted": 702,
+        "started_unrouted": 682,
         "hit_cap": false,
         "status": "completed",
         "score": 977.18,
-        "passes_run": 20,
-        "routing_s": 875.36,
+        "passes_run": 21,
+        "routing_s": 1214.89,
         "stages": {
-          "auto-routing": 875.36
+          "fanout": 2.78,
+          "auto-routing": 1202.44,
+          "optimization": 9.67
         },
-        "user_s": 1037.11,
-        "sys_s": 86.03,
-        "max_rss_bytes": 8211693568,
+        "user_s": 1205.92,
+        "sys_s": 14.41,
+        "max_rss_bytes": 17572085760,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue103-Board-Unrouted.log"
@@ -1914,24 +1931,7 @@
         "checker_nets_routed": 59,
         "checker_nets_multi_pin": 59
       },
-      "uncapped": {
-        "uncapped_wall_s": 7200.39,
-        "uncapped_unrouted": null,
-        "uncapped_violations": null,
-        "started_unrouted": null,
-        "hit_cap": true,
-        "status": "blocked",
-        "score": null,
-        "passes_run": 0,
-        "routing_s": null,
-        "stages": {},
-        "user_s": 8.77,
-        "sys_s": 4.32,
-        "max_rss_bytes": 489308160,
-        "stages_started": [],
-        "rules_sidecar": "Issue107-freq_teiler_200kHz_kicad_bad.rules",
-        "log": "bench/results/java-uncapped/Issue107-freq_teiler_200kHz_kicad_bad.log"
-      },
+      "uncapped": null,
       "stability": {
         "runs": 3,
         "scored_runs": 3,
@@ -2585,23 +2585,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 1709.19,
+        "uncapped_wall_s": 1556.21,
         "uncapped_unrouted": 21,
         "uncapped_violations": 44,
-        "started_unrouted": 351,
+        "started_unrouted": 306,
         "hit_cap": false,
         "status": "completed",
         "score": 932.86,
-        "passes_run": 20,
-        "routing_s": 1698.84,
+        "passes_run": 21,
+        "routing_s": 1566.48,
         "stages": {
-          "auto-routing": 1698.84
+          "fanout": 14.38,
+          "auto-routing": 1488.83,
+          "optimization": 63.27
         },
-        "user_s": 1923.75,
-        "sys_s": 142.84,
-        "max_rss_bytes": 5225086976,
+        "user_s": 1642.52,
+        "sys_s": 27.53,
+        "max_rss_bytes": 6925205504,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue113-Protein.log"
@@ -2887,23 +2891,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 1052.7,
-        "uncapped_unrouted": 135,
+        "uncapped_wall_s": 1494.46,
+        "uncapped_unrouted": 47,
         "uncapped_violations": 112,
-        "started_unrouted": 746,
+        "started_unrouted": 338,
         "hit_cap": false,
         "status": "completed",
-        "score": 801.5,
-        "passes_run": 20,
-        "routing_s": 1039.77,
+        "score": 912.47,
+        "passes_run": 21,
+        "routing_s": 1551.81,
         "stages": {
-          "auto-routing": 1039.77
+          "fanout": 61.78,
+          "auto-routing": 1442.13,
+          "optimization": 47.9
         },
-        "user_s": 1270.6,
-        "sys_s": 185.04,
-        "max_rss_bytes": 7050461184,
+        "user_s": 1555.95,
+        "sys_s": 34.02,
+        "max_rss_bytes": 13147668480,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue145-smoothieboard.log"
@@ -3466,23 +3474,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 296.21,
-        "uncapped_unrouted": 6,
+        "uncapped_wall_s": 440.54,
+        "uncapped_unrouted": 5,
         "uncapped_violations": 20,
-        "started_unrouted": 418,
+        "started_unrouted": 371,
         "hit_cap": false,
         "status": "completed",
-        "score": 976.5,
-        "passes_run": 18,
-        "routing_s": 285.53,
+        "score": 978.85,
+        "passes_run": 21,
+        "routing_s": 439.86,
         "stages": {
-          "auto-routing": 285.53
+          "fanout": 3.16,
+          "auto-routing": 422.77,
+          "optimization": 13.93
         },
-        "user_s": 377.88,
-        "sys_s": 54.21,
-        "max_rss_bytes": 4506320896,
+        "user_s": 484.77,
+        "sys_s": 10.27,
+        "max_rss_bytes": 12743376896,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue178-KeebMaker_Sofle_Choc.log"
@@ -3579,7 +3591,26 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
-      "uncapped": null,
+      "uncapped": {
+        "uncapped_wall_s": 7200.09,
+        "uncapped_unrouted": null,
+        "uncapped_violations": null,
+        "started_unrouted": null,
+        "hit_cap": true,
+        "status": "hit_cap",
+        "score": null,
+        "passes_run": 0,
+        "routing_s": null,
+        "stages": {},
+        "user_s": 4.8,
+        "sys_s": 2.67,
+        "max_rss_bytes": 359809024,
+        "stages_started": [
+          "fanout"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue179-Autorouter_PCB1_2023-3-24.log"
+      },
       "stability": {
         "runs": 3,
         "scored_runs": 0,
@@ -3765,7 +3796,30 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
-      "uncapped": null,
+      "uncapped": {
+        "uncapped_wall_s": 275.55,
+        "uncapped_unrouted": 12,
+        "uncapped_violations": 1372,
+        "started_unrouted": 18,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 656.58,
+        "passes_run": 19,
+        "routing_s": 271.45,
+        "stages": {
+          "auto-routing": 267.95,
+          "optimization": 3.5
+        },
+        "user_s": 293.53,
+        "sys_s": 7.78,
+        "max_rss_bytes": 7197212672,
+        "stages_started": [
+          "auto-routing",
+          "optimization"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue190-processor.Z80.log"
+      },
       "stability": {
         "runs": 3,
         "scored_runs": 0,
@@ -3859,7 +3913,7 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 7200.38,
+        "uncapped_wall_s": 7200.11,
         "uncapped_unrouted": null,
         "uncapped_violations": null,
         "started_unrouted": 378,
@@ -3867,12 +3921,15 @@
         "status": "hit_cap",
         "score": null,
         "passes_run": 0,
-        "routing_s": null,
-        "stages": {},
-        "user_s": 7329.02,
-        "sys_s": 122.5,
-        "max_rss_bytes": 3673047040,
+        "routing_s": 16.25,
+        "stages": {
+          "fanout": 16.25
+        },
+        "user_s": 7047.84,
+        "sys_s": 125.32,
+        "max_rss_bytes": 3244081152,
         "stages_started": [
+          "fanout",
           "auto-routing"
         ],
         "rules_sidecar": null,
@@ -3970,7 +4027,32 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
-      "uncapped": null,
+      "uncapped": {
+        "uncapped_wall_s": 309.22,
+        "uncapped_unrouted": 18,
+        "uncapped_violations": 182,
+        "started_unrouted": 153,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 828.38,
+        "passes_run": 21,
+        "routing_s": 306.95,
+        "stages": {
+          "fanout": 0.86,
+          "auto-routing": 302.7,
+          "optimization": 3.39
+        },
+        "user_s": 360.9,
+        "sys_s": 5.52,
+        "max_rss_bytes": 6919110656,
+        "stages_started": [
+          "fanout",
+          "auto-routing",
+          "optimization"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue209-split05.log"
+      },
       "stability": {
         "runs": 3,
         "scored_runs": 0,
@@ -4159,23 +4241,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 1087.08,
-        "uncapped_unrouted": 64,
+        "uncapped_wall_s": 1025.85,
+        "uncapped_unrouted": 58,
         "uncapped_violations": 192,
-        "started_unrouted": 153,
+        "started_unrouted": 102,
         "hit_cap": false,
         "status": "completed",
-        "score": 752.05,
-        "passes_run": 18,
-        "routing_s": 1073.5,
+        "score": 766.58,
+        "passes_run": 19,
+        "routing_s": 1068.73,
         "stages": {
-          "auto-routing": 1073.5
+          "fanout": 46.96,
+          "auto-routing": 936.07,
+          "optimization": 85.7
         },
-        "user_s": 1208.11,
-        "sys_s": 94.84,
-        "max_rss_bytes": 4304027648,
+        "user_s": 1105.86,
+        "sys_s": 15.61,
+        "max_rss_bytes": 5906612224,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue214-freerouting.log"
@@ -4368,23 +4454,27 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": {
-        "uncapped_wall_s": 4675.43,
-        "uncapped_unrouted": 2,
+        "uncapped_wall_s": 5571.34,
+        "uncapped_unrouted": 1,
         "uncapped_violations": 0,
-        "started_unrouted": 981,
+        "started_unrouted": 601,
         "hit_cap": false,
         "status": "completed",
-        "score": 997.96,
-        "passes_run": 19,
-        "routing_s": 4664.55,
+        "score": 998.97,
+        "passes_run": 16,
+        "routing_s": 5795.22,
         "stages": {
-          "auto-routing": 4664.55
+          "fanout": 233.7,
+          "auto-routing": 5559.23,
+          "optimization": 2.29
         },
-        "user_s": 5163.07,
-        "sys_s": 423.38,
-        "max_rss_bytes": 8278835200,
+        "user_s": 5823.01,
+        "sys_s": 85.13,
+        "max_rss_bytes": 11726241792,
         "stages_started": [
-          "auto-routing"
+          "fanout",
+          "auto-routing",
+          "optimization"
         ],
         "rules_sidecar": null,
         "log": "bench/results/java-uncapped/Issue219-LogicBoard_smt.log"
@@ -4669,7 +4759,32 @@
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
-      "uncapped": null,
+      "uncapped": {
+        "uncapped_wall_s": 321.97,
+        "uncapped_unrouted": 94,
+        "uncapped_violations": 4,
+        "started_unrouted": 99,
+        "hit_cap": false,
+        "status": "completed",
+        "score": 506.25,
+        "passes_run": 19,
+        "routing_s": 325.12,
+        "stages": {
+          "fanout": 6.06,
+          "auto-routing": 318.39,
+          "optimization": 0.67
+        },
+        "user_s": 373.47,
+        "sys_s": 9.5,
+        "max_rss_bytes": 6826164224,
+        "stages_started": [
+          "fanout",
+          "auto-routing",
+          "optimization"
+        ],
+        "rules_sidecar": null,
+        "log": "bench/results/java-uncapped/Issue269-caniot-tiny-arm.log"
+      },
       "stability": {
         "runs": 3,
         "scored_runs": 0,

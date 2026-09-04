@@ -858,9 +858,10 @@ def build_manifest(
             "uncapped.uncapped_wall_s is T_java(complete) ONLY when "
             "uncapped.status == 'completed'; 'hit_cap' is a lower bound and "
             "'blocked' measures a modal-dialog hang, not the board.",
-            "the uncapped campaign ran with the fanout stage inactive while "
-            "java_source.results ran it on 37/46 boards — the two Java "
-            "columns are not the same pipeline (measurement-campaign.md §5).",
+            "uncapped blocks come from the 2026-09-05 hermetic re-run "
+            "(fanout+optimizer on); the fanout-inactive 2026-08-28 campaign is "
+            "archived at bench/results/java-uncapped-contaminated-20260828/ "
+            "(measurement-campaign.md, hermetic re-run section).",
         ],
         "coverage": coverage,
         "fixtures": entries,

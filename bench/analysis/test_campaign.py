@@ -224,9 +224,64 @@ class TestRealCampaignLogs(unittest.TestCase):
 
     def test_no_uncapped_run_executed_a_fanout_stage(self):
         # The whole campaign ran fanout-less; measurement-campaign.md §5 turns
-        # on this, so it must fail loudly if a re-run changes it.
+        # on this, so it must fail loudly if a re-run changes it. This pins the
+        # ARCHIVE (UNCAPPED_DIR points at java-uncapped-contaminated-20260828);
+        # the hermetic re-run intentionally ran fanout and is covered by
+        # TestHermeticCampaignLogs below.
         for name, rec in self.unc.items():
             self.assertNotIn("fanout", rec["stages"], name)
+
+
+class TestHermeticCampaignLogs(unittest.TestCase):
+    """Guards the 2026-09-05 hermetic re-run (measurement-campaign.md §7)."""
+
+    @classmethod
+    def setUpClass(cls):
+        if not os.path.isdir(campaign.HERMETIC_UNCAPPED_DIR):
+            raise unittest.SkipTest("hermetic uncapped results not present")
+        cls.unc = fixture_manifest.load_uncapped(campaign.HERMETIC_UNCAPPED_DIR)
+
+    def test_all_seventeen_timeout_boards_have_a_log(self):
+        self.assertEqual(len(self.unc), 17)
+
+    def test_every_status_is_final(self):
+        for name, rec in self.unc.items():
+            self.assertIn(rec["status"], ("completed", "hit_cap"), name)
+
+    def test_completed_runs_stayed_under_cap_and_scored(self):
+        for name, rec in self.unc.items():
+            if rec["status"] == "completed":
+                self.assertLess(rec["uncapped_wall_s"],
+                                fixture_manifest.UNCAPPED_CAP_S, name)
+                self.assertIsNotNone(rec["uncapped_unrouted"], name)
+
+    def test_every_completed_run_executed_the_full_pipeline(self):
+        # The point of the re-run: fanout AND optimization stages actually ran
+        # (the 2026-08-28 campaign silently skipped both). Fanout may be
+        # "enabled but skipped because the board has no SMD pins" (Issue190) —
+        # enabled is the requirement, work is the board's call.
+        for name, rec in self.unc.items():
+            if rec["status"] == "completed":
+                self.assertIn("auto-routing", rec["stages"], name)
+                self.assertIn("optimization", rec["stages"], name)
+                if "fanout" not in rec["stages"]:
+                    with open(os.path.join(
+                            campaign.HERMETIC_UNCAPPED_DIR,
+                            name.replace(".dsn", ".log")),
+                            encoding="utf-8", errors="replace") as f:
+                        self.assertIn("Fanout stage is enabled", f.read(), name)
+
+    def test_issue029_is_no_longer_blocked(self):
+        # Old campaign: 2 h on the .rules modal dialog. Hermetic: completed.
+        self.assertEqual(self.unc["Issue029-hw48na.dsn"]["status"], "completed")
+
+    def test_only_179_and_208_lack_a_completion_wall(self):
+        no_wall = sorted(
+            n for n, r in self.unc.items() if r["status"] != "completed")
+        self.assertEqual(no_wall, [
+            "Issue179-Autorouter_PCB1_2023-3-24.dsn",
+            "Issue208-freerouting.dsn",
+        ])
 
 
 class TestCheckWithoutLogs(unittest.TestCase):
