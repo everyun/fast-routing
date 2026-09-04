@@ -350,7 +350,7 @@ fn evaluate_one(
         cancelled.store(true, Ordering::Relaxed);
         return Verdict::Unevaluated;
     }
-    let mut rerouter = MazeRerouter;
+    let mut rerouter = MazeRerouter::default();
     let result = attempt_item(
         board,
         item,

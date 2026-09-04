@@ -129,8 +129,7 @@ pub fn trace_geometry(board: &Board) -> TraceGeometry {
                     board
                         .clearances()
                         .value(item.clearance_class, default_class, trace.layer);
-                let mut weighted =
-                    length * (f64::from(trace.half_width) + f64::from(clearance));
+                let mut weighted = length * (f64::from(trace.half_width) + f64::from(clearance));
                 if item.fixed_state.is_shove_fixed() {
                     weighted /= 2.0;
                 }
@@ -170,7 +169,9 @@ pub fn weights_from(scoring: &ScoringSettings) -> ScoreWeights {
         unrouted_net_penalty: f64::from(scoring.unrouted_net_penalty),
         clearance_violation_penalty: f64::from(scoring.clearance_violation_penalty),
         bend_penalty: f64::from(scoring.bend_penalty),
-        trace_cost_per_mm: scoring.default_preferred_direction_trace_cost.unwrap_or(1.0),
+        trace_cost_per_mm: scoring
+            .default_preferred_direction_trace_cost
+            .unwrap_or(1.0),
         via_cost: f64::from(scoring.via_costs()),
         plane_via_cost: f64::from(scoring.plane_via_costs()),
     }

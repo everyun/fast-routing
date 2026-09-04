@@ -275,7 +275,13 @@ impl BoardSnapshotStore {
                 .iter()
                 .enumerate()
                 .map(|(index, entry)| (index, entry.score))
-                .reduce(|worst, candidate| if candidate.1 < worst.1 { candidate } else { worst })
+                .reduce(|worst, candidate| {
+                    if candidate.1 < worst.1 {
+                        candidate
+                    } else {
+                        worst
+                    }
+                })
             else {
                 return false;
             };
@@ -319,8 +325,11 @@ impl BoardSnapshotStore {
     ) -> Option<Restored> {
         // `List.sort` is stable, so entries of equal score keep insertion order
         // and the choice is deterministic.
-        self.entries
-            .sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        self.entries.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         let allowed = if max_restores == 0 {
             u32::MAX
         } else {
@@ -450,16 +459,26 @@ mod tests {
         history.add(&fixture.board, 100.0);
         for expected in 1..=4 {
             let restored = history
-                .restore(&mut fixture.board, MAXIMUM_TRIES_ON_THE_SAME_BOARD, |_, _| {})
+                .restore(
+                    &mut fixture.board,
+                    MAXIMUM_TRIES_ON_THE_SAME_BOARD,
+                    |_, _| {},
+                )
                 .expect("tries left");
             assert_eq!(restored.restore_count, expected);
             assert_eq!(restored.rank, 1);
         }
         assert!(history
-            .restore(&mut fixture.board, MAXIMUM_TRIES_ON_THE_SAME_BOARD, |_, _| {})
+            .restore(
+                &mut fixture.board,
+                MAXIMUM_TRIES_ON_THE_SAME_BOARD,
+                |_, _| {}
+            )
             .is_none());
         // `restoreBestBoard` asks for the best board regardless of the count.
-        assert!(history.restore_best(&mut fixture.board, |_, _| {}).is_some());
+        assert!(history
+            .restore_best(&mut fixture.board, |_, _| {})
+            .is_some());
     }
 
     #[test]
@@ -591,7 +610,11 @@ mod tests {
             stub_trace(&mut fixture.board, 100);
             assert_eq!(fixture.board.store().len(), items_before + 1);
             history
-                .restore(&mut fixture.board, MAXIMUM_TRIES_ON_THE_SAME_BOARD, |_, _| {})
+                .restore(
+                    &mut fixture.board,
+                    MAXIMUM_TRIES_ON_THE_SAME_BOARD,
+                    |_, _| {},
+                )
                 .expect("tries left");
             assert_eq!(fixture.board.store().len(), items_before);
             fixture.board.assert_consistent();

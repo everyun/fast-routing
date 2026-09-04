@@ -189,6 +189,25 @@ impl ItemRouteResult {
         self.improved
     }
 
+    /// Incompletes or vias fell. Length-only keeps are `improved()` but not
+    /// structural.
+    pub fn structural(&self) -> bool {
+        self.reduced_incompletes() || self.reduced_vias()
+    }
+
+    /// An incomplete dropped. The only keep that resets `maxConsecutiveFailures`
+    /// and re-opens the leftover-unrouted backlog: via-only and length-only
+    /// keeps do not move the obstacles that made those leftovers unroutable.
+    pub fn reduced_incompletes(&self) -> bool {
+        self.incomplete_count_after < self.incomplete_count_before
+    }
+
+    /// A via dropped, incompletes tied or better.
+    pub fn reduced_vias(&self) -> bool {
+        self.via_count_after < self.via_count_before
+            && self.incomplete_count_after <= self.incomplete_count_before
+    }
+
     /// `update_improved(boolean)` — `opt_route_item` ANDs the user-stop flag
     /// into the verdict before acting on it (`BatchOptimizer.java:394-395`).
     pub fn update_improved(&mut self, improved: bool) {
@@ -314,6 +333,38 @@ mod tests {
     #[test]
     fn the_not_attempted_result_never_looks_like_an_improvement() {
         assert!(!ItemRouteResult::not_attempted().improved());
+        assert!(!ItemRouteResult::not_attempted().structural());
+    }
+
+    #[test]
+    fn only_an_incomplete_or_via_drop_is_structural() {
+        assert!(verdict(key(2, 1, 100.0), key(1, 9, 900.0), 100.0));
+        assert!(ItemRouteResult::new(
+            &key(2, 1, 100.0),
+            &key(1, 9, 900.0),
+            100.0,
+            LengthMetric::WeightedBoth
+        )
+        .structural());
+        let length_only = ItemRouteResult::new(
+            &key(0, 2, 100.0),
+            &key(0, 2, 90.0),
+            100.0,
+            LengthMetric::WeightedBoth,
+        );
+        assert!(length_only.improved());
+        assert!(!length_only.structural());
+        assert!(!length_only.reduced_incompletes());
+        let via_only = ItemRouteResult::new(
+            &key(0, 3, 100.0),
+            &key(0, 2, 100.0),
+            100.0,
+            LengthMetric::WeightedBoth,
+        );
+        assert!(via_only.improved());
+        assert!(via_only.structural());
+        assert!(via_only.reduced_vias());
+        assert!(!via_only.reduced_incompletes());
     }
 
     #[test]

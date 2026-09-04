@@ -285,6 +285,48 @@ ARCHITECTURE "Budgets".
   two fixtures (`Issue107`, both variants) do come out with different bytes and the same score,
   which is the expected consequence of that metric committing reroutes that changed nothing.
 
+- **The inner reroute's incomplete floor is the ratsnest *before* the rip, not
+  after it.** `MazeRerouter` used to seed `incomplete_floor` from the board the
+  rip-out left, so restoring the ripped connection (7 → 6 on Issue110P, back to
+  the pre-rip 6) looked like progress and earned a second inner pass. That pass
+  queued the 10 leftover unrouted nets, routed 0, and cost another 8 s. Upstream
+  does keep going through all six passes while `still_unrouted_items`; we still
+  stop on a barren / net-destructive pass, and the floor is now the number
+  `opt_route_item` measured *before* the rip (`RerouteRequest.incomplete_floor`).
+  Restoring what we ripped is the job, not a reason to retry the backlog at 2×
+  ripup. A pass that *closes a leftover* still drives the count below the floor
+  and earns the next one.
+
+- **Leftover unrouted nets are retried once per pass, at 100 ms each.**
+  `autoroute_passes_for_optimizing_item` re-derives the whole board's work list,
+  so every optimizer item on an incomplete board re-attempts every leftover
+  connection. On Issue110P that is 10 `NotRouted` searches × ~1.4 s ≈ 7–9 s per
+  item, against Java's 0.4 ms reroute. We restore the ripped connection at the
+  full 100 s allowance, then — on the first item of a pass and after a keep
+  that closed a connection — try leftovers once at
+  [`BACKLOG_CONNECTION_BUDGET_MS`] = 100 ms. Via-only and length-only keeps do
+  not re-open the backlog. Easy-10 connection closure *is* an incomplete drop
+  (Issue026 `-mp 1`: 909.08 → 999.99, 0 open) and still gets the leftover try.
+
+- **Items whose every net was already incomplete are not maze-searched.**
+  The sweep includes traces that live on leftover-open nets. Ripping one and
+  re-routing that net is a 2.5 s `q=4 nr=3` search on Issue110P that never
+  closes anything — the first item's leftover try already attempted those nets.
+  `attempt_item` returns `not_attempted` (counts toward consecutive failures)
+  when every net of the item had `component_count > 1` before the rip. Fully
+  routed nets (the optimizer's real work) are unchanged.
+
+- **`maxConsecutiveFailures` resets only when an incomplete dropped.**
+  Upstream (`BatchOptimizer.java:257-259`) clears the streak on any
+  `improved()`. Under both length metrics a length-only micro-win is
+  `improved()`, and a via-only keep is too; on Issue110P we kept 43 of 109
+  items (3 of them via drops), score 911.91 → 911.92, and never hit the 50-item
+  abort Java reaches in 0.55 s with 0 keeps. Length-only and via-only still
+  commit — the board did get shorter / lose a via — but the streak counts them
+  as failures. Tests:
+  `length_only_keeps_do_not_reset_the_consecutive_failure_streak`,
+  `via_only_keeps_do_not_reset_the_consecutive_failure_streak`.
+
 - **... and it also stops at the first pass that opens more connections than it closes**
   (same function, second added term).
   *Why*: `routed > 0` is the right rule in the currency of attempts and the wrong one in the

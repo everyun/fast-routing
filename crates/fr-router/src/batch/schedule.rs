@@ -239,8 +239,8 @@ pub fn reserve_job_tail(reserve: Duration) -> Duration {
 /// without arming the process's one-shot clock.
 fn clamp_tail_reserve(budget: Duration, want: Duration) -> Duration {
     let want_ms = u64::try_from(want.as_millis()).unwrap_or(u64::MAX);
-    let cap_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX)
-        / TAIL_RESERVE_BUDGET_DIVISOR;
+    let cap_ms =
+        u64::try_from(budget.as_millis()).unwrap_or(u64::MAX) / TAIL_RESERVE_BUDGET_DIVISOR;
     Duration::from_millis(want_ms.min(cap_ms))
 }
 
@@ -1230,7 +1230,12 @@ mod tests {
     fn the_escalation_sequence_is_linear_ripup_and_doubling_time() {
         let mut harness = scripted(vec![], 10);
         run(&mut harness, config(5));
-        let ripup: Vec<i32> = harness.driver.seen.iter().map(|ctx| ctx.ripup_costs).collect();
+        let ripup: Vec<i32> = harness
+            .driver
+            .seen
+            .iter()
+            .map(|ctx| ctx.ripup_costs)
+            .collect();
         assert_eq!(ripup, vec![100, 200, 300, 400, 500]);
         let budget: Vec<u64> = harness
             .driver
@@ -1306,7 +1311,11 @@ mod tests {
             assert_eq!(outcome.stop_reason, Some(StopReason::PassLocalStagnation));
             outcome.passes.len()
         }
-        assert_eq!(stop_pass(1), 18, "a gain of exactly 0.5 is not an improvement");
+        assert_eq!(
+            stop_pass(1),
+            18,
+            "a gain of exactly 0.5 is not an improvement"
+        );
         assert_eq!(stop_pass(2), 19, "a gain of 1.0 is");
     }
 
@@ -1738,7 +1747,11 @@ mod tests {
         let quarter = |budget: u64| clamp_tail_reserve(Duration::from_secs(budget), Duration::MAX);
         assert_eq!(quarter(300), Duration::from_secs(75));
         assert_eq!(quarter(20), Duration::from_secs(5));
-        assert_eq!(quarter(0), Duration::ZERO, "a spent budget reserves nothing");
+        assert_eq!(
+            quarter(0),
+            Duration::ZERO,
+            "a spent budget reserves nothing"
+        );
 
         // Under the cap the estimate is taken whole — the usual case, where the
         // tail is a couple of seconds of a 300 s budget.

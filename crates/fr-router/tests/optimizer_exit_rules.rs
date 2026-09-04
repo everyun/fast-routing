@@ -611,11 +611,97 @@ fn the_release_metric_counts_a_reroute_that_changed_nothing_as_an_improvement() 
         pass.items_improved, 3,
         "the weighted floor is compared against a raw length, so every tie wins"
     );
-    // Which is exactly why the pass never stops early: the failure streak that
-    // `:257-263` counts is reset by every one of these phantom improvements, so
-    // the pass always runs every item the sweep has.
-    assert_eq!(pass.consecutive_failures, 0);
+    // The copper is still kept — mixed-metric `improved()` is unchanged — but
+    // the keeps are length-only (incompletes and vias tied), so they no longer
+    // reset `maxConsecutiveFailures`. Three items is below the cap of 50, so
+    // the pass still exhausts; a 50-item phantom streak now aborts.
+    assert_eq!(pass.consecutive_failures, 3);
     assert_eq!(pass.exit, PassExit::Exhausted);
+}
+
+/// Length-only keeps still commit, but they do not reset the 50-item abort.
+///
+/// Issue110P: 32 of 73 items "improved" with score 911.91 → 911.91, so the
+/// streak never reached 50 and the pass spent the whole job budget. Upstream
+/// on the same board kept 0 and aborted after 50 failures in 0.48 s.
+#[test]
+fn length_only_keeps_do_not_reset_the_consecutive_failure_streak() {
+    let mut bench = Bench::new(5);
+    for net in 1..=5 {
+        bench.join_detour(net, 400);
+    }
+    let mut settings = bench.settings.clone();
+    settings.optimizer.max_consecutive_failures = 2;
+    let rerouter = StraightRerouter::new(&bench, &[1, 2, 3, 4, 5]);
+    let mut optimizer = BatchOptimizer::with_rerouter(&bench.rules, &settings, Box::new(rerouter));
+    optimizer.length_metric = LengthMetric::WeightedBoth;
+
+    let pass = optimizer.opt_route_pass(&mut bench.board, 1, true);
+    assert_eq!(pass.exit, PassExit::ConsecutiveFailures);
+    assert_eq!(pass.items_attempted, 2, "the cap cut the sweep short");
+    assert_eq!(
+        pass.items_improved, 2,
+        "the shorter wires were kept; only the streak treated them as failures"
+    );
+    assert_eq!(pass.consecutive_failures, 2);
+    assert_eq!(
+        pass.key_after.via_count, pass.key_before.via_count,
+        "vias did not move: these were length-only keeps"
+    );
+}
+
+/// Via-only keeps still commit, but they do not reset the abort and they do
+/// not re-open the leftover backlog. Issue110P dropped 3 vias in the first
+/// pass; each one reset the streak and paid another 6 s leftover retry, so
+/// the pass visited 109 items instead of aborting at 50.
+#[test]
+fn via_only_keeps_do_not_reset_the_consecutive_failure_streak() {
+    let mut bench = Bench::new(5);
+    for net in 1..=5 {
+        bench.join_through_two_vias(net);
+    }
+    let mut settings = bench.settings.clone();
+    settings.optimizer.max_consecutive_failures = 2;
+    let rerouter = StraightRerouter::new(&bench, &[1, 2, 3, 4, 5]);
+    let mut optimizer = BatchOptimizer::with_rerouter(&bench.rules, &settings, Box::new(rerouter));
+    optimizer.length_metric = LengthMetric::WeightedBoth;
+
+    let via_before = bench.via_count();
+    let pass = optimizer.opt_route_pass(&mut bench.board, 1, true);
+    assert_eq!(pass.exit, PassExit::ConsecutiveFailures);
+    assert_eq!(pass.items_attempted, 2, "the cap cut the sweep short");
+    assert!(
+        pass.items_improved >= 1,
+        "at least one via-pair was replaced"
+    );
+    assert!(
+        bench.via_count() < via_before,
+        "vias fell ({via_before} -> {}) but the streak still fired",
+        bench.via_count()
+    );
+}
+
+/// The inner reroute's floor is the ratsnest *before* the rip, so merely
+/// putting the ripped connection back does not earn another inner pass.
+#[test]
+fn the_reroute_request_floor_is_the_pre_rip_incomplete_count() {
+    let mut bench = Bench::new(2);
+    bench.join_straight(1);
+    // Net 2 is open, so the board carries one incomplete. Ripping net 1 would
+    // make that two; the floor has to stay one.
+    let rerouter = StraightRerouter::new(&bench, &[1]);
+    let log = rerouter.log();
+    let settings = bench.settings.clone();
+    let mut optimizer = BatchOptimizer::with_rerouter(&bench.rules, &settings, Box::new(rerouter));
+    optimizer.opt_route_pass(&mut bench.board, 1, true);
+    let requests = log.borrow();
+    assert!(!requests.is_empty(), "the joined net is in the sweep");
+    for request in requests.iter() {
+        assert_eq!(
+            request.incomplete_floor, 1,
+            "pre-rip incompletes, not the post-rip 2: {request:?}"
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -210,7 +210,7 @@ fn a_discarded_attempt_leaves_the_worker_board_where_it_found_it() {
     for item in trace_ids(&fixture.board) {
         let before = board_text(&fixture.board);
         let mut scratch = AttemptScratch::new();
-        let mut rerouter = MazeRerouter;
+        let mut rerouter = MazeRerouter::default();
         let discarded = attempt_item(
             &mut fixture.board,
             item,
@@ -231,7 +231,7 @@ fn a_discarded_attempt_leaves_the_worker_board_where_it_found_it() {
             // the board — otherwise the equality above is vacuous for this item.
             let mut kept_board = fixture.board.clone();
             let mut scratch = AttemptScratch::new();
-            let mut rerouter = MazeRerouter;
+            let mut rerouter = MazeRerouter::default();
             let kept = attempt_item(
                 &mut kept_board,
                 item,

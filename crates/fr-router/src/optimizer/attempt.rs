@@ -122,15 +122,32 @@ pub fn attempt_item(
     let key_before = stats::board_key(board);
     let key_before_ms = clock.map_or(0, |clock| clock.elapsed().as_millis());
 
-    let Some(item_ref) = board.store().get(item) else {
+    let (nets, trace_corners, is_trace) = {
+        let Some(item_ref) = board.store().get(item) else {
+            return ItemRouteResult::not_attempted();
+        };
+        let nets: Vec<i32> = item_ref.nets.iter().copied().collect();
+        let trace_corners = match &item_ref.kind {
+            ItemKind::Trace(trace) => Some((trace.first_corner(), trace.last_corner())),
+            _ => None,
+        };
+        let is_trace = trace_corners.is_some();
+        (nets, trace_corners, is_trace)
+    };
+    // A trace/via on a net that was already incomplete is a fragment of the
+    // leftover backlog, not a routed connection being optimized. The first
+    // item of the pass already tried those nets; ripping this fragment and
+    // maze-searching them again is Issue110P's 2.5 s `q=4 nr=3` items.
+    // Fully-routed nets (component count 1) fall through and are re-routed.
+    if !nets.is_empty()
+        && nets
+            .iter()
+            .copied()
+            .filter(|&n| n > 0)
+            .all(|n| board.net_component_count(n) > 1)
+    {
         return ItemRouteResult::not_attempted();
-    };
-    let nets: Vec<i32> = item_ref.nets.iter().copied().collect();
-    let trace_corners = match &item_ref.kind {
-        ItemKind::Trace(trace) => Some((trace.first_corner(), trace.last_corner())),
-        _ => None,
-    };
-    let is_trace = trace_corners.is_some();
+    }
 
     // `:327-340` — step 1. The sweep matches connection *endpoints*, so a fork
     // hanging off either end of this trace is not enumerated on its own; rip it
@@ -188,8 +205,10 @@ pub fn attempt_item(
         ripup_costs: cfg.ripup_costs(is_trace),
         max_passes: cfg.max_autoroute_passes,
         with_preferred_directions: cfg.with_preferred_directions,
+        incomplete_floor: key_before.incomplete_count,
     };
     // `:376-378`.
+    rerouter.prepare_item(&nets);
     let reroute_started = clock.map(|_| std::time::Instant::now());
     rerouter.reroute(board, cfg.rules, cfg.pass_settings, &request);
     let reroute_ms = reroute_started.map_or(0, |started| started.elapsed().as_millis());
@@ -208,17 +227,28 @@ pub fn attempt_item(
     // `:397-399` / `:405-411`.
     if result.improved() && disposition == Disposition::Keep {
         board.commit(mark);
+        rerouter.note_structural(result.reduced_incompletes());
     } else {
         board.rollback_to(mark);
+        if disposition == Disposition::Keep {
+            rerouter.note_structural(false);
+        }
     }
 
     if clock.is_some() {
         crate::optimizer::trace::line(&format!(
-            "item, item={:?}, kind={}, ripped={}, key_before_ms={key_before_ms}, reroute_ms={reroute_ms}, key_after_ms={key_after_ms}, improved={}",
+            "item, item={:?}, kind={}, ripped={}, inc={}->{}, via={}->{}, len={:.1}->{:.1}, key_before_ms={key_before_ms}, reroute_ms={reroute_ms}, key_after_ms={key_after_ms}, improved={}, structural={}",
             item,
             if is_trace { "trace" } else { "drill" },
             ripped_connections.len(),
+            result.incomplete_count_before,
+            result.incomplete_count_after,
+            result.via_count_before,
+            result.via_count_after,
+            result.trace_length_before,
+            result.trace_length_after,
             result.improved(),
+            result.structural(),
         ));
     }
     scratch.ripped_items = ripped_items;

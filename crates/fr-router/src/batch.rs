@@ -933,6 +933,10 @@ pub struct BatchRouter<'r> {
     /// allocates nothing; see `discount_connections_the_cleanup_undid`.
     routed_copper: Vec<ItemId>,
     routed_copper_spans: Vec<(usize, usize)>,
+    /// When set, [`autoroute_items`] is filtered to these nets. The optimizer's
+    /// inner reroute uses this to skip leftover unrouted nets that have already
+    /// been tried against the current board.
+    pub net_filter: Option<std::collections::BTreeSet<i32>>,
 }
 
 impl<'r> BatchRouter<'r> {
@@ -960,6 +964,7 @@ impl<'r> BatchRouter<'r> {
             scratch: ContactScratch::new(),
             routed_copper: Vec::new(),
             routed_copper_spans: Vec::new(),
+            net_filter: None,
         }
     }
 
@@ -1078,6 +1083,9 @@ impl<'r> BatchRouter<'r> {
         self.routed_copper.clear();
         self.routed_copper_spans.clear();
         let mut work = autoroute_items(board, self.rules, &mut self.scratch);
+        if let Some(filter) = &self.net_filter {
+            work.retain(|item| filter.contains(&item.net_no));
+        }
         // A no-op under the default order; see `portfolio::WorkOrder`.
         self.work_order.apply(&mut work, ctx.pass_no);
         outcome.queued = work.len();
@@ -1165,7 +1173,8 @@ impl<'r> BatchRouter<'r> {
                             .map(|(id, _)| id)
                             .take_while(|id| *id >= first_new_id),
                     );
-                    self.routed_copper_spans.push((start, self.routed_copper.len()));
+                    self.routed_copper_spans
+                        .push((start, self.routed_copper.len()));
                 }
                 state if state.is_skip() => outcome.skipped += 1,
                 _ => outcome.not_routed += 1,
@@ -1405,7 +1414,10 @@ mod tests {
         let free_pass = free.autoroute_pass(&mut fixture.board.clone(), 1);
         assert!(free_pass.routed >= 1, "{free_pass:?}");
         assert_eq!(free_pass.connections_hitting_budget, 0, "{free_pass:?}");
-        assert!(free_pass.effort_used > 0, "settles are charged: {free_pass:?}");
+        assert!(
+            free_pass.effort_used > 0,
+            "settles are charged: {free_pass:?}"
+        );
 
         // ... and does not once one settled element is all a connection gets.
         let mut router = BatchRouter::new(&rules, &settings)
@@ -1419,7 +1431,11 @@ mod tests {
             "every connection reached its allowance: {pass:?}"
         );
         assert_eq!(pass.effort_used, pass.queued as u64, "one settle each");
-        assert_eq!(incomplete_count(&mut fixture.board), 1, "nothing was routed");
+        assert_eq!(
+            incomplete_count(&mut fixture.board),
+            1,
+            "nothing was routed"
+        );
     }
 
     #[test]

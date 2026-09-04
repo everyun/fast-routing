@@ -104,6 +104,12 @@ pub use sweep::{SortedRouteItems, SweepKey};
 /// moves the pass-to-pass improvement fraction, never the improvement lattice.
 pub const DEFAULT_BOARD_UNITS_PER_MM: f64 = 10_000.0;
 
+/// Wall budget for leftover (non-ripped) nets on the one backlog retry of a
+/// pass. Issue110P leftovers each cost ~1.4 s and never route; Issue026
+/// leftovers route in a few milliseconds. 100 ms sits two orders above the
+/// latter and two orders below the former.
+pub const BACKLOG_CONNECTION_BUDGET_MS: u64 = 100;
+
 // ---------------------------------------------------------------------------
 // the reroute seam
 // ---------------------------------------------------------------------------
@@ -124,6 +130,9 @@ pub struct RerouteRequest {
     /// to [`ItemRerouter::reroute`]; carried separately so a scripted rerouter
     /// can see which half of the alternation it is in.
     pub with_preferred_directions: bool,
+    /// Ratsnest count **before the rip-out**. Restoring the ripped connection
+    /// is not progress toward another inner pass — see [`MazeRerouter`].
+    pub incomplete_floor: usize,
 }
 
 /// How the optimizer re-routes the connection it just ripped out.
@@ -148,6 +157,20 @@ pub trait ItemRerouter {
         settings: &RouterSettings,
         request: &RerouteRequest,
     );
+
+    /// Nets of the item about to be ripped. [`MazeRerouter`] uses them as the
+    /// inner work-list when leftover unrouted nets have already been tried
+    /// against this board. Scripted rerouters ignore it.
+    fn prepare_item(&mut self, _focus_nets: &[i32]) {}
+
+    /// Called at the start of each optimizer pass so the first item always
+    /// retries the leftover backlog.
+    fn begin_pass(&mut self) {}
+
+    /// `true` when the just-attempted item was **kept** and reduced incompletes.
+    /// The leftover backlog is retried only then; a via-only keep, a length-only
+    /// keep or a rollback leaves the leftover obstacles in place.
+    fn note_structural(&mut self, _closed_an_incomplete: bool) {}
 }
 
 /// The production rerouter: `BatchAutorouter.autoroute_passes_for_optimizing_item`
@@ -225,9 +248,11 @@ pub trait ItemRerouter {
 /// the improvement lattice rejects it and every bit of it is rolled back.
 ///
 /// The escalation therefore also requires the pass to have **reduced the board's
-/// incomplete count** against the number the reroute started from. That number
-/// is the one the loop's own javadoc names — it exists to run passes "until the
-/// board is completed" — and [`PassOutcome::incomplete_count`] is already
+/// incomplete count** against the **pre-rip** ratsnest
+/// ([`RerouteRequest::incomplete_floor`]). Restoring the ripped connection
+/// brings the count back to where `opt_route_item` started and is not a reason
+/// to run another inner pass of leftover unrouted nets. A pass that closes a
+/// leftover still drives the count down and earns the next one. [`PassOutcome::incomplete_count`] is already
 /// computed at the end of every pass, so the rule costs one extra ratsnest per
 /// item and nothing per pass.
 ///
@@ -237,10 +262,41 @@ pub trait ItemRerouter {
 /// treadmill above, where pass `n + 1` is queued more work than pass `n` was.
 ///
 /// [`PassOutcome::incomplete_count`]: crate::batch::PassOutcome::incomplete_count
-#[derive(Debug, Default)]
-pub struct MazeRerouter;
+/// Production rerouter. Stateful across items of one pass: leftover unrouted
+/// nets are attempted on the first item (and again after a structural keep)
+/// and skipped while the board's obstacles have not structurally moved.
+#[derive(Debug, Clone)]
+pub struct MazeRerouter {
+    /// Try every unrouted net, not just [`Self::focus_nets`].
+    retry_backlog: bool,
+    /// Nets of the item being ripped — the connection `opt_route_item` asked
+    /// to re-route.
+    focus_nets: Vec<i32>,
+}
+
+impl Default for MazeRerouter {
+    fn default() -> MazeRerouter {
+        MazeRerouter {
+            retry_backlog: true,
+            focus_nets: Vec::new(),
+        }
+    }
+}
 
 impl ItemRerouter for MazeRerouter {
+    fn prepare_item(&mut self, focus_nets: &[i32]) {
+        self.focus_nets.clear();
+        self.focus_nets.extend_from_slice(focus_nets);
+    }
+
+    fn begin_pass(&mut self) {
+        self.retry_backlog = true;
+    }
+
+    fn note_structural(&mut self, structural: bool) {
+        self.retry_backlog = structural;
+    }
+
     fn reroute(
         &mut self,
         board: &mut Board,
@@ -258,10 +314,13 @@ impl ItemRerouter for MazeRerouter {
         // not go through it, so the flag is set directly.
         router.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
         router.set_requeue_active(false);
-        // What the reroute has to drive down: the board as the ripout left it.
-        // One ratsnest per item, against the two `stats::board_key` already
-        // takes.
-        let mut incomplete_floor = crate::batch::incomplete_count(board);
+        // Always restore the ripped connection first, at the full 100 s
+        // allowance. Mixing it with leftover unrouted nets is how Issue110P
+        // paid 9 s on item 1 for ten NotRouted searches.
+        if !self.focus_nets.is_empty() {
+            router.net_filter = Some(self.focus_nets.iter().copied().collect());
+        }
+        let mut incomplete_floor = request.incomplete_floor;
         for pass_no in 1..=request.max_passes {
             let started = trace::is_enabled().then(std::time::Instant::now);
             let outcome = router.autoroute_pass(board, pass_no);
@@ -281,6 +340,32 @@ impl ItemRerouter for MazeRerouter {
                 break;
             }
             incomplete_floor = outcome.incomplete_count;
+        }
+        if !self.retry_backlog {
+            return;
+        }
+        // One leftover try at a tight wall budget. Issue026's leftover
+        // connections route in milliseconds; Issue110P's never route and
+        // used to cost 1.4 s each.
+        let mut backlog = BatchRouter::new(rules, settings);
+        backlog.start_ripup_costs = request.ripup_costs;
+        backlog.remove_unconnected_vias = true;
+        backlog.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
+        backlog.set_requeue_active(false);
+        backlog.budget.base_connection_ms = BACKLOG_CONNECTION_BUDGET_MS;
+        let started = trace::is_enabled().then(std::time::Instant::now);
+        let outcome = backlog.autoroute_pass(board, 1);
+        if let Some(started) = started {
+            trace::line(&format!(
+                "inner, inner=backlog, queued={}, routed={}, not_routed={}, skipped={}, budget_hits={}, incomplete={incomplete_floor}->{}, ms={}",
+                outcome.queued,
+                outcome.routed,
+                outcome.not_routed,
+                outcome.skipped,
+                outcome.connections_hitting_budget,
+                outcome.incomplete_count,
+                started.elapsed().as_millis(),
+            ));
         }
     }
 }
@@ -456,7 +541,18 @@ impl PassTally {
         self.items_attempted += 1;
         if result.improved() {
             self.items_improved += 1;
-            self.consecutive_failures = 0;
+            // Upstream resets the streak on any `improved()` (`:257-259`). A
+            // length-only micro-win (Issue110P: 911.91 → 911.91) is
+            // `improved()` under both metrics, and a via-only keep is too;
+            // either one would hold the 50-item abort off. The streak
+            // therefore only clears when an *incomplete* dropped — that is
+            // the keep that actually moved leftover-unroutable copper.
+            // Length-only and via-only still commit. See PARITY-DIVERGENCES.
+            if result.reduced_incompletes() {
+                self.consecutive_failures = 0;
+            } else {
+                self.consecutive_failures += 1;
+            }
             // `:265-269`. Assignment, not accumulation: whatever the last
             // improved item scored is what the pass reports.
             self.route_improved =
@@ -467,15 +563,15 @@ impl PassTally {
                 } else {
                     0.0
                 };
-            None
         } else {
             self.consecutive_failures += 1;
-            // `:257-263`.
-            if self.consecutive_failures >= self.max_consecutive_failures {
-                Some(PassExit::ConsecutiveFailures)
-            } else {
-                None
-            }
+        }
+        // `:257-263`. Checked after both branches so a run of length-only
+        // keeps can still fire the abort.
+        if self.consecutive_failures >= self.max_consecutive_failures {
+            Some(PassExit::ConsecutiveFailures)
+        } else {
+            None
         }
     }
 }
@@ -531,7 +627,8 @@ impl<'r> BatchOptimizer<'r> {
     /// [`RouterSettings::apply_board_specific_optimizations`], for the same
     /// reason [`BatchRouter::new`] requires it.
     pub fn new(rules: &'r BoardRules, settings: &'r RouterSettings) -> BatchOptimizer<'r> {
-        let mut optimizer = BatchOptimizer::with_rerouter(rules, settings, Box::new(MazeRerouter));
+        let mut optimizer =
+            BatchOptimizer::with_rerouter(rules, settings, Box::new(MazeRerouter::default()));
         optimizer.parallel_capable = true;
         optimizer
     }
@@ -714,6 +811,7 @@ impl<'r> BatchOptimizer<'r> {
         };
         let pass_settings = pass_settings.as_ref().unwrap_or(self.settings);
 
+        self.rerouter.begin_pass();
         let mut sweep = SortedRouteItems::new();
         let mut tally = PassTally::new(key_before, max_items, max_consecutive_failures);
         let exit = if self.threads().is_parallel() {
