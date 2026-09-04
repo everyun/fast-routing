@@ -104,11 +104,18 @@ pub use sweep::{SortedRouteItems, SweepKey};
 /// moves the pass-to-pass improvement fraction, never the improvement lattice.
 pub const DEFAULT_BOARD_UNITS_PER_MM: f64 = 10_000.0;
 
-/// Wall budget for leftover (non-ripped) nets on the one backlog retry of a
-/// pass. Issue110P leftovers each cost ~1.4 s and never route; Issue026
-/// leftovers route in a few milliseconds. 100 ms sits two orders above the
-/// latter and two orders below the former.
+/// Starting wall budget for leftover (non-ripped) nets on a backlog retry.
+/// Issue110P leftovers never route and must stay cheap; Issue026's route in a
+/// few milliseconds. The budget doubles per retry of the same optimizer pass,
+/// up to [`BACKLOG_CONNECTION_BUDGET_CAP_MS`] — Issue155's leftovers need a
+/// few hundred milliseconds each. Retries only happen after a structural
+/// keep, so unroutable leftovers never see the large budgets.
 pub const BACKLOG_CONNECTION_BUDGET_MS: u64 = 100;
+
+/// Cap on the per-connection backlog budget; reached after four doublings
+/// (100 → 200 → 400 → 800 → 1000), mirroring the shape of upstream's
+/// `100000 * 2^(pass-1)` connection-budget escalation.
+pub const BACKLOG_CONNECTION_BUDGET_CAP_MS: u64 = 1000;
 
 // ---------------------------------------------------------------------------
 // the reroute seam
@@ -267,11 +274,15 @@ pub trait ItemRerouter {
 /// and skipped while the board's obstacles have not structurally moved.
 #[derive(Debug, Clone)]
 pub struct MazeRerouter {
-    /// Try every unrouted net, not just [`Self::focus_nets`].
+    /// Try every unrouted net, not just [`Self::focus_nets`]. Consumed by the
+    /// retry itself; re-armed only by a structural keep.
     retry_backlog: bool,
     /// Nets of the item being ripped — the connection `opt_route_item` asked
     /// to re-route.
     focus_nets: Vec<i32>,
+    /// Per-connection wall budget of the next backlog retry; doubles per
+    /// retry, capped at [`BACKLOG_CONNECTION_BUDGET_CAP_MS`].
+    backlog_budget_ms: u64,
 }
 
 impl Default for MazeRerouter {
@@ -279,6 +290,7 @@ impl Default for MazeRerouter {
         MazeRerouter {
             retry_backlog: true,
             focus_nets: Vec::new(),
+            backlog_budget_ms: BACKLOG_CONNECTION_BUDGET_MS,
         }
     }
 }
@@ -291,6 +303,7 @@ impl ItemRerouter for MazeRerouter {
 
     fn begin_pass(&mut self) {
         self.retry_backlog = true;
+        self.backlog_budget_ms = BACKLOG_CONNECTION_BUDGET_MS;
     }
 
     fn note_structural(&mut self, structural: bool) {
@@ -344,29 +357,41 @@ impl ItemRerouter for MazeRerouter {
         if !self.retry_backlog {
             return;
         }
-        // One leftover try at a tight wall budget. Issue026's leftover
-        // connections route in milliseconds; Issue110P's never route and
-        // used to cost 1.4 s each.
-        let mut backlog = BatchRouter::new(rules, settings);
-        backlog.start_ripup_costs = request.ripup_costs;
-        backlog.remove_unconnected_vias = true;
-        backlog.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
-        backlog.set_requeue_active(false);
-        backlog.budget.base_connection_ms = BACKLOG_CONNECTION_BUDGET_MS;
-        let started = trace::is_enabled().then(std::time::Instant::now);
-        let outcome = backlog.autoroute_pass(board, 1);
-        if let Some(started) = started {
-            trace::line(&format!(
-                "inner, inner=backlog, queued={}, routed={}, not_routed={}, skipped={}, budget_hits={}, incomplete={incomplete_floor}->{}, ms={}",
-                outcome.queued,
-                outcome.routed,
-                outcome.not_routed,
-                outcome.skipped,
-                outcome.connections_hitting_budget,
-                outcome.incomplete_count,
-                started.elapsed().as_millis(),
-            ));
+        // Consumed: the next retry needs a new structural keep.
+        self.retry_backlog = false;
+        // Probe cheaply, then escalate only while the probing keeps routing:
+        // Issue155's leftovers close (three tiers, 100 → 400 ms); Issue110P's
+        // never route, so the probe is all they get — 10 × 100 ms instead of
+        // the 10 × 1.4 s the whole-board work list used to pay per item.
+        let mut budget_ms = self.backlog_budget_ms;
+        loop {
+            let mut backlog = BatchRouter::new(rules, settings);
+            backlog.start_ripup_costs = request.ripup_costs;
+            backlog.remove_unconnected_vias = true;
+            backlog.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
+            backlog.set_requeue_active(false);
+            backlog.budget.base_connection_ms = budget_ms;
+            let started = trace::is_enabled().then(std::time::Instant::now);
+            let outcome = backlog.autoroute_pass(board, 1);
+            if let Some(started) = started {
+                trace::line(&format!(
+                    "inner, inner=backlog, queued={}, routed={}, not_routed={}, skipped={}, budget_hits={}, budget_ms={budget_ms}, incomplete={incomplete_floor}->{}, ms={}",
+                    outcome.queued,
+                    outcome.routed,
+                    outcome.not_routed,
+                    outcome.skipped,
+                    outcome.connections_hitting_budget,
+                    outcome.incomplete_count,
+                    started.elapsed().as_millis(),
+                ));
+            }
+            incomplete_floor = outcome.incomplete_count;
+            if outcome.routed == 0 || budget_ms >= BACKLOG_CONNECTION_BUDGET_CAP_MS {
+                break;
+            }
+            budget_ms = (budget_ms * 2).min(BACKLOG_CONNECTION_BUDGET_CAP_MS);
         }
+        self.backlog_budget_ms = budget_ms;
     }
 }
 

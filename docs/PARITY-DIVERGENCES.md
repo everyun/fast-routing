@@ -297,16 +297,22 @@ ARCHITECTURE "Budgets".
   ripup. A pass that *closes a leftover* still drives the count below the floor
   and earns the next one.
 
-- **Leftover unrouted nets are retried once per pass, at 100 ms each.**
+- **Leftover unrouted nets get a probing retry, not the whole-board work list.**
   `autoroute_passes_for_optimizing_item` re-derives the whole board's work list,
   so every optimizer item on an incomplete board re-attempts every leftover
   connection. On Issue110P that is 10 `NotRouted` searches × ~1.4 s ≈ 7–9 s per
   item, against Java's 0.4 ms reroute. We restore the ripped connection at the
   full 100 s allowance, then — on the first item of a pass and after a keep
-  that closed a connection — try leftovers once at
-  [`BACKLOG_CONNECTION_BUDGET_MS`] = 100 ms. Via-only and length-only keeps do
-  not re-open the backlog. Easy-10 connection closure *is* an incomplete drop
-  (Issue026 `-mp 1`: 909.08 → 999.99, 0 open) and still gets the leftover try.
+  that closed a connection — probe the leftovers at
+  [`BACKLOG_CONNECTION_BUDGET_MS`] = 100 ms per connection and keep retrying
+  with a doubling budget (cap [`BACKLOG_CONNECTION_BUDGET_CAP_MS`] = 1000 ms,
+  the shape of upstream's `100000 * 2^(pass-1)`) only while the probing routes
+  at least one connection. Via-only and length-only keeps do not re-open the
+  backlog. Issue110P's leftovers never route, so they cost one 100 ms probe
+  per pass (10 × 0.1 s, once); Issue155's do route, and the escalation closes
+  all 5 (0 open, 0 violations, `905.65 → 999.99`, vs the flat-100 ms tiering
+  that closed them but left 1 clearance violation, and vs 14.5 s at the old
+  whole-board behaviour).
 
 - **Items whose every net was already incomplete are not maze-searched.**
   The sweep includes traces that live on leftover-open nets. Ripping one and
