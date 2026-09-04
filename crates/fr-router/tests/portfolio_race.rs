@@ -126,6 +126,7 @@ const PASSES: i32 = 1;
 
 /// A portfolio of one is the plain run — same board, no clone, no thread.
 #[test]
+#[ignore = "long test: routes Issue039 twice in a debug build; run with `cargo test -- --include-ignored` or ci/run-local.sh --long (FR_LONG_TESTS=1)"]
 fn a_portfolio_of_one_is_the_default_run() {
     let (Some(mut raced), Some(mut plain)) = (load(FIXTURE), load(FIXTURE)) else {
         return;
@@ -155,6 +156,7 @@ fn a_portfolio_of_one_is_the_default_run() {
 /// The property `--portfolio` rests on: the race is never worse than arm 0, and
 /// arm 0 is the plain run.
 #[test]
+#[ignore = "long test: routes Issue039 on 3 arms in a debug build; run with `cargo test -- --include-ignored` or ci/run-local.sh --long (FR_LONG_TESTS=1)"]
 fn the_race_never_returns_a_board_worse_than_the_default_order() {
     let Some(mut loaded) = load(FIXTURE) else {
         return;
@@ -194,6 +196,7 @@ fn the_race_never_returns_a_board_worse_than_the_default_order() {
 /// Two races leave the same board: an arm's order is a function of its index,
 /// and a tie goes to the lowest index, so nothing about scheduling gets in.
 #[test]
+#[ignore = "long test: routes Issue039 twice on 3 arms in a debug build; run with `cargo test -- --include-ignored` or ci/run-local.sh --long (FR_LONG_TESTS=1)"]
 fn a_race_is_reproducible() {
     let (Some(mut first), Some(mut second)) = (load(FIXTURE), load(FIXTURE)) else {
         return;

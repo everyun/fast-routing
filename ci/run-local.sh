@@ -6,7 +6,22 @@
 #   + spec-constant lint over docs/upstream-study
 #
 # Does not modify crates/. Times each step for the report.
+#
+# Long tests (#[ignore]d, e.g. fr-router/tests/portfolio_race.rs — minutes each
+# in a debug build) are skipped by default. `ci/run-local.sh --long` or
+# FR_LONG_TESTS=1 runs them via `--include-ignored` after the normal suite.
 set -euo pipefail
+
+LONG=0
+for arg in "$@"; do
+  case "$arg" in
+    --long) LONG=1 ;;
+    *) echo "unknown argument: $arg (only --long is supported)" >&2; exit 2 ;;
+  esac
+done
+if [ "${FR_LONG_TESTS:-0}" = "1" ]; then
+  LONG=1
+fi
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
@@ -85,6 +100,15 @@ step "test (debug)" cargo test --workspace --locked --no-fail-fast -- \
   --skip upstream_compat_mode_reproduces_the_two_documented_divergences \
   --skip via_padstacks_are_declared_once_even_when_the_dsn_names_them_twice \
   --skip issue026_matches_the_java_writer_up_to_the_routing
+
+# #[ignore]d long tests (portfolio_race routes a real board for minutes in a
+# debug build). Off by default; `ci/run-local.sh --long` or FR_LONG_TESTS=1.
+# --include-ignored runs only the ignored tests, so the ses-less skips above
+# do not apply here.
+if [ "$LONG" = "1" ]; then
+  step "test (long, ignored)" cargo test --workspace --locked --no-fail-fast -- \
+    --test-threads=8 --include-ignored
+fi
 
 step "release build (fr-cli + g21-referee)" \
   cargo build --release --locked -p fr-cli -p g21-referee
