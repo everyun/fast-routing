@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "passes": 20,
+  "timeout_s": 60,
+  "note": "CI smoke ceilings. added_violations must be 0. unrouted must be <= unrouted_max. in-tool time is recorded, never gated. Boards are java_finished and finish under -mp 20 well inside 30 s on a quiet machine (selection evidence: bench/results/20260830-000534 at -mp 1, 0 unrouted / 0 added violations).",
+  "boards": {
+    "Issue026-J2_reference.dsn": {"unrouted_max": 0},
+    "Issue143-rpi_splitter.dsn": {"unrouted_max": 0},
+    "Issue110-testProjectFromFreeroutingBugTest.dsn": {"unrouted_max": 0},
+    "Issue159-setonix_2hp-pcb.dsn": {"unrouted_max": 0},
+    "Issue155-CH376_MCP795_Module.dsn": {"unrouted_max": 0},
+    "Issue187-processor.Z80.dsn": {"unrouted_max": 0}
+  }
+}
