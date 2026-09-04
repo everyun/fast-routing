@@ -1,0 +1,3 @@
+FRMETRIC {"kind":"counters","expansions":29106818,"queue_pushes":39397274,"queue_pops":39238373,"stale_pops":10131555,"tree_queries":4035568,"tree_nodes_visited":0,"room_completions":277275,"door_shape_computations":728776,"exact_intersections":0,"shove_checks":5644,"ripup_checks":1441460,"pull_tight_iterations":1094}
+51 of 81 connections still incomplete
+job budget spent — the session above is the best board the run held (51 of 81 connections incomplete; 0.33s of the budget was reserved for the shutdown)

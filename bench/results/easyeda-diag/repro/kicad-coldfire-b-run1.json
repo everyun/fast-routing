@@ -1,0 +1,3486 @@
+{
+    "$schema": "https://schemas.kicad.org/drc.v1.json",
+    "coordinate_units": "mm",
+    "date": "2026-09-05T01:20:15",
+    "ignored_checks": [
+        {
+            "description": "Footprint has no courtyard defined",
+            "key": "missing_courtyard"
+        },
+        {
+            "description": "Track endpoint not centered on via",
+            "key": "track_not_centered_on_via"
+        },
+        {
+            "description": "Tuning profile track geometries",
+            "key": "tuning_profile_track_geometries"
+        },
+        {
+            "description": "Footprint doesn't match symbol's footprint filters",
+            "key": "footprint_filters_mismatch"
+        },
+        {
+            "description": "Footprint component type doesn't match footprint pads",
+            "key": "footprint_type_mismatch"
+        }
+    ],
+    "included_severities": [
+        "error"
+    ],
+    "kicad_version": "10.0.5",
+    "schematic_parity": [],
+    "source": "kicad-coldfire-b.kicad_pcb",
+    "unconnected_items": [],
+    "violations": [
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1938 mm)",
+            "items": [
+                {
+                    "description": "走线 [/AN3] (Top_layer), 长度: 1.0922 mm",
+                    "pos": {
+                        "x": 128.7272,
+                        "y": 105.4862
+                    },
+                    "uuid": "c3a94c11-c013-4f14-a815-fca72a530287"
+                },
+                {
+                    "description": "走线 [/AN2] (Top_layer), 长度: 0.2896 mm",
+                    "pos": {
+                        "x": 129.032,
+                        "y": 105.156
+                    },
+                    "uuid": "fc7d43cc-1b3c-4484-ae13-d723fbacbe19"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/AN2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 129.54,
+                        "y": 105.41
+                    },
+                    "uuid": "5933d281-99eb-4979-bcd3-a1622ea44da4"
+                },
+                {
+                    "description": "走线 [/AN3] (Top_layer), 长度: 0.5080 mm",
+                    "pos": {
+                        "x": 129.032,
+                        "y": 106.299
+                    },
+                    "uuid": "8e2b2b7a-97d7-4c7a-b260-02ba586a1840"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1938 mm)",
+            "items": [
+                {
+                    "description": "走线 [/AN3] (Top_layer), 长度: 0.4311 mm",
+                    "pos": {
+                        "x": 129.032,
+                        "y": 105.791
+                    },
+                    "uuid": "3d58a391-eb51-46f2-8a03-a41a08e47e2b"
+                },
+                {
+                    "description": "走线 [/AN2] (Top_layer), 长度: 0.2896 mm",
+                    "pos": {
+                        "x": 129.032,
+                        "y": 105.156
+                    },
+                    "uuid": "fc7d43cc-1b3c-4484-ae13-d723fbacbe19"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/AN7] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 128.397,
+                        "y": 113.665
+                    },
+                    "uuid": "8f1e3632-e6c3-4864-a425-8fba74c6b216"
+                },
+                {
+                    "description": "走线 [/AN6] (B.Cu), 长度: 11.1760 mm",
+                    "pos": {
+                        "x": 129.159,
+                        "y": 123.19
+                    },
+                    "uuid": "acc348df-499a-4d9a-8edb-160bee07b551"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1950 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CLKMOD1] (Top_layer), 长度: 2.5145 mm",
+                    "pos": {
+                        "x": 124.587,
+                        "y": 101.727
+                    },
+                    "uuid": "26b57fbd-42a1-433e-a199-186302363b4e"
+                },
+                {
+                    "description": "走线 [/CLKMOD0] (Top_layer), 长度: 1.0160 mm",
+                    "pos": {
+                        "x": 123.19,
+                        "y": 101.981
+                    },
+                    "uuid": "5789af36-6f3e-49a9-9a18-be12635d47d5"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1950 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CLKMOD1] (Top_layer), 长度: 2.5145 mm",
+                    "pos": {
+                        "x": 124.587,
+                        "y": 101.727
+                    },
+                    "uuid": "26b57fbd-42a1-433e-a199-186302363b4e"
+                },
+                {
+                    "description": "走线 [/CLKMOD0] (Top_layer), 长度: 1.4368 mm",
+                    "pos": {
+                        "x": 123.19,
+                        "y": 100.965
+                    },
+                    "uuid": "9d5b281f-1145-483e-a831-86897725ef24"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1577 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CLKMOD0] (Top_layer), 长度: 1.2700 mm",
+                    "pos": {
+                        "x": 127.635,
+                        "y": 102.489
+                    },
+                    "uuid": "dbbeb156-41e2-419d-b137-a1113d94ce4e"
+                },
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 0.7543 mm",
+                    "pos": {
+                        "x": 126.0729,
+                        "y": 102.9716
+                    },
+                    "uuid": "ea585e1d-8ed6-4538-bf80-91454467b308"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1950 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CLKMOD1] (Top_layer), 长度: 0.3592 mm",
+                    "pos": {
+                        "x": 126.492,
+                        "y": 101.981
+                    },
+                    "uuid": "a98b64fb-1d1e-412c-a99e-4f59dc4fd632"
+                },
+                {
+                    "description": "走线 [/CLKMOD0] (Top_layer), 长度: 2.6670 mm",
+                    "pos": {
+                        "x": 126.111,
+                        "y": 102.235
+                    },
+                    "uuid": "ecb976e2-ddb2-405e-b0e4-af922b9a9b80"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1950 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CLKMOD1] (Top_layer), 长度: 0.3592 mm",
+                    "pos": {
+                        "x": 126.492,
+                        "y": 101.981
+                    },
+                    "uuid": "a98b64fb-1d1e-412c-a99e-4f59dc4fd632"
+                },
+                {
+                    "description": "走线 [/CLKMOD0] (Top_layer), 长度: 0.3592 mm",
+                    "pos": {
+                        "x": 126.365,
+                        "y": 102.489
+                    },
+                    "uuid": "cab3ac35-9df7-4dbf-b0fb-9c5f3b0b9d42"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/DSI] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 141.478,
+                        "y": 106.426
+                    },
+                    "uuid": "17eace0b-3ee8-41a8-99b0-77cc879e8b89"
+                },
+                {
+                    "description": "走线 [/DDAT1] (B.Cu), 长度: 3.9370 mm",
+                    "pos": {
+                        "x": 141.097,
+                        "y": 107.188
+                    },
+                    "uuid": "672cc117-b1b7-411d-8dfd-2bfcabafa4a6"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1951 mm)",
+            "items": [
+                {
+                    "description": "走线 [/DDAT2] (Top_layer), 长度: 0.9195 mm",
+                    "pos": {
+                        "x": 141.351,
+                        "y": 103.98252
+                    },
+                    "uuid": "3231998e-26c2-4872-a150-894e894c3c75"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 3.3274 mm",
+                    "pos": {
+                        "x": 140.335,
+                        "y": 107.823
+                    },
+                    "uuid": "ab3a6cc6-50db-46c1-8258-de58a2bf9b7e"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1951 mm)",
+            "items": [
+                {
+                    "description": "走线 [/DDAT2] (Top_layer), 长度: 0.8549 mm",
+                    "pos": {
+                        "x": 140.43152,
+                        "y": 103.98252
+                    },
+                    "uuid": "99deadfb-a26b-4ea4-80f2-af8fae01411e"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 3.3274 mm",
+                    "pos": {
+                        "x": 140.335,
+                        "y": 107.823
+                    },
+                    "uuid": "ab3a6cc6-50db-46c1-8258-de58a2bf9b7e"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/PWM3] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 129.159,
+                        "y": 99.06
+                    },
+                    "uuid": "503debfd-b232-43c4-83d8-aadacee11a25"
+                },
+                {
+                    "description": "走线 [/DDAT2] (B.Cu), 长度: 1.9050 mm",
+                    "pos": {
+                        "x": 129.667,
+                        "y": 98.298
+                    },
+                    "uuid": "d0a8d74e-6d4c-443e-bbad-c34ea17a45ed"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "JP101 的PTH 焊盘 5 [GND]",
+                    "pos": {
+                        "x": 112.522,
+                        "y": 98.425
+                    },
+                    "uuid": "26288206-684b-4b0b-af48-a1e60d0437bd"
+                },
+                {
+                    "description": "走线 [/DSCLK] (B.Cu), 长度: 5.2420 mm",
+                    "pos": {
+                        "x": 111.217,
+                        "y": 99.568
+                    },
+                    "uuid": "93ca82aa-5fe3-4278-8dce-51a487cd2ed0"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "JP101 的PTH 焊盘 1 [GND]",
+                    "pos": {
+                        "x": 112.522,
+                        "y": 93.345
+                    },
+                    "uuid": "25b4ebe6-18fc-45f6-ba74-d67c9821b2d3"
+                },
+                {
+                    "description": "走线 [/DTIN1] (B.Cu), 长度: 14.4780 mm",
+                    "pos": {
+                        "x": 125.73,
+                        "y": 92.202
+                    },
+                    "uuid": "b373f631-4b79-4c11-babb-e8a3722fafcf"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/RSTI-] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 147.574,
+                        "y": 95.25
+                    },
+                    "uuid": "8d9ffd09-bdfa-49a6-ae8a-5d12d2c1e275"
+                },
+                {
+                    "description": "走线 [/IRQ-7] (B.Cu), 长度: 7.2390 mm",
+                    "pos": {
+                        "x": 141.986,
+                        "y": 95.885
+                    },
+                    "uuid": "e70ff404-931e-431d-b23a-40c236f8e25f"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "MCU_PORT201 的PTH 焊盘 37 [/IRQ-6]",
+                    "pos": {
+                        "x": 138.684,
+                        "y": 136.906
+                    },
+                    "uuid": "21994b0b-3849-4aaf-895e-bea9c7617628"
+                },
+                {
+                    "description": "走线 [/IRQ-7] (In1.Cu), 长度: 2.0320 mm",
+                    "pos": {
+                        "x": 137.287,
+                        "y": 135.763
+                    },
+                    "uuid": "c07ca19c-38e4-40d2-9219-a5213735c9e5"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1914 mm)",
+            "items": [
+                {
+                    "description": "过孔 [GND] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 145.415,
+                        "y": 112.903
+                    },
+                    "uuid": "27c15e83-3070-4946-96c5-2db1850a93dc"
+                },
+                {
+                    "description": "走线 [/IRQ-7] (In1.Cu), 长度: 4.1309 mm",
+                    "pos": {
+                        "x": 143.764,
+                        "y": 115.57
+                    },
+                    "uuid": "819adad3-4757-44b3-93ae-86b29faa9734"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 10 [/DSO]",
+                    "pos": {
+                        "x": 78.867,
+                        "y": 116.459
+                    },
+                    "uuid": "3904c2bd-7d8e-40f6-88da-88ab95200d4a"
+                },
+                {
+                    "description": "走线 [/PST0] (B.Cu), 长度: 3.4290 mm",
+                    "pos": {
+                        "x": 80.01,
+                        "y": 117.348
+                    },
+                    "uuid": "dbd687a2-72c4-4b0c-8a15-24d34de43904"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 8 [/DSI]",
+                    "pos": {
+                        "x": 78.867,
+                        "y": 113.919
+                    },
+                    "uuid": "a03077c5-3c44-4527-ab35-124a1070e4ed"
+                },
+                {
+                    "description": "走线 [/PST0] (B.Cu), 长度: 4.4901 mm",
+                    "pos": {
+                        "x": 80.01,
+                        "y": 113.919
+                    },
+                    "uuid": "f5ba86be-af66-4e00-9bae-49b6e47a80eb"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 0.3776 mm",
+                    "pos": {
+                        "x": 137.3886,
+                        "y": 108.077
+                    },
+                    "uuid": "739640e1-1433-47bc-b73d-1e2be0504266"
+                },
+                {
+                    "description": "走线 [/PST1] (Top_layer), 长度: 3.2766 mm",
+                    "pos": {
+                        "x": 136.8806,
+                        "y": 109.22
+                    },
+                    "uuid": "f84288c7-99d0-401e-a777-762dd8d5e33c"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 0.0359 mm",
+                    "pos": {
+                        "x": 139.4206,
+                        "y": 108.077
+                    },
+                    "uuid": "5c13cfd7-efca-4342-8b6a-a7d85a9109d0"
+                },
+                {
+                    "description": "走线 [/PST3] (Top_layer), 长度: 1.3208 mm",
+                    "pos": {
+                        "x": 138.8872,
+                        "y": 109.22
+                    },
+                    "uuid": "7a84eaae-404e-4407-ba4a-d2ab1a752456"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "走线 [/PST3] (B.Cu), 长度: 1.2700 mm",
+                    "pos": {
+                        "x": 75.184,
+                        "y": 120.904
+                    },
+                    "uuid": "a0e0085e-639c-43aa-b98c-0664e84911a3"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 13 [/PST2]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 121.539
+                    },
+                    "uuid": "c2b2a471-32ae-46bc-94a5-2ec46b2dab70"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1599 mm)",
+            "items": [
+                {
+                    "description": "走线 [/RSTI-] (B.Cu), 长度: 0.8980 mm",
+                    "pos": {
+                        "x": 138.303,
+                        "y": 94.996
+                    },
+                    "uuid": "832677bf-58b2-473e-82fa-456ba1e5ef6d"
+                },
+                {
+                    "description": "走线 [/QSPI_CS3] (B.Cu), 长度: 3.6828 mm",
+                    "pos": {
+                        "x": 137.0711,
+                        "y": 95.66656
+                    },
+                    "uuid": "d4a071b1-f0b8-400d-9d73-fb524ddce117"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1841 mm)",
+            "items": [
+                {
+                    "description": "走线 [/TCLK] (Top_layer), 长度: 18.7960 mm",
+                    "pos": {
+                        "x": 83.312,
+                        "y": 115.316
+                    },
+                    "uuid": "c88d55d9-df4e-476a-9f2c-37ccab4b448b"
+                },
+                {
+                    "description": "Top_layer 上 R110 的焊盘 1 [+3.3V]",
+                    "pos": {
+                        "x": 84.2245,
+                        "y": 121.412
+                    },
+                    "uuid": "e79dabcb-5648-4dc8-b370-6e4b792ec6f7"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1651 mm)",
+            "items": [
+                {
+                    "description": "走线 [/VDDPLL] (Top_layer), 长度: 1.5748 mm",
+                    "pos": {
+                        "x": 140.8938,
+                        "y": 109.22
+                    },
+                    "uuid": "2b2d664e-8136-4e86-9402-5febbeb67e52"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 0.4826 mm",
+                    "pos": {
+                        "x": 141.3764,
+                        "y": 109.22
+                    },
+                    "uuid": "e6c5052e-618e-4de6-9f40-f8e749d5156d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1813 mm)",
+            "items": [
+                {
+                    "description": "走线 [/inout_user/RTS1] (Top_layer), 长度: 1.4368 mm",
+                    "pos": {
+                        "x": 156.718,
+                        "y": 81.026
+                    },
+                    "uuid": "c42b3e86-72d5-49c3-9dfe-1ab82245a385"
+                },
+                {
+                    "description": "Top_layer 上 U203 的焊盘 8 [/inout_user/CTS1]",
+                    "pos": {
+                        "x": 156.275,
+                        "y": 82.296
+                    },
+                    "uuid": "eafa1e00-ea8b-4ad1-8d97-c90991beed86"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "走线 [/inout_user/RXD2] (Top_layer), 长度: 6.5000 mm",
+                    "pos": {
+                        "x": 118.11899,
+                        "y": 70.38101
+                    },
+                    "uuid": "c1dd14c5-8e69-47b8-b9ba-f8781dc0c259"
+                },
+                {
+                    "description": "走线 [/inout_user/CTS2/CANH] (Top_layer), 长度: 2.8355 mm",
+                    "pos": {
+                        "x": 123.65,
+                        "y": 69.85
+                    },
+                    "uuid": "e8fe164c-f67b-427f-916b-a8de14c7b7ee"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "走线 [/inout_user/CTS2/CANH] (Top_layer), 长度: 6.3830 mm",
+                    "pos": {
+                        "x": 117.267,
+                        "y": 69.85
+                    },
+                    "uuid": "5665ec4f-594a-481d-ba0f-abb7bed89401"
+                },
+                {
+                    "description": "走线 [/inout_user/RXD2] (Top_layer), 长度: 1.7635 mm",
+                    "pos": {
+                        "x": 116.872,
+                        "y": 71.628
+                    },
+                    "uuid": "849fc7a7-6403-4bc6-95bd-f308ccb532bc"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1717 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D1] (Top_layer), 长度: 10.1261 mm",
+                    "pos": {
+                        "x": 205.6765,
+                        "y": 98.60026
+                    },
+                    "uuid": "b4488b8c-c934-4883-9a7b-a7300ddf8fc3"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D0] (Top_layer), 长度: 13.5674 mm",
+                    "pos": {
+                        "x": 214.77478,
+                        "y": 88.9
+                    },
+                    "uuid": "d30ea85c-9225-4ccd-9909-7deb7b58b45f"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1717 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D1] (Top_layer), 长度: 10.1261 mm",
+                    "pos": {
+                        "x": 205.6765,
+                        "y": 98.60026
+                    },
+                    "uuid": "b4488b8c-c934-4883-9a7b-a7300ddf8fc3"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 8.4630 mm",
+                    "pos": {
+                        "x": 212.16874,
+                        "y": 92.71
+                    },
+                    "uuid": "fd8ba986-8076-4029-9dd1-3ef35e904776"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1735 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D33] (Top_layer), 长度: 7.0282 mm",
+                    "pos": {
+                        "x": 212.9155,
+                        "y": 119.0117
+                    },
+                    "uuid": "698b2a5c-074f-46c5-948d-76a0967c8351"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D12] (Top_layer), 长度: 1.9397 mm",
+                    "pos": {
+                        "x": 219.5449,
+                        "y": 118.0084
+                    },
+                    "uuid": "e633400a-137a-4f28-9f88-75452ad5ecd6"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1735 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D33] (Top_layer), 长度: 2.3636 mm",
+                    "pos": {
+                        "x": 219.94368,
+                        "y": 119.0117
+                    },
+                    "uuid": "45296a18-c791-4164-9d0e-685ba2599b7b"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D12] (Top_layer), 长度: 1.3335 mm",
+                    "pos": {
+                        "x": 220.9165,
+                        "y": 119.38
+                    },
+                    "uuid": "48a4ec50-b709-4693-9506-bb54a836c3b8"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1717 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 10.7493 mm",
+                    "pos": {
+                        "x": 222.25,
+                        "y": 93.98
+                    },
+                    "uuid": "3371b873-b281-4cf3-8f4a-a45cec80e598"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 8.4630 mm",
+                    "pos": {
+                        "x": 212.16874,
+                        "y": 92.71
+                    },
+                    "uuid": "fd8ba986-8076-4029-9dd1-3ef35e904776"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1717 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D20] (Top_layer), 长度: 4.0232 mm",
+                    "pos": {
+                        "x": 211.0232,
+                        "y": 95.0595
+                    },
+                    "uuid": "11ca79c7-b294-405d-ac8c-996636386c9f"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 5.3989 mm",
+                    "pos": {
+                        "x": 211.50072,
+                        "y": 93.98
+                    },
+                    "uuid": "5a907c24-8e1f-4e63-ab6a-165539ef11b2"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1717 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 2.9769 mm",
+                    "pos": {
+                        "x": 207.6831,
+                        "y": 97.79762
+                    },
+                    "uuid": "19049de5-3dbb-4389-b6f1-671136c2e557"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 8.4630 mm",
+                    "pos": {
+                        "x": 212.16874,
+                        "y": 92.71
+                    },
+                    "uuid": "fd8ba986-8076-4029-9dd1-3ef35e904776"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1735 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D5] (Top_layer), 长度: 2.7120 mm",
+                    "pos": {
+                        "x": 220.3323,
+                        "y": 103.5177
+                    },
+                    "uuid": "c9d60ad4-9132-47f8-b852-b08f421f9bd7"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D24] (Top_layer), 长度: 1.9355 mm",
+                    "pos": {
+                        "x": 221.58452,
+                        "y": 102.87
+                    },
+                    "uuid": "ec69b0e0-e1a4-4ba5-bb40-009910a674a0"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1735 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D5] (Top_layer), 长度: 2.7120 mm",
+                    "pos": {
+                        "x": 220.3323,
+                        "y": 103.5177
+                    },
+                    "uuid": "c9d60ad4-9132-47f8-b852-b08f421f9bd7"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D24] (Top_layer), 长度: 1.6164 mm",
+                    "pos": {
+                        "x": 220.44152,
+                        "y": 104.013
+                    },
+                    "uuid": "ef9e869b-7b8a-410a-a274-18033a5cd687"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1914 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D25] (Top_layer), 长度: 10.5029 mm",
+                    "pos": {
+                        "x": 212.9155,
+                        "y": 105.5116
+                    },
+                    "uuid": "499cdc11-72e5-45e8-bc47-9bcb0a82da67"
+                },
+                {
+                    "description": "P303 的PTH 焊盘 15 [/xilinx/XIL_D7]",
+                    "pos": {
+                        "x": 222.25,
+                        "y": 106.68
+                    },
+                    "uuid": "94fb8cb6-1ba8-411d-8fed-76965efa036a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1778 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D29] (Top_layer), 长度: 5.3467 mm",
+                    "pos": {
+                        "x": 214.03818,
+                        "y": 116.5733
+                    },
+                    "uuid": "3f93debd-9601-4e95-bc99-5dfcfc46ca9e"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D31] (Top_layer), 长度: 1.5626 mm",
+                    "pos": {
+                        "x": 219.2147,
+                        "y": 117.0051
+                    },
+                    "uuid": "d440d133-6e7e-4f70-b775-65516b61d197"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1778 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D29] (Top_layer), 长度: 0.0898 mm",
+                    "pos": {
+                        "x": 213.97468,
+                        "y": 116.5098
+                    },
+                    "uuid": "21779110-ebf4-4c8d-9cfa-81a467115e21"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D31] (Top_layer), 长度: 6.2992 mm",
+                    "pos": {
+                        "x": 212.9155,
+                        "y": 117.0051
+                    },
+                    "uuid": "39fe2b4d-a5c9-4cf5-beda-d988b82f1cfd"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1800 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D29] (Top_layer), 长度: 1.1227 mm",
+                    "pos": {
+                        "x": 219.456,
+                        "y": 116.64442
+                    },
+                    "uuid": "a515b013-37bc-493c-8fc2-1f1e73bacf55"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D31] (Top_layer), 长度: 1.5626 mm",
+                    "pos": {
+                        "x": 219.2147,
+                        "y": 117.0051
+                    },
+                    "uuid": "d440d133-6e7e-4f70-b775-65516b61d197"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1800 mm)",
+            "items": [
+                {
+                    "description": "走线 [/xilinx/XIL_D31] (Top_layer), 长度: 1.5626 mm",
+                    "pos": {
+                        "x": 219.2147,
+                        "y": 117.0051
+                    },
+                    "uuid": "d440d133-6e7e-4f70-b775-65516b61d197"
+                },
+                {
+                    "description": "走线 [/xilinx/XIL_D29] (Top_layer), 长度: 0.1006 mm",
+                    "pos": {
+                        "x": 219.38488,
+                        "y": 116.5733
+                    },
+                    "uuid": "f97f8acb-32b0-4a28-83c9-8e91e1fee56e"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 2.4130 mm",
+                    "pos": {
+                        "x": 131.826,
+                        "y": 107.95
+                    },
+                    "uuid": "1bd89b4a-71ed-4854-9552-b78639a49a10"
+                },
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 2.0320 mm",
+                    "pos": {
+                        "x": 132.334,
+                        "y": 105.791
+                    },
+                    "uuid": "376f5d09-3138-44bd-bbd5-b0631ab68896"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1972 mm)",
+            "items": [
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 1.6764 mm",
+                    "pos": {
+                        "x": 143.129,
+                        "y": 104.4702
+                    },
+                    "uuid": "1e2a880d-5905-4f28-9fc4-220f5b3a8485"
+                },
+                {
+                    "description": "Top_layer 上 U102 的焊盘 83 [/DDAT2]",
+                    "pos": {
+                        "x": 143.057,
+                        "y": 103.973
+                    },
+                    "uuid": "c6e43c18-87a8-40b4-8646-9eced16bbc76"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 1.8542 mm",
+                    "pos": {
+                        "x": 127.635,
+                        "y": 99.4664
+                    },
+                    "uuid": "360bfe05-530a-464c-9394-a837aef1962b"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 1.3539 mm",
+                    "pos": {
+                        "x": 126.4412,
+                        "y": 99.9744
+                    },
+                    "uuid": "44106c0e-b4b8-4ec6-a1a7-38811506b5ee"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1963 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 2.0320 mm",
+                    "pos": {
+                        "x": 132.334,
+                        "y": 105.791
+                    },
+                    "uuid": "376f5d09-3138-44bd-bbd5-b0631ab68896"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 0.1849 mm",
+                    "pos": {
+                        "x": 131.8768,
+                        "y": 108.1278
+                    },
+                    "uuid": "5cff6f8e-83b7-4c9b-8f6e-4d0df3977e9f"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1966 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 0.5388 mm",
+                    "pos": {
+                        "x": 133.477,
+                        "y": 104.267
+                    },
+                    "uuid": "0c011f7d-0064-4c91-aebc-65ba47da988f"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 1.0776 mm",
+                    "pos": {
+                        "x": 131.826,
+                        "y": 105.537
+                    },
+                    "uuid": "72d09675-434b-470a-85b6-2ea2458a2d76"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_DIN] (Top_layer), 长度: 1.6764 mm",
+                    "pos": {
+                        "x": 133.8834,
+                        "y": 93.726
+                    },
+                    "uuid": "51c3c2a2-abbf-41a0-94a9-fe9cc8d2e03f"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 0.8621 mm",
+                    "pos": {
+                        "x": 134.3914,
+                        "y": 94.9452
+                    },
+                    "uuid": "991e2c61-4e0f-47a8-aa59-6c821301b7a3"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 0.5388 mm",
+                    "pos": {
+                        "x": 133.477,
+                        "y": 104.267
+                    },
+                    "uuid": "0c011f7d-0064-4c91-aebc-65ba47da988f"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 1.1430 mm",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 104.775
+                    },
+                    "uuid": "ae0256d3-d912-4338-91ed-eac5970f797d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 1.7272 mm",
+                    "pos": {
+                        "x": 137.8966,
+                        "y": 109.22
+                    },
+                    "uuid": "75ef0c80-aab1-4d33-9bb7-1acb04f75999"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 1.1976 mm",
+                    "pos": {
+                        "x": 137.3886,
+                        "y": 110.7694
+                    },
+                    "uuid": "b12673df-0ab0-4def-84db-06c3d90c31aa"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1955 mm)",
+            "items": [
+                {
+                    "description": "Top_layer 上 U102 的焊盘 81 [+3.3V]",
+                    "pos": {
+                        "x": 143.057,
+                        "y": 104.973
+                    },
+                    "uuid": "cb0ed111-b821-4201-a591-21d7e27b20c1"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 2.7941 mm",
+                    "pos": {
+                        "x": 140.335,
+                        "y": 104.4956
+                    },
+                    "uuid": "db4bdbec-8a47-4227-a6bc-80e03d93ab3a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1539 mm)",
+            "items": [
+                {
+                    "description": "Top_layer 上 U102 的焊盘 74 [/VDDPLL]",
+                    "pos": {
+                        "x": 140.882,
+                        "y": 109.148
+                    },
+                    "uuid": "2170d6c0-0783-494e-9272-20b9e1b945b4"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 0.4826 mm",
+                    "pos": {
+                        "x": 141.3764,
+                        "y": 109.22
+                    },
+                    "uuid": "e6c5052e-618e-4de6-9f40-f8e749d5156d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1810 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 0.4579 mm",
+                    "pos": {
+                        "x": 131.699,
+                        "y": 102.87
+                    },
+                    "uuid": "a7fdfae5-00fe-4856-a92c-2225b2b447e6"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 3.0480 mm",
+                    "pos": {
+                        "x": 129.54,
+                        "y": 103.632
+                    },
+                    "uuid": "e9048795-d303-45d7-82e0-f8a33ecffe12"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1934 mm)",
+            "items": [
+                {
+                    "description": "Top_layer 上 U102 的焊盘 68 [+3.3V]",
+                    "pos": {
+                        "x": 137.882,
+                        "y": 109.148
+                    },
+                    "uuid": "b9e2b391-0f87-48c8-9afd-cc5aa4845ffc"
+                },
+                {
+                    "description": "走线 [GND] (Top_layer), 长度: 1.1430 mm",
+                    "pos": {
+                        "x": 137.3886,
+                        "y": 109.22
+                    },
+                    "uuid": "eafbbf57-056c-4d1c-94d7-7df4763b5444"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1670 mm)",
+            "items": [
+                {
+                    "description": "Top_layer 上 U102 的焊盘 21 [/RCON-]",
+                    "pos": {
+                        "x": 131.382,
+                        "y": 93.798
+                    },
+                    "uuid": "7fed098f-71f6-4b21-9da2-55d122c468df"
+                },
+                {
+                    "description": "走线 [/QSPI_CS0] (Top_layer), 长度: 0.0508 mm",
+                    "pos": {
+                        "x": 131.826,
+                        "y": 94.361
+                    },
+                    "uuid": "82a3537a-ed6a-4c0f-908c-513c864747d0"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1961 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS0] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 155.829,
+                        "y": 88.138
+                    },
+                    "uuid": "67f369d7-f5fc-4bcd-b06b-e83c472c91cf"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 154.813,
+                        "y": 87.757
+                    },
+                    "uuid": "827ea47a-26cf-4649-b1a6-da2fa1a69b94"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CLK] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 95.25
+                    },
+                    "uuid": "7172a399-84a9-48be-b7b0-4ac9ecc82dbf"
+                },
+                {
+                    "description": "走线 [/QSPI_CS0] (Top_layer), 长度: 2.0320 mm",
+                    "pos": {
+                        "x": 131.826,
+                        "y": 96.393
+                    },
+                    "uuid": "f69c2ad3-6c4c-4123-be69-4439efff654b"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1961 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS0] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 155.829,
+                        "y": 88.138
+                    },
+                    "uuid": "67f369d7-f5fc-4bcd-b06b-e83c472c91cf"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 154.813,
+                        "y": 87.757
+                    },
+                    "uuid": "827ea47a-26cf-4649-b1a6-da2fa1a69b94"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1961 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS0] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 155.829,
+                        "y": 88.138
+                    },
+                    "uuid": "67f369d7-f5fc-4bcd-b06b-e83c472c91cf"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 154.813,
+                        "y": 87.757
+                    },
+                    "uuid": "827ea47a-26cf-4649-b1a6-da2fa1a69b94"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1961 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS0] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 155.829,
+                        "y": 88.138
+                    },
+                    "uuid": "67f369d7-f5fc-4bcd-b06b-e83c472c91cf"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 154.813,
+                        "y": 87.757
+                    },
+                    "uuid": "827ea47a-26cf-4649-b1a6-da2fa1a69b94"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CLK] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 95.25
+                    },
+                    "uuid": "7172a399-84a9-48be-b7b0-4ac9ecc82dbf"
+                },
+                {
+                    "description": "走线 [/QSPI_CS0] (B.Cu), 长度: 1.6510 mm",
+                    "pos": {
+                        "x": 131.826,
+                        "y": 96.393
+                    },
+                    "uuid": "adfe5a9f-93a5-4346-975f-0e6343c7e80f"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/AN7] (Top_layer), 长度: 3.9370 mm",
+                    "pos": {
+                        "x": 128.397,
+                        "y": 109.728
+                    },
+                    "uuid": "0de5c603-953a-469c-9392-c958f05e325c"
+                },
+                {
+                    "description": "过孔 [/AN6] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 129.159,
+                        "y": 112.014
+                    },
+                    "uuid": "49b71e53-37b7-4c80-a370-b76f51ba36c3"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1665 mm)",
+            "items": [
+                {
+                    "description": "走线 [/DTIN0] (Top_layer), 长度: 7.7470 mm",
+                    "pos": {
+                        "x": 99.06,
+                        "y": 114.808
+                    },
+                    "uuid": "b269926d-bbdf-4860-878a-fbe86f45ebd5"
+                },
+                {
+                    "description": "Top_layer 上 U201 的焊盘 1 [Net-(U201A-E)]",
+                    "pos": {
+                        "x": 97.728,
+                        "y": 113.792
+                    },
+                    "uuid": "f009a5c0-9361-4a56-8e1f-f873b81ece5d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1566 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 0.6250 mm",
+                    "pos": {
+                        "x": 211.41436,
+                        "y": 102.56774
+                    },
+                    "uuid": "100c989a-3b1c-4559-a1d0-02ec4eed6cb1"
+                },
+                {
+                    "description": "Top_layer 上 U301 的焊盘 143 [/xilinx/XIL_D5]",
+                    "pos": {
+                        "x": 212.5925,
+                        "y": 103.51
+                    },
+                    "uuid": "8b73f1e2-8a14-4de2-9670-7cb7d0da03f1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1589 mm)",
+            "items": [
+                {
+                    "description": "走线 [+3.3V] (Top_layer), 长度: 0.3531 mm",
+                    "pos": {
+                        "x": 192.00368,
+                        "y": 109.65434
+                    },
+                    "uuid": "1eec7d65-88e0-4e14-a3b3-49721a79e138"
+                },
+                {
+                    "description": "Top_layer 上 U301 的焊盘 52 [GND]",
+                    "pos": {
+                        "x": 191.2675,
+                        "y": 110.51
+                    },
+                    "uuid": "6d74cbf1-d63b-42d7-a441-6cecad390552"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1854 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/xilinx/TDI] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 210.43138,
+                        "y": 103.47706
+                    },
+                    "uuid": "764c6d9f-2c8c-4809-b502-ae5e21001298"
+                },
+                {
+                    "description": "走线 [+3.3V] (B.Cu), 长度: 2.0828 mm",
+                    "pos": {
+                        "x": 211.41436,
+                        "y": 102.56774
+                    },
+                    "uuid": "b1fde5e3-b183-4e61-9f5c-5941a864a092"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/IRQ-1] (In1.Cu), 长度: 2.9210 mm",
+                    "pos": {
+                        "x": 175.641,
+                        "y": 111.125
+                    },
+                    "uuid": "317ebd29-8765-4ec9-9d8a-57e22d94eca7"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 178.054,
+                        "y": 110.363
+                    },
+                    "uuid": "f3bbad83-6884-4c15-8782-71ae2b52f551"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [+3.3V] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 161.163,
+                        "y": 92.329
+                    },
+                    "uuid": "1a097fbb-0928-4f8e-9ac6-5ecb76d6fb8b"
+                },
+                {
+                    "description": "走线 [/IRQ-1] (B.Cu), 长度: 3.0480 mm",
+                    "pos": {
+                        "x": 160.528,
+                        "y": 91.44
+                    },
+                    "uuid": "fb8bf766-56c9-4feb-abcd-2ed0cce27f55"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1730 mm)",
+            "items": [
+                {
+                    "description": "走线 [/IRQ-2] (Top_layer), 长度: 0.2586 mm",
+                    "pos": {
+                        "x": 189.16142,
+                        "y": 106.18978
+                    },
+                    "uuid": "6c8a38d8-ed24-4037-975e-eced26ed4f1b"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 0.1401 mm",
+                    "pos": {
+                        "x": 189.33922,
+                        "y": 106.61396
+                    },
+                    "uuid": "8d8ab669-4e4d-4c60-b429-691b9c2ea41b"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1730 mm)",
+            "items": [
+                {
+                    "description": "走线 [/IRQ-2] (Top_layer), 长度: 0.7239 mm",
+                    "pos": {
+                        "x": 188.43752,
+                        "y": 106.18978
+                    },
+                    "uuid": "7390530a-aa5a-4e37-8a7e-4a67877332d0"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 0.1401 mm",
+                    "pos": {
+                        "x": 189.33922,
+                        "y": 106.61396
+                    },
+                    "uuid": "8d8ab669-4e4d-4c60-b429-691b9c2ea41b"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1702 mm)",
+            "items": [
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 6.0173 mm",
+                    "pos": {
+                        "x": 183.32196,
+                        "y": 106.61396
+                    },
+                    "uuid": "582fd035-3a7b-4521-ab79-c08b7666f3b9"
+                },
+                {
+                    "description": "走线 [/IRQ-2] (Top_layer), 长度: 1.8212 mm",
+                    "pos": {
+                        "x": 187.14974,
+                        "y": 104.902
+                    },
+                    "uuid": "c697a729-66bd-40ed-89ec-6fafda4f6ce3"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/IRQ-2] (B.Cu), 长度: 3.4290 mm",
+                    "pos": {
+                        "x": 166.37,
+                        "y": 93.345
+                    },
+                    "uuid": "21bced6b-056d-4857-809c-cb75157eafcc"
+                },
+                {
+                    "description": "RST_SW101 的PTH 焊盘 1 [Net-(D102-K)]",
+                    "pos": {
+                        "x": 168.529,
+                        "y": 92.329
+                    },
+                    "uuid": "9d090dda-6919-4a64-bac3-f18e2b7352f1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/IRQ-1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 150.495,
+                        "y": 95.25
+                    },
+                    "uuid": "000d46ec-f812-43f9-9856-ab0b8d4f8e42"
+                },
+                {
+                    "description": "走线 [/IRQ-2] (B.Cu), 长度: 7.1120 mm",
+                    "pos": {
+                        "x": 149.606,
+                        "y": 94.488
+                    },
+                    "uuid": "45ad61e5-03fc-4bea-964b-c4c8fcfbe5de"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/URTS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 179.705,
+                        "y": 102.87
+                    },
+                    "uuid": "835b721f-b158-40f0-ae3d-1d3b3f672771"
+                },
+                {
+                    "description": "走线 [/IRQ-2] (In1.Cu), 长度: 11.3030 mm",
+                    "pos": {
+                        "x": 180.467,
+                        "y": 104.267
+                    },
+                    "uuid": "89cd1452-fcca-47a4-bbfd-12e79cabfe7d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 3.9370 mm",
+                    "pos": {
+                        "x": 147.701,
+                        "y": 100.33
+                    },
+                    "uuid": "27a3620e-9483-4d64-8534-03bf4e65a7da"
+                },
+                {
+                    "description": "过孔 [+3.3V] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 146.812,
+                        "y": 98.679
+                    },
+                    "uuid": "cbac94c9-b780-437d-a39e-17bb31c299be"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1702 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CS2] (Top_layer), 长度: 6.9825 mm",
+                    "pos": {
+                        "x": 182.87492,
+                        "y": 107.03814
+                    },
+                    "uuid": "1e268e29-2e3b-4b4c-8de1-603e49e1bc66"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 1.2249 mm",
+                    "pos": {
+                        "x": 182.45582,
+                        "y": 105.74782
+                    },
+                    "uuid": "36ba2a7d-fe50-4b49-a2e7-ca692175178f"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1702 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CS2] (Top_layer), 长度: 6.9825 mm",
+                    "pos": {
+                        "x": 182.87492,
+                        "y": 107.03814
+                    },
+                    "uuid": "1e268e29-2e3b-4b4c-8de1-603e49e1bc66"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 6.0173 mm",
+                    "pos": {
+                        "x": 183.32196,
+                        "y": 106.61396
+                    },
+                    "uuid": "582fd035-3a7b-4521-ab79-c08b7666f3b9"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1697 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/IRQ-2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 104.902
+                    },
+                    "uuid": "678c668b-06a3-4cff-ba9a-be9a031a61f6"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 1.1567 mm",
+                    "pos": {
+                        "x": 180.76926,
+                        "y": 104.92994
+                    },
+                    "uuid": "6b3ef586-0c01-4f27-98ae-2dbdaac59ce8"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1841 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/IRQ-2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 104.902
+                    },
+                    "uuid": "678c668b-06a3-4cff-ba9a-be9a031a61f6"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 1.1890 mm",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 104.013
+                    },
+                    "uuid": "783782cc-2b1e-48d7-a711-8d44f9f0d143"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1702 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CS2] (Top_layer), 长度: 6.9825 mm",
+                    "pos": {
+                        "x": 182.87492,
+                        "y": 107.03814
+                    },
+                    "uuid": "1e268e29-2e3b-4b4c-8de1-603e49e1bc66"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (Top_layer), 长度: 0.1401 mm",
+                    "pos": {
+                        "x": 189.33922,
+                        "y": 106.61396
+                    },
+                    "uuid": "8d8ab669-4e4d-4c60-b429-691b9c2ea41b"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/IRQ-1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 150.495,
+                        "y": 95.25
+                    },
+                    "uuid": "000d46ec-f812-43f9-9856-ab0b8d4f8e42"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (In1.Cu), 长度: 4.6990 mm",
+                    "pos": {
+                        "x": 151.257,
+                        "y": 94.869
+                    },
+                    "uuid": "7c26ea1d-34a3-4c5b-936f-6e2042db701a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/IRQ-1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 150.495,
+                        "y": 95.25
+                    },
+                    "uuid": "000d46ec-f812-43f9-9856-ab0b8d4f8e42"
+                },
+                {
+                    "description": "走线 [/IRQ-3] (In1.Cu), 长度: 1.7780 mm",
+                    "pos": {
+                        "x": 149.098,
+                        "y": 94.488
+                    },
+                    "uuid": "f12f2816-6ef5-4489-9c49-719d83ef20b8"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1730 mm)",
+            "items": [
+                {
+                    "description": "走线 [/XTAL] (Top_layer), 长度: 12.5730 mm",
+                    "pos": {
+                        "x": 153.797,
+                        "y": 125.603
+                    },
+                    "uuid": "a261cdfd-590b-4646-894e-d80bef32c993"
+                },
+                {
+                    "description": "Top_layer 上 R212 的焊盘 1 [+3.3V]",
+                    "pos": {
+                        "x": 162.814,
+                        "y": 126.3885
+                    },
+                    "uuid": "d5840dc8-d058-423c-852c-6273018c17db"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/URTS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 179.705,
+                        "y": 102.87
+                    },
+                    "uuid": "835b721f-b158-40f0-ae3d-1d3b3f672771"
+                },
+                {
+                    "description": "走线 [/RSTO-] (In1.Cu), 长度: 10.2870 mm",
+                    "pos": {
+                        "x": 178.943,
+                        "y": 94.234
+                    },
+                    "uuid": "a75303c9-730b-41c9-844b-7e83e9495d19"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 174.752,
+                        "y": 89.408
+                    },
+                    "uuid": "4aa0f1a6-ef5c-4a40-9ffb-25cab63a793b"
+                },
+                {
+                    "description": "走线 [/RSTI-] (B.Cu), 长度: 7.3660 mm",
+                    "pos": {
+                        "x": 174.625,
+                        "y": 90.17
+                    },
+                    "uuid": "e6584be3-3d2d-4ec8-99ba-9ef7b2ae45d4"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CS1] (B.Cu), 长度: 2.9210 mm",
+                    "pos": {
+                        "x": 154.686,
+                        "y": 89.154
+                    },
+                    "uuid": "f8992310-e6a4-446c-8f66-df6af2461e57"
+                },
+                {
+                    "description": "过孔 [/CANTX] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 153.035,
+                        "y": 88.392
+                    },
+                    "uuid": "fb9d7f40-20f2-4f07-b081-054ad7264c6c"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [+3.3V] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 161.163,
+                        "y": 92.329
+                    },
+                    "uuid": "1a097fbb-0928-4f8e-9ac6-5ecb76d6fb8b"
+                },
+                {
+                    "description": "走线 [/QSPI_CS1] (In1.Cu), 长度: 18.9230 mm",
+                    "pos": {
+                        "x": 160.274,
+                        "y": 108.839
+                    },
+                    "uuid": "1ec1ce8f-036c-4aad-9114-ee2fdb5f126d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1841 mm)",
+            "items": [
+                {
+                    "description": "走线 [/UCTS1] (Top_layer), 长度: 2.0295 mm",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 107.569
+                    },
+                    "uuid": "adb78d8f-2077-4bcf-8c2c-e72139087b11"
+                },
+                {
+                    "description": "过孔 [/DSPI_DOUT] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 108.458
+                    },
+                    "uuid": "ef8ac280-134c-44e4-a37f-136aa807ee82"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "走线 [/UCTS1] (B.Cu), 长度: 2.2860 mm",
+                    "pos": {
+                        "x": 170.942,
+                        "y": 83.312
+                    },
+                    "uuid": "5ee0f30b-1c8b-412c-9104-98e70d33771e"
+                },
+                {
+                    "description": "UART_EN202 的PTH 焊盘 7 [Net-(U203-R2OUT)]",
+                    "pos": {
+                        "x": 169.545,
+                        "y": 82.169
+                    },
+                    "uuid": "644e8ab6-0d70-4f5b-b0cd-ea51c24e766c"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 179.197,
+                        "y": 86.487
+                    },
+                    "uuid": "676dbc7e-a4d1-4666-886f-a470e2d1a762"
+                },
+                {
+                    "description": "走线 [/UCTS1] (In1.Cu), 长度: 11.4300 mm",
+                    "pos": {
+                        "x": 179.959,
+                        "y": 89.027
+                    },
+                    "uuid": "f7288932-dc3d-4ba7-a315-dfe80da61d53"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1886 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CLK] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 95.25
+                    },
+                    "uuid": "7172a399-84a9-48be-b7b0-4ac9ecc82dbf"
+                },
+                {
+                    "description": "过孔 [/DSPI_DOUT] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 133.35,
+                        "y": 96.012
+                    },
+                    "uuid": "b1ad049f-192a-49b3-be1b-3aceb22cbfd1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1886 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CLK] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 95.25
+                    },
+                    "uuid": "7172a399-84a9-48be-b7b0-4ac9ecc82dbf"
+                },
+                {
+                    "description": "过孔 [/DSPI_DOUT] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 133.35,
+                        "y": 96.012
+                    },
+                    "uuid": "b1ad049f-192a-49b3-be1b-3aceb22cbfd1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1886 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CLK] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 95.25
+                    },
+                    "uuid": "7172a399-84a9-48be-b7b0-4ac9ecc82dbf"
+                },
+                {
+                    "description": "过孔 [/DSPI_DOUT] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 133.35,
+                        "y": 96.012
+                    },
+                    "uuid": "b1ad049f-192a-49b3-be1b-3aceb22cbfd1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1886 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CLK] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 132.588,
+                        "y": 95.25
+                    },
+                    "uuid": "7172a399-84a9-48be-b7b0-4ac9ecc82dbf"
+                },
+                {
+                    "description": "过孔 [/DSPI_DOUT] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 133.35,
+                        "y": 96.012
+                    },
+                    "uuid": "b1ad049f-192a-49b3-be1b-3aceb22cbfd1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CLK] (B.Cu), 长度: 5.3340 mm",
+                    "pos": {
+                        "x": 166.37,
+                        "y": 88.265
+                    },
+                    "uuid": "40215a00-c6c5-4b3c-84fe-5d8cc09d0c98"
+                },
+                {
+                    "description": "RST_SW101 的PTH 焊盘 2 [GND]",
+                    "pos": {
+                        "x": 168.529,
+                        "y": 87.249
+                    },
+                    "uuid": "7fbf70e4-5710-499f-92f5-37a22971c9ef"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1922 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CLK] (In1.Cu), 长度: 5.5904 mm",
+                    "pos": {
+                        "x": 174.117,
+                        "y": 91.123
+                    },
+                    "uuid": "2639c874-5ddc-4eb1-80e4-c85d97659b3c"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 174.752,
+                        "y": 89.408
+                    },
+                    "uuid": "4aa0f1a6-ef5c-4a40-9ffb-25cab63a793b"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1727 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CLK] (In2.Cu), 长度: 6.0071 mm",
+                    "pos": {
+                        "x": 185.3311,
+                        "y": 106.95178
+                    },
+                    "uuid": "9107ca55-3762-42b4-8544-13163a19356d"
+                },
+                {
+                    "description": "过孔 [/UCTS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 107.569
+                    },
+                    "uuid": "cb0b4c48-a1b5-44b4-95c6-9e8c85eff795"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/DSPI_DOUT] (B.Cu), 长度: 2.2860 mm",
+                    "pos": {
+                        "x": 178.308,
+                        "y": 88.773
+                    },
+                    "uuid": "73f64ba2-8c28-4c0a-9a0c-4acccdbb5470"
+                },
+                {
+                    "description": "过孔 [/QSPI_DIN] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 177.038,
+                        "y": 89.408
+                    },
+                    "uuid": "d1800930-bffb-4802-a542-b576a1b132b2"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1841 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/UCTS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 107.569
+                    },
+                    "uuid": "cb0b4c48-a1b5-44b4-95c6-9e8c85eff795"
+                },
+                {
+                    "description": "走线 [/DSPI_DOUT] (B.Cu), 长度: 3.1179 mm",
+                    "pos": {
+                        "x": 181.61,
+                        "y": 108.458
+                    },
+                    "uuid": "d05d4d72-fe97-4b4b-8a81-ea82a21a09b9"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 178.054,
+                        "y": 105.664
+                    },
+                    "uuid": "4f32b81c-c369-4f04-a5de-c216247a856e"
+                },
+                {
+                    "description": "走线 [/DSPI_DOUT] (In1.Cu), 长度: 15.8750 mm",
+                    "pos": {
+                        "x": 177.292,
+                        "y": 106.045
+                    },
+                    "uuid": "f711b806-fbd1-4e5b-8072-bfe35e1f1543"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/QSPI_CS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 178.054,
+                        "y": 105.664
+                    },
+                    "uuid": "4f32b81c-c369-4f04-a5de-c216247a856e"
+                },
+                {
+                    "description": "走线 [/DSPI_DOUT] (In1.Cu), 长度: 1.3970 mm",
+                    "pos": {
+                        "x": 179.07,
+                        "y": 106.426
+                    },
+                    "uuid": "fecce46e-6b86-4bc3-8d35-2118d422e81c"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_DIN] (Top_layer), 长度: 1.3970 mm",
+                    "pos": {
+                        "x": 134.112,
+                        "y": 97.028
+                    },
+                    "uuid": "978443d2-0f19-4452-a467-7d4409ebc558"
+                },
+                {
+                    "description": "过孔 [/DSPI_DOUT] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 133.35,
+                        "y": 96.012
+                    },
+                    "uuid": "b1ad049f-192a-49b3-be1b-3aceb22cbfd1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_DIN] (B.Cu), 长度: 1.5240 mm",
+                    "pos": {
+                        "x": 175.133,
+                        "y": 88.646
+                    },
+                    "uuid": "3c122bb2-b9f7-4385-af84-da7a9ba878ac"
+                },
+                {
+                    "description": "过孔 [/QSPI_CS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 174.752,
+                        "y": 89.408
+                    },
+                    "uuid": "4aa0f1a6-ef5c-4a40-9ffb-25cab63a793b"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1950 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_DIN] (B.Cu), 长度: 7.4930 mm",
+                    "pos": {
+                        "x": 172.974,
+                        "y": 89.281
+                    },
+                    "uuid": "64f1e0a5-f377-413d-b5ea-ce6bc7e59df7"
+                },
+                {
+                    "description": "走线 [/QSPI_CS2] (B.Cu), 长度: 0.8980 mm",
+                    "pos": {
+                        "x": 165.608,
+                        "y": 90.043
+                    },
+                    "uuid": "a9769c16-a1d0-4544-a1aa-c3c935898b76"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1950 mm)",
+            "items": [
+                {
+                    "description": "走线 [/QSPI_CS2] (B.Cu), 长度: 0.8980 mm",
+                    "pos": {
+                        "x": 165.608,
+                        "y": 90.043
+                    },
+                    "uuid": "a9769c16-a1d0-4544-a1aa-c3c935898b76"
+                },
+                {
+                    "description": "走线 [/QSPI_DIN] (B.Cu), 长度: 0.8980 mm",
+                    "pos": {
+                        "x": 165.481,
+                        "y": 89.281
+                    },
+                    "uuid": "cc9e054c-0b06-4d14-a723-05c190a41ce4"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1575 mm)",
+            "items": [
+                {
+                    "description": "走线 [/URXD1] (B.Cu), 长度: 0.8230 mm",
+                    "pos": {
+                        "x": 149.19452,
+                        "y": 85.18652
+                    },
+                    "uuid": "2e4811a2-0f6a-44b2-8ce7-b8d3ca149bc9"
+                },
+                {
+                    "description": "走线 [/URTS0] (B.Cu), 长度: 9.3980 mm",
+                    "pos": {
+                        "x": 153.035,
+                        "y": 85.598
+                    },
+                    "uuid": "ca72b941-e482-4056-b329-4cb02646d1a7"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1575 mm)",
+            "items": [
+                {
+                    "description": "走线 [/URXD1] (B.Cu), 长度: 1.0345 mm",
+                    "pos": {
+                        "x": 150.01748,
+                        "y": 85.18652
+                    },
+                    "uuid": "6da8c2e4-15d1-4fc6-ad50-69aea6b4e893"
+                },
+                {
+                    "description": "走线 [/URTS0] (B.Cu), 长度: 9.3980 mm",
+                    "pos": {
+                        "x": 153.035,
+                        "y": 85.598
+                    },
+                    "uuid": "ca72b941-e482-4056-b329-4cb02646d1a7"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1575 mm)",
+            "items": [
+                {
+                    "description": "走线 [/URXD1] (B.Cu), 长度: 0.4957 mm",
+                    "pos": {
+                        "x": 148.844,
+                        "y": 84.836
+                    },
+                    "uuid": "7aef3b21-09e0-447f-a271-8361760c989a"
+                },
+                {
+                    "description": "走线 [/URTS0] (B.Cu), 长度: 9.3980 mm",
+                    "pos": {
+                        "x": 153.035,
+                        "y": 85.598
+                    },
+                    "uuid": "ca72b941-e482-4056-b329-4cb02646d1a7"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/URTS1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 151.511,
+                        "y": 83.947
+                    },
+                    "uuid": "712fceef-7f69-4d32-8ddd-46985c6d683e"
+                },
+                {
+                    "description": "走线 [/URXD1] (B.Cu), 长度: 1.1430 mm",
+                    "pos": {
+                        "x": 150.749,
+                        "y": 84.455
+                    },
+                    "uuid": "e12a31ac-7594-4952-8c91-3fd5ec69ed66"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "MCU_PORT201 的PTH 焊盘 41 [/UTXD0]",
+                    "pos": {
+                        "x": 133.604,
+                        "y": 136.906
+                    },
+                    "uuid": "554bf355-e0ee-4002-a620-84d3d79dcfbd"
+                },
+                {
+                    "description": "走线 [/PWM3] (B.Cu), 长度: 1.6510 mm",
+                    "pos": {
+                        "x": 134.62,
+                        "y": 135.763
+                    },
+                    "uuid": "ff4e903f-8e84-436f-aa03-017bb427d202"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1535 mm)",
+            "items": [
+                {
+                    "description": "UART_EN203 的PTH 焊盘 7 [Net-(U204-R1OUT)]",
+                    "pos": {
+                        "x": 135.763,
+                        "y": 82.169
+                    },
+                    "uuid": "74663eaf-797f-4ae5-825e-0bb678c4c578"
+                },
+                {
+                    "description": "过孔 [/URTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.366,
+                        "y": 82.55
+                    },
+                    "uuid": "999e8396-9d78-4bce-821d-53e6be4cfd6a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1535 mm)",
+            "items": [
+                {
+                    "description": "UART_EN203 的PTH 焊盘 7 [Net-(U204-R1OUT)]",
+                    "pos": {
+                        "x": 135.763,
+                        "y": 82.169
+                    },
+                    "uuid": "74663eaf-797f-4ae5-825e-0bb678c4c578"
+                },
+                {
+                    "description": "过孔 [/URTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.366,
+                        "y": 82.55
+                    },
+                    "uuid": "999e8396-9d78-4bce-821d-53e6be4cfd6a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1535 mm)",
+            "items": [
+                {
+                    "description": "UART_EN203 的PTH 焊盘 7 [Net-(U204-R1OUT)]",
+                    "pos": {
+                        "x": 135.763,
+                        "y": 82.169
+                    },
+                    "uuid": "74663eaf-797f-4ae5-825e-0bb678c4c578"
+                },
+                {
+                    "description": "过孔 [/URTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.366,
+                        "y": 82.55
+                    },
+                    "uuid": "999e8396-9d78-4bce-821d-53e6be4cfd6a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1535 mm)",
+            "items": [
+                {
+                    "description": "UART_EN203 的PTH 焊盘 7 [Net-(U204-R1OUT)]",
+                    "pos": {
+                        "x": 135.763,
+                        "y": 82.169
+                    },
+                    "uuid": "74663eaf-797f-4ae5-825e-0bb678c4c578"
+                },
+                {
+                    "description": "过孔 [/URTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.366,
+                        "y": 82.55
+                    },
+                    "uuid": "999e8396-9d78-4bce-821d-53e6be4cfd6a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/UTXD2] (Top_layer), 长度: 2.2860 mm",
+                    "pos": {
+                        "x": 133.985,
+                        "y": 83.312
+                    },
+                    "uuid": "2ad7e10f-f796-4a26-9694-ddd866c5e9e8"
+                },
+                {
+                    "description": "过孔 [/URTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.366,
+                        "y": 82.55
+                    },
+                    "uuid": "999e8396-9d78-4bce-821d-53e6be4cfd6a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1904 mm)",
+            "items": [
+                {
+                    "description": "走线 [/UTXD2] (Top_layer), 长度: 1.0776 mm",
+                    "pos": {
+                        "x": 136.271,
+                        "y": 83.312
+                    },
+                    "uuid": "5349e6cb-2f4e-419e-ae6c-f55f9a82f90d"
+                },
+                {
+                    "description": "UART_EN203 的PTH 焊盘 7 [Net-(U204-R1OUT)]",
+                    "pos": {
+                        "x": 135.763,
+                        "y": 82.169
+                    },
+                    "uuid": "74663eaf-797f-4ae5-825e-0bb678c4c578"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1904 mm)",
+            "items": [
+                {
+                    "description": "UART_EN203 的PTH 焊盘 8 [/UCTS2]",
+                    "pos": {
+                        "x": 138.303,
+                        "y": 82.169
+                    },
+                    "uuid": "161c60d6-c522-408c-9b07-4d4be505b815"
+                },
+                {
+                    "description": "走线 [/URXD2] (Top_layer), 长度: 1.6164 mm",
+                    "pos": {
+                        "x": 139.446,
+                        "y": 82.677
+                    },
+                    "uuid": "a18a3730-81a4-4722-aff3-bff61cf47259"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "过孔 [/UCTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 140.208,
+                        "y": 82.169
+                    },
+                    "uuid": "11093a6e-71f6-4e3b-ab20-b5b69ac043ea"
+                },
+                {
+                    "description": "走线 [/URXD2] (Top_layer), 长度: 4.4450 mm",
+                    "pos": {
+                        "x": 139.446,
+                        "y": 78.232
+                    },
+                    "uuid": "d67e65b2-2d9e-4a64-aaca-07b0f854ae21"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1977 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CANTX] (Top_layer), 长度: 2.9210 mm",
+                    "pos": {
+                        "x": 136.779,
+                        "y": 91.948
+                    },
+                    "uuid": "25dfaa1c-f1e8-4f7c-8b57-7caba6778ed2"
+                },
+                {
+                    "description": "走线 [/URTS0] (Top_layer), 长度: 6.6052 mm",
+                    "pos": {
+                        "x": 137.287,
+                        "y": 91.948
+                    },
+                    "uuid": "38097e3c-0bce-4d6f-bae0-a928f2965fa6"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1977 mm)",
+            "items": [
+                {
+                    "description": "走线 [/URTS0] (Top_layer), 长度: 6.6052 mm",
+                    "pos": {
+                        "x": 137.287,
+                        "y": 91.948
+                    },
+                    "uuid": "38097e3c-0bce-4d6f-bae0-a928f2965fa6"
+                },
+                {
+                    "description": "走线 [/CANTX] (Top_layer), 长度: 0.4579 mm",
+                    "pos": {
+                        "x": 136.779,
+                        "y": 89.027
+                    },
+                    "uuid": "5b2925ba-e254-4f1b-bd97-12e1b112f662"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/CANTX] (B.Cu), 长度: 8.6360 mm",
+                    "pos": {
+                        "x": 127.127,
+                        "y": 84.455
+                    },
+                    "uuid": "3b1d33b0-1d62-4065-8c38-9dc395fbfbd3"
+                },
+                {
+                    "description": "过孔 [/CANRX] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.747,
+                        "y": 85.217
+                    },
+                    "uuid": "5615e862-b026-4fbe-8cd8-d894a16a2d0d"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "PULUPEN201 的PTH 焊盘 4 [Net-(PULUPEN201-Pad4)]",
+                    "pos": {
+                        "x": 162.687,
+                        "y": 120.523
+                    },
+                    "uuid": "3ba65894-954d-4457-b421-4ae53b497665"
+                },
+                {
+                    "description": "走线 [/CANTX] (In1.Cu), 长度: 8.1280 mm",
+                    "pos": {
+                        "x": 161.544,
+                        "y": 119.38
+                    },
+                    "uuid": "f2aae887-7cbe-417b-ba08-fe519acc92f2"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/URTS0] (B.Cu), 长度: 9.3980 mm",
+                    "pos": {
+                        "x": 153.035,
+                        "y": 85.598
+                    },
+                    "uuid": "ca72b941-e482-4056-b329-4cb02646d1a7"
+                },
+                {
+                    "description": "过孔 [/URXD1] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 148.844,
+                        "y": 84.836
+                    },
+                    "uuid": "d8bbecfa-d0b4-41a3-945c-a1d07a6a499e"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [/URTS0] (In1.Cu), 长度: 26.4050 mm",
+                    "pos": {
+                        "x": 127.635,
+                        "y": 90.435
+                    },
+                    "uuid": "00000000-0000-0000-0000-000053d8e600"
+                },
+                {
+                    "description": "过孔 [/AN7] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 128.397,
+                        "y": 113.665
+                    },
+                    "uuid": "8f1e3632-e6c3-4864-a425-8fba74c6b216"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1660 mm)",
+            "items": [
+                {
+                    "description": "UART_EN201 的PTH 焊盘 7 [Net-(U202-R2OUT)]",
+                    "pos": {
+                        "x": 197.485,
+                        "y": 82.169
+                    },
+                    "uuid": "76bf694a-afc9-4af8-bb21-f2e9203df06b"
+                },
+                {
+                    "description": "走线 [/UCTS0] (B.Cu), 长度: 6.4770 mm",
+                    "pos": {
+                        "x": 192.405,
+                        "y": 81.026
+                    },
+                    "uuid": "d56ffcdf-8227-49cd-bebf-ab314bc09d12"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "走线 [Net-(COM_SEL201-P3)] (Top_layer), 长度: 0.1124 mm",
+                    "pos": {
+                        "x": 114.887499,
+                        "y": 77.422499
+                    },
+                    "uuid": "0d472455-117a-4390-8fd6-3763f1ee1317"
+                },
+                {
+                    "description": "COM_SEL203 的PTH 焊盘 1 [/inout_user/CAN_H]",
+                    "pos": {
+                        "x": 114.5,
+                        "y": 78.613
+                    },
+                    "uuid": "285b405c-a6d9-4d65-9851-d5a447b7ca65"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "COM_SEL203 的PTH 焊盘 1 [/inout_user/CAN_H]",
+                    "pos": {
+                        "x": 114.5,
+                        "y": 78.613
+                    },
+                    "uuid": "285b405c-a6d9-4d65-9851-d5a447b7ca65"
+                },
+                {
+                    "description": "走线 [Net-(COM_SEL201-P3)] (Top_layer), 长度: 0.8415 mm",
+                    "pos": {
+                        "x": 115.316,
+                        "y": 80.645
+                    },
+                    "uuid": "751d1cd4-f87d-4e75-b0c4-0eb765042315"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "COM_SEL203 的PTH 焊盘 1 [/inout_user/CAN_H]",
+                    "pos": {
+                        "x": 114.5,
+                        "y": 78.613
+                    },
+                    "uuid": "285b405c-a6d9-4d65-9851-d5a447b7ca65"
+                },
+                {
+                    "description": "走线 [Net-(COM_SEL201-P3)] (Top_layer), 长度: 2.2448 mm",
+                    "pos": {
+                        "x": 115.690501,
+                        "y": 79.735401
+                    },
+                    "uuid": "d86c8735-bb70-4d6b-b75b-a4e27242b592"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "COM_SEL203 的PTH 焊盘 1 [/inout_user/CAN_H]",
+                    "pos": {
+                        "x": 114.5,
+                        "y": 78.613
+                    },
+                    "uuid": "285b405c-a6d9-4d65-9851-d5a447b7ca65"
+                },
+                {
+                    "description": "走线 [Net-(COM_SEL201-P3)] (Top_layer), 长度: 0.7349 mm",
+                    "pos": {
+                        "x": 115.622401,
+                        "y": 77.422499
+                    },
+                    "uuid": "e2f2ddf6-bed3-46f9-9585-c74c95f22da1"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+                {
+                    "description": "COM_SEL203 的PTH 焊盘 1 [/inout_user/CAN_H]",
+                    "pos": {
+                        "x": 114.5,
+                        "y": 78.613
+                    },
+                    "uuid": "285b405c-a6d9-4d65-9851-d5a447b7ca65"
+                },
+                {
+                    "description": "走线 [Net-(COM_SEL201-P3)] (Top_layer), 长度: 0.3064 mm",
+                    "pos": {
+                        "x": 115.316,
+                        "y": 79.803501
+                    },
+                    "uuid": "ffe35521-9a30-43e9-be91-ae8ab299de73"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [Net-(U102-TCLK/PSTCLK/CLKOUT)] (Top_layer), 长度: 0.7620 mm",
+                    "pos": {
+                        "x": 135.763,
+                        "y": 110.744
+                    },
+                    "uuid": "af373bfd-e670-4cbe-aca8-7eabc5cf32bf"
+                },
+                {
+                    "description": "过孔 [/PWM7] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 135.128,
+                        "y": 110.871
+                    },
+                    "uuid": "d0121344-e74d-4b21-b71e-a7ba13f8e96f"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1841 mm)",
+            "items": [
+                {
+                    "description": "Top_layer 上 R208 的焊盘 1 [GND]",
+                    "pos": {
+                        "x": 164.592,
+                        "y": 83.2085
+                    },
+                    "uuid": "48f6c14a-7556-4720-a8a8-332df9e46a72"
+                },
+                {
+                    "description": "走线 [Net-(U203-R2OUT)] (Top_layer), 长度: 8.1280 mm",
+                    "pos": {
+                        "x": 161.29,
+                        "y": 82.296
+                    },
+                    "uuid": "5164a0fd-c690-4ede-a9e3-17eefd0d1810"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)",
+            "items": [
+                {
+                    "description": "走线 [Net-(U204-R1OUT)] (Top_layer), 长度: 0.8890 mm",
+                    "pos": {
+                        "x": 133.985,
+                        "y": 81.788
+                    },
+                    "uuid": "203c2b15-5f36-4345-b067-a40503db4d2f"
+                },
+                {
+                    "description": "过孔 [/URTS2] (Top_layer - B.Cu)",
+                    "pos": {
+                        "x": 134.366,
+                        "y": 82.55
+                    },
+                    "uuid": "999e8396-9d78-4bce-821d-53e6be4cfd6a"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1898 mm)",
+            "items": [
+                {
+                    "description": "UARTCAN202 的PTH 焊盘 2 [/inout_user/TXD1]",
+                    "pos": {
+                        "x": 159.27,
+                        "y": 66.5
+                    },
+                    "uuid": "04c000d3-7e80-4e94-a394-48656027ca56"
+                },
+                {
+                    "description": "走线 [Net-(UARTCAN202-P6)] (B.Cu), 长度: 2.3900 mm",
+                    "pos": {
+                        "x": 159.574999,
+                        "y": 65.349999
+                    },
+                    "uuid": "d617e92c-b529-420c-9821-70f5abdd0158"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1898 mm)",
+            "items": [
+                {
+                    "description": "UARTCAN202 的PTH 焊盘 2 [/inout_user/TXD1]",
+                    "pos": {
+                        "x": 159.27,
+                        "y": 66.5
+                    },
+                    "uuid": "04c000d3-7e80-4e94-a394-48656027ca56"
+                },
+                {
+                    "description": "走线 [Net-(UARTCAN202-P6)] (B.Cu), 长度: 4.0850 mm",
+                    "pos": {
+                        "x": 163.659999,
+                        "y": 65.349999
+                    },
+                    "uuid": "c468c141-3460-403a-ac24-ea6b971d8fc6"
+                }
+            ],
+            "severity": "error",
+            "type": "clearance"
+        },
+        {
+            "description": "电路板边缘间距违规 (<电路板配置> 中的 \"板边\" 约束 间距 0.5000 mm; 实际 0.4000 mm)",
+            "items": [
+                {
+                    "description": "Edge.Cuts 上的 线段",
+                    "pos": {
+                        "x": 228.6,
+                        "y": 55.88
+                    },
+                    "uuid": "d2329e92-466c-4dac-b7cc-e3083f987435"
+                },
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                }
+            ],
+            "severity": "error",
+            "type": "copper_edge_clearance"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 In2.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[+3.3V]在 In2.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 72.5,
+                        "y": 145.5
+                    },
+                    "uuid": "5a5be48f-5d12-4335-8908-43fbe043fb1d"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 9 [+3.3V]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 116.459
+                    },
+                    "uuid": "b6ebb7f4-7b87-4af8-a177-f48a83b4c5b1"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 In1.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 In1.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.755,
+                        "y": 146.685
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1d"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 11 [GND]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 118.999
+                    },
+                    "uuid": "0d916668-f957-435d-a82b-54d4c9913fba"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 3 [GND]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 108.839
+                    },
+                    "uuid": "ad74c47f-0c41-4997-ad3e-dd7e68613f4d"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 In1.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 In1.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.755,
+                        "y": 146.685
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1d"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 20 [GND]",
+                    "pos": {
+                        "x": 78.867,
+                        "y": 129.159
+                    },
+                    "uuid": "7d2008c6-69ef-435c-8d07-fe85b2a03ced"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 In1.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 In1.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.755,
+                        "y": 146.685
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1d"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 23 [GND]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 134.239
+                    },
+                    "uuid": "1940363e-2972-4074-a004-08208e2294a8"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 5 [GND]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 111.379
+                    },
+                    "uuid": "6dce3bbe-b9f4-4b44-85a1-997c2e3e5728"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 20 [GND]",
+                    "pos": {
+                        "x": 78.867,
+                        "y": 129.159
+                    },
+                    "uuid": "7d2008c6-69ef-435c-8d07-fe85b2a03ced"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "BDM_PORT101 的PTH 焊盘 23 [GND]",
+                    "pos": {
+                        "x": 76.327,
+                        "y": 134.239
+                    },
+                    "uuid": "1940363e-2972-4074-a004-08208e2294a8"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "MCU_PORT201 的PTH 焊盘 54 [GND]",
+                    "pos": {
+                        "x": 118.364,
+                        "y": 139.446
+                    },
+                    "uuid": "84f65bf7-5c08-4e78-844d-e929a546931b"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "RST_SW101 的PTH 焊盘 2 [GND]",
+                    "pos": {
+                        "x": 176.149,
+                        "y": 87.249
+                    },
+                    "uuid": "a45ff5fb-a520-42ec-b043-4281d3555da2"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "JP101 的PTH 焊盘 1 [GND]",
+                    "pos": {
+                        "x": 112.522,
+                        "y": 93.345
+                    },
+                    "uuid": "25b4ebe6-18fc-45f6-ba74-d67c9821b2d3"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 填充区 最小引线数量 2; 实际 1)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "JP101 的PTH 焊盘 3 [GND]",
+                    "pos": {
+                        "x": 112.522,
+                        "y": 95.885
+                    },
+                    "uuid": "c4800104-87a9-409c-b099-08e37aa0307e"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        },
+        {
+            "description": "缓释热焊盘 (花焊盘) 与填充区的连接不完整 (层 B.Cu; 2 条引线与死铜相连)",
+            "items": [
+                {
+                    "description": "填充区[GND]在 B.Cu 上, 优先级 0",
+                    "pos": {
+                        "x": 71.7,
+                        "y": 56.3
+                    },
+                    "uuid": "00000000-0000-0000-0000-00005aeebe1a"
+                },
+                {
+                    "description": "JP201 的PTH 焊盘 1 [GND]",
+                    "pos": {
+                        "x": 90.5,
+                        "y": 113.0
+                    },
+                    "uuid": "8cb015c3-74e3-48b3-badd-deea378583b0"
+                }
+            ],
+            "severity": "error",
+            "type": "starved_thermal"
+        }
+    ]
+}

@@ -1,0 +1,7 @@
+Imported PCB1 in 0.00s: 4 layers, 165 items (164 pins, 0 traces, 0 vias)
+Board: 254 items (164 pins, 86 traces, 3 vias); router delta +86 traces, +3 vias
+Router: 1 passes, 11 routed, 72 failed, 1 ripped, 25 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 45 clearance violations, 49 of 81 connections incomplete, score 283.95/1000
+Total 21.57s
+Exported Specctra SES session file: bench/results/easyeda-diag/x40.ses

@@ -1,0 +1,29 @@
+fixture : easyeda-pcb1
+left    : bench/results/easyeda-diag/easyeda-pcb1.import.dsn
+right   : bench/results/easyeda-diag/easyeda-pcb1.golden.json
+
+group             gate   status        left   right  diffs
+----------------------------------------------------------
+resolution        G1.1   OK               3       3      0
+layers            G1.1   OK               4       4      0
+clearance_matrix  G1.1   MISMATCH       220     224      4
+padstacks         G1.1   OK              32      32      0
+components        G1.1   OK               1       1      0
+nets              G1.1   OK              52      52      0
+wiring            G1.1   OK               0       0      0
+via_rules         G1.1   OK             162     162      0
+images            extra  OK               1       1      0
+net_classes       extra  OK              54      54      0
+rules_misc        extra  OK               4       4      0
+boundary          extra  OK               2       2      0
+structure_areas   extra  OK               0       0      0
+----------------------------------------------------------
+TOTAL                    DIFFER                          4
+
+clearance_matrix (4 difference(s))
+  + (board_edge,board_edge)@1: left=<absent>  right=19.686
+  + (board_edge,board_edge)@15: left=<absent>  right=19.686
+  + (board_edge,board_edge)@16: left=<absent>  right=19.686
+  + (board_edge,board_edge)@2: left=<absent>  right=19.686
+
+excluded off-diagonal clearance cells: 6160 (not observable through the release dump — see EXCLUSIONS)

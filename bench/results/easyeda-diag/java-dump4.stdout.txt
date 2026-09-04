@@ -1,0 +1,7 @@
+2026-09-04 23:49:47.441 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-04 23:49:47.475 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-04 23:49:48.828 INFO   [37F188\9D9497] Loading board file 'easyeda-pcb1.dsn'...
+2026-09-04 23:49:48.868 INFO   [37F188\9D9497] Job '37F188\9D9497' started at 2026-09-04T15:49:48.868696Z.
+2026-09-04 23:49:48.870 INFO   [37F188\9D9497] Job '37F188\9D9497' finished with state: COMPLETED (elapsed: 0.00 seconds, finished at UTC: 2026-09-04T15:49:48.870161Z).
+2026-09-04 23:49:49.406 WARN   GitHub release response does not contain 'tag_name': {"message":"API rate limit exceeded for 64.186.229.124. (But here's the good news: Authenticated requests get a higher rate limit. Check out the documentation for more details.)","documentation_url":"https://docs.github.com/rest/overview/resources-in-the-rest-api#rate-limiting"}
+

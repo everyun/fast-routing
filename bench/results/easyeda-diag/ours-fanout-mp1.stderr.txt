@@ -1,0 +1,2 @@
+FRMETRIC {"kind":"counters","expansions":4406178,"queue_pushes":5975736,"queue_pops":5894308,"stale_pops":1488130,"tree_queries":637256,"tree_nodes_visited":0,"room_completions":47978,"door_shape_computations":129424,"exact_intersections":0,"shove_checks":1119,"ripup_checks":276669,"pull_tight_iterations":1069}
+51 of 81 connections still incomplete

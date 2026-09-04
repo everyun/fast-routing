@@ -1,0 +1,11 @@
+FRDIAG fanout stop=Some(NothingRouted) total=19 passes=2
+FRDIAG fanout pass=0 ripup=100 routed=19 not_routed=52 insert_error=0 already=24 skipped_no_vias=0 vias=5
+FRDIAG fanout pass=1 ripup=200 routed=0 not_routed=52 insert_error=0 already=43 skipped_no_vias=0 vias=5
+Imported PCB1 in 0.00s: 4 layers, 165 items (164 pins, 0 traces, 0 vias)
+Board: 250 items (164 pins, 82 traces, 3 vias); router delta +82 traces, +3 vias
+Router: 8 passes, 11 routed, 73 failed, 0 ripped, 19 pins fanned out
+Router stopped on pass limit (0 board restores)
+Referee: 45 clearance violations, 51 of 81 connections incomplete, score 259.26/1000
+Total 165.88s
+Exported Specctra SES session file: bench/results/easyeda-diag/ours-mp8.ses
+51 of 81 connections still incomplete

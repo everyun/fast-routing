@@ -1,0 +1,4 @@
+FRDIAG fanout stop=Some(NothingRouted) total=19 passes=2
+FRDIAG fanout pass=0 ripup=100 routed=19 not_routed=52 insert_error=0 already=24 skipped_no_vias=0 vias=5
+FRDIAG fanout pass=1 ripup=200 routed=0 not_routed=52 insert_error=0 already=43 skipped_no_vias=0 vias=5
+51 of 81 connections still incomplete

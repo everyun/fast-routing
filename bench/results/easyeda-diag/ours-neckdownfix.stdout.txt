@@ -1,0 +1,7 @@
+Imported PCB1 in 0.00s: 4 layers, 165 items (164 pins, 0 traces, 0 vias)
+Board: 328 items (164 pins, 162 traces, 1 vias); router delta +162 traces, +1 vias
+Router: 1 passes, 0 routed, 2 failed, 0 ripped, 56 pins fanned out
+Router stopped on job deadline (0 board restores)
+Referee: 46 clearance violations, 31 of 81 connections incomplete, score 503.70/1000
+Total 455.69s
+Exported Specctra SES session file: bench/results/easyeda-diag/ours-neckdownfix.ses

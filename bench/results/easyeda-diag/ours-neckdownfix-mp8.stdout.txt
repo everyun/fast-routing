@@ -1,0 +1,13 @@
+FRDIAG fanout stop=Some(NothingRouted) total=56 passes=3
+FRDIAG fanout pass=0 ripup=100 routed=54 not_routed=10 insert_error=2 already=29 skipped_no_vias=0 vias=7
+FRDIAG fanout pass=1 ripup=200 routed=2 not_routed=17 insert_error=2 already=74 skipped_no_vias=0 vias=9
+FRDIAG fanout pass=2 ripup=300 routed=0 not_routed=17 insert_error=2 already=76 skipped_no_vias=0 vias=9
+Imported PCB1 in 0.00s: 4 layers, 165 items (164 pins, 0 traces, 0 vias)
+Board: 319 items (164 pins, 153 traces, 1 vias); router delta +153 traces, +1 vias
+Router: 1 passes, 0 routed, 3 failed, 0 ripped, 56 pins fanned out
+Router stopped on job deadline (0 board restores)
+Referee: 46 clearance violations, 31 of 81 connections incomplete, score 503.70/1000
+Total 431.37s
+Exported Specctra SES session file: bench/results/easyeda-diag/ours-neckdownfix-mp8.ses
+31 of 81 connections still incomplete
+job budget spent — the session above is the best board the run held (31 of 81 connections incomplete; 0.33s of the budget was reserved for the shutdown)
