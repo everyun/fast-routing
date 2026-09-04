@@ -267,6 +267,11 @@ def import_ses(kicad_py: str, pcb_path: str, ses_path: str, out_pcb: str) -> Non
         "if not ok:\n"
         "    raise SystemExit('ImportSpecctraSES returned False')\n"
         f"pcbnew.SaveBoard({out_pcb!r}, board)\n"
+        # Skip wx teardown: wxLogGui flushes buffered import warnings as a
+        # modal NSAlert during wxEntryCleanup, which wedges a headless run
+        # (observed on kicad-tutorial; sample stack ends in -[NSAlert runModal]).
+        "import os\n"
+        "os._exit(0)\n"
     )
     done = subprocess.run(
         [kicad_py, "-c", script],
