@@ -34,6 +34,22 @@ pub struct CompletedShape {
     /// seeded with the value the completion actually computed, instead of
     /// re-deriving it from the simplex it was just turned into.
     pub oct: Option<fr_geometry::planar::IntOctagon>,
+    /// Memo of [`CompletedShape::cached_bbox`]: outer `Some` = computed,
+    /// inner `None` = the shape is unbounded.
+    pub bbox: std::cell::Cell<Option<Option<IntBox>>>,
+}
+
+impl CompletedShape {
+    /// `shape.bounding_box()`, computed once per candidate. `None` for an
+    /// unbounded shape, matching `union_into`'s `is_bounded` branch.
+    pub fn cached_bbox(&self) -> Option<IntBox> {
+        if let Some(memo) = self.bbox.get() {
+            return memo;
+        }
+        let computed = self.shape.is_bounded().then(|| self.shape.bounding_box());
+        self.bbox.set(Some(computed));
+        computed
+    }
 }
 
 impl AutorouteEngine<'_> {
@@ -85,6 +101,7 @@ impl AutorouteEngine<'_> {
                 shape: start_shape,
                 contained: contained.clone(),
                 oct: None,
+                bbox: std::cell::Cell::new(None),
             });
         }
         if result.is_empty() {
@@ -169,28 +186,40 @@ impl AutorouteEngine<'_> {
             new_result.clear();
             let mut new_bounding: Option<IntBox> = None;
             for candidate in result.drain(..) {
-                let intersection = candidate.shape.intersection(&obstacle_shape);
-                let mut something_changed = false;
-                if intersection.dimension() == 2 {
-                    // `:625-628`: a completed room whose overlap is contained in
-                    // the from-door shape is the room we came through — leaving
-                    // it alone is what stops the tiling re-carving itself.
-                    let ignore_expansion_room = matches!(obstacle, Obstacle::Room(_))
-                        && ignore_shape
-                            .map(|ignore| geom::contains_shape(ignore, &intersection))
-                            .unwrap_or(false);
-                    if !ignore_expansion_room {
-                        something_changed = true;
-                        carve_hits += 1;
-                        let restrained = self.restrain_shape(&candidate, &obstacle_shape);
-                        for room in restrained {
-                            union_into(&mut new_bounding, &room.shape);
-                            new_result.push(room);
+                let candidate_bbox = candidate.cached_bbox();
+                // Exact reject: disjoint bounding boxes cannot make a 2-dim
+                // intersection, so the exact (allocating) intersection below
+                // is skipped for the pairs it would answer `dimension < 2`.
+                if candidate_bbox
+                    .map(|bbox| bbox.intersects(&obstacle_bounds))
+                    .unwrap_or(true)
+                {
+                    let intersection = candidate.shape.intersection(&obstacle_shape);
+                    let mut something_changed = false;
+                    if intersection.dimension() == 2 {
+                        // `:625-628`: a completed room whose overlap is contained in
+                        // the from-door shape is the room we came through — leaving
+                        // it alone is what stops the tiling re-carving itself.
+                        let ignore_expansion_room = matches!(obstacle, Obstacle::Room(_))
+                            && ignore_shape
+                                .map(|ignore| geom::contains_shape(ignore, &intersection))
+                                .unwrap_or(false);
+                        if !ignore_expansion_room {
+                            something_changed = true;
+                            carve_hits += 1;
+                            let restrained = self.restrain_shape(&candidate, &obstacle_shape);
+                            for room in restrained {
+                                union_bbox(&mut new_bounding, room.cached_bbox());
+                                new_result.push(room);
+                            }
                         }
                     }
-                }
-                if !something_changed {
-                    union_into(&mut new_bounding, &candidate.shape);
+                    if !something_changed {
+                        union_bbox(&mut new_bounding, candidate_bbox);
+                        new_result.push(candidate);
+                    }
+                } else {
+                    union_bbox(&mut new_bounding, candidate_bbox);
                     new_result.push(candidate);
                 }
             }
@@ -263,6 +292,7 @@ impl AutorouteEngine<'_> {
                     shape: piece,
                     contained: shape_to_be_contained.clone(),
                     oct: None,
+                bbox: std::cell::Cell::new(None),
                 });
             }
             crate::rooms::attr::add_restrain(restrain_started);
@@ -306,6 +336,7 @@ impl AutorouteEngine<'_> {
                 shape: piece,
                 contained: new_contained,
                 oct: None,
+                bbox: std::cell::Cell::new(None),
             });
         }
         let opposite_half_plane = geom::half_plane(&split_line.opposite());
@@ -316,6 +347,7 @@ impl AutorouteEngine<'_> {
                 shape: rest_piece,
                 contained: rest_contained,
                 oct: None,
+                bbox: std::cell::Cell::new(None),
             };
             result.extend(self.restrain_shape(&rest, obstacle_shape));
         }
@@ -377,6 +409,7 @@ impl AutorouteEngine<'_> {
                     shape: section,
                     contained,
                     oct: None,
+                bbox: std::cell::Cell::new(None),
                 }
             })
             .collect();
@@ -630,6 +663,20 @@ fn union_into(bounds: &mut Option<IntBox>, shape: &Simplex) {
         return;
     }
     let bb = shape.bounding_box();
+    *bounds = Some(match bounds.take() {
+        Some(existing) => existing.union(&bb),
+        None => bb,
+    });
+}
+
+/// [`union_into`] for an already-computed bounding box — the
+/// [`CompletedShape::cached_bbox`] form, where `None` is the unbounded case.
+fn union_bbox(bounds: &mut Option<IntBox>, bbox: Option<IntBox>) {
+    let Some(bb) = bbox else {
+        let crit = fr_geometry::planar::Limits::CRIT_INT;
+        *bounds = Some(IntBox::new(-crit, -crit, crit, crit));
+        return;
+    };
     *bounds = Some(match bounds.take() {
         Some(existing) => existing.union(&bb),
         None => bb,
