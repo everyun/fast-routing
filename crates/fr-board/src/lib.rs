@@ -78,14 +78,8 @@
 //! to [`Board`] is a `StoreDelta` walk calling the same
 //! index/unindex pair [`rollback_to`](Board::rollback_to) uses.
 //!
-//! # Legacy compatibility
-//!
-//! [`BasicBoard`] and its per-type `Vec`s are the pre-rewrite model, kept in
-//! [`legacy`]. The crates that consumed it (`fr-autoroute`, `fr-drc`,
-//! `fr-core::legacy`) were deleted in M4; the module remains only so existing
-//! root re-exports of those names still compile. The new payload types with
-//! colliding names live in [`item`] (`fr_board::item::Pin`, `fr_board::item::Via`,
-//! …).
+//! The new payload types with names that collided with the pre-rewrite model
+//! live in [`item`] (`fr_board::item::Pin`, `fr_board::item::Via`, …).
 
 pub mod board;
 pub mod clearance;
@@ -93,7 +87,6 @@ pub mod connectivity;
 pub mod history;
 pub mod item;
 pub mod journal;
-pub mod legacy;
 pub mod net_nos;
 pub mod search_tree;
 pub mod shape;
@@ -117,9 +110,3 @@ pub use shove::{
     ShoveInsert, FULL_SHOVE,
 };
 pub use store::{ItemStore, SlotIndex, StoreDelta};
-
-// The pre-rewrite model. See the `legacy` module docs; these names shadow the
-// new payload types of the same name, which are reachable as `item::Pin` etc.
-pub use legacy::{
-    BasicBoard, ConductionArea, ItemHeader, ItemType, ObstacleArea, Pin, PolylineTrace, Via,
-};

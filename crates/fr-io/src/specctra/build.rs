@@ -2424,7 +2424,7 @@ impl<'a> Builder<'a> {
     ///
     /// `Pin.get_shape` (`Pin.java:163-239`) builds an *absolute* shape: rotate the pad by the pin
     /// rotation, mirror it, translate it by the package-relative pin location, rotate by the
-    /// component rotation, flip, and finally translate by the component location. `fr_board::Pin`
+    /// component rotation, flip, and finally translate by the component location. `fr_board::item::Pin`
     /// stores no placement — `search_tree::drill_shapes` translates the padstack by `Pin::center`
     /// — so what belongs in the table is upstream's absolute shape minus the pin centre:
     ///
@@ -2570,7 +2570,7 @@ impl<'a> Builder<'a> {
 
     /// Interns a placed padstack in the board's padstack table.
     ///
-    /// `fr_board::Pin` carries a padstack index and a centre but no placement, so the rotation and
+    /// `fr_board::item::Pin` carries a padstack index and a centre but no placement, so the rotation and
     /// the mirroring have to be baked into the stored geometry. Interning by placement is the
     /// `PadShapeCache` `dsn-board-semantics.md` §17.2 asks for: hundreds of instances of the same
     /// footprint at the same rotation share one entry, where upstream recomputes per instance.
