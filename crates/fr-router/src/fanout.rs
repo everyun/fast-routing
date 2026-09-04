@@ -42,6 +42,17 @@
 //! We additionally stop after [`NO_PROGRESS_PASS_LIMIT`] consecutive passes that
 //! routed nothing new, which is strictly earlier and never later. Recorded in
 //! `docs/PARITY-DIVERGENCES.md`.
+//!
+//! # Job deadline
+//!
+//! Upstream arms no `TimeLimit` anywhere in this stage (`RoutingBoard.fanout`
+//! builds its engine with a `null` TimeLimit, `:1053-1055`). Our `--job-timeout`
+//! is nonetheless honoured here the same way the route and optimizer stages
+//! honour it: [`FanoutConfig::deadline`] defaults to [`JobDeadline::ambient`]
+//! and is polled before every pass and before every pin, so a spent budget ends
+//! the stage with [`FanoutStop::JobDeadline`] and the pipeline's reserved tail
+//! still judges and writes the board. One pin's attempt is never interrupted —
+//! interrupting mid-attempt would make what gets inserted depend on load.
 
 use fr_board::board::Board;
 use fr_board::item::{ItemId, ItemKind};
@@ -50,6 +61,7 @@ use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::RouterSettings;
 use fr_rules::via_rule::ViaRule;
 
+use crate::batch::schedule::JobDeadline;
 use crate::batch::{connected_set, unconnected_set, AttemptOutcome, AttemptState, ContactScratch};
 use crate::ctrl::AutorouteControl;
 
@@ -150,6 +162,9 @@ pub struct FanoutConfig {
     pub fallback_to_board_vias: bool,
     /// Consecutive zero-progress passes that stop the stage (our divergence).
     pub no_progress_pass_limit: u32,
+    /// The job's wall budget, polled before every pass and every pin.
+    /// Defaults to [`JobDeadline::ambient`]; [`JobDeadline::NONE`] opts out.
+    pub deadline: JobDeadline,
 }
 
 impl FanoutConfig {
@@ -175,7 +190,14 @@ impl FanoutConfig {
             density_radius: SURROUNDINGS_DENSITY_RADIUS_MM * scale,
             fallback_to_board_vias: settings.fanout.fallback_to_board_vias,
             no_progress_pass_limit: NO_PROGRESS_PASS_LIMIT,
+            deadline: JobDeadline::ambient(),
         }
+    }
+
+    /// Overrides the job deadline — tests, and drivers that own their own clock.
+    pub fn with_deadline(mut self, deadline: JobDeadline) -> FanoutConfig {
+        self.deadline = deadline;
+        self
     }
 }
 
@@ -386,6 +408,9 @@ pub enum FanoutStop {
     BoardUnchanged,
     /// No component had an SMD pin to escape.
     NothingToDo,
+    /// The job's wall budget ran out ([`JobDeadline`]). Not an upstream stop
+    /// rule — upstream arms no time limit in this stage at all.
+    JobDeadline,
 }
 
 /// Everything a fanout run produced.
@@ -428,6 +453,10 @@ pub fn fanout_board(
     let mut zero_progress_passes = 0u32;
 
     for pass_no in 0..config.max_passes.max(0) {
+        if config.deadline.expired() {
+            outcome.stop = Some(FanoutStop::JobDeadline);
+            return outcome;
+        }
         if config.max_items > 0 && outcome.total_items_fanouted >= config.max_items as usize {
             outcome.stop = Some(FanoutStop::MaxItems);
             return outcome;
@@ -443,6 +472,12 @@ pub fn fanout_board(
             &mut scratch,
         );
         outcome.passes.push(counters);
+        if config.deadline.expired() {
+            // A pass cut short between pins must not be read as the release's
+            // `routed == 0` stop below — the reason is the deadline.
+            outcome.stop = Some(FanoutStop::JobDeadline);
+            return outcome;
+        }
         if counters.routed == 0 {
             // `:111-113` — the release's first and strongest stop.
             outcome.stop = Some(FanoutStop::NothingRouted);
@@ -505,6 +540,12 @@ pub fn fanout_pass(
     };
     for component in components {
         for pin in &component.pins {
+            if config.deadline.expired() {
+                // Between pins, never inside one pin's attempt: what a
+                // deadline cut inserts must not depend on machine load.
+                counters.via_count = via_count(board);
+                return counters;
+            }
             if config.max_items > 0 && *total_items_fanouted >= config.max_items as usize {
                 counters.via_count = via_count(board);
                 return counters;
@@ -974,5 +1015,65 @@ mod tests {
         assert_eq!(outcome.stop, Some(FanoutStop::NothingRouted));
         assert_eq!(outcome.passes.len(), 1);
         assert_eq!(outcome.total_items_fanouted, 0);
+    }
+
+    /// The job deadline is a stage-level stop too: an already-spent budget ends
+    /// the run before the first pass, like the batch loop's own
+    /// `an_expired_job_deadline_stops_the_loop_before_any_pass`.
+    #[test]
+    fn an_expired_job_deadline_stops_fanout_before_any_pass() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let rules = fixture.rules.clone();
+        let settings = fixture.settings.clone();
+        let config = FanoutConfig::from_settings(&settings, 1.0)
+            .with_deadline(JobDeadline::already_passed());
+        let outcome = fanout_board(&mut fixture.board, &rules, &settings, &config);
+        assert_eq!(outcome.stop, Some(FanoutStop::JobDeadline));
+        assert!(outcome.passes.is_empty());
+        assert_eq!(outcome.total_items_fanouted, 0);
+    }
+
+    /// The per-pin poll: a pass that finds the budget spent aborts between
+    /// pins — no pin attempted, and the stage reads the stop as the deadline,
+    /// not as the release's `routed == 0` rule.
+    #[test]
+    fn a_deadline_spent_inside_a_pass_aborts_between_pins() {
+        let mut fixture = TestFixture::two_layer_with_pads();
+        let rules = fixture.rules.clone();
+        let settings = fixture.settings.clone();
+        let config = FanoutConfig::from_settings(&settings, 1.0)
+            .with_deadline(JobDeadline::already_passed());
+        let components = components(
+            &fixture.board,
+            config.pin_sorting_order,
+            config.density_radius,
+        );
+        assert!(!components.is_empty(), "the fixture has SMD pins to escape");
+        let mut total = 0;
+        let mut scratch = ContactScratch::new();
+        let counters = fanout_pass(
+            &mut fixture.board,
+            &rules,
+            &settings,
+            &config,
+            &components,
+            0,
+            &mut total,
+            &mut scratch,
+        );
+        assert_eq!(counters.routed, 0);
+        assert_eq!(counters.not_routed, 0);
+        assert_eq!(total, 0);
+    }
+
+    /// An unarmed deadline never fires: the default config reads the ambient
+    /// deadline, which is [`JobDeadline::NONE`] unless `--job-timeout` armed it.
+    #[test]
+    fn an_unarmed_deadline_never_stops_the_stage() {
+        let config = FanoutConfig::from_settings(
+            &TestFixture::two_layer_with_pads().settings,
+            1.0,
+        );
+        assert!(!config.deadline.is_armed() || !config.deadline.expired());
     }
 }

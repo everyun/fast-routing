@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """G1.0/G1.1 golden-dump comparator: Java's resolved board model vs ours.
 
-`java -de f.dsn -do f.import.dsn --router.*.enabled=false` makes the release jar
-import a board and immediately write it back out through `DsnWriter`. The result
+`bench/tools/java_dump/` (DumpDsn) makes the release jar import a board and write
+it back out through `DsnWriter` — the headless `-do f.import.dsn` recipe cannot,
+the v2.3.0 headless pipeline writes SES only. The result
 (`bench/golden/dumps/<fixture>.import.dsn`) is not the input file — it is Java's
 **resolved board model**, serialised: clearance classes materialised, placements
 resolved, net classes bound, wiring re-imported with fixed states. That is the

@@ -69,8 +69,8 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
       re-baseline; record 3-run stability per fixture (`stable/unstable`).
 - [ ] Fixture manifest: per-board classification (`java_finished/timeout/crash/degenerate`),
       dedup (≈39 independent designs), coverage properties; `bench/fetch_fixtures.sh`.
-- [ ] Golden dumps: `java -de f.dsn -do f.import.dsn --router.enabled=false
-      --router.fanout.enabled=false --router.optimizer.enabled=false` for all 46, checked in
+- [ ] Golden dumps: `bench/tools/java_dump/` (DumpDsn; the release jar's headless `-do`
+      writes SES only, never a DSN — see `bench/tools/java_dump/README.md`) for all 46, checked in
       (G1.0 oracle). Plus `java -drc` JSON of every input board (G1.2a oracle).
 - [ ] Fix `run_bench.py` stage-regex bug (per-stage keys currently unaggregatable); wire
       fr-check placeholder judging; delete the fabricated README tables (done in this commit).

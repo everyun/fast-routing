@@ -36,9 +36,12 @@ The original 300 s / `-mp 20` baseline is kept as historical data but is not the
 
 Java's own CLI provides three calibration oracles (verified working):
 - `java -de f.dsn -drc report.json` → machine-readable violations of the **input** board
-- `java -de f.dsn -do f.import.dsn --router.enabled=false --router.fanout.enabled=false
-  --router.optimizer.enabled=false` → a dump of Java's **resolved internal board model**
-  (all three disable flags are required; fanout otherwise still mutates the board)
+- `bench/tools/java_dump/` (DumpDsn) → a dump of Java's **resolved internal board model**.
+  The older recipe `java -de f.dsn -do f.import.dsn --router.enabled=false …` does **not**
+  work on the release jar: the v2.3.0 headless pipeline (`HeadlessBoardManager`) only writes
+  SES, so `-do` never produces a DSN. DumpDsn walks the same load path
+  (`loadFromSpecctraDsn` + `DsnWriter`) and is verified byte-identical to the checked-in
+  `bench/golden/dumps/` oracles — see `bench/tools/java_dump/README.md`.
 - deterministic outputs on boards where no wall budget binds (verified: 3 identical runs →
   byte-identical SES), so per-fixture references are stable once classified
 
