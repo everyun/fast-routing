@@ -209,6 +209,105 @@ class FourTuple(unittest.TestCase):
     def test_shape(self):
         self.assertEqual(g4_kicad.four_tuple(3, 0, 1, 2), (3, 0, 1, 2))
 
+
+def _violation(vtype, uuids):
+    return {
+        "type": vtype,
+        "description": f"{vtype} violation",
+        "items": [
+            {"description": f"item {u}", "pos": {"x": 1.0, "y": 2.0}, "uuid": u}
+            for u in uuids
+        ],
+    }
+
+
+class ClassifyViolations(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_pcb_uuids_reads_uuid_and_tstamp(self):
+        pcb = os.path.join(self.dir, "b.kicad_pcb")
+        _write(
+            pcb,
+            '(kicad_pcb (segment (uuid "aaaaaaaa-1111-1111-1111-111111111111"))'
+            ' (via (tstamp "bbbbbbbb-2222-2222-2222-222222222222")))',
+        )
+        self.assertEqual(
+            g4_kicad.pcb_uuids(pcb),
+            {
+                "aaaaaaaa-1111-1111-1111-111111111111",
+                "bbbbbbbb-2222-2222-2222-222222222222",
+            },
+        )
+
+    def test_violation_key_ignores_coordinate_jitter(self):
+        a = _violation("clearance", ["u1", "u2"])
+        b = _violation("clearance", ["u2", "u1"])
+        b["items"][0]["pos"] = {"x": 1.0001, "y": 2.0002}
+        self.assertEqual(g4_kicad.violation_key(a), g4_kicad.violation_key(b))
+
+    def test_stable_split_into_debt_and_residual(self):
+        before_uuids = {"old1", "old2"}
+        before = {"violations": [], "unconnected_items": []}
+        after = {
+            "violations": [
+                _violation("clearance", ["old1", "old2"]),  # fixture debt
+                _violation("clearance", ["old1", "new1"]),  # residual
+                _violation("copper_edge_clearance", ["old1", "new2"]),  # residual
+            ],
+            "unconnected_items": [],
+        }
+        # three identical runs -> no noise
+        cls = g4_kicad.classify_violations([after, after, after], before, before_uuids)
+        self.assertEqual(cls["raw_delta"], 3)
+        self.assertEqual(cls["noise"], 0)
+        self.assertEqual(cls["fixture_debt"], 1)
+        self.assertEqual(cls["residual"], 2)
+        self.assertEqual(len(cls["residual_violations"]), 2)
+
+    def test_run_noise_is_dropped_from_residual(self):
+        before_uuids = {"old1"}
+        before = {"violations": [], "unconnected_items": []}
+        flaky = _violation("shorting_items", ["old1", "new9"])
+        steady = _violation("clearance", ["old1", "new1"])
+        run1 = {"violations": [flaky, steady], "unconnected_items": []}
+        run2 = {"violations": [steady], "unconnected_items": []}
+        run3 = {"violations": [steady], "unconnected_items": []}
+        cls = g4_kicad.classify_violations([run1, run2, run3], before, before_uuids)
+        self.assertEqual(cls["raw_delta"], 2)
+        self.assertEqual(cls["noise"], 1)
+        self.assertEqual(cls["fixture_debt"], 0)
+        self.assertEqual(cls["residual"], 1)
+        self.assertEqual(cls["noise_examples"][0]["type"], "shorting_items")
+
+    def test_item_without_uuid_is_never_fixture_debt(self):
+        v = _violation("clearance", ["old1"])
+        del v["items"][0]["uuid"]
+        before = {"violations": [], "unconnected_items": []}
+        after = {"violations": [v], "unconnected_items": []}
+        cls = g4_kicad.classify_violations([after], before, {"old1"})
+        self.assertEqual(cls["fixture_debt"], 0)
+        self.assertEqual(cls["residual"], 1)
+
+    def test_zone_fill_report_detects_changes(self):
+        pre = os.path.join(self.dir, "pre.kicad_pcb")
+        post = os.path.join(self.dir, "post.kicad_pcb")
+        poly_a = "(filled_polygon (layer F.Cu) (pts (xy 0 0) (xy 1 0) (xy 1 1)))"
+        poly_b = "(filled_polygon (layer F.Cu) (pts (xy 0 0) (xy 2 0) (xy 2 2)))"
+        _write(pre, f"(kicad_pcb (zone {poly_a}))")
+        _write(post, f"(kicad_pcb (zone {poly_b}))")
+        rep = g4_kicad.zone_fill_report(pre, post)
+        self.assertTrue(rep["changed"])
+        self.assertEqual(rep["filled_polygons_before"], 1)
+        self.assertEqual(rep["filled_polygons_after"], 1)
+        self.assertEqual(rep["changed_polygons"], 2)
+        _write(post, f"(kicad_pcb (zone {poly_a}))")
+        self.assertFalse(g4_kicad.zone_fill_report(pre, post)["changed"])
+
     def test_row_without_ses_or_pcb_leaves_kicad_and_angles_empty(self):
         row = g4_kicad.row_for(
             "Board.dsn",

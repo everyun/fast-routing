@@ -13,11 +13,27 @@ For every out-of-sample (or any) board:
 and for every board that has a `.kicad_pcb` source:
 
   * copy the PCB, run `kicad-cli pcb drc` before SES import,
-    `pcbnew.ImportSpecctraSES` the session into the copy, DRC again,
-    report unconnected-item delta and DRC-violation delta.
+    `pcbnew.ImportSpecctraSES` the session into the copy,
+    refill every zone with `pcbnew.ZONE_FILLER` (KiCad does not refill on
+    SES import, so without this step DRC checks our fresh tracks against
+    the fixture's *stale* zone fills — see REPORT-easyeda class (c)),
+    then run DRC three times and intersect the violations by physical
+    object pair (item UUIDs), not coordinates: kicad-cli DRC is not
+    run-to-run stable on some boards.
+
+The DRC-violation delta is reported in four columns:
+
+  * `raw`          — after − before violation count, first DRC run;
+  * `fixture_debt` — stable after-violations whose every item UUID already
+                     exists in the fixture PCB (pre-existing/locked copper,
+                     not ours);
+  * `noise`        — violations of the first run that do not reproduce in
+                     all three runs;
+  * `residual`     — stable violations involving at least one object the
+                     fixture did not contain. This is the gate number.
 
 The G4 4-tuple is (unrouted, added violations, angle violations, KiCad-DRC
-delta). The first two numbers come from a G2.1 `gate.json` when one is
+residual). The first two numbers come from a G2.1 `gate.json` when one is
 passed; they are `null` otherwise. This file never talks to the router.
 
 Stdlib Python 3 only, like the rest of `bench/`. pcbnew / kicad-cli are
@@ -27,9 +43,11 @@ optional at import time so the unit tests stay hermetic.
 from __future__ import annotations
 
 import argparse
+import collections
 import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -235,6 +253,129 @@ def drc_delta(before: dict, after: dict) -> dict:
 
 
 # --------------------------------------------------------------------------
+# violation classification (fixture debt / run noise / residual)
+# --------------------------------------------------------------------------
+
+_UUID_RE = re.compile(r"\((?:uuid|tstamp)\s+\"?([0-9A-Fa-f-]{36})\"?\)")
+
+
+def pcb_uuids(pcb_path: str) -> set:
+    """Every item UUID in a .kicad_pcb (uuid nodes; tstamp for older files)."""
+    with open(pcb_path, "r", encoding="utf-8", errors="replace") as f:
+        return set(_UUID_RE.findall(f.read()))
+
+
+def _item_key(item: dict) -> str:
+    """Identity of one DRC item: its UUID when present, else rounded position."""
+    uuid = item.get("uuid")
+    if uuid:
+        return f"uuid:{uuid}"
+    pos = item.get("pos") or {}
+    return f"pos:{pos.get('x', 0):.4f},{pos.get('y', 0):.4f}"
+
+
+def violation_key(violation: dict):
+    """Physical object pair: violation type + sorted item identities.
+
+    Coordinates are deliberately not part of the key — kicad-cli DRC jitter
+    moves reported positions between runs without changing the objects.
+    """
+    return (
+        (violation.get("type") or violation.get("error_type") or "").lower(),
+        tuple(sorted(_item_key(it) for it in violation.get("items") or [])),
+    )
+
+
+def _is_fixture_debt(violation: dict, before_uuids: set) -> bool:
+    """True iff every item of the violation existed in the fixture PCB."""
+    items = violation.get("items") or []
+    if not items:
+        return False
+    for it in items:
+        uuid = it.get("uuid")
+        if not uuid or uuid not in before_uuids:
+            return False
+    return True
+
+
+def classify_violations(after_runs: list, before_report: dict, before_uuids: set) -> dict:
+    """Split the after-DRC violations into noise / fixture-debt / residual.
+
+    `after_runs` are ≥1 DRC reports of the same imported board. A violation
+    is *stable* when its physical object pair shows up in every run; the
+    rest of the first run is run-to-run noise. Among the stable ones,
+    violations whose items all pre-date the SES import are fixture debt;
+    the remainder is the residual attributable to our routing.
+    """
+    before = count_drc(before_report)
+    run_maps = []
+    for rep in after_runs:
+        counted = count_drc(rep)
+        m = {}
+        # re-walk the raw list so aggregated unconnected entries stay out
+        for v in rep.get("violations") or []:
+            vtype = (v.get("type") or v.get("error_type") or "").lower()
+            if vtype in ("unconnected_items", "unconnected_item", "unconnected"):
+                continue
+            m[violation_key(v)] = v
+        m["_count"] = counted["violations"]
+        run_maps.append(m)
+    first = run_maps[0]
+    first_keys = {k for k in first if k != "_count"}
+    stable = set(first_keys)
+    for m in run_maps[1:]:
+        stable &= {k for k in m if k != "_count"}
+    noise_keys = first_keys - stable
+    debt, residual = [], []
+    for k in sorted(stable):
+        (debt if _is_fixture_debt(first[k], before_uuids) else residual).append(k)
+    return {
+        "raw_delta": first["_count"] - before["violations"],
+        "noise": len(noise_keys),
+        "fixture_debt": len(debt),
+        "residual": len(residual),
+        "residual_violations": [
+            {
+                "type": k[0],
+                "description": (first[k].get("description") or "")[:120],
+                "items": [
+                    (it.get("description") or "")[:80] for it in first[k].get("items") or []
+                ],
+            }
+            for k in residual[:50]
+        ],
+        "noise_examples": [
+            {"type": k[0], "description": (first[k].get("description") or "")[:120]}
+            for k in sorted(noise_keys)[:10]
+        ],
+    }
+
+
+# --------------------------------------------------------------------------
+# zone refill (filled_polygon before/after comparison)
+# --------------------------------------------------------------------------
+
+
+def zone_fill_report(prerefill_pcb: str, refilled_pcb: str) -> dict:
+    """Did ZONE_FILLER change any filled_polygon? Compared as multisets."""
+    polys = []
+    for path in (prerefill_pcb, refilled_pcb):
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            tree = check_ses.parse_sexp(f.read())
+        polys.append(
+            collections.Counter(repr(n) for n in check_ses.iter_nodes(tree, "filled_polygon"))
+        )
+    diff = polys[1] - polys[0]
+    diff.update(polys[0] - polys[1])
+    return {
+        "filled_polygons_before": sum(polys[0].values()),
+        "filled_polygons_after": sum(polys[1].values()),
+        "changed": bool(diff),
+        "changed_polygons": sum(diff.values()),
+    }
+
+
+# --------------------------------------------------------------------------
 # pcbnew SES import + kicad-cli DRC (skipped in unit tests)
 # --------------------------------------------------------------------------
 
@@ -257,7 +398,20 @@ def run_drc(kicad_cli: str, pcb_path: str, out_json: str) -> dict:
         return json.load(f)
 
 
-def import_ses(kicad_py: str, pcb_path: str, ses_path: str, out_pcb: str) -> None:
+def import_ses(
+    kicad_py: str,
+    pcb_path: str,
+    ses_path: str,
+    out_pcb: str,
+    prerefill_pcb: str | None = None,
+) -> None:
+    """Import the SES, then refill all zones before saving.
+
+    KiCad's SES importer adds tracks/vias but never refills zones; without
+    the ZONE_FILLER pass the after-DRC checks new copper against stale
+    fixture fills. `prerefill_pcb` keeps a pre-refill copy so the caller can
+    prove the refill actually changed filled_polygons.
+    """
     script = (
         "import wx\n"
         "app = wx.App(False)\n"
@@ -266,6 +420,8 @@ def import_ses(kicad_py: str, pcb_path: str, ses_path: str, out_pcb: str) -> Non
         f"ok = pcbnew.ImportSpecctraSES(board, {ses_path!r})\n"
         "if not ok:\n"
         "    raise SystemExit('ImportSpecctraSES returned False')\n"
+        + (f"pcbnew.SaveBoard({prerefill_pcb!r}, board)\n" if prerefill_pcb else "")
+        + "pcbnew.ZONE_FILLER(board).Fill(board.Zones())\n"
         f"pcbnew.SaveBoard({out_pcb!r}, board)\n"
         # Skip wx teardown: wxLogGui flushes buffered import warnings as a
         # modal NSAlert during wxEntryCleanup, which wedges a headless run
@@ -284,26 +440,48 @@ def import_ses(kicad_py: str, pcb_path: str, ses_path: str, out_pcb: str) -> Non
         )
 
 
+DRC_RUNS = 3  # after-DRC repetitions for the noise intersection
+
+
 def kicad_roundtrip(
     pcb_path: str,
     ses_path: str,
     work_dir: str,
     kicad_cli: str,
     kicad_py: str,
+    drc_runs: int = DRC_RUNS,
 ) -> dict:
-    """DRC before, import SES, DRC after. All artefacts stay in `work_dir`."""
+    """DRC before, import SES, refill zones, DRC after ×`drc_runs`.
+
+    All artefacts stay in `work_dir`. Returns the raw delta plus the
+    noise / fixture-debt / residual split of the after-violations.
+    """
     os.makedirs(work_dir, exist_ok=True)
     before_pcb = os.path.join(work_dir, "before.kicad_pcb")
     after_pcb = os.path.join(work_dir, "after.kicad_pcb")
+    prerefill_pcb = os.path.join(work_dir, "after-norefill.kicad_pcb")
     shutil.copy2(pcb_path, before_pcb)
     before_json = os.path.join(work_dir, "drc-before.json")
-    after_json = os.path.join(work_dir, "drc-after.json")
     before = run_drc(kicad_cli, before_pcb, before_json)
-    import_ses(kicad_py, before_pcb, ses_path, after_pcb)
-    after = run_drc(kicad_cli, after_pcb, after_json)
-    delta = drc_delta(before, after)
+    import_ses(kicad_py, before_pcb, ses_path, after_pcb, prerefill_pcb)
+    after_jsons = []
+    after_runs = []
+    for i in range(max(1, drc_runs)):
+        path = os.path.join(work_dir, f"drc-after-r{i + 1}.json")
+        after_runs.append(run_drc(kicad_cli, after_pcb, path))
+        after_jsons.append(path)
+    delta = drc_delta(before, after_runs[0])
+    cls = classify_violations(after_runs, before, pcb_uuids(before_pcb))
+    delta["zone_refill"] = zone_fill_report(prerefill_pcb, after_pcb)
+    delta["drc_runs"] = max(1, drc_runs)
+    delta["drc_delta_raw"] = cls["raw_delta"]
+    delta["drc_noise"] = cls["noise"]
+    delta["drc_fixture_debt"] = cls["fixture_debt"]
+    delta["drc_residual"] = cls["residual"]
+    delta["residual_violations"] = cls["residual_violations"]
+    delta["noise_examples"] = cls["noise_examples"]
     delta["drc_before_path"] = before_json
-    delta["drc_after_path"] = after_json
+    delta["drc_after_paths"] = after_jsons
     delta["imported_pcb"] = after_pcb
     return delta
 
@@ -357,7 +535,8 @@ def row_for(
     angle_n = angles.get("angle_violations_generated")
     if angle_n is None:
         angle_n = angles.get("angle_violations")
-    drc_n = None if not kicad or "error" in kicad or kicad.get("skipped") else kicad["drc_delta"]
+    kicad_ok = kicad and "error" not in kicad and not kicad.get("skipped")
+    drc_n = kicad["drc_residual"] if kicad_ok else None
     return {
         "fixture": name,
         "tuple": four_tuple(unrouted, added, angle_n, drc_n),
@@ -365,9 +544,11 @@ def row_for(
         "added_violations": added,
         "angle_violations": angle_n,
         "angle_violations_imported": angles.get("angle_violations_imported"),
-        "kicad_drc_delta": drc_n,
-        "unconnected_delta": None if not kicad or "error" in kicad or kicad.get("skipped")
-        else kicad["unconnected_delta"],
+        "kicad_drc_residual": drc_n,
+        "kicad_drc_raw": kicad["drc_delta_raw"] if kicad_ok else None,
+        "kicad_drc_fixture_debt": kicad["drc_fixture_debt"] if kicad_ok else None,
+        "kicad_drc_noise": kicad["drc_noise"] if kicad_ok else None,
+        "unconnected_delta": kicad["unconnected_delta"] if kicad_ok else None,
         "snap_angle": snap,
         "angles": angles,
         "kicad": kicad,
@@ -379,8 +560,8 @@ def row_for(
 
 def report(rows, stream=sys.stdout):
     print(
-        f"{'fixture':36s} {'tuple (u, +v, ang, drcΔ)':28s} "
-        f"{'unconnΔ':>8s} snap",
+        f"{'fixture':36s} {'tuple (u, +v, ang, drc)':28s} "
+        f"{'rawΔ':>6s} {'debt':>5s} {'noise':>6s} {'resid':>6s} {'unconnΔ':>8s} snap",
         file=stream,
     )
     for row in rows:
@@ -389,6 +570,8 @@ def report(rows, stream=sys.stdout):
         tag = f" (+{imported} imported)" if imported else ""
         print(
             f"{row['fixture'][:34]:36s} {str(t):28s} "
+            f"{str(row['kicad_drc_raw']):>6s} {str(row['kicad_drc_fixture_debt']):>5s} "
+            f"{str(row['kicad_drc_noise']):>6s} {str(row['kicad_drc_residual']):>6s} "
             f"{str(row['unconnected_delta']):>8s} {row['snap_angle']}{tag}",
             file=stream,
         )
