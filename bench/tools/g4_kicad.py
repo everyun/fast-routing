@@ -5,7 +5,10 @@ For every out-of-sample (or any) board:
 
   * count SES wire-segment angle violations against the board's snap_angle
     (`none` / `ninety_degree` / `fortyfive_degree`, defaulting to 45° when
-    the DSN declares nothing — same default as the Specctra reader);
+    the DSN declares nothing — same default as the Specctra reader),
+    split into `generated` (router-produced — the G4 number) and `imported`
+    (verbatim re-emitted pre-routed DSN copper, which no Specctra router
+    re-angles);
 
 and for every board that has a `.kicad_pcb` source:
 
@@ -66,15 +69,15 @@ def snap_angle_of(dsn_path: str) -> str:
 
 
 def _nums_after_width(path_node) -> list[float]:
-    """(path <layer> <width> x1 y1 x2 y2 ...) -> [x1, y1, x2, y2, ...]."""
-    nums = []
-    for el in path_node[1:]:
-        if isinstance(el, str):
-            try:
-                nums.append(float(el))
-            except ValueError:
-                pass
-    return nums[1:]  # drop width
+    """(path <layer> <width> x1 y1 x2 y2 ...) -> [x1, y1, x2, y2, ...].
+
+    Layer and width are dropped **positionally**: the layer atom may be a
+    quoted *numeric* name (EasyEDA exports `"1"`, `"2"`, …), which the parser
+    returns unquoted and indistinguishable from a coordinate. Filtering by
+    float-parsability would eat it and shift every coordinate by one.
+    """
+    atoms = [el for el in path_node[1:] if isinstance(el, str)]
+    return [float(a) for a in atoms[2:]]
 
 
 def segment_ok(dx: float, dy: float, snap: str, eps: float = ANGLE_EPS) -> bool:
@@ -93,15 +96,55 @@ def segment_ok(dx: float, dy: float, snap: str, eps: float = ANGLE_EPS) -> bool:
     return axis or diag
 
 
-def angle_violations(ses_path: str, snap: str) -> dict:
+def _dsn_imported_segments(dsn_path: str) -> set[tuple[float, ...]]:
+    """Every `(wire (path …))` segment in the DSN's wiring scope, scaled to SES
+    coordinates, both directions.
+
+    The reader scales DSN coordinates by the board scale factor, which is the
+    resolution value times a power of ten (`dsn-board-semantics.md` §3.2), so
+    all candidates `r * 10^k` are included rather than re-deriving k.
+    """
+    with open(dsn_path, "r", encoding="utf-8", errors="replace") as f:
+        tree = check_ses.parse_sexp(f.read())
+    resolution = 1.0
+    for node in check_ses.iter_nodes(tree, "resolution"):
+        if len(node) >= 3:
+            try:
+                resolution = float(node[2])
+            except (TypeError, ValueError):
+                pass
+            break
+    scales = [resolution * (10.0**k) for k in range(4)]
+    segs: set[tuple[float, ...]] = set()
+    for wire in check_ses.iter_nodes(tree, "wire"):
+        for path in check_ses.iter_nodes(wire, "path"):
+            pts = _nums_after_width(path)
+            for k in range(2, len(pts) - 1, 2):
+                for s in scales:
+                    seg = (pts[k - 2] * s, pts[k - 1] * s, pts[k] * s, pts[k + 1] * s)
+                    segs.add(seg)
+                    segs.add((seg[2], seg[3], seg[0], seg[1]))
+    return segs
+
+
+def angle_violations(ses_path: str, snap: str, dsn_path: str | None = None) -> dict:
     """Walk every SES wire path; count illegal segments.
 
-    A zero-length hop is ignored. Returns the count plus a few examples so a
-    failing board is diagnosable without re-parsing the file.
+    A zero-length hop is ignored. When the source DSN is given, each illegal
+    segment is additionally classified as `imported` (a verbatim re-emission
+    of pre-routed DSN copper, which upstream also writes back unchanged) or
+    `generated` (produced by the router — the number G4 gates on). Returns the
+    counts plus a few examples so a failing board is diagnosable without
+    re-parsing the file.
     """
+    imported_segs: set[tuple[float, ...]] = set()
+    have_dsn = bool(dsn_path) and os.path.exists(dsn_path)
+    if have_dsn:
+        imported_segs = _dsn_imported_segments(dsn_path)
     with open(ses_path, "r", encoding="utf-8", errors="replace") as f:
         tree = check_ses.parse_sexp(f.read())
     bad = 0
+    imported = 0
     total = 0
     examples = []
     for wire in check_ses.iter_nodes(tree, "wire"):
@@ -115,6 +158,9 @@ def angle_violations(ses_path: str, snap: str) -> dict:
                 total += 1
                 if not segment_ok(dx, dy, snap):
                     bad += 1
+                    seg = (pts[k - 2], pts[k - 1], pts[k], pts[k + 1])
+                    if seg in imported_segs:
+                        imported += 1
                     if len(examples) < 8:
                         examples.append(
                             {
@@ -122,12 +168,15 @@ def angle_violations(ses_path: str, snap: str) -> dict:
                                 "to": [pts[k], pts[k + 1]],
                                 "dx": dx,
                                 "dy": dy,
+                                "imported": seg in imported_segs,
                             }
                         )
     return {
         "snap_angle": snap,
         "segments": total,
         "angle_violations": bad,
+        "angle_violations_imported": imported if have_dsn else None,
+        "angle_violations_generated": (bad - imported) if have_dsn else None,
         "examples": examples,
     }
 
@@ -264,10 +313,13 @@ def row_for(
     skip_kicad: bool,
 ) -> dict:
     snap = snap_angle_of(dsn) if os.path.exists(dsn) else DEFAULT_SNAP
+    have_ses = ses and os.path.exists(ses) and os.path.getsize(ses) > 0
     angles = (
-        angle_violations(ses, snap)
-        if ses and os.path.exists(ses) and os.path.getsize(ses) > 0
-        else {"snap_angle": snap, "segments": 0, "angle_violations": None, "examples": []}
+        angle_violations(ses, snap, dsn)
+        if have_ses
+        else {"snap_angle": snap, "segments": 0, "angle_violations": None,
+              "angle_violations_imported": None, "angle_violations_generated": None,
+              "examples": []}
     )
     kicad = None
     if pcb and not skip_kicad and ses and os.path.exists(ses) and os.path.getsize(ses) > 0:
@@ -283,7 +335,12 @@ def row_for(
 
     unrouted = (gate_row or {}).get("ours_unrouted")
     added = (gate_row or {}).get("added_violations")
-    angle_n = angles.get("angle_violations")
+    # The tuple's angle number is the count the router is responsible for:
+    # generated segments when the DSN is available to classify with, else the
+    # raw total.
+    angle_n = angles.get("angle_violations_generated")
+    if angle_n is None:
+        angle_n = angles.get("angle_violations")
     drc_n = None if not kicad or "error" in kicad or kicad.get("skipped") else kicad["drc_delta"]
     return {
         "fixture": name,
@@ -291,6 +348,7 @@ def row_for(
         "unrouted": unrouted,
         "added_violations": added,
         "angle_violations": angle_n,
+        "angle_violations_imported": angles.get("angle_violations_imported"),
         "kicad_drc_delta": drc_n,
         "unconnected_delta": None if not kicad or "error" in kicad or kicad.get("skipped")
         else kicad["unconnected_delta"],
@@ -311,9 +369,11 @@ def report(rows, stream=sys.stdout):
     )
     for row in rows:
         t = row["tuple"]
+        imported = row.get("angle_violations_imported")
+        tag = f" (+{imported} imported)" if imported else ""
         print(
             f"{row['fixture'][:34]:36s} {str(t):28s} "
-            f"{str(row['unconnected_delta']):>8s} {row['snap_angle']}",
+            f"{str(row['unconnected_delta']):>8s} {row['snap_angle']}{tag}",
             file=stream,
         )
         if row.get("kicad") and row["kicad"].get("error"):

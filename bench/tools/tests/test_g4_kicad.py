@@ -92,6 +92,63 @@ class SnapAndSes(unittest.TestCase):
         self.assertEqual(out["angle_violations"], 0)
         self.assertEqual(out["segments"], 2)
 
+    def test_quoted_numeric_layer_name_is_not_a_coordinate(self):
+        # EasyEDA exports numeric layer names: (path "1" 6298 x1 y1 ...).
+        # parse_sexp strips the quotes, so float-filtering would eat the layer
+        # atom and shift every coordinate by one — easyeda-pcb1 showed 64
+        # phantom violations that way. The true pairing is clean here.
+        ses = os.path.join(self.dir, "a.ses")
+        _write(
+            ses,
+            '(session s (routes (network_out n '
+            '(wire (path "1" 200 0 0 10 0 20 10)))))',
+        )
+        out = g4_kicad.angle_violations(ses, "fortyfive_degree")
+        self.assertEqual(out["segments"], 2)
+        self.assertEqual(out["angle_violations"], 0)
+
+    def test_imported_dsn_copper_is_classified_separately(self):
+        # The DSN carries a pre-routed free-angle wire; the session re-emits it
+        # verbatim (scaled by the resolution) plus one router-made bad segment.
+        dsn = os.path.join(self.dir, "a.dsn")
+        _write(
+            dsn,
+            "(pcb a (resolution um 10) (wiring "
+            "(wire (path F.Cu 200 0 0 3 1)) (net N)))",
+        )
+        ses = os.path.join(self.dir, "a.ses")
+        _write(
+            ses,
+            "(session s (routes (network_out n "
+            "(wire (path F.Cu 2000 0 0 30 10 40 10)) "
+            "(wire (path F.Cu 2000 0 0 9 1)))))",
+        )
+        out = g4_kicad.angle_violations(ses, "fortyfive_degree", dsn)
+        self.assertEqual(out["angle_violations"], 2)
+        self.assertEqual(out["angle_violations_imported"], 1)
+        self.assertEqual(out["angle_violations_generated"], 1)
+
+    def test_generated_bad_segments_gate_the_tuple(self):
+        dsn = os.path.join(self.dir, "a.dsn")
+        _write(
+            dsn,
+            "(pcb a (resolution um 10) (wiring "
+            "(wire (path F.Cu 200 0 0 3 1)) (net N)))",
+        )
+        ses = os.path.join(self.dir, "a.rust.ses")
+        _write(
+            ses,
+            "(session s (routes (network_out n "
+            "(wire (path F.Cu 2000 0 0 30 10)))))",
+        )
+        row = g4_kicad.row_for(
+            "a.dsn", dsn=dsn, ses=ses, pcb=None, gate_row=None,
+            work_root=None, kicad_cli="", kicad_py="", skip_kicad=True,
+        )
+        # Only imported copper is off-angle: the tuple's angle number is 0.
+        self.assertEqual(row["tuple"][2], 0)
+        self.assertEqual(row["angle_violations_imported"], 1)
+
 
 class DrcCount(unittest.TestCase):
     def test_unconnected_and_violations_are_separate(self):
