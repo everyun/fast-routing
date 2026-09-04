@@ -574,6 +574,25 @@ class JavaUserDataPath(unittest.TestCase):
         self.assertIsNone(out["router.enabled"])
         self.assertIsNone(out["optimizer.enabled"])
         self.assertEqual(out["max_passes"], 20)
+class TimeFooter(unittest.TestCase):
+    def test_bsd_minus_l(self):
+        stderr = (
+            "        1.23 real         0.80 user         0.10 sys\n"
+            "         409600  maximum resident set size\n"
+        )
+        got = run_bench.parse_time_footer(stderr)
+        self.assertEqual(got["time_real_s"], 1.23)
+        self.assertEqual(got["max_rss_bytes"], 409600)
+
+    def test_gnu_time_footer(self):
+        stderr = "TIME_FOOTER real=1.25 user=0.80 sys=0.10 rss_kb=400\n"
+        got = run_bench.parse_time_footer(stderr)
+        self.assertEqual(got["time_real_s"], 1.25)
+        self.assertEqual(got["max_rss_bytes"], 400 * 1024)
+
+    def test_time_argv_is_a_list(self):
+        argv = run_bench.time_argv()
+        self.assertIsInstance(argv, list)
 
 
 if __name__ == "__main__":

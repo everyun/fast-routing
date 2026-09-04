@@ -84,7 +84,7 @@ DEFAULT_RUST_BIN = os.path.join(REPO_ROOT, "target", "release", "fr-cli")
 DEFAULT_MANIFEST = fixture_manifest.DEFAULT_MANIFEST
 DEFAULT_REFERENCE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                  "reference.json")
-TIME_BIN = "/usr/bin/time"  # `-l` prints max RSS in BYTES on this macOS (verified)
+TIME_BIN = "/usr/bin/time"  # BSD `-l` (macOS, RSS in bytes) or GNU `-f` (Linux)
 
 # How far under `--timeout` fr-cli's own `--job-timeout` is set.
 #
@@ -122,9 +122,13 @@ RESULTS_SCHEMA = 3
 # Log parsers
 # --------------------------------------------------------------------------
 
-# /usr/bin/time -l footer (goes to stderr)
+# /usr/bin/time -l footer (goes to stderr) — BSD/macOS
 RE_TIME_REAL = re.compile(r"([\d.]+)\s+real\s+([\d.]+)\s+user\s+([\d.]+)\s+sys")
 RE_MAX_RSS = re.compile(r"(\d+)\s+maximum resident set size")
+# GNU time, via `time -f 'TIME_FOOTER real=%e user=%U sys=%S rss_kb=%M'`
+RE_GNU_TIME = re.compile(
+    r"TIME_FOOTER real=([\d.]+) user=([\d.]+) sys=([\d.]+) rss_kb=(\d+)"
+)
 
 # Java Freerouting (with -l en). Examples seen with v2.3.0:
 #   Auto-routing pass #4 on board '...' was completed in 0.05 seconds with the
@@ -336,11 +340,30 @@ def parse_java_settings(stdout: str, cmd: list[str], *,
             "optimizer": opt_ran,
         },
     }
+def time_argv() -> list[str]:
+    """Prefix that records RSS. Empty when `/usr/bin/time` is missing.
+
+    macOS BSD time understands `-l` (RSS in bytes). GNU time on Linux does
+    not; we ask it for a one-line footer instead so CI on ubuntu can parse
+    the same fields. Wall time for the record is still `time.monotonic()`.
+    """
+    if not os.path.isfile(TIME_BIN):
+        return []
+    if sys.platform == "darwin":
+        return [TIME_BIN, "-l"]
+    return [TIME_BIN, "-f", "TIME_FOOTER real=%e user=%U sys=%S rss_kb=%M"]
 
 
 def parse_time_footer(stderr: str) -> dict:
     out = {"max_rss_bytes": None, "time_real_s": None, "time_user_s": None,
            "time_sys_s": None}
+    m = RE_GNU_TIME.search(stderr)
+    if m:
+        out["time_real_s"] = float(m.group(1))
+        out["time_user_s"] = float(m.group(2))
+        out["time_sys_s"] = float(m.group(3))
+        out["max_rss_bytes"] = int(m.group(4)) * 1024
+        return out
     m = RE_TIME_REAL.search(stderr)
     if m:
         out["time_real_s"] = float(m.group(1))
@@ -562,7 +585,7 @@ def run_one(tool: str, fixture: str, out_dir: str, args, entry=None) -> dict:
         # 4 when the job budget ran out — both are results, not crashes.
         ok_exit_codes = {0, 2, 4}
 
-    full_cmd = ["nice", "-n", "10", TIME_BIN, "-l"] + cmd
+    full_cmd = ["nice", "-n", "10"] + time_argv() + cmd
 
     rec = {
         "tool": tool,
