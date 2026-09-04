@@ -386,8 +386,8 @@ fn a_bad_job_timeout_is_a_usage_error() {
 /// instead, and the length is not arbitrary: **250 ms was measured to be too short** on a
 /// loaded machine — `exec` plus dyld plus the Rust runtime had not reached `main`'s first line,
 /// the signal hit the default disposition, and the child died of `SIGTERM` (raw wait status 15).
-/// Two seconds makes that window negligible without making the suite slower in any way anyone
-/// will notice.
+/// Five seconds makes that window negligible on a loaded machine (multiple agents compiling
+/// at once); two seconds was still too short under that contention.
 ///
 /// Whether the run is still going when the signal lands is left open on purpose — both outcomes
 /// satisfy the contract — but note that on a board this small it usually *has* finished by then,
@@ -413,8 +413,9 @@ fn a_sigterm_does_not_cost_us_the_session() {
         .expect("fr-cli spawns");
 
     let mut piped = child.stderr.take().expect("stderr is piped");
-    // See the doc comment: 250 ms was measured to be too short under load.
-    std::thread::sleep(std::time::Duration::from_secs(2));
+    // See the doc comment: 250 ms was measured to be too short under load; 2 s
+    // still lost the race with the default SIGTERM disposition on a contended box.
+    std::thread::sleep(std::time::Duration::from_secs(5));
 
     // `kill(1)` rather than a `libc` dependency, for the same reason `main.rs` declares
     // `signal` itself: this workspace has no third-party crates. A run that already finished

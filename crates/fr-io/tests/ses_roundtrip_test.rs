@@ -48,18 +48,22 @@ use fr_io::specctra::{
     strip_session_copper, ImportedDesign, SesLibrary,
 };
 
-const FIXTURE_DIR: &str = "/tmp/freerouting-upstream/fixtures";
-
 /// A board unit, the tolerance [`assert_equivalent`] allows on a trace corner. See the module
 /// docs, point 2.
 const CORNER_TOLERANCE: i32 = 1;
 
+fn fixture_dir() -> std::path::PathBuf {
+    std::env::var_os("FR_FIXTURE_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp/freerouting-upstream/fixtures"))
+}
+
 fn read_fixture(name: &str) -> Vec<u8> {
-    let path = format!("{FIXTURE_DIR}/{name}");
+    let path = fixture_dir().join(name);
     std::fs::read(&path).unwrap_or_else(|error| {
         panic!(
-            "fixture '{path}' is missing ({error}); run bench/fetch_fixtures.sh to populate \
-             {FIXTURE_DIR}"
+            "fixture '{}' is missing ({error}); run bench/fetch_fixtures.sh or set FR_FIXTURE_DIR",
+            path.display()
         )
     })
 }
