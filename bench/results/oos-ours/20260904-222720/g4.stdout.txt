@@ -1,0 +1,22 @@
+fixture                              tuple (u, +v, ang, drcΔ)      unconnΔ snap
+cla45-compute-hdi6cs.dsn             (None, None, 4, None)            None fortyfive_degree
+    kicad error: RuntimeError: ImportSpecctraSES failed (exit 1): 1:01:43 PM: Debug: Adding duplicate image handler for 'PNM file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'PCX file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'IFF file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'Windows icon file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'Windows cursor file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'Windows animated cursor file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'TGA file'
+11:01:43 PM: Debug: Adding duplicate image handler for 'XPM file'
+ImportSpecctraSES returned False
+
+cla45-computeboard.dsn               (None, None, 0, 0)                  0 fortyfive_degree
+cla45-power-io-l6.dsn                (None, None, 0, 358)              -30 fortyfive_degree
+cla45-sensor-hdi.dsn                 (None, None, 108, 12)             -64 fortyfive_degree
+cla45-sensor-l6.dsn                  (None, None, 0, 13)              -244 fortyfive_degree
+easyeda-pcb1.dsn                     (None, None, 64, None)           None fortyfive_degree
+kicad-coldfire-unrouted.dsn          (None, None, 190, 281)            -57 ninety_degree
+kicad-coldfire.dsn                   (None, None, 295, 1)                0 fortyfive_degree
+kicad-tutorial.dsn                   (None, None, 0, 0)                  0 none
+
+wrote bench/results/oos-ours/20260904-222720/g4.json

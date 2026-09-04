@@ -1,0 +1,30 @@
+java reference: 9 boards × 3 rounds = 27 runs, W=2, jar=/tmp/frbase/freerouting-2.3.0.jar
+  r1 cla45-computeboard.dsn                   0/0          3.5s
+  r1 cla45-compute-hdi6cs.dsn                 TIMEOUT      300.1s
+  r1 cla45-power-io-l6.dsn                    TIMEOUT      300.1s
+  r1 cla45-sensor-hdi.dsn                     TIMEOUT      300.1s
+  r1 cla45-sensor-l6.dsn                      TIMEOUT      300.1s
+  r1 easyeda-pcb1.dsn                         9/45         84.0s
+  r1 kicad-coldfire-unrouted.dsn              TIMEOUT      300.1s
+  r1 kicad-tutorial.dsn                       0/0          14.3s
+  r1 kicad-coldfire.dsn                       TIMEOUT      300.1s
+  r2 cla45-computeboard.dsn                   0/0          3.8s
+  r2 cla45-compute-hdi6cs.dsn                 TIMEOUT      300.1s
+  r2 cla45-power-io-l6.dsn                    TIMEOUT      300.1s
+  r2 cla45-sensor-hdi.dsn                     TIMEOUT      300.1s
+  r2 cla45-sensor-l6.dsn                      TIMEOUT      300.1s
+  r2 easyeda-pcb1.dsn                         9/45         85.8s
+  r2 kicad-coldfire-unrouted.dsn              TIMEOUT      300.1s
+  r2 kicad-tutorial.dsn                       0/0          12.8s
+  r2 kicad-coldfire.dsn                       TIMEOUT      300.1s
+  r3 cla45-computeboard.dsn                   0/0          3.6s
+  r3 cla45-compute-hdi6cs.dsn                 TIMEOUT      300.1s
+  r3 cla45-power-io-l6.dsn                    TIMEOUT      300.1s
+  r3 cla45-sensor-hdi.dsn                     TIMEOUT      300.1s
+  r3 cla45-sensor-l6.dsn                      TIMEOUT      300.1s
+  r3 easyeda-pcb1.dsn                         9/45         88.1s
+  r3 kicad-coldfire-unrouted.dsn              TIMEOUT      300.1s
+  r3 kicad-tutorial.dsn                       0/0          24.0s
+  r3 kicad-coldfire.dsn                       TIMEOUT      300.0s
+wrote /Users/chiqingzhen/fr-work/kicad-gate/bench/results/oos-java-reference/results.json
+wrote /Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/manifest.json

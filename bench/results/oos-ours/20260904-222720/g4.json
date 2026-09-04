@@ -1,0 +1,739 @@
+[
+ {
+  "fixture": "cla45-compute-hdi6cs.dsn",
+  "tuple": [
+   null,
+   null,
+   4,
+   null
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 4,
+  "kicad_drc_delta": null,
+  "unconnected_delta": null,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 678,
+   "angle_violations": 4,
+   "examples": [
+    {
+     "from": [
+      28873.0,
+      -352706.0
+     ],
+     "to": [
+      28981.0,
+      -352813.0
+     ],
+     "dx": 108.0,
+     "dy": -107.0
+    },
+    {
+     "from": [
+      497402.0,
+      -79078.0
+     ],
+     "to": [
+      501718.0,
+      -83393.0
+     ],
+     "dx": 4316.0,
+     "dy": -4315.0
+    },
+    {
+     "from": [
+      525539.0,
+      -277648.0
+     ],
+     "to": [
+      526301.0,
+      -278411.0
+     ],
+     "dx": 762.0,
+     "dy": -763.0
+    },
+    {
+     "from": [
+      521037.0,
+      -273147.0
+     ],
+     "to": [
+      525539.0,
+      -277648.0
+     ],
+     "dx": 4502.0,
+     "dy": -4501.0
+    }
+   ]
+  },
+  "kicad": {
+   "error": "RuntimeError: ImportSpecctraSES failed (exit 1): 1:01:43 PM: Debug: Adding duplicate image handler for 'PNM file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'PCX file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'IFF file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'Windows icon file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'Windows cursor file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'Windows animated cursor file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'TGA file'\n11:01:43 PM: Debug: Adding duplicate image handler for 'XPM file'\nImportSpecctraSES returned False\n"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/cla45-compute-hdi6cs.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/cla45-compute-hdi6cs.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "cla45-computeboard.dsn",
+  "tuple": [
+   null,
+   null,
+   0,
+   0
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 0,
+  "kicad_drc_delta": 0,
+  "unconnected_delta": 0,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 0,
+   "angle_violations": 0,
+   "examples": []
+  },
+  "kicad": {
+   "unconnected_before": 0,
+   "unconnected_after": 0,
+   "unconnected_delta": 0,
+   "violations_before": 0,
+   "violations_after": 0,
+   "drc_delta": 0,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-computeboard.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-computeboard.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/cla45-computeboard.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/cla45-computeboard.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/cla45-computeboard.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "cla45-power-io-l6.dsn",
+  "tuple": [
+   null,
+   null,
+   0,
+   358
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 0,
+  "kicad_drc_delta": 358,
+  "unconnected_delta": -30,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 204,
+   "angle_violations": 0,
+   "examples": []
+  },
+  "kicad": {
+   "unconnected_before": 140,
+   "unconnected_after": 110,
+   "unconnected_delta": -30,
+   "violations_before": 460,
+   "violations_after": 818,
+   "drc_delta": 358,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-power-io-l6.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-power-io-l6.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/cla45-power-io-l6.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/cla45-power-io-l6.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/cla45-power-io-l6.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "cla45-sensor-hdi.dsn",
+  "tuple": [
+   null,
+   null,
+   108,
+   12
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 108,
+  "kicad_drc_delta": 12,
+  "unconnected_delta": -64,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 805,
+   "angle_violations": 108,
+   "examples": [
+    {
+     "from": [
+      1150000.0,
+      -1082500.0
+     ],
+     "to": [
+      1148800.0,
+      -1086400.0
+     ],
+     "dx": -1200.0,
+     "dy": -3900.0
+    },
+    {
+     "from": [
+      1111200.0,
+      -1141400.0
+     ],
+     "to": [
+      1106000.0,
+      -1139200.0
+     ],
+     "dx": -5200.0,
+     "dy": 2200.0
+    },
+    {
+     "from": [
+      908800.0,
+      -990300.0
+     ],
+     "to": [
+      842200.0,
+      -995600.0
+     ],
+     "dx": -66600.0,
+     "dy": -5300.0
+    },
+    {
+     "from": [
+      860700.0,
+      -1180500.0
+     ],
+     "to": [
+      880200.0,
+      -1185500.0
+     ],
+     "dx": 19500.0,
+     "dy": -5000.0
+    },
+    {
+     "from": [
+      1103800.0,
+      -1003900.0
+     ],
+     "to": [
+      1097500.0,
+      -1000000.0
+     ],
+     "dx": -6300.0,
+     "dy": 3900.0
+    },
+    {
+     "from": [
+      905200.0,
+      -1192750.0
+     ],
+     "to": [
+      925300.0,
+      -1195250.0
+     ],
+     "dx": 20100.0,
+     "dy": -2500.0
+    },
+    {
+     "from": [
+      990500.0,
+      -857500.0
+     ],
+     "to": [
+      921100.0,
+      -853600.0
+     ],
+     "dx": -69400.0,
+     "dy": 3900.0
+    },
+    {
+     "from": [
+      1020300.0,
+      -1190000.0
+     ],
+     "to": [
+      1005200.0,
+      -1192750.0
+     ],
+     "dx": -15100.0,
+     "dy": -2750.0
+    }
+   ]
+  },
+  "kicad": {
+   "unconnected_before": 99,
+   "unconnected_after": 35,
+   "unconnected_delta": -64,
+   "violations_before": 1371,
+   "violations_after": 1383,
+   "drc_delta": 12,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-sensor-hdi.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-sensor-hdi.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/cla45-sensor-hdi.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/cla45-sensor-hdi.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/cla45-sensor-hdi.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "cla45-sensor-l6.dsn",
+  "tuple": [
+   null,
+   null,
+   0,
+   13
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 0,
+  "kicad_drc_delta": 13,
+  "unconnected_delta": -244,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 874,
+   "angle_violations": 0,
+   "examples": []
+  },
+  "kicad": {
+   "unconnected_before": 365,
+   "unconnected_after": 121,
+   "unconnected_delta": -244,
+   "violations_before": 0,
+   "violations_after": 13,
+   "drc_delta": 13,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-sensor-l6.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/cla45-sensor-l6.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/cla45-sensor-l6.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/cla45-sensor-l6.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/cla45-sensor-l6.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "easyeda-pcb1.dsn",
+  "tuple": [
+   null,
+   null,
+   64,
+   null
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 64,
+  "kicad_drc_delta": null,
+  "unconnected_delta": null,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 92,
+   "angle_violations": 64,
+   "examples": [
+    {
+     "from": [
+      15750.0,
+      343774.0
+     ],
+     "to": [
+      503160.0,
+      373467.0
+     ],
+     "dx": 487410.0,
+     "dy": 29693.0
+    },
+    {
+     "from": [
+      6298.0,
+      343774.0
+     ],
+     "to": [
+      503160.0,
+      332440.0
+     ],
+     "dx": 496862.0,
+     "dy": -11334.0
+    },
+    {
+     "from": [
+      6298.0,
+      343774.0
+     ],
+     "to": [
+      631500.0,
+      332440.0
+     ],
+     "dx": 625202.0,
+     "dy": -11334.0
+    },
+    {
+     "from": [
+      585900.0,
+      413500.0
+     ],
+     "to": [
+      591448.0,
+      373448.0
+     ],
+     "dx": 5548.0,
+     "dy": -40052.0
+    },
+    {
+     "from": [
+      591448.0,
+      373448.0
+     ],
+     "to": [
+      631500.0,
+      343774.0
+     ],
+     "dx": 40052.0,
+     "dy": -29674.0
+    },
+    {
+     "from": [
+      3178.0,
+      487898.0
+     ],
+     "to": [
+      605428.0,
+      482970.0
+     ],
+     "dx": 602250.0,
+     "dy": -4928.0
+    },
+    {
+     "from": [
+      15750.0,
+      498000.0
+     ],
+     "to": [
+      603900.0,
+      496472.0
+     ],
+     "dx": 588150.0,
+     "dy": -1528.0
+    },
+    {
+     "from": [
+      603900.0,
+      496472.0
+     ],
+     "to": [
+      605428.0,
+      487898.0
+     ],
+     "dx": 1528.0,
+     "dy": -8574.0
+    }
+   ]
+  },
+  "kicad": {
+   "skipped": true,
+   "reason": "no kicad_pcb source"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/easyeda-pcb1.rust.ses",
+  "pcb": null,
+  "gate": null
+ },
+ {
+  "fixture": "kicad-coldfire-unrouted.dsn",
+  "tuple": [
+   null,
+   null,
+   190,
+   281
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 190,
+  "kicad_drc_delta": 281,
+  "unconnected_delta": -57,
+  "snap_angle": "ninety_degree",
+  "angles": {
+   "snap_angle": "ninety_degree",
+   "segments": 197,
+   "angle_violations": 190,
+   "examples": [
+    {
+     "from": [
+      989859.0,
+      -1222148.0
+     ],
+     "to": [
+      989612.0,
+      -1221064.0
+     ],
+     "dx": -247.0,
+     "dy": 1084.0
+    },
+    {
+     "from": [
+      989612.0,
+      -1221062.0
+     ],
+     "to": [
+      977280.0,
+      -1214120.0
+     ],
+     "dx": -12332.0,
+     "dy": 6942.0
+    },
+    {
+     "from": [
+      996274.0,
+      -1208278.0
+     ],
+     "to": [
+      989859.0,
+      -1222148.0
+     ],
+     "dx": -6415.0,
+     "dy": -13870.0
+    },
+    {
+     "from": [
+      2125780.0,
+      -1015323.0
+     ],
+     "to": [
+      2115126.0,
+      -1017215.0
+     ],
+     "dx": -10654.0,
+     "dy": -1892.0
+    },
+    {
+     "from": [
+      2115126.0,
+      -1017215.0
+     ],
+     "to": [
+      2088405.0,
+      -1028501.0
+     ],
+     "dx": -26721.0,
+     "dy": -11286.0
+    },
+    {
+     "from": [
+      2125780.0,
+      -1015323.0
+     ],
+     "to": [
+      2125925.0,
+      -1030100.0
+     ],
+     "dx": 145.0,
+     "dy": -14777.0
+    },
+    {
+     "from": [
+      1011053.0,
+      -1136287.0
+     ],
+     "to": [
+      1026780.0,
+      -1137920.0
+     ],
+     "dx": 15727.0,
+     "dy": -1633.0
+    },
+    {
+     "from": [
+      1031878.0,
+      -1131047.0
+     ],
+     "to": [
+      1011053.0,
+      -1136287.0
+     ],
+     "dx": -20825.0,
+     "dy": -5240.0
+    }
+   ]
+  },
+  "kicad": {
+   "unconnected_before": 479,
+   "unconnected_after": 422,
+   "unconnected_delta": -57,
+   "violations_before": 15,
+   "violations_after": 296,
+   "drc_delta": 281,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/kicad-coldfire-unrouted.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/kicad-coldfire-unrouted.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/kicad-coldfire-unrouted.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/kicad-coldfire-unrouted.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/kicad-coldfire-unrouted.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "kicad-coldfire.dsn",
+  "tuple": [
+   null,
+   null,
+   295,
+   1
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 295,
+  "kicad_drc_delta": 1,
+  "unconnected_delta": 0,
+  "snap_angle": "fortyfive_degree",
+  "angles": {
+   "snap_angle": "fortyfive_degree",
+   "segments": 3240,
+   "angle_violations": 295,
+   "examples": [
+    {
+     "from": [
+      1235710.0,
+      -990600.0
+     ],
+     "to": [
+      1211580.0,
+      -1018540.0
+     ],
+     "dx": -24130.0,
+     "dy": -27940.0
+    },
+    {
+     "from": [
+      2097480.0,
+      -1120090.0
+     ],
+     "to": [
+      2092760.0,
+      -1115360.0
+     ],
+     "dx": -4720.0,
+     "dy": 4730.0
+    },
+    {
+     "from": [
+      1290320.0,
+      -913765.0
+     ],
+     "to": [
+      1289680.0,
+      -914400.0
+     ],
+     "dx": -640.0,
+     "dy": -635.0
+    },
+    {
+     "from": [
+      1343660.0,
+      -937260.0
+     ],
+     "to": [
+      1343910.0,
+      -949452.0
+     ],
+     "dx": 250.0,
+     "dy": -12192.0
+    },
+    {
+     "from": [
+      1293110.0,
+      -1034540.0
+     ],
+     "to": [
+      1295400.0,
+      -1036320.0
+     ],
+     "dx": 2290.0,
+     "dy": -1780.0
+    },
+    {
+     "from": [
+      1337310.0,
+      -912495.0
+     ],
+     "to": [
+      1335400.0,
+      -914400.0
+     ],
+     "dx": -1910.0,
+     "dy": -1905.0
+    },
+    {
+     "from": [
+      1403350.0,
+      -1044960.0
+     ],
+     "to": [
+      1431290.0,
+      -1044700.0
+     ],
+     "dx": 27940.0,
+     "dy": 260.0
+    },
+    {
+     "from": [
+      1327150.0,
+      -754380.0
+     ],
+     "to": [
+      1326520.0,
+      -755015.0
+     ],
+     "dx": -630.0,
+     "dy": -635.0
+    }
+   ]
+  },
+  "kicad": {
+   "unconnected_before": 0,
+   "unconnected_after": 0,
+   "unconnected_delta": 0,
+   "violations_before": 148,
+   "violations_after": 149,
+   "drc_delta": 1,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/kicad-coldfire.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/kicad-coldfire.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/kicad-coldfire.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/kicad-coldfire.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/kicad-coldfire.kicad_pcb",
+  "gate": null
+ },
+ {
+  "fixture": "kicad-tutorial.dsn",
+  "tuple": [
+   null,
+   null,
+   0,
+   0
+  ],
+  "unrouted": null,
+  "added_violations": null,
+  "angle_violations": 0,
+  "kicad_drc_delta": 0,
+  "unconnected_delta": 0,
+  "snap_angle": "none",
+  "angles": {
+   "snap_angle": "none",
+   "segments": 0,
+   "angle_violations": 0,
+   "examples": []
+  },
+  "kicad": {
+   "unconnected_before": 0,
+   "unconnected_after": 0,
+   "unconnected_delta": 0,
+   "violations_before": 0,
+   "violations_after": 0,
+   "drc_delta": 0,
+   "drc_before_path": "bench/results/oos-ours/20260904-222720/g4-work/kicad-tutorial.dsn/drc-before.json",
+   "drc_after_path": "bench/results/oos-ours/20260904-222720/g4-work/kicad-tutorial.dsn/drc-after.json",
+   "imported_pcb": "bench/results/oos-ours/20260904-222720/g4-work/kicad-tutorial.dsn/after.kicad_pcb"
+  },
+  "ses": "bench/results/oos-ours/20260904-222720/ses/kicad-tutorial.rust.ses",
+  "pcb": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/pcb/kicad-tutorial.kicad_pcb",
+  "gate": null
+ }
+]

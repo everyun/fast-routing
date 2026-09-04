@@ -1,0 +1,209 @@
+[
+ {
+  "fixture": "cla45-compute-hdi6cs.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   839,
+   0,
+   4,
+   null
+  ],
+  "unconnected_delta": null,
+  "input": [
+   848,
+   3049
+  ],
+  "java": [
+   null,
+   null
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": "error"
+ },
+ {
+  "fixture": "cla45-computeboard.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "unconnected_delta": 0,
+  "input": [
+   0,
+   0
+  ],
+  "java": [
+   0,
+   0
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": "ok"
+ },
+ {
+  "fixture": "cla45-power-io-l6.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   127,
+   0,
+   0,
+   358
+  ],
+  "unconnected_delta": -30,
+  "input": [
+   163,
+   298
+  ],
+  "java": [
+   null,
+   null
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": "ok"
+ },
+ {
+  "fixture": "cla45-sensor-hdi.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   44,
+   0,
+   108,
+   12
+  ],
+  "unconnected_delta": -64,
+  "input": [
+   83,
+   276
+  ],
+  "java": [
+   null,
+   null
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": "ok"
+ },
+ {
+  "fixture": "cla45-sensor-l6.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   121,
+   0,
+   0,
+   13
+  ],
+  "unconnected_delta": -244,
+  "input": [
+   369,
+   10
+  ],
+  "java": [
+   null,
+   null
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": "ok"
+ },
+ {
+  "fixture": "easyeda-pcb1.dsn",
+  "g24_verdict": "FAIL",
+  "g24_gate": "comparative",
+  "g24_reason": "unrouted 57 > reference 9",
+  "tuple": [
+   57,
+   0,
+   64,
+   null
+  ],
+  "unconnected_delta": null,
+  "input": [
+   75,
+   45
+  ],
+  "java": [
+   9,
+   45
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": null
+ },
+ {
+  "fixture": "kicad-coldfire-unrouted.dsn",
+  "g24_verdict": "FAIL",
+  "g24_gate": "absolute",
+  "g24_reason": "added 1 violations",
+  "tuple": [
+   425,
+   1,
+   190,
+   281
+  ],
+  "unconnected_delta": -57,
+  "input": [
+   482,
+   4
+  ],
+  "java": [
+   null,
+   null
+  ],
+  "snap_angle": "ninety_degree",
+  "kicad_import": "ok"
+ },
+ {
+  "fixture": "kicad-coldfire.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   234,
+   0,
+   295,
+   1
+  ],
+  "unconnected_delta": 0,
+  "input": [
+   429,
+   73
+  ],
+  "java": [
+   null,
+   null
+  ],
+  "snap_angle": "fortyfive_degree",
+  "kicad_import": "ok"
+ },
+ {
+  "fixture": "kicad-tutorial.dsn",
+  "g24_verdict": "pass",
+  "g24_gate": "absolute",
+  "g24_reason": "absolute gate met",
+  "tuple": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "unconnected_delta": 0,
+  "input": [
+   0,
+   0
+  ],
+  "java": [
+   0,
+   0
+  ],
+  "snap_angle": "none",
+  "kicad_import": "ok"
+ }
+]

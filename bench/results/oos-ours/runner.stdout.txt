@@ -1,0 +1,49 @@
+results dir: bench/results/oos-ours/20260904-222720
+9 fixtures x ['rust'], passes=20, timeout=300.0s, config=oos-mp20-300s, W=2 — timings from this run may NOT be quoted
+[1/9] rust  cla45-compute-hdi6cs.dsn ... u/v=839/3077  wall=281.29s rss=133M
+[2/9] rust  cla45-computeboard.dsn ... u/v=0/0  wall=0.03s rss=7M
+[3/9] rust  cla45-power-io-l6.dsn ... u/v=127/531  wall=283.60s rss=98M
+[4/9] rust  cla45-sensor-hdi.dsn ... u/v=44/625  wall=283.98s rss=125M
+[5/9] rust  cla45-sensor-l6.dsn ... u/v=121/10  wall=284.27s rss=96M
+[6/9] rust  easyeda-pcb1.dsn ... u/v=57/45  wall=284.70s rss=748M
+[7/9] rust  kicad-coldfire-unrouted.dsn ... u/v=425/4  wall=283.49s rss=128M
+[8/9] rust  kicad-coldfire.dsn ... u/v=234/218  wall=282.27s rss=46M
+[9/9] rust  kicad-tutorial.dsn ... u/v=0/0  wall=0.11s rss=20M
+
+# Freerouting (Java) vs fr-cli (Rust) benchmark
+
+- Run: 2026-09-04T22:27:21
+- Config label: `oos-mp20-300s`
+- Passes: 20, timeout: 300.0s
+- Concurrency: W=2 — **sharded sweep; the timing columns are not comparable**
+- Jar: `/tmp/frbase/freerouting-2.3.0.jar`
+- Rust binary: `target/release/fr-cli`
+- Repo rev: `73f364e`
+- Manifest: `bench/fixtures-oos/manifest.json` (generated 2026-09-04T14:19:49Z)
+- Quality predicate: `placeholder-nets-v0`
+
+Cells: `class` = manifest classification of the **Java** reference on this board; `u/v` = unrouted/violations **as the tool reports them about itself** (no independent verification — fr-check, ROADMAP M1.4, replaces this column); `time` = wall s (tool-reported routing s in parens — for Java this excludes JVM startup); `RSS` = peak resident set; `nets(chk)` = check_ses.py, nets-with-routing / multi-pin nets in the DSN (coarse: no connectivity, no clearance); `quality` = the run's quality predicate — only `pass` rows feed the headline geomean; `W` = how many bench processes were running at once when this row was timed (`?` = a run recorded before the field existed). **Every timing on a `W > 1` row is inflated by contention and is excluded from the geomean whatever `quality` says** — see `--serial-perf`.
+
+| fixture | class | W | java u/v (self) | java time s | java RSS | java nets(chk) | rust u/v (self) | rust time s | rust RSS | rust nets(chk) | wall J/R | in-tool J/R | quality |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| cla45-compute-hdi6cs.dsn | unknown | 2 | - | - | - | - | 839/3077 | 281.29 (280.88) | 133M | 161/363 | - | - | java_unknown |
+| cla45-computeboard.dsn | unknown | 2 | - | - | - | - | 0/0 | 0.03 (0.02) | 7M | 0/0 | - | - | java_unknown |
+| cla45-power-io-l6.dsn | unknown | 2 | - | - | - | - | 127/531 | 283.60 (283.59) | 98M | 30/118 | - | - | java_unknown |
+| cla45-sensor-hdi.dsn | unknown | 2 | - | - | - | - | 44/625 | 283.98 (283.89) | 125M | 50/51 | - | - | java_unknown |
+| cla45-sensor-l6.dsn | unknown | 2 | - | - | - | - | 121/10 | 284.27 (284.26) | 96M | 36/63 | - | - | java_unknown |
+| easyeda-pcb1.dsn | unknown | 2 | - | - | - | - | 57/45 | 284.70 (284.69) | 748M | 12/35 | - | - | java_unknown |
+| kicad-coldfire-unrouted.dsn | unknown | 2 | - | - | - | - | 425/4 | 283.49 (283.48) | 128M | 37/7 | - | - | java_unknown |
+| kicad-coldfire.dsn | unknown | 2 | - | - | - | - | 234/218 | 282.27 (282.26) | 46M | 209/7 | - | - | java_unknown |
+| kicad-tutorial.dsn | unknown | 2 | - | - | - | - | 0/0 | 0.11 (0.08) | 20M | 0/0 | - | - | java_unknown |
+
+## Summary
+
+- **rust**: 9/9 runs finished (0 timeouts, 0 crashes); self-reported total unrouted 1847, violations 4510; total wall 1983.7s; checker completion 535/644 nets (83.1%)
+- **Fixture classes** (Java reference): java_unknown 9
+- **Quality filter** `placeholder-nets-v0`: 0/9 fixtures pass
+- **Geomean speedup, quality-filtered**: n/a — 0 fixtures passed `placeholder-nets-v0`. No speed claim may be made from this run.
+
+> Wall-clock includes JVM startup (~10 s) which dominates small boards; in-tool time is the fairer algorithmic comparison and the product headline stays wall-clock with startup broken out (ROADMAP G4). Both `u/v` columns are self-reports and both `nets(chk)` columns are coarse completion counts — neither is a DRC verdict, so the quality filter above is a floor, not a gate. `degenerate` = Java finished with score 0.00 / no nets to route; those boards look like clean wins and are excluded by construction. Every ratio above is from `W=1` rows only; a sharded sweep produces quality verdicts and no speed number at all.
+
+wrote bench/results/oos-ours/20260904-222720/results.json
+wrote bench/results/oos-ours/20260904-222720/report.md

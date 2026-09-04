@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "generated_utc": "2026-09-04T14:19:49Z",
+  "generated_utc": "2026-09-04T15:13:37Z",
   "generator": "bench/manifest.py",
   "fixtures_dir": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos",
   "java_source": {
-    "results": null,
+    "results": "bench/results/oos-java-reference/results.json",
     "config": {
-      "label": null,
-      "jar": null,
-      "passes": null,
-      "timeout_s": null
+      "label": "oos-mp20-300s",
+      "jar": "/tmp/frbase/freerouting-2.3.0.jar",
+      "passes": 20,
+      "timeout_s": 300.0
     }
   },
   "java_uncapped_source": {
@@ -18,9 +18,9 @@
     "analysis": "bench/analysis/measurement-campaign.md"
   },
   "java_stability_source": {
-    "dir": null,
-    "runs": null,
-    "cap_s": null
+    "dir": "bench/results/oos-java-reference/stability",
+    "runs": 3,
+    "cap_s": 300.0
   },
   "notes": [
     "dedup.group is exact-md5; variant_family is a curated table of same-design variants (VARIANT_FAMILIES in bench/manifest.py).",
@@ -29,9 +29,7 @@
     "stability.unrouted/violations are Java's self-reported numbers, not the referee's, and are comparable only with each other and with stability.started_unrouted — never with a referee count.",
     "snap_angle_effective falls back to the reader default (fortyfive_degree) when the board declares none.",
     "uncapped.uncapped_wall_s is T_java(complete) ONLY when uncapped.status == 'completed'; 'hit_cap' is a lower bound and 'blocked' measures a modal-dialog hang, not the board.",
-    "the uncapped campaign ran with the fanout stage inactive while java_source.results ran it on 37/46 boards — the two Java columns are not the same pipeline (measurement-campaign.md §5).",
-    "source is the G2.4 evidence field: origin path + sha256, export command, optional copper-strip / plane-type / snap_angle patches.",
-    "This manifest is the out-of-sample tier (bench/fixtures-oos), not the 46-board suite."
+    "the uncapped campaign ran with the fanout stage inactive while java_source.results ran it on 37/46 boards — the two Java columns are not the same pipeline (measurement-campaign.md §5)."
   ],
   "coverage": {
     "fixtures": 9,
@@ -39,11 +37,11 @@
     "variant_families": 9,
     "duplicate_groups": {},
     "by_java_class": {
-      "java_finished": 0,
-      "java_timeout": 0,
+      "java_finished": 1,
+      "java_timeout": 6,
       "java_crash": 0,
-      "java_degenerate": 0,
-      "java_unknown": 9
+      "java_degenerate": 2,
+      "java_unknown": 0
     },
     "signal_layers": {
       "2": 1,
@@ -72,14 +70,16 @@
     "with_preexisting_wiring": 4,
     "with_preexisting_copper": 4,
     "not_specctra_dsn": [],
-    "stability_measured": 0,
+    "stability_measured": 9,
     "by_stability_class": {
-      "stable": 0,
+      "stable": 3,
       "unstable": 0,
-      "no_result": 0,
+      "no_result": 6,
       "unmeasured": 0
     },
-    "comparative_gate_eligible": [],
+    "comparative_gate_eligible": [
+      "easyeda-pcb1.dsn"
+    ],
     "java_finished_not_stable": [],
     "uncapped_measured": 0,
     "by_uncapped_status": {
@@ -88,7 +88,14 @@
       "blocked": 0,
       "in_flight": 0
     },
-    "timeout_without_uncapped_wall": []
+    "timeout_without_uncapped_wall": [
+      "cla45-compute-hdi6cs.dsn",
+      "cla45-power-io-l6.dsn",
+      "cla45-sensor-hdi.dsn",
+      "cla45-sensor-l6.dsn",
+      "kicad-coldfire-unrouted.dsn",
+      "kicad-coldfire.dsn"
+    ]
   },
   "fixtures": [
     {
@@ -134,9 +141,9 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
+        "class": "java_timeout",
+        "reason": "killed at the Nones timeout",
+        "wall_s": 300.053,
         "tool_time_s": null,
         "score": null,
         "unrouted": null,
@@ -145,7 +152,48 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": null,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/cla45-compute-hdi6cs.r1.log",
+          "bench/results/oos-java-reference/stability/cla45-compute-hdi6cs.r2.log",
+          "bench/results/oos-java-reference/stability/cla45-compute-hdi6cs.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/Documents/Env Config Vault/10 资产台账/CLA45 车顶 HDR 相机/threeboard-m3/workstreams/compute-production/ecad/compute-core-hdi6cs.kicad_pcb",
@@ -206,18 +254,59 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
-        "score": null,
-        "unrouted": null,
-        "violations": null,
-        "checker_nets_routed": null,
-        "checker_nets_multi_pin": null
+        "class": "java_degenerate",
+        "reason": "finished with final score 0.00 (nothing to route)",
+        "wall_s": 3.585,
+        "tool_time_s": 0.38,
+        "score": 0.0,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 0,
+        "checker_nets_multi_pin": 0
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 0.0,
+        "started_unrouted": 0,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/cla45-computeboard.r1.log",
+          "bench/results/oos-java-reference/stability/cla45-computeboard.r2.log",
+          "bench/results/oos-java-reference/stability/cla45-computeboard.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/Documents/Env Config Vault/10 资产台账/CLA45 车顶 HDR 相机/computeboard/computeboard.kicad_pcb",
@@ -276,10 +365,10 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
+        "class": "java_timeout",
+        "reason": "killed at the Nones timeout",
+        "wall_s": 300.05,
+        "tool_time_s": 44.68,
         "score": null,
         "unrouted": null,
         "violations": null,
@@ -287,7 +376,48 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 140,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 140,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 140,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 140,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/cla45-power-io-l6.r1.log",
+          "bench/results/oos-java-reference/stability/cla45-power-io-l6.r2.log",
+          "bench/results/oos-java-reference/stability/cla45-power-io-l6.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/Documents/Env Config Vault/10 资产台账/CLA45 车顶 HDR 相机/threeboard-m3/workstreams/l6-l-production-v1/kicad/power-io-l6-80-freerouting-seed-v1.kicad_pcb",
@@ -346,18 +476,59 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
-        "score": null,
-        "unrouted": null,
-        "violations": null,
+        "class": "java_timeout",
+        "reason": "killed at the Nones timeout",
+        "wall_s": 300.09,
+        "tool_time_s": 8.41,
+        "score": 543.99,
+        "unrouted": 46,
+        "violations": 625,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 71,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 71,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 71,
+            "passes_run": 1,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 71,
+            "passes_run": 1,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/cla45-sensor-hdi.r1.log",
+          "bench/results/oos-java-reference/stability/cla45-sensor-hdi.r2.log",
+          "bench/results/oos-java-reference/stability/cla45-sensor-hdi.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/Documents/Env Config Vault/10 资产台账/CLA45 车顶 HDR 相机/sensorboard/sensorboard-hdi.kicad_pcb",
@@ -416,18 +587,59 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
-        "score": null,
-        "unrouted": null,
-        "violations": null,
+        "class": "java_timeout",
+        "reason": "killed at the Nones timeout",
+        "wall_s": 300.115,
+        "tool_time_s": 56.77,
+        "score": 840.1,
+        "unrouted": 57,
+        "violations": 10,
         "checker_nets_routed": null,
         "checker_nets_multi_pin": null
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 129,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 129,
+            "passes_run": 3,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 129,
+            "passes_run": 3,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 129,
+            "passes_run": 3,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/cla45-sensor-l6.r1.log",
+          "bench/results/oos-java-reference/stability/cla45-sensor-l6.r2.log",
+          "bench/results/oos-java-reference/stability/cla45-sensor-l6.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/Documents/Env Config Vault/10 资产台账/CLA45 车顶 HDR 相机/threeboard-m3/workstreams/l6-l-production-v1/kicad/sensor-l6-freerouting-seed-v1.kicad_pcb",
@@ -487,18 +699,59 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
-        "score": null,
-        "unrouted": null,
-        "violations": null,
-        "checker_nets_routed": null,
-        "checker_nets_multi_pin": null
+        "class": "java_finished",
+        "reason": null,
+        "wall_s": 88.089,
+        "tool_time_s": 90.39,
+        "score": 777.78,
+        "unrouted": 9,
+        "violations": 45,
+        "checker_nets_routed": 30,
+        "checker_nets_multi_pin": 35
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 9u/45v",
+        "unrouted": 9,
+        "violations": 45,
+        "score": 777.78,
+        "started_unrouted": 26,
+        "per_run": {
+          "r1": {
+            "unrouted": 9,
+            "violations": 45,
+            "score": 777.78,
+            "started_unrouted": 26,
+            "passes_run": 19,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 9,
+            "violations": 45,
+            "score": 777.78,
+            "started_unrouted": 26,
+            "passes_run": 19,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 9,
+            "violations": 45,
+            "score": 777.78,
+            "started_unrouted": 26,
+            "passes_run": 19,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/easyeda-pcb1.r1.log",
+          "bench/results/oos-java-reference/stability/easyeda-pcb1.r2.log",
+          "bench/results/oos-java-reference/stability/easyeda-pcb1.r3.log"
+        ]
+      },
       "source": {
         "kind": "dsn_copy",
         "origin": "/Users/chiqingzhen/fr-ref/fr-java-release/fixtures/Issue684-Autorouter_PCB1_2026-5-8.dsn",
@@ -555,10 +808,10 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
+        "class": "java_timeout",
+        "reason": "killed at the Nones timeout",
+        "wall_s": 300.07,
+        "tool_time_s": 73.85,
         "score": null,
         "unrouted": null,
         "violations": null,
@@ -566,7 +819,48 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": 218,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 218,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 218,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": 218,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/kicad-coldfire-unrouted.r1.log",
+          "bench/results/oos-java-reference/stability/kicad-coldfire-unrouted.r2.log",
+          "bench/results/oos-java-reference/stability/kicad-coldfire-unrouted.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/demos/kit-dev-coldfire-xilinx_5213/kit-dev-coldfire-xilinx_5213.kicad_pcb",
@@ -623,9 +917,9 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
+        "class": "java_timeout",
+        "reason": "killed at the Nones timeout",
+        "wall_s": 300.042,
         "tool_time_s": null,
         "score": null,
         "unrouted": null,
@@ -634,7 +928,48 @@
         "checker_nets_multi_pin": null
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 0,
+        "cap_s": 300.0,
+        "class": "no_result",
+        "reason": "3 runs, none reached a final score (killed at the cap while routing)",
+        "unrouted": null,
+        "violations": null,
+        "score": null,
+        "started_unrouted": null,
+        "per_run": {
+          "r1": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": null,
+            "violations": null,
+            "score": null,
+            "started_unrouted": null,
+            "passes_run": 0,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/kicad-coldfire.r1.log",
+          "bench/results/oos-java-reference/stability/kicad-coldfire.r2.log",
+          "bench/results/oos-java-reference/stability/kicad-coldfire.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/demos/kit-dev-coldfire-xilinx_5213/kit-dev-coldfire-xilinx_5213.kicad_pcb",
@@ -689,18 +1024,59 @@
         "parse_note": null
       },
       "java": {
-        "class": "java_unknown",
-        "reason": "no java record in the source results.json",
-        "wall_s": null,
-        "tool_time_s": null,
-        "score": null,
-        "unrouted": null,
-        "violations": null,
-        "checker_nets_routed": null,
-        "checker_nets_multi_pin": null
+        "class": "java_degenerate",
+        "reason": "finished with final score 0.00 (nothing to route)",
+        "wall_s": 23.989,
+        "tool_time_s": 17.61,
+        "score": 0.0,
+        "unrouted": 0,
+        "violations": 0,
+        "checker_nets_routed": 0,
+        "checker_nets_multi_pin": 0
       },
       "uncapped": null,
-      "stability": null,
+      "stability": {
+        "runs": 3,
+        "scored_runs": 3,
+        "cap_s": 300.0,
+        "class": "stable",
+        "reason": "3 runs agree on 0u/0v",
+        "unrouted": 0,
+        "violations": 0,
+        "score": 0.0,
+        "started_unrouted": 0,
+        "per_run": {
+          "r1": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r2": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 2,
+            "routing_started": true
+          },
+          "r3": {
+            "unrouted": 0,
+            "violations": 0,
+            "score": 0.0,
+            "started_unrouted": 0,
+            "passes_run": 2,
+            "routing_started": true
+          }
+        },
+        "logs": [
+          "bench/results/oos-java-reference/stability/kicad-tutorial.r1.log",
+          "bench/results/oos-java-reference/stability/kicad-tutorial.r2.log",
+          "bench/results/oos-java-reference/stability/kicad-tutorial.r3.log"
+        ]
+      },
       "source": {
         "kind": "kicad_pcb",
         "origin": "/Users/chiqingzhen/fr-ref/fr-java-release/examples/tutorial_board/tutorial_board.kicad_pcb",
