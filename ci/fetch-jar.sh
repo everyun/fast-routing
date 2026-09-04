@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Download Freerouting 2.3.0 and pin it by sha256.
 # Default dest: /tmp/frbase/freerouting-2.3.0.jar (overridable).
-# Authority for the hash is ci/pins.json; when infra lands bench/reference.json,
-# the two must be aligned (see REPORT-ci.md).
+# Authority for the hash is bench/reference.json (single source; the old
+# ci/pins.json duplicate was removed when infra landed it).
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PINS="$ROOT/ci/pins.json"
+PINS="$ROOT/bench/reference.json"
 DEST=${1:-}
-URL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["jar"]["url"])' "$PINS")
-WANT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["jar"]["sha256"])' "$PINS")
-PIN_PATH=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["jar"]["path"])' "$PINS")
+URL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["download_url"])' "$PINS")
+WANT=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$PINS")
+PIN_PATH="/tmp/frbase/freerouting-2.3.0.jar"
 DEST=${DEST:-$PIN_PATH}
 
 hash_of() {

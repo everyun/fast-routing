@@ -1,9 +1,0 @@
-{
-  "jar": {
-    "url": "https://github.com/freerouting/freerouting/releases/download/v2.3.0/freerouting-2.3.0.jar",
-    "sha256": "3cf18d608437740bc497db6b8ef5888e2e60a08de0def20691d1bad0c0e0ee24",
-    "build_revision": "2d4de019aa89e9fa3dc1dc44e09bf509760cafc1",
-    "path": "/tmp/frbase/freerouting-2.3.0.jar",
-    "note": "sha256 measured from the v2.3.0 GitHub release asset and from ~/fr-ref/frbase/freerouting-2.3.0.jar. Align with bench/reference.json when infra lands that file."
-  }
-}

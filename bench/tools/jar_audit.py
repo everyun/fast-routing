@@ -36,13 +36,13 @@ FORBIDDEN_PACKAGES = (
 
 # docs/ARCHITECTURE.md: Build-Revision `2d4de019aa89e9fa3dc1dc44e09bf509760cafc1`.
 # The task asks for equality with the `2d4de019…` prefix; we accept that prefix
-# and, when pins.json is present, the full hash.
+# and, when bench/reference.json is present, the full hash.
 DEFAULT_REVISION_PREFIX = "2d4de019"
 
 PINS_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "ci",
-    "pins.json",
+    "bench",
+    "reference.json",
 )
 
 
@@ -56,7 +56,7 @@ def load_pins(path: str | None = None) -> dict:
 
 def expected_revision(pins: dict | None = None) -> str:
     pins = pins if pins is not None else load_pins()
-    rev = (pins.get("jar") or {}).get("build_revision") or DEFAULT_REVISION_PREFIX
+    rev = pins.get("build_revision") or DEFAULT_REVISION_PREFIX
     return str(rev)
 
 
@@ -210,11 +210,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("jar", nargs="?", default=None, help="path to freerouting-*.jar")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--revision", default=None, help="override expected Build-Revision")
-    ap.add_argument("--pins", default=None, help="override ci/pins.json")
+    ap.add_argument("--pins", default=None,
+                    help="override bench/reference.json")
     args = ap.parse_args(argv)
 
     pins = load_pins(args.pins) if args.pins or os.path.isfile(PINS_PATH) else {}
-    jar = args.jar or (pins.get("jar") or {}).get("path") or "/tmp/frbase/freerouting-2.3.0.jar"
+    jar = args.jar or "/tmp/frbase/freerouting-2.3.0.jar"
     revision = args.revision or expected_revision(pins)
     result = audit_path(jar, revision=revision)
     if args.json:
