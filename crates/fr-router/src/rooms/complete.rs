@@ -140,8 +140,7 @@ impl AutorouteEngine<'_> {
         // query is the `_for_completion` entry point rather than
         // `overlapping_obstacles_tile` followed by a second sort of the same
         // list.
-        let mut obstacles = Vec::new();
-        let mut own_net = Vec::new();
+        let (mut obstacles, mut own_net) = self.take_collect_vecs();
         let collect_started = crate::rooms::attr::start();
         self.overlapping_obstacles_tile_for_completion(
             &TileShape::Box(bounding),
@@ -159,7 +158,10 @@ impl AutorouteEngine<'_> {
         // of cloning their simplexes, and `new_result` is allocated once per
         // call instead of once per obstacle (28 M hits on Issue039).
         let mut new_result: Vec<CompletedShape> = Vec::new();
-        for (index, obstacle) in obstacles.into_iter().enumerate() {
+        // By-index, not drain: `Obstacle` is `Copy`, and the vec stays
+        // un-borrowed so the early return below can hand it back to the pool.
+        for index in 0..obstacles.len() {
+            let obstacle = obstacles[index];
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {
                 continue;
             }
@@ -229,11 +231,13 @@ impl AutorouteEngine<'_> {
                 Some(bb) => bounding = bb,
                 None => {
                     crate::rooms::attr::add_carve(carve_started, carve_hits);
+                    self.give_back_collect_vecs(obstacles, own_net);
                     return Vec::new();
                 }
             }
         }
         crate::rooms::attr::add_carve(carve_started, carve_hits);
+        self.give_back_collect_vecs(obstacles, own_net);
 
         self.divide_large_rooms(result)
     }

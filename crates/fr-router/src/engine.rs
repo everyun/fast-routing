@@ -163,6 +163,13 @@ pub struct AutorouteEngine<'b> {
     /// Grid-query hit indices, sorted ascending to emit the presorted cache
     /// in completion order.
     scratch_grid_hits: Vec<u32>,
+    /// Checked-out-between-queries collect buffers. `Option` because a nested
+    /// collect (try_remove_edge → complete_shape inside calculate_doors while
+    /// the caller still holds the own-net list) must fall back to allocating
+    /// instead of aliasing the live buffer.
+    scratch_collect_obstacles: Option<Vec<Obstacle>>,
+    /// The own-net half of the pool.
+    scratch_collect_own_net: Option<Vec<(ItemId, u16)>>,
     /// Guard against unbounded recursion in `restrain_shape`.
     restrain_depth: u32,
     /// This connection's allowance, when the caller armed one.
@@ -364,6 +371,8 @@ impl<'b> AutorouteEngine<'b> {
             item_cache: None,
             scratch_hit_bounds: Vec::new(),
             scratch_grid_hits: Vec::new(),
+            scratch_collect_obstacles: None,
+            scratch_collect_own_net: None,
             restrain_depth: 0,
             clock: None,
         }
@@ -711,9 +720,15 @@ impl<'b> AutorouteEngine<'b> {
                 && (query_box.contains_box(&room.octagon().bounding_box())
                     || room.shape.intersects_box(&query_box))
         });
-        rooms.sort_unstable_by_key(|(_, room)| *room);
+        // One sort, not two: duplicate leaves of one room read the same
+        // current `id_no`, so keying on `(-id_no, RoomId)` makes duplicates
+        // adjacent (the dedup) while ordering survivors exactly like the
+        // completion key's rooms row (`-id_no`; ids are unique across rooms).
+        rooms.sort_unstable_by_key(|(_, room)| {
+            let room = *room;
+            (-self.rooms.room(room).id_no, room)
+        });
         rooms.dedup_by_key(|(_, room)| *room);
-        rooms.sort_unstable_by_key(|(_, room)| -self.rooms.room(*room).id_no);
         for (_, room) in &rooms {
             obstacles.push(Obstacle::Room(*room));
             self.scratch_hit_bounds
@@ -874,6 +889,34 @@ impl<'b> AutorouteEngine<'b> {
             marks: vec![0; marks],
             gen: 0,
         });
+    }
+
+    /// Checks out the collect buffers (fresh when a nested collect is holding
+    /// them). Pair with [`give_back_collect_vecs`](Self::give_back_collect_vecs).
+    pub(crate) fn take_collect_vecs(&mut self) -> (Vec<Obstacle>, Vec<(ItemId, u16)>) {
+        (
+            self.scratch_collect_obstacles.take().unwrap_or_default(),
+            self.scratch_collect_own_net.take().unwrap_or_default(),
+        )
+    }
+
+    /// Returns the buffers to the pool. A nested user finding the slot taken
+    /// keeps its own — the pool holds at most one pair.
+    pub(crate) fn give_back_collect_vecs(
+        &mut self,
+        obstacles: Vec<Obstacle>,
+        own_net: Vec<(ItemId, u16)>,
+    ) {
+        if self.scratch_collect_obstacles.is_none() {
+            let mut obstacles = obstacles;
+            obstacles.clear();
+            self.scratch_collect_obstacles = Some(obstacles);
+        }
+        if self.scratch_collect_own_net.is_none() {
+            let mut own_net = own_net;
+            own_net.clear();
+            self.scratch_collect_own_net = Some(own_net);
+        }
     }
 
     /// The body the two ordered entry points share: the tree walk, the
