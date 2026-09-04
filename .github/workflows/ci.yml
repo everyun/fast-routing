@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Java (Temurin 21+)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: PyYAML (ci.yml parse)
+        run: python3 -m pip install --user pyyaml
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cache fixtures
+        uses: actions/cache@v4
+        with:
+          path: /tmp/freerouting-upstream
+          key: fixtures-${{ hashFiles('bench/fetch_fixtures.sh') }}
+
+      - name: Cache reference jar
+        uses: actions/cache@v4
+        with:
+          path: /tmp/frbase
+          key: jar-2.3.0-${{ hashFiles('ci/pins.json') }}
+
+      - name: Run local CI
+        run: bash ci/run-local.sh

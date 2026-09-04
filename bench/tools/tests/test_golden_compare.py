@@ -940,6 +940,16 @@ class GoldenDumpSweepTests(unittest.TestCase):
 
     def test_oracle_read_failures_are_detected_from_the_sibling_log(self):
         """The two fixtures whose own Java run did not finish, and only those."""
+        # Sibling `*.log` files are gitignored; a clean checkout has dumps only.
+        sibling_logs = [
+            p[: -len(".import.dsn")] + ".log"
+            for p in self.paths
+            if p.endswith(".import.dsn")
+        ]
+        if not any(os.path.isfile(path) for path in sibling_logs):
+            self.skipTest(
+                "Java oracle logs are gitignored (*.log) and are not in this checkout"
+            )
         failed = {
             gc.fixture_name(p): gc.oracle_read_failure(p)
             for p in self.paths
