@@ -212,8 +212,6 @@ fn the_fortyfive_tiling_is_not_finer_than_the_any_angle_one() {
     );
 }
 
-// ------------------------------------------------- the hand-derived door set
-
 /// A square obstacle room alone in open space, worked out by hand.
 ///
 /// The room is the box `[-100,-100]..[100,100]`, whose normalized octagon has

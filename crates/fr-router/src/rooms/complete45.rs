@@ -68,7 +68,7 @@ use fr_geometry::planar::{IntOctagon, Side, Simplex};
 
 use crate::engine::{AutorouteEngine, Obstacle};
 use crate::rooms::complete::CompletedShape;
-use crate::rooms::RoomId;
+use crate::rooms::{RoomId, RoomKind};
 
 /// Number of octagon border lines.
 const SIDE_COUNT: usize = 8;
@@ -222,13 +222,15 @@ impl AutorouteEngine<'_> {
                 // the door we came through is the room we came from. Keep the
                 // candidate unchanged — unless the candidate is *itself* wholly
                 // inside the ignore shape, in which case it is dropped.
-                if let (Obstacle::Room(_), Some(ignore)) = (obstacle, ignore_oct) {
-                    let intersection = candidate.shape.intersection(&obstacle_oct).normalize();
-                    if octagon_contains(&ignore, &intersection) {
-                        if !octagon_contains(&ignore, &candidate.shape) {
-                            new_result.push(*candidate);
+                if let (Obstacle::Room(r), Some(ignore)) = (obstacle, ignore_oct) {
+                    if self.rooms.room(r).kind == RoomKind::CompleteFree {
+                        let intersection = candidate.shape.intersection(&obstacle_oct).normalize();
+                        if octagon_contains(&ignore, &intersection) {
+                            if !octagon_contains(&ignore, &candidate.shape) {
+                                new_result.push(*candidate);
+                            }
+                            continue;
                         }
-                        continue;
                     }
                 }
                 self.restrain_shape_45(candidate, &obstacle_oct, &mut new_result);
