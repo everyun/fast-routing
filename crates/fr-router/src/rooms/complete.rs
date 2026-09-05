@@ -192,6 +192,9 @@ impl AutorouteEngine<'_> {
         // of cloning their simplexes, and `new_result` is allocated once per
         // call instead of once per obstacle (28 M hits on Issue039).
         let mut new_result: Vec<CompletedShape> = Vec::new();
+        // One buffer for every restrain of the call: the appending
+        // `restrain_shape` allocates nothing itself.
+        let mut restrained: Vec<CompletedShape> = Vec::new();
         // By-index, not drain: `Obstacle` is `Copy`, and the vec stays
         // un-borrowed so the early return below can hand it back to the pool.
         for index in 0..obstacles.len() {
@@ -285,8 +288,9 @@ impl AutorouteEngine<'_> {
                     if !ignore_expansion_room {
                         something_changed = true;
                         carve_hits += 1;
-                        let restrained = self.restrain_shape(&candidate, &obstacle_shape);
-                        for room in restrained {
+                        restrained.clear();
+                        self.restrain_shape(&candidate, &obstacle_shape, &mut restrained);
+                        for room in restrained.drain(..) {
                             union_bbox(&mut new_bounding, room.cached_bbox());
                             new_result.push(room);
                         }
@@ -318,6 +322,10 @@ impl AutorouteEngine<'_> {
 
     /// `ShapeSearchTree.restrain_shape` (`:664-782`), the geometric heart.
     ///
+    /// Appends the restrained pieces in the same order the old
+    /// `Vec`-returning version produced them; the recursion shares `out`, so
+    /// a call chain allocates nothing (75 M+ hits on Issue039).
+    ///
     /// Pass 1 picks, among the obstacle border lines whose *segment* crosses
     /// the room's interior, the one with the largest
     /// [`distance_to_the_left`](crate::geom::distance_to_the_left) from the
@@ -329,13 +337,13 @@ impl AutorouteEngine<'_> {
         &mut self,
         room: &CompletedShape,
         obstacle_shape: &Simplex,
-    ) -> Vec<CompletedShape> {
-        let mut result = Vec::new();
+        out: &mut Vec<CompletedShape>,
+    ) {
         if room.contained.is_empty() {
-            return result;
+            return;
         }
         if !self.enter_restrain() {
-            return result;
+            return;
         }
         // Nested splits would otherwise charge the child's wall twice: once
         // in the child and once in the parent that called it.
@@ -367,7 +375,7 @@ impl AutorouteEngine<'_> {
         if let Some(cut_line) = cut_line {
             let piece = room_shape.intersection(&geom::half_plane(&cut_line));
             if piece.dimension() >= 2 {
-                result.push(CompletedShape {
+                out.push(CompletedShape {
                     shape: piece,
                     contained: shape_to_be_contained.clone(),
                     oct: None,
@@ -377,7 +385,7 @@ impl AutorouteEngine<'_> {
             }
             crate::rooms::attr::add_restrain(restrain_started);
             self.leave_restrain();
-            return result;
+            return;
         }
 
         // No line has the whole contained shape on its right.
@@ -385,7 +393,7 @@ impl AutorouteEngine<'_> {
             // There is already a completed room around it (`:723-726`).
             crate::rooms::attr::add_restrain(restrain_started);
             self.leave_restrain();
-            return result;
+            return;
         }
         let mut split_line: Option<Line> = None;
         for i in 0..obstacle_shape.border_line_count() {
@@ -405,14 +413,14 @@ impl AutorouteEngine<'_> {
             // Parts of the room may already be occupied from somewhere else.
             crate::rooms::attr::add_restrain(restrain_started);
             self.leave_restrain();
-            return result;
+            return;
         };
 
         let cut_half_plane = geom::half_plane(&split_line);
         let new_contained = shape_to_be_contained.intersection(&cut_half_plane);
         let piece = room_shape.intersection(&cut_half_plane);
         if piece.dimension() >= 2 {
-            result.push(CompletedShape {
+            out.push(CompletedShape {
                 shape: piece,
                 contained: new_contained,
                 oct: None,
@@ -431,11 +439,10 @@ impl AutorouteEngine<'_> {
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::RefCell::new(None),
             };
-            result.extend(self.restrain_shape(&rest, obstacle_shape));
+            self.restrain_shape(&rest, obstacle_shape, out);
         }
         crate::rooms::attr::add_restrain(restrain_started);
         self.leave_restrain();
-        result
     }
 
     /// `ShapeSearchTree.divide_large_room` (`:1057-1090`): a single result room
