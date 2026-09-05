@@ -253,8 +253,7 @@ fn via_padstacks_are_declared_once_even_when_the_dsn_names_them_twice() {
     assert_eq!(text.matches("(padstack \"Via[0-1]_800:400_um\"").count(), 1);
 
     let v19_bytes = read_fixture("Issue026-J2_reference.ses");
-    let v19 = String::from_utf8(v19_bytes)
-        .expect("the companion v1.9 session file is utf-8");
+    let v19 = String::from_utf8(v19_bytes).expect("the companion v1.9 session file is utf-8");
     assert_eq!(
         v19.matches("(padstack \"Via[0-1]_800:400_um\"").count(),
         2,

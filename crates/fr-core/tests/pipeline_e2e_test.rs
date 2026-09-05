@@ -32,7 +32,7 @@
 //! Needs `bench/fetch_fixtures.sh`; fails loudly rather than skipping (gate G1.3).
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use fr_board::{Board, ItemKind};
 use fr_check::ScoreWeights;
@@ -248,11 +248,7 @@ fn issue066_session_round_trip_is_judged_identically() {
     let stripped = fr_io::specctra::strip_session_copper(&dsn_bytes);
     let mut design1 = import(&stripped).unwrap();
     let library1 = SesLibrary::from_design(&design1);
-    read_session(
-        &ses_bytes,
-        SesTarget::for_design(&mut design1, &library1),
-    )
-    .unwrap();
+    read_session(&ses_bytes, SesTarget::for_design(&mut design1, &library1)).unwrap();
 
     let before = Referee::judge(&design1, &ScoreWeights::V2);
 
@@ -267,13 +263,11 @@ fn issue066_session_round_trip_is_judged_identically() {
 
     let after = Referee::judge(&design2, &ScoreWeights::V2);
     assert_eq!(
-        before.stats.clearance_violation_count,
-        after.stats.clearance_violation_count,
+        before.stats.clearance_violation_count, after.stats.clearance_violation_count,
         "Issue066 violation count changed on re-export"
     );
     assert_eq!(
-        before.stats.incomplete_count,
-        after.stats.incomplete_count,
+        before.stats.incomplete_count, after.stats.incomplete_count,
         "Issue066 incomplete count changed on re-export"
     );
 }
