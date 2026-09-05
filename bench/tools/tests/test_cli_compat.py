@@ -26,13 +26,28 @@ JAVA_SNIPPET = r"""
 """
 
 OURS_SNIPPET = r"""
-            "-de" | "--design" | "-di" => args.design = Some(next!("-de")),
+            "-de" | "--design" => { }
+            "-di" => { }
             "-do" | "--output" => args.output = Some(next!("-do")),
+            "-dr" => { }
+            "-drc" => { }
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
-            "-us" | "--threads" => args.threads = Some(parse_count("--threads", &next!("-us"))),
+            "-mt" => { }
+            "-oit" => { }
+            "-us" => { }
+            "-is" => { }
+            "-hr" => { }
+            "-inc" => { }
+            "-l" => { }
+            "-dl" => { }
+            "-da" => { }
+            "-ll" => { }
+            "-host" => { }
+            "-dct" => { }
+            "--threads" => args.threads = Some(parse_count("--threads", &next!("--threads"))),
             "--portfolio" => { }
             "--no-optimizer" => args.no_optimizer = true,
-            "-h" | "--help" => { }
+            "-h" | "-help" | "--help" => { }
 """
 
 
@@ -51,6 +66,10 @@ class ParseTests(unittest.TestCase):
         names = set(cc.parse_ours_flags(OURS_SNIPPET))
         self.assertIn("-de", names)
         self.assertIn("--design", names)
+        self.assertIn("-mt", names)
+        self.assertIn("-oit", names)
+        self.assertIn("-dr", names)
+        self.assertIn("-drc", names)
         self.assertIn("-us", names)
         self.assertIn("--threads", names)
         self.assertIn("--portfolio", names)
@@ -58,9 +77,9 @@ class ParseTests(unittest.TestCase):
 
 
 class ClassifyTests(unittest.TestCase):
-    def test_us_collision_is_unsupported(self):
+    def test_us_is_partial(self):
         flag = cc.classify_pair("-us", {"-us"}, {"-us", "--threads"})
-        self.assertEqual(flag.status, "不支持")
+        self.assertEqual(flag.status, "部分")
 
     def test_threads_is_ours(self):
         flag = cc.classify_pair("--threads", {"-us", "-mt"}, {"--threads", "-us"})
@@ -70,6 +89,18 @@ class ClassifyTests(unittest.TestCase):
         flag = cc.classify_pair("-do", {"-do"}, {"-do"})
         self.assertEqual(flag.status, "兼容")
 
+    def test_mt_is_compatible(self):
+        flag = cc.classify_pair("-mt", {"-mt"}, {"-mt"})
+        self.assertEqual(flag.status, "兼容")
+
+    def test_oit_is_compatible(self):
+        flag = cc.classify_pair("-oit", {"-oit"}, {"-oit"})
+        self.assertEqual(flag.status, "兼容")
+
+    def test_compare_boards_is_unsupported(self):
+        flag = cc.classify_pair("--compare-boards", {"--compare-boards"}, {"--compare-boards"})
+        self.assertEqual(flag.status, "不支持")
+
     def test_mp_is_partial(self):
         flag = cc.classify_pair("-mp", {"-mp"}, {"-mp"})
         self.assertEqual(flag.status, "部分")
@@ -78,23 +109,30 @@ class ClassifyTests(unittest.TestCase):
         flag = cc.classify_pair("--portfolio", set(), {"--portfolio"})
         self.assertEqual(flag.status, "我方独有")
 
-    def test_inc_is_unsupported(self):
-        flag = cc.classify_pair("-inc", {"-inc"}, set())
-        self.assertEqual(flag.status, "不支持")
+    def test_inc_is_compatible(self):
+        flag = cc.classify_pair("-inc", {"-inc"}, {"-inc"})
+        self.assertEqual(flag.status, "兼容")
 
 
 @unittest.skipUnless(cc.find_global_settings() is not None, "Java source not mounted")
 class LiveCliTests(unittest.TestCase):
     def test_table_contains_required_rows(self):
         flags = {f.name: f for f in cc.collect()}
-        self.assertEqual(flags["-us"].status, "不支持")
+        self.assertEqual(flags["-us"].status, "部分")
+        self.assertEqual(flags["-mt"].status, "兼容")
+        self.assertEqual(flags["-oit"].status, "兼容")
+        self.assertEqual(flags["-dr"].status, "部分")
+        self.assertEqual(flags["-drc"].status, "兼容")
+        self.assertEqual(flags["-inc"].status, "兼容")
+        self.assertEqual(flags["-dct"].status, "兼容")
         self.assertEqual(flags["--threads"].status, "我方独有")
         self.assertEqual(flags["--portfolio"].status, "我方独有")
         self.assertEqual(flags["--no-optimizer"].status, "我方独有")
         self.assertEqual(flags["-do"].status, "兼容")
         self.assertEqual(flags["-mp"].status, "部分")
+        self.assertEqual(flags["--compare-boards"].status, "不支持")
         text = cc.render(list(flags.values()))
-        self.assertIn("`-us` collision", text)
+        self.assertIn("`-us` compatibility", text)
         self.assertEqual(text, cc.render(list(flags.values())))
 
 

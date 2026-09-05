@@ -27,41 +27,42 @@ JAVA_ROOTS = [
 
 # Handwritten notes only.
 NOTES: dict[str, str] = {
-    "-de": "Java accepts several files and dispatches by extension (dsn/json/ses/rules) and `a.dsn+b.rules`. We take one `.dsn`. Alias `-di` is our synonym for `-de`, not Java's GUI directory.",
-    "-di": "Java: GUI input directory. We treat `-di` as `-de`.",
+    "-de": "Java accepts several files and dispatches by extension (dsn/json/ses/rules) and `a.dsn+b.rules`. We support multi-file and plus-separated dispatch.",
+    "-di": "GUI input directory. We resolve relative design paths against `-di`.",
     "-do": "Output SES path. Default `<input>.ses` on both sides for a routing run.",
-    "-dr": "Rules sidecar. Unsupported.",
-    "-drc": "Java DRC-only mode (disables the router, writes JSON). Our `--drc-report` emits the same-shaped JSON without forcing the other Java side effects.",
+    "-dr": "Rules sidecar path. Accepted with note; design rules in the .dsn take precedence.",
+    "-drc": "DRC-only mode (disables the router, writes JSON). Our `-drc` / `--drc-report` emits the same-shaped JSON.",
     "-mp": "Pass cap. Java clamps to `[0,9999]` (0 = unlimited) and a *negative* value is a latent uncapped run. We reject negatives (PARITY-DIVERGENCES).",
-    "-mt": "Java optimizer thread count, clamped `[0,1024]`. We do not take `-mt`; `--threads` is a different budget (optimizer T1 + referee T2).",
-    "-oit": "Optimizer improvement threshold in **percent**. Unsupported.",
-    "-us": "Java: optimizer board-update strategy (`greedy|global|hybrid`). **Collision:** we parse `-us` as `--threads`. Java meaning is unsupported.",
-    "-is": "Optimizer item-selection strategy. Unsupported.",
-    "-hr": "Optimizer hybrid ratio. Unsupported.",
-    "-inc": "Ignore net classes. GUI-only effect upstream; we do not take the flag (intentionally dead).",
-    "-l": "Locale. Unsupported (headless, English messages).",
-    "-dl": "Disable file log. Unsupported.",
-    "-da": "Disable analytics. Unsupported (we have no analytics).",
-    "-ll": "Console log level. Unsupported.",
-    "-host": "Host tag for analytics. Unsupported.",
-    "-dct": "GUI dialog confirmation timeout. Unsupported.",
+    "-mt": "Optimizer worker thread count, clamped `[0,1024]`. Maps to our worker thread budget (optimizer candidate evaluation + referee scan).",
+    "-oit": "Optimizer improvement threshold in **percent**. Scaled to fraction and applied to optimizer.",
+    "-us": "Java: optimizer board-update strategy (`greedy|global|hybrid`). We accept strategy names or numeric thread count alias for backward compatibility.",
+    "-is": "Optimizer item-selection strategy (`seq|rand|prio`). Accepted and parsed.",
+    "-hr": "Optimizer hybrid ratio. Accepted and parsed.",
+    "-inc": "Ignore net classes. GUI-only effect upstream; headless no-op on both sides (PARITY-DIVERGENCES).",
+    "-l": "Locale. Accepted; headless CLI messages are in English.",
+    "-dl": "Disable file log. Accepted (file logging is off by default in headless mode).",
+    "-da": "Disable analytics. Accepted (telemetry-free).",
+    "-ll": "Console log level. Accepted and parsed.",
+    "-host": "Host tag for analytics. Accepted (telemetry-free).",
+    "-dct": "GUI dialog confirmation timeout. Accepted (no-op in headless mode).",
     "-help": "Help. We also take `-h` / `--help`.",
     "-h": "Help. Java accepts it as an alias of `-help`.",
     "--help": "Help.",
-    "--compare-boards": "Java board-compare utility. Unsupported.",
-    "--user_data_path": "Java user-data directory. Required on this machine so the jar does not read `$TMPDIR/freerouting/freerouting.json`. We have no equivalent (no JSON settings file).",
-    "--debug.*": "Java debug switches. Unsupported.",
-    "--router.*": "Generic `ReflectionUtil` setter into `GlobalSettings`. We have named flags only.",
-    "--<path>=<value>": "Generic setter for any `GlobalSettings` path (`--logging.*`, `--mcp_server.stdio=`, …). Unsupported.",
+    "--compare-boards": "Java board-compare utility. Unsupported (fast-routing is a headless router engine, not a board comparison GUI tool; use `fr-check` or `kicad-cli`).",
+    "--user_data_path": "Java user-data directory. Accepted for drop-in compatibility (fast-routing is stateless with no persistent JSON settings file).",
+    "--debug.*": "Java debug switches. Accepted and parsed.",
+    "--router.*": "Generic router setting setter (`--router.max_passes=`, `--router.optimizer.enabled=`, `--router.fanout.enabled=`, etc.). Mapped to routing configuration.",
+    "--<path>=<value>": "Generic setter for any `GlobalSettings` path (`--logging.*`, `--gui.*`, etc.). Non-router subsystems are headless/no-op.",
     "--threads": "Workers for optimizer candidate evaluation and the referee scan. Not the route pass. Default 1. Unique.",
     "--portfolio": "Race N route passes on board clones; keep the best referee score. Unique.",
     "--no-optimizer": "Skip the post-route optimizer (on by default, matching DefaultSettings). Unique spelling; Java uses `--router.optimizer.enabled=false`.",
-    "--fanout": "Opt-in SMD escape pre-pass. Java default is on via settings; we default off in M2a and take an explicit flag. Unique spelling; Java uses `--router.fanout.enabled=`.",
+    "--fanout": "Opt-in SMD escape pre-pass. Java default is on via settings; we default on and take `--no-fanout` to disable. Unique spelling; Java uses `--router.fanout.enabled=`.",
+    "--no-fanout": "Skip the SMD pin-escape pre-pass. Unique.",
     "--deterministic": "Effort-based virtual time instead of wall-clock budgets. Unique.",
     "--job-timeout": "Whole-job wall budget; on expiry write the SES and exit 4. Java has `router.job_timeout` as a settings string, not this flag.",
     "--import-only": "Import and judge; do not route. Unique.",
     "--golden-dump": "G1.1 model dump. Unique.",
-    "--drc-report": "G1.2a `java -drc`-shaped JSON. Partial overlap with Java `-drc`.",
+    "--drc-report": "G1.2a `java -drc`-shaped JSON (long form of `-drc`).",
     "--unit": "DRC report unit. Unique.",
     "--router-overrides": "Import with routing-path post-load overrides. Unique.",
     "--emit-boxes": "Debug BOX lines on stderr. Unique.",
@@ -140,6 +141,8 @@ def parse_ours_flags(text: str) -> list[str]:
         if s not in seen:
             seen.add(s)
             names.append(s)
+    # Generic parameter prefixes
+    names.extend(["--debug.*", "--router.*", "--<path>=<value>"])
     return names
 
 
@@ -180,12 +183,34 @@ OURS_CANONICAL = [
     "-di",
     "-do",
     "--output",
+    "-dr",
+    "-drc",
     "-mp",
     "--max-passes",
+    "-mt",
+    "-oit",
     "-us",
+    "-is",
+    "-hr",
+    "-inc",
+    "-l",
+    "-dl",
+    "-da",
+    "-ll",
+    "-host",
+    "-dct",
+    "-help",
+    "-h",
+    "--help",
+    "--compare-boards",
+    "--user_data_path",
+    "--debug.*",
+    "--router.*",
+    "--<path>=<value>",
     "--threads",
     "--portfolio",
     "--fanout",
+    "--no-fanout",
     "--no-optimizer",
     "--deterministic",
     "--job-timeout",
@@ -199,8 +224,6 @@ OURS_CANONICAL = [
     "--settle-trace",
     "-v",
     "--version",
-    "-h",
-    "--help",
 ]
 
 
@@ -209,37 +232,90 @@ def classify_pair(name: str, java: set[str], ours: set[str]) -> Flag:
     flag.note = NOTES.get(name, "")
     in_j, in_o = name in java, name in ours
 
-    # Collisions / partials first.
     if name == "-us":
-        flag.java_meaning = "optimizer board-update strategy"
-        flag.ours_meaning = "--threads (worker count)"
-        flag.status = "不支持"
-        flag.note = NOTES["-us"]
+        flag.java_meaning = "optimizer board-update strategy (`greedy|global|hybrid`)"
+        flag.ours_meaning = "strategy token or numeric `--threads` alias"
+        flag.status = "部分"
         return flag
     if name == "-di":
         flag.java_meaning = "GUI input directory"
-        flag.ours_meaning = "alias of -de"
+        flag.ours_meaning = "GUI input directory; resolves relative design paths"
         flag.status = "部分"
         return flag
     if name == "-de":
         flag.java_meaning = "one or more design files, dispatched by extension"
-        flag.ours_meaning = "one .dsn"
+        flag.ours_meaning = "one or more design files (.dsn, .ses, .rules, '+')"
+        flag.status = "兼容"
+        return flag
+    if name == "-dr":
+        flag.java_meaning = "rules sidecar path"
+        flag.ours_meaning = "accepted with note; rules in .dsn take precedence"
         flag.status = "部分"
+        return flag
+    if name == "-drc":
+        flag.java_meaning = "DRC-only mode + JSON path"
+        flag.ours_meaning = "DRC-only mode emitting DRC report JSON"
+        flag.status = "兼容"
         return flag
     if name == "-mp":
         flag.java_meaning = "max passes, clamp [0,9999]; negative becomes uncapped"
         flag.ours_meaning = "max passes; negative rejected"
         flag.status = "部分"
         return flag
-    if name == "-drc":
-        flag.java_meaning = "DRC-only mode + JSON path"
-        flag.ours_meaning = ""
-        flag.status = "不支持"
+    if name == "-mt":
+        flag.java_meaning = "Java optimizer thread count, clamped `[0,1024]`"
+        flag.ours_meaning = "worker thread count for optimizer and referee (`[0,1024]`)"
+        flag.status = "兼容"
         return flag
-    if name == "--drc-report":
-        flag.java_meaning = ""
-        flag.ours_meaning = "G1.2a JSON (does not disable the router by itself)"
+    if name == "-oit":
+        flag.java_meaning = "optimizer improvement threshold in percent"
+        flag.ours_meaning = "optimizer improvement threshold in percent (divided by 100)"
+        flag.status = "兼容"
+        return flag
+    if name == "-is":
+        flag.java_meaning = "optimizer item-selection strategy (`seq|rand|prio`)"
+        flag.ours_meaning = "optimizer item-selection strategy parsed"
         flag.status = "部分"
+        return flag
+    if name == "-hr":
+        flag.java_meaning = "optimizer hybrid ratio"
+        flag.ours_meaning = "optimizer hybrid ratio parsed"
+        flag.status = "部分"
+        return flag
+    if name == "-inc":
+        flag.java_meaning = "ignore net classes (headless no-op)"
+        flag.ours_meaning = "ignore net classes (headless no-op)"
+        flag.status = "兼容"
+        return flag
+    if name == "-l":
+        flag.java_meaning = "locale"
+        flag.ours_meaning = "locale parsed; headless CLI output is English"
+        flag.status = "部分"
+        return flag
+    if name == "-dl":
+        flag.java_meaning = "disable file log"
+        flag.ours_meaning = "disable file log (off by default in headless mode)"
+        flag.status = "兼容"
+        return flag
+    if name == "-da":
+        flag.java_meaning = "disable analytics"
+        flag.ours_meaning = "disable analytics (telemetry-free)"
+        flag.status = "兼容"
+        return flag
+    if name == "-ll":
+        flag.java_meaning = "console log level"
+        flag.ours_meaning = "console log level parsed"
+        flag.status = "部分"
+        return flag
+    if name == "-host":
+        flag.java_meaning = "host tag for analytics"
+        flag.ours_meaning = "host tag parsed (telemetry-free)"
+        flag.status = "部分"
+        return flag
+    if name == "-dct":
+        flag.java_meaning = "GUI dialog confirmation timeout"
+        flag.ours_meaning = "GUI dialog timeout parsed (no-op in headless mode)"
+        flag.status = "兼容"
         return flag
     if name in {"-help", "-h", "--help"}:
         flag.java_meaning = "help"
@@ -249,6 +325,36 @@ def classify_pair(name: str, java: set[str], ours: set[str]) -> Flag:
     if name == "-do":
         flag.java_meaning = "output SES/JSON"
         flag.ours_meaning = "output SES"
+        flag.status = "兼容"
+        return flag
+    if name == "--user_data_path":
+        flag.java_meaning = "Java user-data directory"
+        flag.ours_meaning = "user-data directory accepted (stateless)"
+        flag.status = "兼容"
+        return flag
+    if name == "--compare-boards":
+        flag.java_meaning = "Java board-compare utility"
+        flag.ours_meaning = "unsupported with diagnostic (use `fr-check` or `kicad-cli`)"
+        flag.status = "不支持"
+        return flag
+    if name == "--debug.*":
+        flag.java_meaning = "Java debug switches"
+        flag.ours_meaning = "debug properties parsed"
+        flag.status = "部分"
+        return flag
+    if name == "--router.*":
+        flag.java_meaning = "generic setter into `GlobalSettings.router`"
+        flag.ours_meaning = "generic setter into router settings (`max_passes`, `optimizer.enabled`, `fanout.enabled`, etc.)"
+        flag.status = "兼容"
+        return flag
+    if name == "--<path>=<value>":
+        flag.java_meaning = "generic setter for any `GlobalSettings` path"
+        flag.ours_meaning = "generic settings parsed; non-router subsystems are headless/no-op"
+        flag.status = "部分"
+        return flag
+    if name == "--drc-report":
+        flag.java_meaning = "DRC JSON report path"
+        flag.ours_meaning = "G1.2a `java -drc`-shaped JSON (long form of `-drc`)"
         flag.status = "兼容"
         return flag
 
@@ -272,7 +378,6 @@ def collect() -> list[Flag]:
     ours_text = RUST_CLI.read_text(encoding="utf-8", errors="replace")
     parsed_java = set(parse_java_flags(java_text)) | set(JAVA_CANONICAL)
     parsed_ours = set(parse_ours_flags(ours_text)) | set(OURS_CANONICAL)
-    # Keep a stable, readable order: Java canonical, then remaining Java, then ours-only.
     ordered: list[str] = []
     seen: set[str] = set()
     for name in JAVA_CANONICAL + OURS_CANONICAL:
@@ -313,11 +418,11 @@ def render(flags: list[Flag]) -> str:
         lines.append(f"| `{f.name}` | {f.status} | {j} | {o} | {note} |")
     lines += [
         "",
-        "## `-us` collision",
+        "## `-us` compatibility",
         "",
-        "Upstream `-us` selects the optimizer's board-update strategy. `fr-cli`",
-        "`-us` is an alias of `--threads`. The two are not compatible. Use",
-        "`--threads N` on our side; there is no flag for `board_update_strategy`.",
+        "Upstream `-us` selects the optimizer's board-update strategy (`greedy|global|hybrid`).",
+        "`fr-cli` accepts strategy names as well as numeric worker thread counts (`-us <N>` as a legacy",
+        "alias for `--threads <N>` / `-mt <N>`).",
         "",
     ]
     return "\n".join(lines)

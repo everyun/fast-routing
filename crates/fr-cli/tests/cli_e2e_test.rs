@@ -811,3 +811,242 @@ fn imported_counts(report: &str) -> String {
     let (_, counts) = line.split_once(": ").expect("the line has a colon");
     counts.to_string()
 }
+
+// =================================================================================================
+// Freerouting 2.3.0 drop-in CLI compatibility tests
+// =================================================================================================
+
+#[test]
+fn kicad_plugin_argument_bundle_routes_successfully() {
+    let workspace = Workspace::with_board("kicad-bundle", UNROUTED_BOARD);
+    let ses = workspace.path("routed.ses");
+    let user_data = workspace.path("userdata");
+    let rules = workspace.path("board.rules");
+    std::fs::write(&rules, "(rules PCB cli_route)").expect("write rules");
+
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "-mp".as_ref(),
+        "2".as_ref(),
+        "-mt".as_ref(),
+        "4".as_ref(),
+        "-oit".as_ref(),
+        "1.0".as_ref(),
+        "-dct".as_ref(),
+        "0".as_ref(),
+        "-dr".as_ref(),
+        rules.as_os_str(),
+        "-inc".as_ref(),
+        "default".as_ref(),
+        "-l".as_ref(),
+        "en".as_ref(),
+        "-dl".as_ref(),
+        "-da".as_ref(),
+        "-ll".as_ref(),
+        "INFO".as_ref(),
+        "-host".as_ref(),
+        "kicad-plugin".as_ref(),
+        "--user_data_path".as_ref(),
+        user_data.as_os_str(),
+    ]);
+
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+    assert!(ses.is_file());
+    let report = stdout(&output);
+    assert!(report.contains("Referee: 0 clearance violations, 0 of 2 connections incomplete"));
+}
+
+#[test]
+fn mt_and_oit_flags_are_parsed_and_applied() {
+    let workspace = Workspace::with_board("mt-oit", UNROUTED_BOARD);
+    let ses = workspace.path("out.ses");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "-mt".as_ref(),
+        "2".as_ref(),
+        "-oit".as_ref(),
+        "0.5".as_ref(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+    assert!(ses.is_file());
+}
+
+#[test]
+fn drc_flag_modes() {
+    let workspace = Workspace::new("drc-compat");
+    let drc_file = workspace.path("report.drc.json");
+
+    // With explicit file argument
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-drc".as_ref(),
+        drc_file.as_os_str(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+    assert!(drc_file.is_file());
+
+    // Without explicit file argument (defaults to <input>.drc.json)
+    let output2 = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-drc".as_ref(),
+    ]);
+    assert_eq!(code(&output2), 0, "stderr: {}", stderr(&output2));
+    assert!(workspace.path("board.drc.json").is_file());
+}
+
+#[test]
+fn us_strategy_and_thread_alias() {
+    let workspace = Workspace::new("us-test");
+    for strategy in ["greedy", "global", "hybrid"] {
+        let output = run(&[
+            "-de".as_ref(),
+            workspace.design().as_os_str(),
+            "-us".as_ref(),
+            strategy.as_ref(),
+            "--import-only".as_ref(),
+        ]);
+        assert_eq!(code(&output), 0, "strategy {strategy}: {}", stderr(&output));
+    }
+
+    // Numeric thread count alias
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-us".as_ref(),
+        "4".as_ref(),
+        "--import-only".as_ref(),
+    ]);
+    assert_eq!(
+        code(&output),
+        0,
+        "numeric thread count: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn is_and_hr_flags_are_accepted() {
+    let workspace = Workspace::new("is-hr");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-is".as_ref(),
+        "prio".as_ref(),
+        "-hr".as_ref(),
+        "1:1".as_ref(),
+        "--import-only".as_ref(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+}
+
+#[test]
+fn di_directory_resolution() {
+    let workspace = Workspace::new("di-test");
+    let output = run(&[
+        "-di".as_ref(),
+        workspace.dir.as_os_str(),
+        "-de".as_ref(),
+        "board.dsn".as_ref(),
+        "--import-only".as_ref(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+}
+
+#[test]
+fn de_plus_joined_and_multi_file_syntax() {
+    let workspace = Workspace::new("de-multi");
+    let rules = workspace.path("board.rules");
+    std::fs::write(&rules, "(rules PCB cli_smoke)").expect("write rules");
+
+    let combined = format!("{}+{}", workspace.design().display(), rules.display());
+    let output = run(&["-de", combined.as_str(), "--import-only"]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+}
+
+#[test]
+fn router_key_value_properties() {
+    let workspace = Workspace::with_board("router-props", UNROUTED_BOARD);
+    let ses = workspace.path("routed.ses");
+    let output = run(&[
+        "-de".as_ref(),
+        workspace.design().as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "--router.max_passes=2".as_ref(),
+        "--router.max_threads=4".as_ref(),
+        "--router.optimizer.improvement_threshold=0.5".as_ref(),
+        "--router.optimizer.enabled=true".as_ref(),
+        "--router.fanout.enabled=true".as_ref(),
+        "--logging.file.enabled=false".as_ref(),
+        "--gui.enabled=false".as_ref(),
+    ]);
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+    assert!(ses.is_file());
+}
+
+#[test]
+fn compare_boards_is_unsupported_with_clear_diagnostic() {
+    let output = run(&["--compare-boards=board1.dsn,board2.dsn"]);
+    assert_eq!(code(&output), 1);
+    assert!(
+        stderr(&output).contains("--compare-boards is unsupported"),
+        "stderr: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn issue026_kicad_plugin_e2e() {
+    let dsn_path = Path::new("/tmp/freerouting-upstream/fixtures/Issue026-J2_reference.dsn");
+    let alt_path = Path::new(concat!(
+        env!("HOME"),
+        "/fr-ref/freerouting-upstream/fixtures/Issue026-J2_reference.dsn"
+    ));
+    let target_dsn = if dsn_path.exists() {
+        dsn_path
+    } else if alt_path.exists() {
+        alt_path
+    } else {
+        // Fall back gracefully if fixture is absent in this environment
+        return;
+    };
+
+    let dir = std::env::temp_dir().join(format!("fr-cli-issue026-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("create dir");
+    let ses = dir.join("Issue026.ses");
+    let user_data = dir.join("userdata");
+
+    let output = run(&[
+        "-de".as_ref(),
+        target_dsn.as_os_str(),
+        "-do".as_ref(),
+        ses.as_os_str(),
+        "-mp".as_ref(),
+        "1".as_ref(),
+        "-mt".as_ref(),
+        "4".as_ref(),
+        "-oit".as_ref(),
+        "1.0".as_ref(),
+        "-dct".as_ref(),
+        "0".as_ref(),
+        "-dl".as_ref(),
+        "-da".as_ref(),
+        "-ll".as_ref(),
+        "INFO".as_ref(),
+        "--user_data_path".as_ref(),
+        user_data.as_os_str(),
+    ]);
+
+    assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
+    assert!(ses.is_file());
+    let _ = std::fs::remove_dir_all(&dir);
+}

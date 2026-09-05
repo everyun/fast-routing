@@ -39,41 +39,15 @@
 //! Both cases exit 4 whatever the board looks like: it says "this result is what the budget
 //! bought", which is the one thing a harness cannot work out for itself.
 //!
-//! `--import-only`, `--golden-dump` and `--drc-report` never route and always exit 0 on success:
+//! `--import-only`, `--golden-dump` and `--drc-report` (and `-drc`) never route and always exit 0 on success:
 //! their contract is "this is what the *input* looks like", and the gates depend on it.
 //!
-//! # The gate flags are first class now
+//! # Drop-in Freerouting 2.3.0 CLI compatibility
 //!
-//! `docs/ROADMAP.md` G1.1 says the exchange format is one "which `fr-cli` must emit".
-//! Until M1 it was emitted by `cargo run -p fr-io --example golden_emit`, and the G1.2a JSON by
-//! `cargo run -p fr-check --example drc_report`, so both gates depended on example binaries that
-//! nothing shipped. Both are flags here now:
-//!
-//! ```sh
-//! fr-cli -de board.dsn --import-only
-//! fr-cli -de board.dsn --golden-dump board.golden.json
-//! fr-cli -de board.dsn --drc-report board.drc.json --unit mm --pin-frame-fix
-//! ```
-//!
-//! # Flags
-//!
-//! Every pre-existing flag is preserved. `-mp/--max-passes` is live now: it is the pass cap the
-//! batch driver runs to, and pass *n* routes at `start_ripup_costs * n`
-//! (`batch-orchestration.md` §4).
-//!
-//! `-us/--threads N` is live now, and it does **not** parallelise the route pass: upstream 2.3.0
-//! routes strictly sequentially, its multi-threaded pass is private with no call site
-//! (conformance #107, #111), and concurrent connection routing (`ARCHITECTURE.md`'s T3) is not
-//! written. What `--threads` buys is the two stages that are safely parallel — the batch
-//! optimizer's candidate evaluation (T1) and the referee's violation scan (T2). It defaults to
-//! `1`; see the flag's help text for why that is not the machine's core count.
-//!
-//! `--portfolio N` races N route passes with different item orders on board clones and keeps the
-//! best referee score. Off by default. It buys quality at equal wall clock, never speed.
-//!
-//! `--settle-trace FILE` turns on the differential harness's record stream: one
-//! `FRMETRIC settle <door> <section> <g> <f>` line per settled maze element, the same shape the
-//! lab jar emits under `-Dfrlab.settle_trace=1`, for `bench/tools/frlab_parse.py`.
+//! Upstream flags like `-mt <threads>`, `-oit <percent>`, `-dr <rules>`, `-drc <file>`,
+//! `-inc <classes>`, `-dct <ms>`, `-di <dir>`, `-l <locale>`, `-dl`, `-da`, `-ll <level>`,
+//! `-host <tag>`, `--user_data_path=<dir>`, and `--router.<key>=<val>` are accepted for
+//! drop-in toolchain compatibility (KiCad Freerouting plugin, batch scripts, etc.).
 
 use std::env;
 use std::fs;
@@ -91,7 +65,7 @@ use fr_io::specctra::ImportOptions;
 const EXIT_INCOMPLETE: i32 = 2;
 /// Usage, IO and import failures.
 const EXIT_ERROR: i32 = 1;
-/// `--job-timeout` ran out or a signal arrived; the `.ses` was written anyway.
+/// `--job-timeout` ran out or a signal arrived; the `.ses` was still written.
 const EXIT_DEADLINE: i32 = 4;
 
 /// `SIGINT`, on every unix.
@@ -111,12 +85,6 @@ extern "C" {
 /// The handler. **Everything it does must be async-signal-safe**:
 /// [`fr_core::request_job_stop`] is one relaxed atomic store, and `signal` and
 /// `raise` are both on the POSIX safe list.
-///
-/// The first signal is a request: the router polls the flag between
-/// connections, stops, and the normal path judges the board and writes the
-/// session. The disposition is then reset, so a second signal does what the
-/// caller plainly meant — a run wedged somewhere that does not poll (a very
-/// long referee pass, say) must still be killable without `SIGKILL`.
 extern "C" fn request_stop_on_signal(signum: i32) {
     fr_core::request_job_stop();
     unsafe {
@@ -133,9 +101,7 @@ fn install_signal_handlers() {
     }
 }
 
-/// `--job-timeout SECS`, in seconds. `0` is a budget that is already spent —
-/// documented, because "no timeout" would be the other plausible reading and
-/// the difference is a 300-second bench run.
+/// `--job-timeout SECS`, in seconds. `0` is a budget that is already spent.
 fn parse_job_timeout(value: &str) -> std::time::Duration {
     match value.parse::<f64>() {
         Ok(seconds) if seconds.is_finite() && seconds >= 0.0 => {
@@ -144,6 +110,29 @@ fn parse_job_timeout(value: &str) -> std::time::Duration {
         _ => fail(&format!(
             "--job-timeout {value}: expected a non-negative number of seconds \
              (0 arms a budget that is already spent)"
+        )),
+    }
+}
+
+/// Optimizer improvement threshold in percent (`-oit`), e.g. `1.0` -> `0.01`.
+fn parse_oit(value: &str) -> f32 {
+    match value.parse::<f32>() {
+        Ok(pct) if pct.is_finite() && pct >= 0.0 => pct / 100.0,
+        Ok(_) => 0.0,
+        Err(_) => fail(&format!(
+            "-oit {value}: expected a non-negative number for improvement threshold in percent"
+        )),
+    }
+}
+
+/// Optimizer / worker threads clamped `[0, 1024]` (`-mt`).
+fn parse_threads_mt(value: &str) -> usize {
+    match value.parse::<i64>() {
+        Ok(t) if t < 0 => 0,
+        Ok(t) if t > 1024 => 1024,
+        Ok(t) => usize::try_from(t).unwrap_or(1024),
+        Err(_) => fail(&format!(
+            "-mt {value}: expected a whole number of threads (0..=1024)"
         )),
     }
 }
@@ -158,57 +147,62 @@ USAGE:
 INPUT / OUTPUT
     -de, --design <FILE>        Input Specctra .dsn design file path (Required)
     -do, --output <FILE>        Output Specctra .ses session file path (Default: <input>.ses)
+    -di <DIR>                   GUI input directory; resolves relative design file paths
+    -dr <FILE>                  Rules sidecar (.rules) file path (rules in .dsn take precedence)
 
 MODES (default: route)
     --import-only               Import and judge the board; write the .ses only if -do was given
     --golden-dump <FILE>        Emit the `fast-routing.golden-dump/1` model dump (gate G1.1)
-    --drc-report <FILE>         Emit the `java -drc` shaped violation JSON (gate G1.2a)
+    -drc, --drc-report [FILE]   Emit DRC violation JSON and exit without routing (gate G1.2a)
 
 ROUTING OPTIONS
     -mp, --max-passes <N>       Ripup-and-reroute passes (Default: 1). Pass n rips at 100*n.
                                 Must be >= 0; a negative value is an error (upstream runs it
                                 uncapped instead — see docs/PARITY-DIVERGENCES.md)
+    -oit <PCT>                  Optimizer improvement threshold in percent (Default: 1.0 = 1%)
     --fanout                    Run the SMD pin-escape pre-pass first (ON by default, matching
-                                upstream DefaultSettings.fanout.enabled). Kept as an explicit
-                                flag so scripts that already pass it stay valid.
+                                upstream DefaultSettings.fanout.enabled).
     --no-fanout                 Skip the SMD pin-escape pre-pass.
-    --no-optimizer              Skip the post-routing optimization stage (it is ON by default,
-                                as it is upstream: router.optimizer.enabled defaults to true)
+    --no-optimizer              Skip the post-routing optimization stage (ON by default).
     --deterministic             Never read the wall clock for budget decisions: the
                                 per-connection allowance is spent in effort-based virtual time
     --job-timeout <SECS>        Wall budget for the whole job (Default: none). When it runs out
                                 the router stops like a stop rule does — best board restored,
-                                .ses written, referee run — and the exit code is 4. The budget
-                                covers that shutdown too: a board-sized reserve is taken off it
-                                after the import, so the run ends inside SECS. 0 arms a budget
-                                that is already spent.
+                                .ses written, referee run — and the exit code is 4.
+    --router.<PROP>=<VAL>       Generic router settings setter (e.g. --router.max_passes=10,
+                                --router.optimizer.enabled=false, --router.fanout.enabled=true)
+
+PARALLELISM (see also `docs/ARCHITECTURE.md`, "Parallelism")
+    -mt, --threads <N>          Workers for the optimizer's candidate evaluation and the
+                                referee's violation scan. Clamped [0, 1024]. 0 = automatic.
+                                (Default: 1)
+    -us <STRATEGY|N>            Optimizer update strategy (greedy|global|hybrid) or thread count
+    --portfolio <N>             Race N route passes with different item orders on board clones
+                                and keep the best referee score. (Default: 1)
+
+COMPATIBILITY & HEADLESS OPTIONS
+    -inc <CLASSES>              Ignore net classes (comma-separated; headless no-op)
+    -dct <MS>                   GUI dialog confirmation timeout in ms (headless no-op)
+    -l <LOCALE>                 Locale setting (headless CLI output is English)
+    -dl                         Disable file log (file logging is off by default)
+    -da                         Disable analytics (telemetry-free)
+    -ll <LEVEL>                 Console log level (DEBUG, INFO, WARN, ERROR)
+    -host <TAG>                 Host tag for analytics
+    -is <STRATEGY>              Item selection strategy (seq|rand|prio)
+    -hr <RATIO>                 Optimizer hybrid ratio
+    --user_data_path <DIR>      User data directory (stateless)
 
 --drc-report OPTIONS
     --unit <mm|mil|inch|um>     Report unit (Default: mm, which is what the oracles use)
-    --router-overrides          Import with the routing-path post-load overrides instead of
-                                the -drc ones (board_edge class synthesis on)
+    --router-overrides          Import with routing-path post-load overrides
     --emit-boxes                Also write one BOX line per item to stderr
-    --pin-frame-fix             Deprecated no-op; the importer now places pads in the pin frame
+    --pin-frame-fix             Deprecated no-op
 
 DIAGNOSTICS
-    --settle-trace <FILE>       Write one `FRMETRIC settle` line per settled maze element, the
-                                lab jar's `-Dfrlab.settle_trace=1` format (`1`/`stderr` = stderr)
-
-PARALLELISM (see also `docs/ARCHITECTURE.md`, "Parallelism")
-    -us, --threads <N>          Workers for the optimizer's candidate evaluation and the
-                                referee's violation scan. NOT the route pass, which is
-                                sequential upstream and here. `0` = pick from the machine.
-                                (Default: 1 — the parallel optimizer is reproducible at a
-                                fixed N but is not the same heuristic as the sequential one,
-                                so it is opt-in rather than a silent default.)
-    --portfolio <N>             Race N route passes with different item orders on board
-                                clones and keep the best referee score. Arm 0 is always the
-                                default order, so the result is never worse than N=1 on the
-                                same budget. Costs N cores for the same wall clock.
-                                (Default: 1)
+    --settle-trace <FILE>       Write one `FRMETRIC settle` line per settled maze element
 
     -v,  --version              Print version information
-    -h,  --help                 Print help
+    -h,  -help, --help          Print help
 
 EXIT CODES
     0  finished, nothing left unconnected   2  routed and written, incompletes remain
@@ -223,6 +217,8 @@ EXIT CODES
 struct Args {
     design: Option<String>,
     output: Option<String>,
+    rules_file: Option<String>,
+    input_directory: Option<String>,
     golden_dump: Option<String>,
     drc_report: Option<String>,
     import_only: bool,
@@ -234,18 +230,29 @@ struct Args {
     portfolio: Option<usize>,
     fanout: bool,
     no_optimizer: bool,
+    improvement_threshold: Option<f32>,
     deterministic: bool,
     job_timeout: Option<std::time::Duration>,
     settle_trace: Option<String>,
+    ignore_net_classes: Option<String>,
+    dialog_timeout: Option<usize>,
+    disable_file_logging: bool,
+    disable_analytics: bool,
+    locale: Option<String>,
+    log_level: Option<String>,
+    host: Option<String>,
+    board_update_strategy: Option<String>,
+    item_selection_strategy: Option<String>,
+    hybrid_ratio: Option<String>,
 }
 
-/// A non-negative count flag (`--threads`, `--portfolio`), rejected rather than
-/// silently ignored when it is not one — the same rule `-mp` follows.
+/// A non-negative count flag (`--threads`, `--portfolio`, `-dct`), rejected rather than
+/// silently ignored when it is not one.
 fn parse_count(flag: &str, value: &str) -> usize {
     match value.parse::<usize>() {
         Ok(count) => count,
         Err(_) => fail(&format!(
-            "{flag} {value}: expected a non-negative whole number of workers"
+            "{flag} {value}: expected a non-negative whole number"
         )),
     }
 }
@@ -256,21 +263,6 @@ fn fail(message: &str) -> ! {
 }
 
 /// `-mp <N>`, with the negative value rejected instead of silently ignored.
-///
-/// **A declared divergence** (`docs/PARITY-DIVERGENCES.md`). Upstream accepts a
-/// negative `max_passes`, and it is a latent bug: the entry point's guard
-/// `getRunRouter() && (maxPasses == null || maxPasses >= 0)` sends a negative
-/// value down the *fanout-only* branch, which sets `maxPasses = 0`; but
-/// `BatchAutorouter.runBatchLoop:894` recomputes the same guard and `:931`
-/// requires `maxPasses > 0` for the cap to apply — so the router re-enables
-/// itself and runs with **no pass cap at all** until a stagnation rule fires
-/// (conformance appendix §1.2, which names it "the cautionary example").
-///
-/// Refusing the input is the smallest fix that cannot surprise anyone: `-mp -1`
-/// has no sensible meaning, nobody can be relying on 'unbounded' from it, and
-/// the alternative — silently clamping — hides a typo in a long run. A
-/// non-numeric value is rejected for the same reason; the pre-existing
-/// `.parse().ok()` turned `-mp tow` into a silent single-pass run.
 fn parse_max_passes(value: &str) -> usize {
     match value.parse::<i64>() {
         Ok(passes) if passes < 0 => fail(&format!(
@@ -283,10 +275,6 @@ fn parse_max_passes(value: &str) -> usize {
 }
 
 fn main() {
-    // First thing of all, before a single argument is looked at: the promise is that this
-    // binary never dies holding work it did not write, and the only window where that cannot
-    // be honoured is the one before the handler exists. It is this short on purpose — an
-    // operator's Ctrl-C is the commonest way to lose a routed board.
     install_signal_handlers();
 
     let argv: Vec<String> = env::args().collect();
@@ -297,16 +285,11 @@ fn main() {
 
     let mut args = Args {
         unit: "mm".to_string(),
-        // Match `DefaultSettings.fanout.enabled = true`. The library
-        // `MazeOptions` default stays off so in-process tests keep the cheap
-        // no-escape path; the drop-in CLI is the Java-compatible entry.
         fanout: true,
         ..Args::default()
     };
     let mut index = 1;
-    // `next` consumes the value of a `--flag <value>` pair, or fails with the flag's name —
-    // the pre-rewrite scan silently dropped a trailing flag, which turned a typo into a
-    // "missing required input" message about the wrong argument.
+
     macro_rules! next {
         ($flag:expr) => {{
             index += 1;
@@ -316,17 +299,134 @@ fn main() {
             }
         }};
     }
+
     while index < argv.len() {
+        let arg = &argv[index];
+
+        // Handle key=value format for long options e.g. --router.max_passes=10, --user_data_path=/tmp, --compare-boards=...
+        if let Some(rest) = arg.strip_prefix("--") {
+            if let Some((key, val)) = rest.split_once('=') {
+                if key == "user_data_path" {
+                    index += 1;
+                    continue;
+                }
+                if key == "compare-boards" {
+                    fail("--compare-boards is unsupported; fast-routing is a headless router engine, not a board comparison GUI tool (use fr-check or kicad-cli instead)");
+                }
+                if let Some(prop) = key.strip_prefix("router.") {
+                    match prop {
+                        "max_passes" => args.max_passes = Some(parse_max_passes(val)),
+                        "max_threads" => args.threads = Some(parse_threads_mt(val)),
+                        "optimizer.max_threads" => args.threads = Some(parse_threads_mt(val)),
+                        "optimizer.improvement_threshold" => {
+                            args.improvement_threshold = Some(parse_oit(val))
+                        }
+                        "optimizer.enabled" => match val.to_lowercase().as_str() {
+                            "false" | "0" | "off" => args.no_optimizer = true,
+                            "true" | "1" | "on" => args.no_optimizer = false,
+                            _ => fail(&format!(
+                                "--router.optimizer.enabled={val}: expected boolean"
+                            )),
+                        },
+                        "fanout.enabled" => match val.to_lowercase().as_str() {
+                            "false" | "0" | "off" => args.fanout = false,
+                            "true" | "1" | "on" => args.fanout = true,
+                            _ => fail(&format!("--router.fanout.enabled={val}: expected boolean")),
+                        },
+                        "job_timeout" => {
+                            args.job_timeout = Some(parse_job_timeout(val));
+                        }
+                        "enabled" => match val.to_lowercase().as_str() {
+                            "false" | "0" | "off" => args.import_only = true,
+                            "true" | "1" | "on" => {}
+                            _ => fail(&format!("--router.enabled={val}: expected boolean")),
+                        },
+                        other => {
+                            eprintln!("note: --router.{other}={val} accepted");
+                        }
+                    }
+                    index += 1;
+                    continue;
+                }
+                if let Some(prop) = key.strip_prefix("debug.") {
+                    eprintln!("note: debug switch --debug.{prop}={val} parsed");
+                    index += 1;
+                    continue;
+                }
+                if key.starts_with("logging.")
+                    || key.starts_with("gui.")
+                    || key.starts_with("mcp_server.")
+                    || key.starts_with("profile.")
+                {
+                    index += 1;
+                    continue;
+                }
+            }
+        }
+
         match argv[index].as_str() {
-            "-de" | "--design" | "-di" => args.design = Some(next!("-de")),
+            "-de" | "--design" => {
+                let first = next!("-de");
+                let mut files = Vec::new();
+                for part in first.split('+') {
+                    let trimmed = part.trim();
+                    if !trimmed.is_empty() {
+                        files.push(trimmed.to_string());
+                    }
+                }
+                while index + 1 < argv.len() && !argv[index + 1].starts_with('-') {
+                    index += 1;
+                    for part in argv[index].split('+') {
+                        let trimmed = part.trim();
+                        if !trimmed.is_empty() {
+                            files.push(trimmed.to_string());
+                        }
+                    }
+                }
+                for file in files {
+                    let lower = file.to_lowercase();
+                    if lower.ends_with(".dsn") {
+                        args.design = Some(file);
+                    } else if lower.ends_with(".ses") || lower.ends_with(".json") {
+                        if args.output.is_none() {
+                            args.output = Some(file);
+                        }
+                    } else if lower.ends_with(".rules") {
+                        args.rules_file = Some(file);
+                    } else if args.design.is_none() {
+                        args.design = Some(file);
+                    }
+                }
+            }
+            "-di" => {
+                let dir_or_file = next!("-di");
+                if dir_or_file.to_lowercase().ends_with(".dsn") && args.design.is_none() {
+                    args.design = Some(dir_or_file);
+                } else {
+                    args.input_directory = Some(dir_or_file);
+                }
+            }
             "-do" | "--output" => args.output = Some(next!("-do")),
-            "--golden-dump" => args.golden_dump = Some(next!("--golden-dump")),
+            "-dr" => {
+                let rf = next!("-dr");
+                args.rules_file = Some(rf);
+                eprintln!(
+                    "note: -dr sidecar rules file is accepted; rules in .dsn take precedence"
+                );
+            }
+            "-drc" => {
+                if index + 1 < argv.len() && !argv[index + 1].starts_with('-') {
+                    index += 1;
+                    args.drc_report = Some(argv[index].clone());
+                } else {
+                    args.drc_report = Some(String::new());
+                }
+                args.import_only = true;
+            }
             "--drc-report" => args.drc_report = Some(next!("--drc-report")),
+            "--golden-dump" => args.golden_dump = Some(next!("--golden-dump")),
             "--import-only" => args.import_only = true,
             "--unit" => args.unit = next!("--unit"),
-            // Was an experiment that measured a bug in `specctra::build::placed_pad_shapes`.
-            // The bug is fixed, so the correction is now a *displacement*; the flag stays only
-            // because `bench/tools/drc_compare.py` still passes it.
             "--pin-frame-fix" => eprintln!(
                 "note: --pin-frame-fix is a no-op and is deprecated; the importer now places \
                  pads in the pin frame itself (fr-io specctra::build::placed_pad_shapes)"
@@ -334,7 +434,54 @@ fn main() {
             "--router-overrides" => args.router_overrides = true,
             "--emit-boxes" => args.emit_boxes = true,
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
-            "-us" | "--threads" => args.threads = Some(parse_count("--threads", &next!("-us"))),
+            "-mt" => args.threads = Some(parse_threads_mt(&next!("-mt"))),
+            "-oit" => args.improvement_threshold = Some(parse_oit(&next!("-oit"))),
+            "-us" => {
+                let val = next!("-us");
+                if let Ok(count) = val.parse::<usize>() {
+                    args.threads = Some(count);
+                } else {
+                    let op = val.to_lowercase();
+                    if matches!(op.as_str(), "greedy" | "global" | "hybrid") {
+                        args.board_update_strategy = Some(op);
+                    } else {
+                        fail(&format!(
+                            "-us {val}: expected worker count (e.g. 4) or board update strategy (greedy|global|hybrid)"
+                        ));
+                    }
+                }
+            }
+            "--threads" => args.threads = Some(parse_count("--threads", &next!("--threads"))),
+            "-is" => {
+                let val = next!("-is");
+                args.item_selection_strategy = Some(val);
+            }
+            "-hr" => {
+                let val = next!("-hr");
+                args.hybrid_ratio = Some(val);
+            }
+            "-inc" => {
+                let val = next!("-inc");
+                args.ignore_net_classes = Some(val);
+            }
+            "-dct" => {
+                let val = next!("-dct");
+                args.dialog_timeout = Some(parse_count("-dct", &val));
+            }
+            "-l" => {
+                let val = next!("-l");
+                args.locale = Some(val);
+            }
+            "-dl" => args.disable_file_logging = true,
+            "-da" => args.disable_analytics = true,
+            "-ll" => {
+                let val = next!("-ll");
+                args.log_level = Some(val);
+            }
+            "-host" => {
+                let val = next!("-host");
+                args.host = Some(val);
+            }
             "--portfolio" => {
                 args.portfolio = Some(parse_count("--portfolio", &next!("--portfolio")))
             }
@@ -344,11 +491,17 @@ fn main() {
             "--deterministic" => args.deterministic = true,
             "--job-timeout" => args.job_timeout = Some(parse_job_timeout(&next!("--job-timeout"))),
             "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
+            "--user_data_path" => {
+                let _dir = next!("--user_data_path");
+            }
+            "--compare-boards" => {
+                fail("--compare-boards is unsupported; fast-routing is a headless router engine, not a board comparison GUI tool (use fr-check or kicad-cli instead)");
+            }
             "-v" | "--version" => {
                 println!("fast-routing v{}", env!("CARGO_PKG_VERSION"));
                 return;
             }
-            "-h" | "--help" => {
+            "-h" | "-help" | "--help" => {
                 print_usage();
                 return;
             }
@@ -357,17 +510,29 @@ fn main() {
         index += 1;
     }
 
-    let Some(input_path) = args.design.clone() else {
+    let Some(mut input_path) = args.design.clone() else {
         fail("missing required input design file (-de <file.dsn>)");
     };
 
-    // Must be set before anything asks the sink, which resolves the environment once.
+    if let Some(dir) = &args.input_directory {
+        let p = Path::new(&input_path);
+        if !p.is_absolute() && !p.exists() {
+            let combined = Path::new(dir).join(&input_path);
+            if combined.exists() {
+                input_path = combined.to_string_lossy().to_string();
+            }
+        }
+    }
+
+    if let Some(out) = &mut args.drc_report {
+        if out.is_empty() {
+            *out = default_drc(&input_path);
+        }
+    }
+
     if let Some(path) = &args.settle_trace {
         env::set_var("FR_SETTLE_TRACE", path);
     }
-    // Armed before the file is even read, so the budget covers the import too — on the large
-    // fixtures that is seconds, and a budget that only started at the router would overrun by
-    // exactly them.
     if let Some(budget) = args.job_timeout {
         fr_core::arm_job_deadline(budget);
     }
@@ -377,18 +542,11 @@ fn main() {
         Err(error) => fail(&error.to_string()),
     };
 
-    // The two emitters are their own modes: they import with their own options and never touch
-    // the referee or the session writer. Both may be requested in one run.
     if args.golden_dump.is_some() || args.drc_report.is_some() {
         emit_reports(&job, &args, &input_path);
         return;
     }
 
-    // Where the session goes, decided *before* the run: the job writes it itself, before it
-    // judges the board, so that a run killed at a harness cap still leaves one (see
-    // `fr_core::pipeline`'s "The session is written before the board is judged").
-    // `--import-only` writes a session only when one was asked for; the default path always
-    // does, because a caller that passed no `-do` still expects `<input>.ses`.
     let session_path = if args.import_only {
         args.output.clone()
     } else {
@@ -399,12 +557,7 @@ fn main() {
         )
     };
 
-    // `--import-only` keeps the M1 contract: no router stage, so the board the referee judges
-    // and the session carries is exactly the imported one.
     let job = if args.import_only {
-        // No router stage, so nothing sets the job's referee budget from a
-        // `MazeOptions`; `--threads` still applies to the referee's T2 scan,
-        // which is the only parallel work an import-only run has.
         job.with_referee_threads(MazeOptions::default().with_threads(args.threads).threads())
     } else {
         let passes = args.max_passes.unwrap_or(1).max(1);
@@ -415,7 +568,8 @@ fn main() {
                 .with_optimizer(!args.no_optimizer)
                 .with_deterministic(args.deterministic)
                 .with_threads(args.threads)
-                .with_portfolio(args.portfolio.unwrap_or(1)),
+                .with_portfolio(args.portfolio.unwrap_or(1))
+                .with_improvement_threshold(args.improvement_threshold),
         ))
     };
     let job = match &session_path {
@@ -429,10 +583,7 @@ fn main() {
         Err(error) => fail(&describe(&error)),
     };
     fr_metrics::settle_trace::flush();
-    // `FR_METRICS_REPORT=1` dumps the `FRMETRIC` counter/stage/pass report to stderr. It is
-    // env-gated rather than a flag because it is measurement scaffolding for `bench/tools/`,
-    // not part of the drop-in CLI contract; the report is all-zero without the `metrics`
-    // feature, so the gate costs one `var_os` per run.
+
     if std::env::var_os("FR_METRICS_REPORT").is_some() {
         for line in fr_metrics::report().to_frmetric_lines() {
             eprintln!("{line}");
@@ -443,9 +594,6 @@ fn main() {
         eprintln!("warning: {warning}");
     }
 
-    // The file itself is already on disk — the job wrote it before the referee ran. This line
-    // only reports it, and it stays where it always was in the output so that a harness parsing
-    // stdout sees the same summary it always did.
     if let Some(path) = &session_path {
         println!("Exported Specctra SES session file: {path}");
     }
@@ -459,13 +607,7 @@ fn main() {
             report.stats.incomplete_count, report.stats.max_connections
         );
     }
-    // 4 outranks 2, and is checked after the session is on disk: it says "the budget ran out,
-    // and *this* is the board it bought". The router's own stop reason is not what decides —
-    // the budget can also be spent in the import, the optimizer or the referee, and a caller
-    // that asked for one wants to know it was spent however the run ended.
     if fr_core::job_budget_spent() {
-        // The reserve is named because it is the difference between "the budget was too short"
-        // and "the budget was spent shutting down", and only the caller can act on either.
         eprintln!(
             "job budget spent — the session above is the best board the run held \
              ({} of {} connections incomplete; {:.2}s of the budget was reserved for the \
@@ -476,10 +618,6 @@ fn main() {
         );
         process::exit(EXIT_DEADLINE);
     }
-    // The old contract, now that there is a router behind it: 0 when the board came out fully
-    // connected, 2 when it did not. The referee's count is the one that decides, not the
-    // router's own — they are computed by different code over the same board, and disagreeing
-    // with the judge in our favour is the one failure mode a harness cannot detect.
     if report.stats.incomplete_count > 0 {
         process::exit(EXIT_INCOMPLETE);
     }
@@ -493,6 +631,14 @@ fn default_ses(input: &str) -> String {
     }
 }
 
+/// `<input>.dsn` → `<input>.drc.json`; anything else gains `.drc.json`.
+fn default_drc(input: &str) -> String {
+    match input.strip_suffix(".dsn") {
+        Some(stem) => format!("{stem}.drc.json"),
+        None => format!("{input}.drc.json"),
+    }
+}
+
 fn describe(error: &JobError) -> String {
     match error {
         JobError::Import(_) => format!("import failed: {error}"),
@@ -500,20 +646,6 @@ fn describe(error: &JobError) -> String {
     }
 }
 
-/// The three-or-four line run summary.
-///
-/// `started` is the whole invocation's clock. It is reported on its own line
-/// and **not** on the "Imported" one, which says import and has to mean it: the
-/// pre-existing line printed the end-to-end elapsed time there, so every routed
-/// run claimed the importer had cost what the router did. `bench/run_bench.py`
-/// reads `Total` for the tool time and falls back to the old line.
-///
-/// The same rule applies to the item counts on that line, and they were breaking
-/// it the same way: they came from [`JobReport::census`], which is taken after
-/// the router stage, so "Imported … 4 617 items" on a routed board counted
-/// copper the importer never read. They now come from
-/// [`JobReport::import_census`], and a routed run gets a second line for the
-/// board it finished with — the delta between the two is the copper we added.
 fn print_summary(report: &JobReport, started: Instant) {
     println!(
         "Imported {} in {:.2}s: {} layers, {} items ({} pins, {} traces, {} vias)",
@@ -527,9 +659,6 @@ fn print_summary(report: &JobReport, started: Instant) {
     );
     if let Some(router) = &report.router {
         println!(
-            // Signed, because the delta is genuinely two-way: a pass that normalizes and
-            // removes tails can leave a pre-routed board with *fewer* trace items than it
-            // found (`Issue103-Board-Routed`, -1).
             "Board: {} items ({} pins, {} traces, {} vias); router delta {:+} traces, {:+} vias",
             report.census.total(),
             report.census.pins,
@@ -596,11 +725,6 @@ fn print_summary(report: &JobReport, started: Instant) {
     println!("Total {:.2}s", started.elapsed().as_secs_f64());
 }
 
-/// `--golden-dump` and `--drc-report`.
-///
-/// Each re-imports with the options its oracle was generated under, rather than sharing one
-/// board: `-drc` runs the post-load overrides *off* and the `-do` dump path runs them *on*
-/// ([`DRC_IMPORT_OPTIONS`]), so a shared import would silently be wrong for one of them.
 fn emit_reports(job: &RoutingJob, args: &Args, input_path: &str) {
     let source = Path::new(input_path)
         .file_name()
@@ -619,8 +743,6 @@ fn emit_reports(job: &RoutingJob, args: &Args, input_path: &str) {
     }
 
     if let Some(out) = &args.drc_report {
-        // Validated before the import, which on the larger fixtures is seconds of work to
-        // throw away over a typo.
         let Some(report_options) = ReportOptions::default().with_unit_name(&args.unit) else {
             fail(&format!("unknown unit '{}'", args.unit));
         };

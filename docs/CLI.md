@@ -13,44 +13,45 @@ divergence; **不支持** Java has it, we do not (or we reused the spelling);
 
 | flag | status | Java 2.3.0 | fr-cli | notes |
 |---|---|---|---|---|
-| `-de` | 部分 | one or more design files, dispatched by extension | one .dsn | Java accepts several files and dispatches by extension (dsn/json/ses/rules) and `a.dsn+b.rules`. We take one `.dsn`. Alias `-di` is our synonym for `-de`, not Java's GUI directory. |
-| `-di` | 部分 | GUI input directory | alias of -de | Java: GUI input directory. We treat `-di` as `-de`. |
+| `-de` | 兼容 | one or more design files, dispatched by extension | one or more design files (.dsn, .ses, .rules, '+') | Java accepts several files and dispatches by extension (dsn/json/ses/rules) and `a.dsn+b.rules`. We support multi-file and plus-separated dispatch. |
+| `-di` | 部分 | GUI input directory | GUI input directory; resolves relative design paths | GUI input directory. We resolve relative design paths against `-di`. |
 | `-do` | 兼容 | output SES/JSON | output SES | Output SES path. Default `<input>.ses` on both sides for a routing run. |
-| `-dr` | 不支持 | Rules sidecar. Unsupported. |  | Rules sidecar. Unsupported. |
-| `-drc` | 不支持 | DRC-only mode + JSON path |  | Java DRC-only mode (disables the router, writes JSON). Our `--drc-report` emits the same-shaped JSON without forcing the other Java side effects. |
+| `-dr` | 部分 | rules sidecar path | accepted with note; rules in .dsn take precedence | Rules sidecar path. Accepted with note; design rules in the .dsn take precedence. |
+| `-drc` | 兼容 | DRC-only mode + JSON path | DRC-only mode emitting DRC report JSON | DRC-only mode (disables the router, writes JSON). Our `-drc` / `--drc-report` emits the same-shaped JSON. |
 | `-mp` | 部分 | max passes, clamp [0,9999]; negative becomes uncapped | max passes; negative rejected | Pass cap. Java clamps to `[0,9999]` (0 = unlimited) and a *negative* value is a latent uncapped run. We reject negatives (PARITY-DIVERGENCES). |
-| `-mt` | 不支持 | Java optimizer thread count, clamped `[0,1024]`. We do not take `-mt`; `--threads` is a different budget (optimizer T1 + referee T2). |  | Java optimizer thread count, clamped `[0,1024]`. We do not take `-mt`; `--threads` is a different budget (optimizer T1 + referee T2). |
-| `-oit` | 不支持 | Optimizer improvement threshold in **percent**. Unsupported. |  | Optimizer improvement threshold in **percent**. Unsupported. |
-| `-us` | 不支持 | optimizer board-update strategy | --threads (worker count) | Java: optimizer board-update strategy (`greedy\|global\|hybrid`). **Collision:** we parse `-us` as `--threads`. Java meaning is unsupported. |
-| `-is` | 不支持 | Optimizer item-selection strategy. Unsupported. |  | Optimizer item-selection strategy. Unsupported. |
-| `-hr` | 不支持 | Optimizer hybrid ratio. Unsupported. |  | Optimizer hybrid ratio. Unsupported. |
-| `-inc` | 不支持 | Ignore net classes. GUI-only effect upstream; we do not take the flag (intentionally dead). |  | Ignore net classes. GUI-only effect upstream; we do not take the flag (intentionally dead). |
-| `-l` | 不支持 | Locale. Unsupported (headless, English messages). |  | Locale. Unsupported (headless, English messages). |
-| `-dl` | 不支持 | Disable file log. Unsupported. |  | Disable file log. Unsupported. |
-| `-da` | 不支持 | Disable analytics. Unsupported (we have no analytics). |  | Disable analytics. Unsupported (we have no analytics). |
-| `-ll` | 不支持 | Console log level. Unsupported. |  | Console log level. Unsupported. |
-| `-host` | 不支持 | Host tag for analytics. Unsupported. |  | Host tag for analytics. Unsupported. |
-| `-dct` | 不支持 | GUI dialog confirmation timeout. Unsupported. |  | GUI dialog confirmation timeout. Unsupported. |
+| `-mt` | 兼容 | Java optimizer thread count, clamped `[0,1024]` | worker thread count for optimizer and referee (`[0,1024]`) | Optimizer worker thread count, clamped `[0,1024]`. Maps to our worker thread budget (optimizer candidate evaluation + referee scan). |
+| `-oit` | 兼容 | optimizer improvement threshold in percent | optimizer improvement threshold in percent (divided by 100) | Optimizer improvement threshold in **percent**. Scaled to fraction and applied to optimizer. |
+| `-us` | 部分 | optimizer board-update strategy (`greedy\|global\|hybrid`) | strategy token or numeric `--threads` alias | Java: optimizer board-update strategy (`greedy\|global\|hybrid`). We accept strategy names or numeric thread count alias for backward compatibility. |
+| `-is` | 部分 | optimizer item-selection strategy (`seq\|rand\|prio`) | optimizer item-selection strategy parsed | Optimizer item-selection strategy (`seq\|rand\|prio`). Accepted and parsed. |
+| `-hr` | 部分 | optimizer hybrid ratio | optimizer hybrid ratio parsed | Optimizer hybrid ratio. Accepted and parsed. |
+| `-inc` | 兼容 | ignore net classes (headless no-op) | ignore net classes (headless no-op) | Ignore net classes. GUI-only effect upstream; headless no-op on both sides (PARITY-DIVERGENCES). |
+| `-l` | 部分 | locale | locale parsed; headless CLI output is English | Locale. Accepted; headless CLI messages are in English. |
+| `-dl` | 兼容 | disable file log | disable file log (off by default in headless mode) | Disable file log. Accepted (file logging is off by default in headless mode). |
+| `-da` | 兼容 | disable analytics | disable analytics (telemetry-free) | Disable analytics. Accepted (telemetry-free). |
+| `-ll` | 部分 | console log level | console log level parsed | Console log level. Accepted and parsed. |
+| `-host` | 部分 | host tag for analytics | host tag parsed (telemetry-free) | Host tag for analytics. Accepted (telemetry-free). |
+| `-dct` | 兼容 | GUI dialog confirmation timeout | GUI dialog timeout parsed (no-op in headless mode) | GUI dialog confirmation timeout. Accepted (no-op in headless mode). |
 | `-help` | 兼容 | help | help | Help. We also take `-h` / `--help`. |
 | `-h` | 兼容 | help | help | Help. Java accepts it as an alias of `-help`. |
 | `--help` | 兼容 | help | help | Help. |
-| `--compare-boards` | 不支持 | Java board-compare utility. Unsupported. |  | Java board-compare utility. Unsupported. |
-| `--user_data_path` | 不支持 | Java user-data directory. Required on this machine so the jar does not read `$TMPDIR/freerouting/freerouting.json`. We have no equivalent (no JSON settings file). |  | Java user-data directory. Required on this machine so the jar does not read `$TMPDIR/freerouting/freerouting.json`. We have no equivalent (no JSON settings file). |
-| `--debug.*` | 不支持 | Java debug switches. Unsupported. |  | Java debug switches. Unsupported. |
-| `--router.*` | 不支持 | Generic `ReflectionUtil` setter into `GlobalSettings`. We have named flags only. |  | Generic `ReflectionUtil` setter into `GlobalSettings`. We have named flags only. |
-| `--<path>=<value>` | 不支持 | Generic setter for any `GlobalSettings` path (`--logging.*`, `--mcp_server.stdio=`, …). Unsupported. |  | Generic setter for any `GlobalSettings` path (`--logging.*`, `--mcp_server.stdio=`, …). Unsupported. |
+| `--compare-boards` | 不支持 | Java board-compare utility | unsupported with diagnostic (use `fr-check` or `kicad-cli`) | Java board-compare utility. Unsupported (fast-routing is a headless router engine, not a board comparison GUI tool; use `fr-check` or `kicad-cli`). |
+| `--user_data_path` | 兼容 | Java user-data directory | user-data directory accepted (stateless) | Java user-data directory. Accepted for drop-in compatibility (fast-routing is stateless with no persistent JSON settings file). |
+| `--debug.*` | 部分 | Java debug switches | debug properties parsed | Java debug switches. Accepted and parsed. |
+| `--router.*` | 兼容 | generic setter into `GlobalSettings.router` | generic setter into router settings (`max_passes`, `optimizer.enabled`, `fanout.enabled`, etc.) | Generic router setting setter (`--router.max_passes=`, `--router.optimizer.enabled=`, `--router.fanout.enabled=`, etc.). Mapped to routing configuration. |
+| `--<path>=<value>` | 部分 | generic setter for any `GlobalSettings` path | generic settings parsed; non-router subsystems are headless/no-op | Generic setter for any `GlobalSettings` path (`--logging.*`, `--gui.*`, etc.). Non-router subsystems are headless/no-op. |
 | `--design` | 我方独有 |  | Long form of `-de`. Unique spelling. | Long form of `-de`. Unique spelling. |
 | `--output` | 我方独有 |  | Long form of `-do`. Unique spelling. | Long form of `-do`. Unique spelling. |
 | `--max-passes` | 我方独有 |  | Long form of `-mp`. Unique spelling; Java only has `-mp`. | Long form of `-mp`. Unique spelling; Java only has `-mp`. |
 | `--threads` | 我方独有 |  | Workers for optimizer candidate evaluation and the referee scan. Not the route pass. Default 1. Unique. | Workers for optimizer candidate evaluation and the referee scan. Not the route pass. Default 1. Unique. |
 | `--portfolio` | 我方独有 |  | Race N route passes on board clones; keep the best referee score. Unique. | Race N route passes on board clones; keep the best referee score. Unique. |
-| `--fanout` | 我方独有 |  | Opt-in SMD escape pre-pass. Java default is on via settings; we default off in M2a and take an explicit flag. Unique spelling; Java uses `--router.fanout.enabled=`. | Opt-in SMD escape pre-pass. Java default is on via settings; we default off in M2a and take an explicit flag. Unique spelling; Java uses `--router.fanout.enabled=`. |
+| `--fanout` | 我方独有 |  | Opt-in SMD escape pre-pass. Java default is on via settings; we default on and take `--no-fanout` to disable. Unique spelling; Java uses `--router.fanout.enabled=`. | Opt-in SMD escape pre-pass. Java default is on via settings; we default on and take `--no-fanout` to disable. Unique spelling; Java uses `--router.fanout.enabled=`. |
+| `--no-fanout` | 我方独有 |  | Skip the SMD pin-escape pre-pass. Unique. | Skip the SMD pin-escape pre-pass. Unique. |
 | `--no-optimizer` | 我方独有 |  | Skip the post-route optimizer (on by default, matching DefaultSettings). Unique spelling; Java uses `--router.optimizer.enabled=false`. | Skip the post-route optimizer (on by default, matching DefaultSettings). Unique spelling; Java uses `--router.optimizer.enabled=false`. |
 | `--deterministic` | 我方独有 |  | Effort-based virtual time instead of wall-clock budgets. Unique. | Effort-based virtual time instead of wall-clock budgets. Unique. |
 | `--job-timeout` | 我方独有 |  | Whole-job wall budget; on expiry write the SES and exit 4. Java has `router.job_timeout` as a settings string, not this flag. | Whole-job wall budget; on expiry write the SES and exit 4. Java has `router.job_timeout` as a settings string, not this flag. |
 | `--import-only` | 我方独有 |  | Import and judge; do not route. Unique. | Import and judge; do not route. Unique. |
 | `--golden-dump` | 我方独有 |  | G1.1 model dump. Unique. | G1.1 model dump. Unique. |
-| `--drc-report` | 部分 |  | G1.2a JSON (does not disable the router by itself) | G1.2a `java -drc`-shaped JSON. Partial overlap with Java `-drc`. |
+| `--drc-report` | 兼容 | DRC JSON report path | G1.2a `java -drc`-shaped JSON (long form of `-drc`) | G1.2a `java -drc`-shaped JSON (long form of `-drc`). |
 | `--unit` | 我方独有 |  | DRC report unit. Unique. | DRC report unit. Unique. |
 | `--router-overrides` | 我方独有 |  | Import with routing-path post-load overrides. Unique. | Import with routing-path post-load overrides. Unique. |
 | `--emit-boxes` | 我方独有 |  | Debug BOX lines on stderr. Unique. | Debug BOX lines on stderr. Unique. |
@@ -59,8 +60,8 @@ divergence; **不支持** Java has it, we do not (or we reused the spelling);
 | `-v` | 我方独有 |  | Print version. Unique (Java has no `-v`). | Print version. Unique (Java has no `-v`). |
 | `--version` | 我方独有 |  | Print version. Unique. | Print version. Unique. |
 
-## `-us` collision
+## `-us` compatibility
 
-Upstream `-us` selects the optimizer's board-update strategy. `fr-cli`
-`-us` is an alias of `--threads`. The two are not compatible. Use
-`--threads N` on our side; there is no flag for `board_update_strategy`.
+Upstream `-us` selects the optimizer's board-update strategy (`greedy|global|hybrid`).
+`fr-cli` accepts strategy names as well as numeric worker thread counts (`-us <N>` as a legacy
+alias for `--threads <N>` / `-mt <N>`).

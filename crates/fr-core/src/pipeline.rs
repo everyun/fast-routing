@@ -82,7 +82,7 @@ use fr_router::StopReason;
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 
 /// The router stage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum RouterStage {
     /// Import, judge, write the imported wiring back out. No routing, no board mutation.
     #[default]
@@ -92,7 +92,7 @@ pub enum RouterStage {
 }
 
 /// How the [`RouterStage::Maze`] stage is run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MazeOptions {
     /// Ripup-and-reroute passes. Pass *n* routes at `start_ripup_costs * n`
     /// (`batch-orchestration.md` §4, row 44). `-mp` on the command line.
@@ -138,6 +138,9 @@ pub struct MazeOptions {
     /// is the plain single run and clones nothing. `--portfolio` on the command
     /// line.
     pub portfolio: usize,
+    /// Early exit improvement threshold for the optimizer stage (fraction).
+    /// `-oit` on the command line passes percent (e.g. 1.0 -> 0.01).
+    pub improvement_threshold: Option<f32>,
 }
 
 impl Default for MazeOptions {
@@ -149,6 +152,7 @@ impl Default for MazeOptions {
             optimize: true,
             threads_requested: None,
             portfolio: 1,
+            improvement_threshold: None,
         }
     }
 }
@@ -190,6 +194,12 @@ impl MazeOptions {
     /// Sets the portfolio arm count (`--portfolio`). Floored at one.
     pub fn with_portfolio(mut self, arms: usize) -> MazeOptions {
         self.portfolio = arms.max(1);
+        self
+    }
+
+    /// Sets the optimizer improvement threshold fraction (`-oit`).
+    pub fn with_improvement_threshold(mut self, threshold: Option<f32>) -> MazeOptions {
+        self.improvement_threshold = threshold;
         self
     }
 
@@ -352,6 +362,9 @@ fn settings_for(design: &ImportedDesign, options: MazeOptions) -> RouterSettings
         &design.rules.layer_structure,
     );
     settings.max_passes = options.max_passes.max(1);
+    if let Some(threshold) = options.improvement_threshold {
+        settings.optimizer.improvement_threshold = threshold;
+    }
     settings
 }
 

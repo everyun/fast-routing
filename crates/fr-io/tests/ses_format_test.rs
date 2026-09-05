@@ -18,7 +18,7 @@ use fr_io::specctra::{
 /// working directory, hence the climb to the workspace root.
 const JAVA_SES_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../bench/results/20260828-013025/ses"
+    "/../../bench/results/java-reference/ses"
 );
 
 fn fixture_dir() -> std::path::PathBuf {
@@ -208,10 +208,7 @@ fn issue026_matches_the_java_writer_up_to_the_routing() {
     let bytes = read_fixture("Issue026-J2_reference.dsn");
     let design = import(&bytes).expect("Issue026 should import");
     // The bench run passed the job name, which is what lands in `(base_design …)`.
-    let ours = write_session(&SesInput::from_design(
-        &design,
-        "Issue026-J2_reference.java",
-    ));
+    let ours = write_session(&SesInput::from_design(&design, "Issue026-J2_reference"));
     let java_path = format!("{JAVA_SES_DIR}/Issue026-J2_reference.java.ses");
     let theirs = std::fs::read_to_string(&java_path)
         .unwrap_or_else(|error| panic!("golden '{java_path}' is missing ({error})"));
