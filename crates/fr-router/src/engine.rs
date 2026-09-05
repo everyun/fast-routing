@@ -743,33 +743,38 @@ impl<'b> AutorouteEngine<'b> {
         }
         crate::rooms::attr::add_room_walk(walk_started, self.scratch_rooms.len() as u64);
         let mut rooms = std::mem::take(&mut self.scratch_rooms);
-        rooms.retain(|(_, room)| {
-            let room = self.rooms.room(*room);
-            // The shape-exact `intersects_box` is replaced by the memoized
-            // octagon's bounding box: an extra room here is a carve no-op —
-            // its shape misses the query box, and every candidate lives
-            // inside the query box, so the `dimension() == 2` gate can never
-            // fire for it (the same superset argument the item side makes).
-            room.alive
-                && room.kind == RoomKind::CompleteFree
-                && room.layer == layer
-                && query_box.intersects(&room.octagon().bounding_box())
-        });
-        // One sort, not two: duplicate leaves of one room read the same
-        // current `id_no`, so keying on `(-id_no, RoomId)` makes duplicates
-        // adjacent (the dedup) while ordering survivors exactly like the
-        // completion key's rooms row (`-id_no`; ids are unique across rooms).
-        // The cached-key sort chases `rooms.room()` once per leaf, not once
-        // per comparison.
-        rooms.sort_by_cached_key(|(_, room)| {
-            let room = *room;
-            (-self.rooms.room(room).id_no, room)
-        });
-        rooms.dedup_by_key(|(_, room)| *room);
-        for (_, room) in &rooms {
-            obstacles.push(Obstacle::Room(*room));
-            self.scratch_hit_bounds
-                .push(self.rooms.room(*room).octagon().bounding_box());
+        // Fast path: if there is only 1 room leaf, skip sort_by_cached_key and dedup!
+        if rooms.len() <= 1 {
+            rooms.retain(|(_, room)| {
+                let room = self.rooms.room(*room);
+                room.alive
+                    && room.kind == RoomKind::CompleteFree
+                    && room.layer == layer
+                    && query_box.intersects(&room.octagon().bounding_box())
+            });
+            for (_, room) in &rooms {
+                obstacles.push(Obstacle::Room(*room));
+                self.scratch_hit_bounds
+                    .push(self.rooms.room(*room).octagon().bounding_box());
+            }
+        } else {
+            rooms.retain(|(_, room)| {
+                let room = self.rooms.room(*room);
+                room.alive
+                    && room.kind == RoomKind::CompleteFree
+                    && room.layer == layer
+                    && query_box.intersects(&room.octagon().bounding_box())
+            });
+            rooms.sort_by_cached_key(|(_, room)| {
+                let room = *room;
+                (-self.rooms.room(room).id_no, room)
+            });
+            rooms.dedup_by_key(|(_, room)| *room);
+            for (_, room) in &rooms {
+                obstacles.push(Obstacle::Room(*room));
+                self.scratch_hit_bounds
+                    .push(self.rooms.room(*room).octagon().bounding_box());
+            }
         }
         rooms.clear();
         self.scratch_rooms = rooms;

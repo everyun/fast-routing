@@ -277,10 +277,7 @@ impl AutorouteEngine<'_> {
                         new_result.push(candidate);
                         continue;
                     }
-                    let mut something_changed = false;
-                    // `:625-628`: a completed room whose overlap is contained in
-                    // the from-door shape is the room we came through — leaving
-                    // it alone is what stops the tiling re-carving itself.
+                    // Fast path: if this is an Item obstacle, ignore_expansion_room is always false!
                     let ignore_expansion_room = matches!(obstacle, Obstacle::Room(_))
                         && ignore_shape
                             .map(|ignore| {
@@ -288,6 +285,7 @@ impl AutorouteEngine<'_> {
                                 geom::contains_shape(ignore, &intersection)
                             })
                             .unwrap_or(false);
+                    let mut something_changed = false;
                     if !ignore_expansion_room {
                         something_changed = true;
                         carve_hits += 1;
