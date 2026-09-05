@@ -1122,7 +1122,18 @@ impl Board {
             return;
         };
         let mut candidates = Vec::new();
-        self.pick_items(point, None, &mut candidates);
+        // Upstream (`Trace.java:177`): `board.overlapping_objects(search_shape, this.layer)`.
+        // Single-layer items (traces, SMD pins, conduction areas) restrict the tree query
+        // to their single layer; multi-layer items (through-hole pins, vias) query None (all layers).
+        let query_layer = match &item.kind {
+            ItemKind::Trace(t) => Some(t.layer),
+            ItemKind::ConductionArea(a) => Some(a.layer),
+            ItemKind::ObstacleArea(a) => Some(a.layer),
+            ItemKind::Pin(p) if p.layers.is_single() => Some(p.layers.first),
+            ItemKind::Via(v) if v.layers.is_single() => Some(v.layers.first),
+            _ => None,
+        };
+        self.pick_items(point, query_layer, &mut candidates);
         for candidate in candidates {
             if candidate == id {
                 continue;
