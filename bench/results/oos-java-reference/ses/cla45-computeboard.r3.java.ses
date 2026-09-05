@@ -1,0 +1,84 @@
+(session "cla45-computeboard"
+  (base_design "cla45-computeboard")
+  (placement
+    (resolution um 10)
+    (component "Hi3559AV100_FCBGA1067_25x25_P0.65"
+      (place U1 175000 -230000 front 90)
+    )
+    (component "MECH_U2"
+      (place U2 380000 -135000 front 0)
+    )
+    (component "MECH_J1"
+      (place J1 30000 -130000 front 0)
+      (place J2 30000 -330000 front 0)
+    )
+    (component "MECH_U3"
+      (place U3 100000 -400000 back 180)
+    )
+    (component "MECH_U4"
+      (place U4 200000 -400000 back 180)
+    )
+    (component "MECH_U5"
+      (place U5 270000 -400000 back 180)
+    )
+    (component "MECH_PS1"
+      (place PS1 360000 -220000 back 180)
+      (place PS2 360000 -270000 back 180)
+      (place PS3 360000 -320000 back 180)
+      (place PS4 360000 -370000 back 180)
+    )
+    (component "MECH_PS5"
+      (place PS5 380000 -50000 back 180)
+    )
+    (component "MECH_PS6"
+      (place PS6 300000 -50000 back 180)
+    )
+    (component "MECH_X1"
+      (place X1 190000 -50000 back 180)
+      (place U6 230000 -50000 back 180)
+    )
+    (component "MECH_J3"
+      (place J3 130000 -440000 front 0)
+    )
+    (component "MountingHole_1"
+      (place H1 25000 -25000 front 0)
+      (place H2 435000 -25000 front 0)
+      (place H3 25000 -435000 front 0)
+      (place H4 435000 -435000 front 0)
+    )
+  )
+  (was_is
+  )
+  (routes 
+    (resolution um 10)
+    (parser
+      (host_cad "KiCad's Pcbnew")
+      (host_version "10.0.5")
+    )
+    (library_out 
+      (padstack "Via[0-7]_600:300_um"
+        (shape
+          (circle F.Cu 6000 0 0)
+        )
+        (shape
+          (circle GND 6000 0 0)
+        )
+        (shape
+          (circle In2.Cu 6000 0 0)
+        )
+        (shape
+          (circle PWR 6000 0 0)
+        )
+        (shape
+          (circle In5.Cu 6000 0 0)
+        )
+        (shape
+          (circle B.Cu 6000 0 0)
+        )
+        (attach off)
+      )
+    )
+    (network_out 
+    )
+  )
+)

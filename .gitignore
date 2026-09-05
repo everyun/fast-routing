@@ -3,6 +3,7 @@ target/
 **/*.rs.bk
 *.ses
 !bench/results/java-reference/ses/*.ses
+!bench/results/oos-java-reference/ses/*.ses
 !bench/golden/**/*.ses
 !bench/golden/**/*.rules
 *.tmp
