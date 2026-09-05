@@ -223,17 +223,42 @@ pub fn normal_contacts(
     let Some(item) = board.store().get(id) else {
         return;
     };
-    let points = connectivity::connection_points(item);
-    for point in points.iter() {
-        let mut picked = std::mem::take(&mut scratch.picked);
-        board.normal_contacts_at(id, point, &mut picked);
-        for contact in picked.iter().copied() {
-            if !out.contains(&contact) {
-                out.push(contact);
+    match &item.kind {
+        ItemKind::ConductionArea(_) => {
+            for &net_no in &item.nets {
+                for &other_id in board.store().net_items(net_no) {
+                    if other_id == id {
+                        continue;
+                    }
+                    let Some(other) = board.store().get(other_id) else {
+                        continue;
+                    };
+                    if !connectivity::shares_layer(item, other) {
+                        continue;
+                    }
+                    let points = connectivity::connection_points(other);
+                    if points.iter().any(|p| connectivity::touches_at(item, p)) {
+                        if !out.contains(&other_id) {
+                            out.push(other_id);
+                        }
+                    }
+                }
             }
         }
-        picked.clear();
-        scratch.picked = picked;
+        _ => {
+            let points = connectivity::connection_points(item);
+            for point in points.iter() {
+                let mut picked = std::mem::take(&mut scratch.picked);
+                board.normal_contacts_at(id, point, &mut picked);
+                for contact in picked.iter().copied() {
+                    if !out.contains(&contact) {
+                        out.push(contact);
+                    }
+                }
+                picked.clear();
+                scratch.picked = picked;
+            }
+        }
     }
     out.sort_unstable();
 }
@@ -784,7 +809,8 @@ pub fn route_with_control(
             let Ok(mut search) = MazeSearch::get_instance(&mut engine, start, destination) else {
                 return AttemptOutcome::of(AttemptState::NotRouted);
             };
-            match search.find_connection() {
+            let detours = crate::maze::ripup::BoardDetours::new(engine.board);
+            match search.find_connection_with(&detours) {
                 Ok(connection) => connection,
                 Err(_) => return AttemptOutcome::of(AttemptState::NotRouted),
             }
@@ -1058,7 +1084,7 @@ impl<'r> BatchRouter<'r> {
             rules,
             settings,
             start_ripup_costs: settings.scoring.start_ripup_costs(),
-            remove_unconnected_vias: false,
+            remove_unconnected_vias: true,
             requeue_policy: RequeuePolicy::default(),
             fanout_enabled: false,
             budget: BudgetPolicy::default(),
@@ -1087,6 +1113,7 @@ impl<'r> BatchRouter<'r> {
     /// fanout-tail recovery.
     pub fn with_fanout(mut self, ran: bool) -> BatchRouter<'r> {
         self.fanout_enabled = ran;
+        self.remove_unconnected_vias = !ran;
         self
     }
 
@@ -1582,5 +1609,67 @@ mod tests {
             &mut scratch
         ));
         assert!(fixture.board.store().get(dangling).is_none());
+    }
+
+    #[test]
+    fn conduction_area_normal_contacts_and_connected_set_traversal() {
+        use fr_board::item::{AreaShape, ConductionArea, LayerRange, Pin, PlacedArea, Via};
+        use fr_geometry::planar::IntBox;
+
+        let mut fixture = TestFixture::two_layer_with_pads();
+        // Insert a conduction area on layer 1 covering the whole board
+        let pour_id = fixture.board.insert_item(Item::new(
+            NetNos::of(TEST_NET),
+            1,
+            FixedState::SystemFixed,
+            ItemKind::ConductionArea(ConductionArea {
+                area: PlacedArea::new(AreaShape::Box(IntBox::new(-10000, -10000, 10000, 10000))),
+                layer: 1,
+                is_obstacle: false,
+                is_filled: true,
+            }),
+        ));
+
+        // Insert via 1 on net 1 spanning [0, 1] at (100, 100)
+        let via1 = fixture.board.insert_item(Item::new(
+            NetNos::of(TEST_NET),
+            1,
+            FixedState::Unfixed,
+            ItemKind::Via(Via {
+                center: IntPoint::new(100, 100),
+                padstack_no: 0,
+                layers: LayerRange::new(0, 1),
+                attach_allowed: true,
+                is_escape_via: false,
+                escape_via_smd_layer: -1,
+            }),
+        ));
+
+        // Insert via 2 on net 1 spanning [0, 1] at (500, 500)
+        let via2 = fixture.board.insert_item(Item::new(
+            NetNos::of(TEST_NET),
+            1,
+            FixedState::Unfixed,
+            ItemKind::Via(Via {
+                center: IntPoint::new(500, 500),
+                padstack_no: 0,
+                layers: LayerRange::new(0, 1),
+                attach_allowed: true,
+                is_escape_via: false,
+                escape_via_smd_layer: -1,
+            }),
+        ));
+
+        let mut scratch = ContactScratch::new();
+        let mut pour_contacts = Vec::new();
+        normal_contacts(&fixture.board, pour_id, &mut scratch, &mut pour_contacts);
+        assert!(pour_contacts.contains(&via1), "pour must touch via1");
+        assert!(pour_contacts.contains(&via2), "pour must touch via2");
+
+        // Connected set starting at via1 must reach via2 through the pour
+        let connected = connected_set(&fixture.board, TEST_NET, via1, &mut scratch);
+        assert!(connected.contains(&via1));
+        assert!(connected.contains(&pour_id));
+        assert!(connected.contains(&via2), "connected_set must traverse through conduction area");
     }
 }

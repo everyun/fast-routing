@@ -21,6 +21,10 @@
 //!   `ripup_costs <= 2 × start_ripup_costs`, in **both** the trace and the via
 //!   branch.
 
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
+
+use fr_board::board::Board;
 use fr_board::clearance::ClearanceSource;
 use fr_board::item::{ItemClass, ItemId, ItemKind};
 use fr_geometry::planar::{Line, Point, Polyline, Simplex};
@@ -57,6 +61,158 @@ impl DetourSource for NoDetours {
     #[inline]
     fn detour(&self, _item: ItemId) -> f64 {
         1.0
+    }
+}
+
+/// Dynamic detour calculator querying the board contact graph,
+/// matching upstream `Connection.get(item).get_detour()`.
+pub struct BoardDetours<'a> {
+    board: &'a Board,
+    cache: RefCell<BTreeMap<ItemId, f64>>,
+}
+
+impl<'a> BoardDetours<'a> {
+    /// Creates a new detour source over `board`.
+    pub fn new(board: &'a Board) -> Self {
+        BoardDetours {
+            board,
+            cache: RefCell::new(BTreeMap::new()),
+        }
+    }
+
+    fn calculate_detour(&self, seed: ItemId) -> f64 {
+        let Some(seed_item) = self.board.store().get(seed) else {
+            return 1.0;
+        };
+        if !seed_item.is_routable() {
+            return 1.0;
+        }
+
+        let mut scratch = crate::batch::ContactScratch::new();
+        let mut contacts = Vec::new();
+        crate::batch::normal_contacts(self.board, seed, &mut scratch, &mut contacts);
+
+        let mut connection_items = BTreeSet::new();
+        connection_items.insert(seed);
+
+        let mut start_point: Option<Point> = None;
+        let mut end_point: Option<Point> = None;
+
+        for curr_contact in contacts {
+            let Some(prev_contact_point) =
+                crate::batch::normal_contact_point(self.board, seed, curr_contact)
+            else {
+                continue;
+            };
+            let prev_contact_layer =
+                crate::batch::first_common_layer(self.board, seed, curr_contact).unwrap_or(0);
+            let mut fork_found = false;
+            if matches!(seed_item.kind, ItemKind::Trace(_)) {
+                let mut check = Vec::new();
+                self.board
+                    .normal_contacts_at(seed, &prev_contact_point, &mut check);
+                if check.len() != 1 {
+                    fork_found = true;
+                }
+            }
+
+            let mut curr_id = curr_contact;
+            let mut curr_prev_point = prev_contact_point;
+            let mut curr_prev_layer = prev_contact_layer;
+
+            loop {
+                let Some(curr_item) = self.board.store().get(curr_id) else {
+                    break;
+                };
+                if !curr_item.is_routable() || fork_found {
+                    if start_point.is_none() {
+                        start_point = Some(curr_prev_point);
+                    } else if start_point.as_ref() != Some(&curr_prev_point) {
+                        end_point = Some(curr_prev_point);
+                    }
+                    break;
+                }
+                connection_items.insert(curr_id);
+                let mut curr_contacts = Vec::new();
+                crate::batch::normal_contacts(
+                    self.board,
+                    curr_id,
+                    &mut scratch,
+                    &mut curr_contacts,
+                );
+
+                let mut next_contact: Option<(ItemId, Point, i32)> = None;
+                for tmp_contact in curr_contacts {
+                    let Some(tmp_layer) =
+                        crate::batch::first_common_layer(self.board, curr_id, tmp_contact)
+                    else {
+                        continue;
+                    };
+                    let Some(tmp_point) =
+                        crate::batch::normal_contact_point(self.board, curr_id, tmp_contact)
+                    else {
+                        fork_found = true;
+                        break;
+                    };
+                    if tmp_layer != curr_prev_layer || tmp_point != curr_prev_point {
+                        if next_contact.is_some() {
+                            fork_found = true;
+                            break;
+                        }
+                        next_contact = Some((tmp_contact, tmp_point, tmp_layer));
+                    }
+                }
+                let Some((next_id, next_point, next_layer)) = next_contact else {
+                    break;
+                };
+                curr_id = next_id;
+                curr_prev_point = next_point;
+                curr_prev_layer = next_layer;
+            }
+        }
+
+        let detour = match (&start_point, &end_point) {
+            (Some(sp), Some(ep)) => {
+                let p1 = match sp {
+                    Point::Int(p) => p.to_float(),
+                    Point::Float(p) => *p,
+                    Point::Rational(p) => p.to_float(),
+                };
+                let p2 = match ep {
+                    Point::Int(p) => p.to_float(),
+                    Point::Float(p) => *p,
+                    Point::Rational(p) => p.to_float(),
+                };
+                let min_distance = p1.distance(&p2);
+                let mut trace_length = 0.0f64;
+                for &ci in &connection_items {
+                    if let Some(item) = self.board.store().get(ci) {
+                        if let ItemKind::Trace(trace) = &item.kind {
+                            trace_length += trace.polyline.length_total();
+                        }
+                    }
+                }
+                const DETOUR_ADD: f64 = 100.0;
+                const DETOUR_ITEM_COST: f64 = 0.1;
+                (trace_length + DETOUR_ADD) / (min_distance + DETOUR_ADD)
+                    + DETOUR_ITEM_COST * (connection_items.len().saturating_sub(1) as f64)
+            }
+            _ => f64::from(i32::MAX),
+        };
+
+        for &ci in &connection_items {
+            self.cache.borrow_mut().insert(ci, detour);
+        }
+        detour
+    }
+}
+
+impl<'a> DetourSource for BoardDetours<'a> {
+    fn detour(&self, item: ItemId) -> f64 {
+        if let Some(&val) = self.cache.borrow().get(&item) {
+            return val;
+        }
+        self.calculate_detour(item)
     }
 }
 
@@ -393,6 +549,33 @@ impl AutorouteEngine<'_> {
         let Some(item) = self.board.store().get(item_id) else {
             return Vec::new();
         };
+        match &item.kind {
+            ItemKind::ConductionArea(_) => {
+                let mut result = Vec::new();
+                for &net_no in &item.nets {
+                    for &other_id in self.board.store().net_items(net_no) {
+                        if other_id == item_id {
+                            continue;
+                        }
+                        let Some(other) = self.board.store().get(other_id) else {
+                            continue;
+                        };
+                        if !connectivity::shares_layer(item, other) {
+                            continue;
+                        }
+                        let points = connectivity::connection_points(other);
+                        if points.iter().any(|p| connectivity::touches_at(item, p)) {
+                            if !result.contains(&other_id) {
+                                result.push(other_id);
+                            }
+                        }
+                    }
+                }
+                result.sort_unstable();
+                return result;
+            }
+            _ => {}
+        }
         let mut points: Vec<Point> = Vec::new();
         match &item.kind {
             ItemKind::Trace(trace) => {
@@ -616,5 +799,15 @@ mod tests {
             &FixedDetour(4.0),
         );
         assert_eq!(decision, RipupDecision::Cost(100 * half_width / 4));
+    }
+
+    #[test]
+    fn board_detours_calculates_actual_detour_ratio() {
+        let fixture = TestFixture::with_foreign_trace();
+        let detours = BoardDetours::new(&fixture.board);
+        let trace = fixture.trace_id();
+        let detour = detours.detour(trace);
+        // The fixture has a straight foreign trace, so detour ratio is ~1.0
+        assert!(detour >= 1.0, "detour should be >= 1.0, got {detour}");
     }
 }

@@ -606,7 +606,7 @@ impl Default for LoopConfig {
             max_passes: DEFAULT_MAX_PASSES,
             start_ripup_costs: START_RIPUP_COSTS,
             fanout_enabled: false,
-            remove_unconnected_vias: false,
+            remove_unconnected_vias: true,
             history_limit: crate::batch::history::MAX_HISTORY_SIZE,
             budget: BudgetPolicy::default(),
             deadline: JobDeadline::ambient(),
