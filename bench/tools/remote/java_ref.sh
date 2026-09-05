@@ -12,6 +12,7 @@ SUITE="46"
 MP="20"
 JOB_TIMEOUT="285"
 WORKERS="8"
+WORKTREE=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,6 +32,10 @@ while [ $# -gt 0 ]; do
       WORKERS="$2"
       shift 2
       ;;
+    --worktree)
+      WORKTREE="$2"
+      shift 2
+      ;;
     *)
       echo "error: unknown argument $1" >&2
       exit 1
@@ -44,14 +49,14 @@ RUN_TAG="java-ref-${SUITE}-${TIMESTAMP}"
 
 echo "==> Starting Java reference run: $RUN_TAG on $REMOTE_HOST"
 
-# Copy runner script if needed
-ssh "$REMOTE_HOST" mkdir -p "\$HOME/fr/runs"
-scp -q "$SCRIPT_DIR/run_java.py" "$REMOTE_HOST:~/fr/run_java.py"
+# Copy runner script
+ssh "$REMOTE_HOST" mkdir -p "\$HOME/fr/tools" "\$HOME/fr/runs"
+scp -q "$SCRIPT_DIR/run_java.py" "$REMOTE_HOST:~/fr/tools/run_java.py"
 
 ssh "$REMOTE_HOST" bash -s <<REMOTE_SCRIPT
 set -euo pipefail
 RUN_DIR="\$HOME/fr/runs/${RUN_TAG}"
-python3 "\$HOME/fr/run_java.py" \
+python3 "\$HOME/fr/tools/run_java.py" \
   --suite "${SUITE}" \
   --mp "${MP}" \
   --job-timeout "${JOB_TIMEOUT}" \

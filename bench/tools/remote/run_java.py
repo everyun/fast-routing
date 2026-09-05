@@ -133,6 +133,7 @@ def main() -> int:
     ap.add_argument("--hard-timeout", type=int, default=None)
     ap.add_argument("-w", "--concurrency", type=int, default=8)
     ap.add_argument("--out", required=True, help="Output directory")
+    ap.add_argument("--repo-root", default=None)
     ap.add_argument("--fixtures-dir", default=None)
 
     args = ap.parse_args()
@@ -140,8 +141,22 @@ def main() -> int:
     out_dir = Path(args.out).resolve()
     hard_timeout = args.hard_timeout or (args.job_timeout + 35)
 
+    repo_root = None
+    if args.repo_root:
+        repo_root = Path(args.repo_root).resolve()
+    else:
+        for p in sorted(Path.home().glob("fr/worktrees/*")):
+            if (p / "bench/fixtures-oos").is_dir():
+                repo_root = p
+                break
+
     if args.suite == "oos":
-        fixtures_dir = Path(args.fixtures_dir or "/tmp/freerouting-upstream/fixtures-oos").resolve()
+        if args.fixtures_dir:
+            fixtures_dir = Path(args.fixtures_dir).resolve()
+        elif repo_root and (repo_root / "bench/fixtures-oos").is_dir():
+            fixtures_dir = repo_root / "bench/fixtures-oos"
+        else:
+            fixtures_dir = Path("/tmp/freerouting-upstream/fixtures-oos").resolve()
         boards = [b for b in SUITE_OOS if (fixtures_dir / f"{b}.dsn").is_file()]
     elif args.suite == "24":
         fixtures_dir = Path(args.fixtures_dir or "/tmp/freerouting-upstream/fixtures").resolve()

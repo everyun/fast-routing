@@ -443,3 +443,35 @@ multi-pin "nets" need no wires (pins already touching / connected by plane).
   compound document. Java "succeeds" on it in 3.8 s with score 0.00 — exactly
   the kind of free win the `java_degenerate` class exists to keep out of the
   numbers.
+
+## Remote quality sweeps (orca)
+
+To relieve local machine contention while iterating on router quality, full suite runs (24, 46, and OOS) can be offloaded to the dedicated Debian host **orca** (`172.20.0.6`, 80 cores, 125 GB RAM).
+
+### Scripts (`bench/tools/remote/`)
+
+- `push.sh <worktree_or_commit>`: pushes the local branch or commit to `orca:~/fr/fast-routing.git`.
+- `quality.sh <worktree_or_commit> [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors on|off] [-w 8]`:
+  1. Pushes code to orca via `push.sh`.
+  2. Updates/creates worktree on orca under `~/fr/worktrees/<branch>`.
+  3. Builds `fr-cli` and `g21-referee` in isolated per-branch target `~/fr/targets/<branch>`.
+  4. Runs boards with concurrency $W=8$ (`nice -n 10`).
+  5. Judges sessions against reference via `g21_judge.py`.
+  6. Rsyncs logs, sessions, and `gate.json` back to Mac under `~/fr-work/logs/remote/<tag>/`.
+- `java_ref.sh [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [-w 8]`:
+  Runs the pinned Freerouting 2.3.0 jar on orca with clean isolated `--user_data_path` per board, syncing sessions and logs back.
+
+### Usage
+
+```sh
+# Run 46-board quality sweep from current worktree
+bench/tools/remote/quality.sh . --suite 46
+
+# Run 24-board unique java_finished sweep with 45-degree doors enabled
+bench/tools/remote/quality.sh ~/fr-work/angles --suite 24 --doors on
+
+# Run 9-board out-of-sample sweep
+bench/tools/remote/quality.sh . --suite oos
+```
+
+**Note**: orca has no KiCad installation, so G4 (KiCad DRC and angle checks) remains on the Mac host. Serial ledger timings (README benchmarks) also remain on the quiet Mac host.
