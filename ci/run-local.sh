@@ -76,32 +76,17 @@ step "fmt" cargo fmt --all -- --check
 
 step "clippy" cargo clippy --workspace --all-targets -- -D warnings
 
-# Companion Issue026.ses / Java golden .ses files are not in the 46-file DSN
-# corpus `fetch_fixtures.sh` produces, and `*.ses` is gitignored, so the five
-# tests that read them fail loudly on a clean checkout (G1.3). Skip those;
-# everything else must pass.
+# Run full test suite; everything must pass.
 step "test (debug)" cargo test --workspace --locked --no-fail-fast -- \
-  --test-threads=8 \
-  --skip issue026_wiring_round_trips_and_is_judged_identically \
-  --skip a_session_written_by_the_java_jar_reads_back \
-  --skip upstream_compat_mode_reproduces_the_two_documented_divergences \
-  --skip via_padstacks_are_declared_once_even_when_the_dsn_names_them_twice \
-  --skip issue026_matches_the_java_writer_up_to_the_routing
+  --test-threads=8
 
 # #[ignore]d long tests (portfolio_race routes a real board for minutes in a
 # debug build). Off by default; `ci/run-local.sh --long` or FR_LONG_TESTS=1.
-# NOTE: --include-ignored runs normal tests TOO (it does not mean "only
-# ignored"), so the ses-less skips above must be repeated here. One more skip:
-# the `alloc_stats` doctest is a ```ignore snippet that only compiles with
+# The `alloc_stats` doctest is a ```ignore snippet that only compiles with
 # `--features fr-metrics/alloc-stats` — it is documentation, not a test.
 if [ "$LONG" = "1" ]; then
   step "test (long, ignored)" cargo test --workspace --locked --no-fail-fast -- \
     --test-threads=8 --include-ignored \
-    --skip issue026_wiring_round_trips_and_is_judged_identically \
-    --skip a_session_written_by_the_java_jar_reads_back \
-    --skip upstream_compat_mode_reproduces_the_two_documented_divergences \
-    --skip via_padstacks_are_declared_once_even_when_the_dsn_names_them_twice \
-    --skip issue026_matches_the_java_writer_up_to_the_routing \
     --skip alloc_stats
 fi
 

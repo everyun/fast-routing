@@ -46,21 +46,38 @@ const SESSION: &str = "Issue026-J2_reference.ses";
 /// A board unit — see the module docs.
 const CORNER_TOLERANCE: i32 = 1;
 
+fn repo_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("the crate is two levels below the workspace root")
+        .to_path_buf()
+}
+
 fn fixture_dir() -> PathBuf {
     let dir = std::env::var_os("FR_FIXTURE_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/tmp/freerouting-upstream/fixtures"));
-    assert!(
-        dir.is_dir(),
+    if dir.is_dir() {
+        return dir;
+    }
+    let golden = repo_root().join("bench/golden/fixtures");
+    if golden.is_dir() {
+        return golden;
+    }
+    panic!(
         "fixture directory '{}' is missing; run bench/fetch_fixtures.sh or set FR_FIXTURE_DIR",
         dir.display()
     );
-    dir
 }
 
 fn read_fixture(name: &str) -> Vec<u8> {
     let path = fixture_dir().join(name);
-    std::fs::read(&path).unwrap_or_else(|error| {
+    if let Ok(bytes) = std::fs::read(&path) {
+        return bytes;
+    }
+    let golden_path = repo_root().join("bench/golden/fixtures").join(name);
+    std::fs::read(&golden_path).unwrap_or_else(|error| {
         panic!(
             "fixture '{}' is missing ({error}); run bench/fetch_fixtures.sh",
             path.display()

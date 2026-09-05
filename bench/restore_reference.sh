@@ -92,6 +92,15 @@ for name in names:
         missing.append(name)
 if missing:
     sys.exit("missing fixtures: " + ", ".join(missing[:8]))
+# Also copy all companion fixture files (.ses, .rules, .log, etc.)
+for item in os.listdir(src):
+    s, d = os.path.join(src, item), os.path.join(dst, item)
+    if os.path.isfile(s):
+        if (not os.path.isfile(d)) or os.path.getsize(s) != os.path.getsize(d):
+            shutil.copy2(s, d)
+    elif os.path.isdir(s) and not item.startswith("."):
+        if not os.path.isdir(d):
+            shutil.copytree(s, d)
 print(f"    {len(names)} dsn in {dst}")
 PY
 ln -sfn "$fixroot" /tmp/freerouting-upstream

@@ -13,13 +13,19 @@ use fr_io::specctra::{
     ses_write::{write_session, write_session_verbose, SesInput},
 };
 
-/// The 2.3.0 jar's own session files, from the bench run that produced
-/// `bench/results/20260828-013025/`. Integration tests run with the crate directory as their
-/// working directory, hence the climb to the workspace root.
+/// The 2.3.0 jar's own session files, from the hermetic Java reference baseline.
 const JAVA_SES_DIR: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../bench/results/java-reference/ses"
 );
+
+fn repo_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crate is two levels below workspace root")
+        .to_path_buf()
+}
 
 fn fixture_dir() -> std::path::PathBuf {
     std::env::var_os("FR_FIXTURE_DIR")
@@ -29,7 +35,11 @@ fn fixture_dir() -> std::path::PathBuf {
 
 fn read_fixture(name: &str) -> Vec<u8> {
     let path = fixture_dir().join(name);
-    std::fs::read(&path).unwrap_or_else(|error| {
+    if let Ok(bytes) = std::fs::read(&path) {
+        return bytes;
+    }
+    let golden_path = repo_root().join("bench/golden/fixtures").join(name);
+    std::fs::read(&golden_path).unwrap_or_else(|error| {
         panic!(
             "fixture '{}' is missing ({error}); run bench/fetch_fixtures.sh or set FR_FIXTURE_DIR",
             path.display()
@@ -242,8 +252,9 @@ fn via_padstacks_are_declared_once_even_when_the_dsn_names_them_twice() {
     let text = write_session(&SesInput::from_design(&design, "Issue026-J2_reference.dsn"));
     assert_eq!(text.matches("(padstack \"Via[0-1]_800:400_um\"").count(), 1);
 
-    let v19 = std::fs::read_to_string(fixture_dir().join("Issue026-J2_reference.ses"))
-        .expect("the companion v1.9 session file is part of the fixture set");
+    let v19_bytes = read_fixture("Issue026-J2_reference.ses");
+    let v19 = String::from_utf8(v19_bytes)
+        .expect("the companion v1.9 session file is utf-8");
     assert_eq!(
         v19.matches("(padstack \"Via[0-1]_800:400_um\"").count(),
         2,

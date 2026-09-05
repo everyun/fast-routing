@@ -1,0 +1,9 @@
+2026-08-28 06:24:01.741 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+WARNING: Final field userProfileSettings in class app.freerouting.settings.GlobalSettings has been mutated reflectively by class com.google.gson.internal.bind.ReflectiveTypeAdapterFactory$2 in unnamed module @706a04ae (file:/private/tmp/frbase/freerouting-2.3.0.jar)
+WARNING: Use --enable-final-field-mutation=ALL-UNNAMED to avoid a warning
+WARNING: Mutating final fields will be blocked in a future release unless final field mutation is enabled
+2026-08-28 06:24:03.151 INFO   Opening '/tmp/freerouting-upstream/fixtures/Issue039-bug-design.dsn'...
+2026-08-28 06:24:03.173 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 06:24:03.570 INFO   [61EEC1\11FA6D] Loading board file 'Issue039-bug-design.dsn'...
+2026-08-28 06:24:03.573 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-08-28 06:24:10.160 INFO   Saving '/Users/chiqingzhen/Documents/fast-routing/bench/golden/dumps/Issue039-bug-design.import.dsn'...

@@ -52,6 +52,14 @@ use fr_io::specctra::{
 /// docs, point 2.
 const CORNER_TOLERANCE: i32 = 1;
 
+fn repo_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .expect("crate is two levels below workspace root")
+        .to_path_buf()
+}
+
 fn fixture_dir() -> std::path::PathBuf {
     std::env::var_os("FR_FIXTURE_DIR")
         .map(std::path::PathBuf::from)
@@ -60,7 +68,11 @@ fn fixture_dir() -> std::path::PathBuf {
 
 fn read_fixture(name: &str) -> Vec<u8> {
     let path = fixture_dir().join(name);
-    std::fs::read(&path).unwrap_or_else(|error| {
+    if let Ok(bytes) = std::fs::read(&path) {
+        return bytes;
+    }
+    let golden_path = repo_root().join("bench/golden/fixtures").join(name);
+    std::fs::read(&golden_path).unwrap_or_else(|error| {
         panic!(
             "fixture '{}' is missing ({error}); run bench/fetch_fixtures.sh or set FR_FIXTURE_DIR",
             path.display()

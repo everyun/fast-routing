@@ -3,8 +3,11 @@ target/
 **/*.rs.bk
 *.ses
 !bench/results/java-reference/ses/*.ses
+!bench/golden/**/*.ses
+!bench/golden/**/*.rules
 *.tmp
 *.log
+!bench/golden/**/*.log
 # per-run temp out-dirs of the stability sweep (canonical output: sweep.json)
 bench/results/java-stability/*/
 # per-run JVM profile dirs of the uncapped re-run (canonical output: <stem>.log + results.json)
