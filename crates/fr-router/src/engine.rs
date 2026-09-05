@@ -178,6 +178,10 @@ pub struct AutorouteEngine<'b> {
     tile_simplex_base: Vec<u32>,
     /// The memo cells for [`AutorouteEngine::tile_simplex_base`].
     tile_simplex_cache: Vec<std::cell::OnceCell<std::rc::Rc<Simplex>>>,
+    /// Same flat layout for the octagon flavor — the 45° carve octagonizes
+    /// every collected obstacle, and `tile_octagon` of a Simplex tile is f64
+    /// corner math per call.
+    tile_octagon_cache: Vec<std::cell::OnceCell<Option<IntOctagon>>>,
     /// Guard against unbounded recursion in `restrain_shape`.
     restrain_depth: u32,
     /// This connection's allowance, when the caller armed one.
@@ -383,6 +387,7 @@ impl<'b> AutorouteEngine<'b> {
             scratch_collect_own_net: None,
             tile_simplex_base: Vec::new(),
             tile_simplex_cache: Vec::new(),
+            tile_octagon_cache: Vec::new(),
             restrain_depth: 0,
             clock: None,
         }
@@ -494,6 +499,7 @@ impl<'b> AutorouteEngine<'b> {
         self.item_cache = None;
         self.tile_simplex_base.clear();
         self.tile_simplex_cache.clear();
+        self.tile_octagon_cache.clear();
         self.drills.clear();
         self.pages.reset_all();
         self.nodes.reset();
@@ -862,6 +868,8 @@ impl<'b> AutorouteEngine<'b> {
             self.tile_simplex_base[slot.index()] = self.tile_simplex_cache.len() as u32;
             self.tile_simplex_cache
                 .resize_with(self.tile_simplex_cache.len() + tile_count, Default::default);
+            self.tile_octagon_cache
+                .resize_with(self.tile_octagon_cache.len() + tile_count, Default::default);
             let obstacle = item.is_trace_obstacle(net_no);
             for (index, tile) in tree.item_shapes(slot, id).iter().enumerate() {
                 let Some(shape) = tile.shape.as_ref() else {
@@ -1292,6 +1300,22 @@ impl<'b> AutorouteEngine<'b> {
         item: ItemId,
         index: u16,
     ) -> Option<IntOctagon> {
+        if let Some(cell) = self
+            .tile_simplex_base
+            .get(slot.index())
+            .and_then(|base| self.tile_octagon_cache.get(*base as usize + index as usize))
+        {
+            return *cell.get_or_init(|| {
+                self.tree()
+                    .item_shapes(slot, item)
+                    .get(index as usize)
+                    .and_then(|tile| tile.shape.as_ref())
+                    .and_then(tile_octagon)
+            });
+        }
+        // The cache only exists once the connection's item cache is built;
+        // every 45°-chain caller has collected first, so this is the cold
+        // path for direct callers.
         let tile = self
             .tree()
             .item_shapes(slot, item)

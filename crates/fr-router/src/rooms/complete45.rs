@@ -194,6 +194,22 @@ impl AutorouteEngine<'_> {
             let Some(obstacle_oct) = self.obstacle_octagon(obstacle) else {
                 continue;
             };
+            // Cheap integer reject before the exact loop: the item octagon
+            // is memoized per connection (see `tile_octagon_cache`), so this
+            // box costs four integer reads. `octagon_overlaps` implies the
+            // bounding boxes intersect, so an obstacle disjoint from every
+            // candidate's box keeps all of them unchanged — exactly the
+            // loop's answer. (`scratch_hit_bounds` would avoid the memo
+            // read, but the plain `overlapping_obstacles_tile` re-sorts for
+            // the neighbour order after collecting, so it is not paired
+            // with the collect's bounds here.)
+            let obstacle_bounds = obstacle_oct.bounding_box();
+            if !result
+                .iter()
+                .any(|candidate| candidate.shape.bounding_box().intersects(&obstacle_bounds))
+            {
+                continue;
+            }
 
             let mut new_result: Vec<Room45> = Vec::new();
             for candidate in &result {
