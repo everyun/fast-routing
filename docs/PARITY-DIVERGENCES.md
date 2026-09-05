@@ -35,6 +35,41 @@ ARCHITECTURE "Budgets".
   *Effect*: CLI `-de … -mp 20` now runs fanout then route then optimizer, as the jar does.
   `--no-fanout` restores the previous CLI.
 
+- **Pull-tight fork-splice recheck** (`fr_router::pull_tight`,
+  `PullTightAlgo::check_fork_splice`, called from the acute branch of all
+  four §6.4 end-corner rules). *Upstream* (`board/PullTightAlgo45.java:475-497`
+  and its three copies) splices the contact trace's line in as the adjusted
+  trace's new leading line with no clearance recheck: the adjusted trace can
+  cover ground its predecessor never legally occupied. *We* check the spliced
+  three-line window at the compensated half width (same granularity as the
+  bend branch's `reposition_line`) and refuse the move when it fails.
+  *Why*: on easyeda-pcb1 the fanout escape of pin `u1-66` (net
+  GND1_SMOOTHING) ends beside a full-width trunk; the acute rule extended
+  that trunk's centerline to the contact point inside its own end cap, and
+  the spur's cap landed in netless pin `u1-127`'s pad — gap 295 vs 800
+  required, the run's only added violation. Upstream never hits it there
+  because its escape geometry differs; the construction itself is
+  unchecked upstream. *Effect*: strictly fewer coverage-extending
+  adjustments; easy-10 SES byte-identical with the gate; the acute joint
+  stays acute where the splice would violate.
+
+- **Destination-pin neckdown stub** (`fr_router::maze::search`,
+  `check_neck_down_at_dest_pin` returns 0). *Upstream*
+  (`autoroute/MazeSearchAlgo.java:1542-1550`) walks the room's target doors
+  and returns the first Pin's `get_trace_neckdown_halfwidth(layer)`, and
+  `:340-347` then caps `half_width` with it for `ExpansionDoor` entries.
+  *We* return 0 = "no destination pin needs neckdown" (M2a stub). The
+  start-pin side (`:361-369`, `TargetItemExpansionDoor` to a Pin) **is**
+  ported — `AutorouteEngine::pin_trace_neckdown_halfwidth`, tested by
+  `fr-router/tests/neckdown_start_pin.rs` on easyeda-pcb1's `$1N2152` —
+  so the remaining delta is dest-side only. *Effect*: on a board whose
+  destination pin is narrower than the trace width, we keep the full-width
+  `half_width` into the small-door test where upstream necks down; no
+  46-fixture board exhibits it (the property is unique to the EasyEDA
+  export, where the start-pin branch is what the escapes actually need).
+  Fix is a three-liner on top of `pin_trace_neckdown_halfwidth` when a board
+  demonstrates it.
+
 - **Fanout no-progress stop** (`fr_router::fanout`, `NO_PROGRESS_PASS_LIMIT = 2`).
   *Upstream* (`autoroute/BatchFanout.java:82-144`) stops a fanout run on three conditions only:
   `routed_count == 0` (`:111-113`), three consecutive **bit-identical** `(routed_count << 32) ^

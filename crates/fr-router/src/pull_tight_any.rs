@@ -962,6 +962,9 @@ impl PullTightAlgo<'_> {
             new_lines.push(contact.line);
             new_lines.push(add_line);
             new_lines.extend_from_slice(&arr[copy_from..copy_from + new_line_count - 2]);
+            if !self.check_fork_splice(&[contact.line, add_line, arr[copy_from]]) {
+                return None;
+            }
             return polyline_from_lines(&new_lines);
         }
         if fork.bend {
@@ -1060,6 +1063,9 @@ impl PullTightAlgo<'_> {
             new_lines.extend_from_slice(&arr[..new_line_count - 2]);
             new_lines.push(add_line);
             new_lines.push(contact.line);
+            if !self.check_fork_splice(&[arr[new_line_count - 3], add_line, contact.line]) {
+                return None;
+            }
             return polyline_from_lines(&new_lines);
         }
         if fork.bend {

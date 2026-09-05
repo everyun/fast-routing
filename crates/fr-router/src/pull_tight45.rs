@@ -539,6 +539,11 @@ impl PullTightAlgo<'_> {
             new_lines.push(contact.line);
             new_lines.push(add_line);
             new_lines.extend_from_slice(&arr[1..]);
+            // Divergence gate: the splice is unchecked upstream (see
+            // `check_fork_splice`).
+            if !self.check_fork_splice(&[contact.line, add_line, arr[1]]) {
+                return None;
+            }
             return polyline_from_lines(&new_lines);
         }
         if fork.bend {
@@ -610,6 +615,9 @@ impl PullTightAlgo<'_> {
             new_lines.extend_from_slice(&arr[..arr.len() - 1]);
             new_lines.push(add_line);
             new_lines.push(contact.line);
+            if !self.check_fork_splice(&[arr[arr.len() - 2], add_line, contact.line]) {
+                return None;
+            }
             return polyline_from_lines(&new_lines);
         }
         if fork.bend {

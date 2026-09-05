@@ -1171,6 +1171,29 @@ impl<'b> PullTightAlgo<'b> {
         Some(fork)
     }
 
+    /// Clearance gate for the acute fork splice (PARITY-DIVERGENCES,
+    /// "pull-tight fork-splice recheck"). Upstream's chamfer construction has
+    /// no clearance recheck: the contact's line becomes the adjusted trace's
+    /// new leading line, so the splice can cover ground the trace never
+    /// legally occupied — on easyeda-pcb1 a full-width net-31 trace grew a
+    /// spur into netless pin 129's pad (gap 295 < 800, the +1v). Checks the
+    /// spliced three-line window at the compensated half width, the same
+    /// granularity `reposition_line_base` uses for the bend branch. A
+    /// degenerate window is not gated (upstream would produce it too).
+    pub(crate) fn check_fork_splice(&mut self, lines: &[Line]) -> bool {
+        if lines.len() < 3 {
+            return true;
+        }
+        let window = Polyline::new_from_lines(&lines[..3]);
+        if window.arr.len() < 3 {
+            return true;
+        }
+        match window.offset_shape(self.curr_half_width, 0) {
+            Some(shape) => self.check_trace_shape(&shape),
+            None => true,
+        }
+    }
+
     /// The chamfer line the `acute_angle` branch of all four §6.4 rules builds
     /// (`PullTightAlgo45.java:475-497` and its three copies, which differ only
     /// in the two `turn_45_degree` factors).
