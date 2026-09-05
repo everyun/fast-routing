@@ -1320,12 +1320,14 @@ mod tests {
         let rules = fixture.rules.clone();
         let settings = fixture.settings.clone();
 
-        // A plain router at `-mp 1` requeues; the seam has to be reachable.
+        // A plain router with SinglePassOnly at `-mp 1` requeues; the seam has to be reachable.
         let mut plain = BatchRouter::new(&rules, &settings);
+        plain.requeue_policy = crate::batch::schedule::RequeuePolicy::SinglePassOnly;
+        plain.set_requeue_active(true);
         plain.autoroute_pass(&mut fixture.board.clone(), 1);
         assert!(
             plain.requeue_active(),
-            "the default is upstream's -mp 1 rule"
+            "SinglePassOnly requeues on pass 1"
         );
 
         // ... and what `MazeRerouter` builds does not.

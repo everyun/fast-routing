@@ -1118,9 +1118,8 @@ impl<'r> BatchRouter<'r> {
             board_units_per_mm: 1.0,
             parallel_connections: threads::Threads::single(),
             work_order: portfolio::WorkOrder::default(),
-            // A direct `autoroute_pass` caller drives a single pass, which is
-            // the case the requeue exists for; `run` overwrites this.
-            requeue_active: true,
+            // A direct `autoroute_pass` caller drives a single pass, matching RequeuePolicy::default().
+            requeue_active: false,
             total_items_routed: 0,
             scratch: ContactScratch::new(),
             routed_copper: Vec::new(),

@@ -48,6 +48,7 @@ use std::path::PathBuf;
 
 use fr_io::specctra;
 use fr_router::batch::BatchRouter;
+use fr_router::RequeuePolicy;
 use fr_router::{BoardScorer, CheckScorer};
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 
@@ -254,23 +255,24 @@ fn no_pass_cap_ends_below_its_best_retained_board_or_below_one_pass() {
     }
 }
 
-/// A pass cap of 1 keeps the M2a divergence (the in-pass requeue); anything
-/// above it runs upstream's no-retry-inside-a-pass rule
-/// (`docs/PARITY-DIVERGENCES.md`, `RequeuePolicy::SinglePassOnly`).
+/// A pass cap of 1 with SinglePassOnly keeps the M2a divergence (the in-pass requeue);
+/// the default Never policy runs upstream's no-retry-inside-a-pass rule at all pass counts.
 #[test]
 fn the_requeue_divergence_is_confined_to_single_pass_runs() {
     let Some(mut loaded) = load("Issue026-J2_reference.dsn") else {
         return;
     };
     let mut router = BatchRouter::new(&loaded.design.rules, &loaded.settings);
+    router.requeue_policy = RequeuePolicy::SinglePassOnly;
     let single = router.run(&mut loaded.design.board, 1);
-    assert!(router.requeue_active(), "-mp 1 requeues");
+    assert!(router.requeue_active(), "-mp 1 with SinglePassOnly requeues");
     let requeued_at_one: usize = single.passes.iter().map(|pass| pass.requeued).sum();
 
     let Some(mut loaded) = load("Issue026-J2_reference.dsn") else {
         return;
     };
     let mut router = BatchRouter::new(&loaded.design.rules, &loaded.settings);
+    router.requeue_policy = RequeuePolicy::SinglePassOnly;
     let multi = router.run(&mut loaded.design.board, 4);
     assert!(!router.requeue_active(), "-mp 4 runs upstream's rule");
     assert_eq!(

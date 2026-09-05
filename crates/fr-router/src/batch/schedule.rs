@@ -411,14 +411,14 @@ impl JobDeadline {
 /// explicit, and its default resolves on the pass count.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RequeuePolicy {
-    /// Requeue only when a single pass was asked for — **the default**.
+    /// Requeue only when a single pass was asked for.
     ///
     /// `-mp 1` requeues; `-mp >= 2` runs upstream's no-retry-inside-a-pass rule,
     /// so a multi-pass run is a faithful transcription and the intermediate
     /// boards match the release's.
-    #[default]
     SinglePassOnly,
-    /// Never requeue: upstream's behaviour at every pass count.
+    /// Never requeue: upstream's behaviour at every pass count — **the default**.
+    #[default]
     Never,
     /// Always requeue, whatever the pass count. Diverges from upstream on every
     /// multi-pass run; kept for A/B measurement of the divergence.
@@ -1768,9 +1768,11 @@ mod tests {
 
     #[test]
     fn the_requeue_policy_resolves_on_the_pass_count() {
-        assert!(RequeuePolicy::default().applies_to(1));
+        assert!(!RequeuePolicy::default().applies_to(1));
         assert!(!RequeuePolicy::default().applies_to(2));
         assert!(!RequeuePolicy::Never.applies_to(1));
         assert!(RequeuePolicy::Always.applies_to(8));
+        assert!(RequeuePolicy::SinglePassOnly.applies_to(1));
+        assert!(!RequeuePolicy::SinglePassOnly.applies_to(2));
     }
 }
