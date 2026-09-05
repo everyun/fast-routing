@@ -466,7 +466,9 @@ impl<'b> AutorouteEngine<'b> {
     /// its bounding octagon and reading octagons back is what makes that free.
     #[inline]
     pub fn angle_family(&self) -> TreeAngleFamily {
-        if self.tiling_45.is_on() {
+        if self.board.angle_restriction() == AngleRestriction::Ninety {
+            TreeAngleFamily::Ninety
+        } else if self.tiling_45.is_on() {
             TreeAngleFamily::FortyFive
         } else {
             TreeAngleFamily::AnyAngle
@@ -1332,6 +1334,25 @@ impl<'b> AutorouteEngine<'b> {
             Obstacle::Room(room) => {
                 let room = self.rooms.room(room);
                 room.alive.then(|| room.octagon())
+            }
+        }
+    }
+
+    /// [`obstacle_shape`](Self::obstacle_shape) in the box flavor.
+    pub fn obstacle_box(&self, obstacle: Obstacle) -> Option<IntBox> {
+        match obstacle {
+            Obstacle::Item(item, index, slot) => {
+                let tile = self
+                    .tree()
+                    .item_shapes(slot, item)
+                    .get(index as usize)?
+                    .shape
+                    .as_ref()?;
+                Some(tile.bounding_box())
+            }
+            Obstacle::Room(room) => {
+                let room = self.rooms.room(room);
+                room.alive.then(|| room.shape.bounding_box())
             }
         }
     }

@@ -690,6 +690,13 @@ impl Board {
                 store,
                 ctx,
             );
+        } else if *angle_restriction == AngleRestriction::Ninety {
+            trees.ensure_compensated_tree_with_family(
+                clearance_class,
+                crate::search_tree::TreeAngleFamily::Ninety,
+                store,
+                ctx,
+            );
         }
     }
 

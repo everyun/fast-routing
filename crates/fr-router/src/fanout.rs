@@ -55,8 +55,8 @@
 //! interrupting mid-attempt would make what gets inserted depend on load.
 
 use fr_board::board::Board;
-use fr_board::item::{ItemId, ItemKind};
-use fr_geometry::planar::{FloatPoint, IntPoint};
+use fr_board::item::{AreaShape, ItemId, ItemKind};
+use fr_geometry::planar::{FloatPoint, IntBox, IntPoint};
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::RouterSettings;
 use fr_rules::via_rule::ViaRule;
@@ -450,7 +450,6 @@ pub fn fanout_board(
     let mut scratch = ContactScratch::new();
     let mut previous_state: Option<(usize, usize)> = None;
     let mut identical_passes = 0u32;
-    let mut zero_progress_passes = 0u32;
 
     for pass_no in 0..config.max_passes.max(0) {
         if config.deadline.expired() {
@@ -483,20 +482,8 @@ pub fn fanout_board(
             outcome.stop = Some(FanoutStop::NothingRouted);
             return outcome;
         }
-        // Our earlier stop; `routed == 0` above already covers the zero case,
-        // so this fires on a pass that routed only pins it had routed before,
-        // i.e. the board's escape count did not grow.
-        let state = (counters.routed, counters.via_count);
-        if previous_state.is_some_and(|previous| previous.1 >= state.1) {
-            zero_progress_passes += 1;
-            if zero_progress_passes >= config.no_progress_pass_limit {
-                outcome.stop = Some(FanoutStop::NoProgress);
-                return outcome;
-            }
-        } else {
-            zero_progress_passes = 0;
-        }
         // Row 22 — the release's `(routed << 32) ^ vias` oscillation detector.
+        let state = (counters.routed, counters.via_count);
         if previous_state == Some(state) {
             identical_passes += 1;
             if identical_passes >= STAGNATION_PASS_LIMIT {
@@ -634,11 +621,9 @@ pub fn fanout_pin(
     // first, else route against the whole set at once.
     let mut targets = unconnected;
     targets.sort_by(|a, b| {
-        target_distance_square(board, *a, &pin.center).total_cmp(&target_distance_square(
-            board,
-            *b,
-            &pin.center,
-        ))
+        let da = target_distance_square(board, *a, &pin.center);
+        let db = target_distance_square(board, *b, &pin.center);
+        da.total_cmp(&db).then_with(|| a.cmp(b))
     });
     if targets.len() <= 4 {
         // No allowance: `RoutingBoard.fanout` builds its engine with
@@ -716,12 +701,34 @@ fn target_distance_square(board: &Board, id: ItemId, pin_center: &IntPoint) -> f
         ItemKind::Pin(pin) => pin.center.to_float(),
         ItemKind::Via(via) => via.center.to_float(),
         ItemKind::Trace(trace) => {
-            let (a, b) = (trace.first_corner(), trace.last_corner());
-            let (a, b) = (a.to_float(), b.to_float());
-            FloatPoint {
-                x: (a.x + b.x) / 2.0,
-                y: (a.y + b.y) / 2.0,
-            }
+            let b = trace.polyline.bounding_box();
+            FloatPoint::new(
+                (b.ll.x as f64 + b.ur.x as f64) / 2.0,
+                (b.ll.y as f64 + b.ur.y as f64) / 2.0,
+            )
+        }
+        ItemKind::ConductionArea(area) => {
+            let b = match &area.area.relative_area {
+                AreaShape::Box(b) => *b,
+                AreaShape::Octagon(o) => o.bounding_box(),
+                AreaShape::Simplex(s) => s.bounding_box(),
+                AreaShape::Polygon(p) => {
+                    let mut b = IntBox::EMPTY;
+                    for pt in p.corner_array() {
+                        let fp = pt.to_float();
+                        let ip = fp.round();
+                        b = b.union(&IntBox::new(ip.x, ip.y, ip.x, ip.y));
+                    }
+                    b
+                }
+                AreaShape::Convex(v) => v
+                    .iter()
+                    .fold(IntBox::EMPTY, |acc, s| acc.union(&s.bounding_box())),
+            };
+            FloatPoint::new(
+                (b.ll.x as f64 + b.ur.x as f64) / 2.0 + area.area.translation.x as f64,
+                (b.ll.y as f64 + b.ur.y as f64) / 2.0 + area.area.translation.y as f64,
+            )
         }
         _ => return f64::MAX,
     };

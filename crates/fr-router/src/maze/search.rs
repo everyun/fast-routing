@@ -1161,12 +1161,20 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         }
     }
 
-    /// `MazeSearchAlgo.check_neck_down_at_dest_pin` (`:1542-1550`) — stub
-    /// returning 0, i.e. "no destination pin needs neckdown". Upstream reads
-    /// the first target-door pin's neckdown half width; the pieces exist now
-    /// (`pin_trace_neckdown_halfwidth`). Declared in PARITY-DIVERGENCES
-    /// ("Destination-pin neckdown stub").
-    fn check_neck_down_at_dest_pin(&self, _room: RoomId) -> f64 {
+    /// `MazeSearchAlgo.check_neck_down_at_dest_pin` (`:1542-1550`): checks if
+    /// `room` contains a destination pin that needs neckdown on the room's layer,
+    /// returning that neckdown half width, or 0 if none.
+    fn check_neck_down_at_dest_pin(&self, room: RoomId) -> f64 {
+        let layer_no = self.engine.rooms.room(room).layer;
+        for &door_id in &self.engine.rooms.room(room).target_doors {
+            if let DoorKind::Target { item, .. } = self.engine.rooms.door(door_id).kind {
+                if let Some(neckdown) = self.engine.pin_trace_neckdown_halfwidth(item, layer_no) {
+                    if neckdown > 0 {
+                        return neckdown as f64;
+                    }
+                }
+            }
+        }
         0.0
     }
 

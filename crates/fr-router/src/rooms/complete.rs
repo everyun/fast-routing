@@ -118,6 +118,9 @@ impl AutorouteEngine<'_> {
         // what decides which `complete_shape` runs. The dispatch lives here so
         // the whole lifecycle below — `complete_expansion_room`, the re-completion
         // of the second and later candidates, `try_remove_edge` — is shared.
+        if self.is_ninety() {
+            return self.complete_shape_90(shape, contained, layer, ignore_room, ignore_shape);
+        }
         if self.is_fortyfive_completion() {
             return self.complete_shape_45(shape, contained, layer, ignore_room, ignore_shape);
         }

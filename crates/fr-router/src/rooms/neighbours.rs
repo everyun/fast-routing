@@ -62,8 +62,12 @@ impl AutorouteEngine<'_> {
     /// [`id_no`](crate::rooms::Room::id_no) — see [`mint_room_id`](Self::mint_room_id).
     pub fn calculate_doors(&mut self, room_id: RoomId) {
         // `AutorouteEngine.java:520-525` dispatches on the *tree* subclass:
+        // `ShapeSearchTree90Degree` → `SortedOrthogonalRoomNeighbours`,
         // `ShapeSearchTree45Degree` → `Sorted45DegreeRoomNeighbours`, else this
         // one. Here the subclass is the engine's angle family.
+        if self.is_ninety() {
+            return self.calculate_doors_90(room_id);
+        }
         if self.is_fortyfive() {
             return self.calculate_doors_45(room_id);
         }

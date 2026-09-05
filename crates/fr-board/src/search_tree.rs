@@ -373,6 +373,8 @@ pub enum TreeAngleFamily {
     /// — never a missed obstacle — and it is exactly what upstream's own room
     /// completion sees anyway.
     FortyFive,
+    /// `ShapeSearchTree90Degree` — every stored shape is a box.
+    Ninety,
 }
 
 /// A query hit: which item, and which of its tile shapes.
@@ -1682,12 +1684,21 @@ pub fn calculate_tree_shapes_for_family(
     out: &mut Vec<ItemTileShape>,
 ) {
     calculate_tree_shapes(item, tree_class, ctx, out);
-    if family != TreeAngleFamily::FortyFive {
-        return;
-    }
-    for tile in out.iter_mut() {
-        if let Some(shape) = tile.shape.take() {
-            tile.shape = Some(shape.to_flavor(AngleRestriction::FortyFive));
+    match family {
+        TreeAngleFamily::AnyAngle => {}
+        TreeAngleFamily::FortyFive => {
+            for tile in out.iter_mut() {
+                if let Some(shape) = tile.shape.take() {
+                    tile.shape = Some(shape.to_flavor(AngleRestriction::FortyFive));
+                }
+            }
+        }
+        TreeAngleFamily::Ninety => {
+            for tile in out.iter_mut() {
+                if let Some(shape) = tile.shape.take() {
+                    tile.shape = Some(shape.to_flavor(AngleRestriction::Ninety));
+                }
+            }
         }
     }
 }
