@@ -51,12 +51,12 @@ log "repo  $ROOT"
 log "rev   $(git rev-parse --short HEAD) $(git rev-parse --abbrev-ref HEAD)"
 log "date  $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-step "yaml-parse .github/workflows/ci.yml" \
-  python3 -c 'import yaml,sys; yaml.safe_load(open(sys.argv[1])); print("ci.yml ok")' \
-    .github/workflows/ci.yml
+step "yaml-parse workflows" \
+  python3 -c 'import yaml,sys; [yaml.safe_load(open(f)) for f in sys.argv[1:]]; print("workflows ok")' \
+    .github/workflows/ci.yml .github/workflows/release.yml
 
 if command -v actionlint >/dev/null 2>&1; then
-  step "actionlint" actionlint .github/workflows/ci.yml
+  step "actionlint" actionlint .github/workflows/ci.yml .github/workflows/release.yml
 else
   log "actionlint not installed — skipped"
 fi

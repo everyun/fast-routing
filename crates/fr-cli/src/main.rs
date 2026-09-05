@@ -139,7 +139,7 @@ fn parse_threads_mt(value: &str) -> usize {
 
 fn print_usage() {
     eprintln!(
-        r#"fast-routing (Freerouting in Rust) v{}
+        r#"fast-routing (Freerouting in Rust) v{} ({}, upstream reference freerouting-{}.jar {})
 
 USAGE:
     fast-routing -de <input.dsn> [OPTIONS]
@@ -208,7 +208,10 @@ EXIT CODES
     0  finished, nothing left unconnected   2  routed and written, incompletes remain
     1  usage / IO / import failure          4  job timeout or signal; the .ses was still written
 "#,
-        env!("CARGO_PKG_VERSION")
+        env!("CARGO_PKG_VERSION"),
+        env!("FR_BUILD_GIT_HASH"),
+        env!("FR_REFERENCE_JAR_VERSION"),
+        env!("FR_REFERENCE_JAR_REVISION"),
     );
 }
 
@@ -498,7 +501,13 @@ fn main() {
                 fail("--compare-boards is unsupported; fast-routing is a headless router engine, not a board comparison GUI tool (use fr-check or kicad-cli instead)");
             }
             "-v" | "--version" => {
-                println!("fast-routing v{}", env!("CARGO_PKG_VERSION"));
+                println!(
+                    "fast-routing v{} ({}, upstream reference freerouting-{}.jar {})",
+                    env!("CARGO_PKG_VERSION"),
+                    env!("FR_BUILD_GIT_HASH"),
+                    env!("FR_REFERENCE_JAR_VERSION"),
+                    env!("FR_REFERENCE_JAR_REVISION"),
+                );
                 return;
             }
             "-h" | "-help" | "--help" => {

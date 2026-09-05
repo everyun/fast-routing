@@ -157,7 +157,10 @@ fn help_and_version_still_work() {
 
     let version = run(&["-v"]);
     assert_eq!(code(&version), 0);
-    assert!(stdout(&version).starts_with("fast-routing v"));
+    let v_out = stdout(&version);
+    assert!(v_out.starts_with("fast-routing v"));
+    assert!(v_out.contains("2.3.0"));
+    assert!(v_out.contains("2d4de019"));
 }
 
 #[test]

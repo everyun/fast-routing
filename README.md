@@ -31,6 +31,43 @@ The reference is the released artifact, not a source tree:
 See `docs/ARCHITECTURE.md` for the hybrid, `docs/ROADMAP.md` for gates, and
 `docs/PARITY-DIVERGENCES.md` for declared differences.
 
+## Installation
+
+### Pre-built binaries
+
+Pre-built binaries and SHA256 checksums are available on the [Releases](https://github.com/freerouting/freerouting/releases) page for:
+- **macOS** Apple Silicon (`aarch64-apple-darwin`) & Intel (`x86_64-apple-darwin`)
+- **Linux** x86_64 (`x86_64-unknown-linux-gnu`) & ARM64 (`aarch64-unknown-linux-gnu`)
+- **Windows** x86_64 (`x86_64-pc-windows-msvc`)
+
+Download and extract the archive for your system, then place `fr-cli` (or `fr-cli.exe` on Windows) in your `PATH`.
+
+### From source (Cargo)
+
+With a Rust 1.75+ toolchain installed:
+
+```bash
+# Clone the repository
+git clone https://github.com/freerouting/freerouting.git
+cd freerouting
+
+# Install fr-cli into ~/.cargo/bin
+cargo install --path crates/fr-cli
+```
+
+Or build locally without installing:
+
+```bash
+cargo build --release -p fr-cli
+# Executable is at target/release/fr-cli
+```
+
+Verify the installation:
+
+```bash
+fr-cli --version
+```
+
 ## Quick start
 
 ```bash

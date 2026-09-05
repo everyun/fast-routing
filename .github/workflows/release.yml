@@ -1,0 +1,129 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release tag (optional, e.g. v0.1.0)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: fr-cli-aarch64-apple-darwin
+            archive_type: tar.gz
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact_name: fr-cli-x86_64-apple-darwin
+            archive_type: tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: fr-cli-x86_64-unknown-linux-gnu
+            archive_type: tar.gz
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: fr-cli-aarch64-unknown-linux-gnu
+            archive_type: tar.gz
+            cross_aarch64_linux: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: fr-cli-x86_64-pc-windows-msvc
+            archive_type: zip
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation linker (Linux aarch64)
+        if: matrix.cross_aarch64_linux
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+
+      - name: Build release binary
+        run: cargo build --release --locked -p fr-cli --target ${{ matrix.target }}
+
+      - name: Package archive (Unix)
+        if: matrix.archive_type == 'tar.gz'
+        run: |
+          mkdir -p staging
+          cp target/${{ matrix.target }}/release/fr-cli staging/
+          cp README.md LICENSE staging/ 2>/dev/null || true
+          tar -czvf ${{ matrix.artifact_name }}.tar.gz -C staging .
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum ${{ matrix.artifact_name }}.tar.gz > ${{ matrix.artifact_name }}.tar.gz.sha256
+          else
+            shasum -a 256 ${{ matrix.artifact_name }}.tar.gz > ${{ matrix.artifact_name }}.tar.gz.sha256
+          fi
+
+      - name: Package archive (Windows)
+        if: matrix.archive_type == 'zip'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path staging
+          Copy-Item target/${{ matrix.target }}/release/fr-cli.exe staging/
+          if (Test-Path README.md) { Copy-Item README.md staging/ }
+          if (Test-Path LICENSE) { Copy-Item LICENSE staging/ }
+          Compress-Archive -Path staging/* -DestinationPath ${{ matrix.artifact_name }}.zip
+          $hash = (Get-FileHash -Algorithm SHA256 ${{ matrix.artifact_name }}.zip).Hash.ToLower()
+          "$hash  ${{ matrix.artifact_name }}.zip" | Out-File -Encoding ascii ${{ matrix.artifact_name }}.zip.sha256
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            ${{ matrix.artifact_name }}.*
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Aggregate SHA256 checksums
+        working-directory: dist
+        run: |
+          cat *.sha256 > SHA256SUMS.txt
+          ls -la
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
