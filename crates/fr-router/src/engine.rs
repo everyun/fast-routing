@@ -285,9 +285,9 @@ impl LayerGrid {
             }
         }
         let mut total = 0u32;
-        for cell in 0..cols * rows {
+        for (cell, &count) in counts.iter().enumerate() {
             grid.offsets[cell] = total;
-            total += counts[cell];
+            total += count;
         }
         grid.offsets[cols * rows] = total;
         let mut indices = vec![0u32; total as usize];
@@ -849,8 +849,7 @@ impl<'b> AutorouteEngine<'b> {
             .trees()
             .compensated_tree(self.tree_class)
             .unwrap_or_else(|| self.board.default_tree());
-        let mut layers: Vec<Vec<CachedItem>> =
-            vec![Vec::new(); (self.ctrl.layer_count.max(0) as usize).max(1)];
+        let mut layers: Vec<Vec<CachedItem>> = vec![Vec::new(); self.ctrl.layer_count.max(1)];
         let net_no = self.ctrl.net_no;
         for (id, item) in self.board.store().iter_ascending() {
             let Some(slot) = self.board.store().slot_of(id) else {

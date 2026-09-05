@@ -231,6 +231,10 @@ pub fn is_intersected_interior_by(shape: &Simplex, segment: &LineSegment) -> boo
     }
 }
 
+// Eight parameters mirror the upstream Simplex.is_intersected_interior_by
+// helper (shape, both endpoints, the segment line, both float endpoints, and
+// the two per-side scratch buffers it writes).
+#[allow(clippy::too_many_arguments)]
 fn is_intersected_interior_by_with(
     shape: &Simplex,
     start_point: &Point,

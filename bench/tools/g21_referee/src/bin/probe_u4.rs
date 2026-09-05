@@ -66,9 +66,7 @@ fn main() {
     for v in &verdict.violations {
         for id in [v.a, v.b] {
             let item = store.get(id).unwrap();
-            if let ItemKind::Pin(p) = &item.kind {
-                let x = p.center.x as f64;
-                let y = p.center.y as f64;
+            if let ItemKind::Pin(_) = &item.kind {
                 if true {
                     let other_id = if v.a == id { v.b } else { v.a };
                     let other = store.get(other_id).unwrap();

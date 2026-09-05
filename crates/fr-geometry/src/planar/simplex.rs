@@ -807,9 +807,7 @@ impl Simplex {
                     let n_ind = if ind >= new_length { 0 } else { ind };
                     intersection_sides[n_ind] = None;
 
-                    if ind > 0 {
-                        ind -= 1;
-                    }
+                    ind = ind.saturating_sub(1);
                     index_of_last_removed_line = ind;
                 } else {
                     ind += 1;

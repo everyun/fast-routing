@@ -610,10 +610,12 @@ fn the_stall_guard_is_upstreams_constant_in_wall_mode_and_rounds_otherwise() {
     // The generous side: the deterministic guard must not bind before the wall
     // clock it stands in for would, and the heaviest `opt_changed_area`
     // measured in the fixture suite spent 17 229 rounds in 1 050 ms.
-    assert!(
-        1_000 * ROUNDS_PER_VIRTUAL_MS > 17_229,
-        "the deterministic guard would bind on healthy work"
-    );
+    const {
+        assert!(
+            1_000 * ROUNDS_PER_VIRTUAL_MS > 17_229,
+            "the deterministic guard would bind on healthy work"
+        );
+    }
 }
 
 /// A board with real work to do, so that "nothing happened" is a statement

@@ -116,46 +116,6 @@ fn random_simplex(rng: &mut Rng, pool: i32) -> Simplex {
     Simplex::get_instance(&lines)
 }
 
-/// A random *consistent* convex polygon: the convex hull (monotone chain) of
-/// random integer points, so the region is always genuine. Degenerate hulls
-/// (2 corners → an unbounded 1-dim strip simplex) stay in the deck on purpose.
-fn random_hull(rng: &mut Rng, pool: i32) -> Simplex {
-    let count = 3 + rng.below(6);
-    let mut pts: Vec<IntPoint> = (0..count)
-        .map(|_| IntPoint::new(rng.coord(pool), rng.coord(pool)))
-        .collect();
-    pts.sort_by_key(|p| (p.x, p.y));
-    pts.dedup();
-    if pts.len() < 2 {
-        return Simplex::EMPTY;
-    }
-    // Monotone chain; `cross` is exact i64.
-    let cross = |o: &IntPoint, a: &IntPoint, b: &IntPoint| -> i64 {
-        (a.x as i64 - o.x as i64) * (b.y as i64 - o.y as i64)
-            - (a.y as i64 - o.y as i64) * (b.x as i64 - o.x as i64)
-    };
-    let mut hull: Vec<IntPoint> = Vec::new();
-    for half in 0..2 {
-        let iter: Box<dyn Iterator<Item = &IntPoint>> = if half == 0 {
-            Box::new(pts.iter())
-        } else {
-            Box::new(pts.iter().rev())
-        };
-        let start = hull.len();
-        for p in iter {
-            while hull.len() > start + 1
-                && cross(&hull[hull.len() - 2], &hull[hull.len() - 1], p) <= 0
-            {
-                hull.pop();
-            }
-            hull.push(*p);
-        }
-        hull.pop();
-    }
-    hull.dedup();
-    Simplex::from_convex_polygon(&hull)
-}
-
 fn random_tile(rng: &mut Rng, pool: i32) -> Simplex {
     match rng.below(3) {
         0 => random_box(rng, pool),

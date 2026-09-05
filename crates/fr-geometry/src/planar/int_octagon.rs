@@ -47,6 +47,9 @@ impl IntOctagon {
     ///
     /// The parameter order matches the upstream constructor:
     /// `(lx, ly, rx, uy, ulx, lrx, llx, urx)`.
+    // Eight bounds are the shape's definition; boxing them into a struct would
+    // just rename the same list at every call site.
+    #[allow(clippy::too_many_arguments)]
     pub const fn new(
         lx: i32,
         ly: i32,

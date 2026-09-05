@@ -144,10 +144,11 @@ impl NetClass {
         }
         let compare_value = self.trace_half_width_arr[0];
         for i in 1..self.trace_half_width_arr.len() {
-            if i < layer_structure.arr.len() && layer_structure.arr[i].is_signal {
-                if self.trace_half_width_arr[i] != compare_value {
-                    return true;
-                }
+            if i < layer_structure.arr.len()
+                && layer_structure.arr[i].is_signal
+                && self.trace_half_width_arr[i] != compare_value
+            {
+                return true;
             }
         }
         false
@@ -165,7 +166,7 @@ impl NetClass {
             && !layer_structure
                 .arr
                 .get(first_inner)
-                .map_or(false, |l| l.is_signal)
+                .is_some_and(|l| l.is_signal)
         {
             first_inner += 1;
         }
@@ -175,10 +176,10 @@ impl NetClass {
 
         let compare_width = self.trace_half_width_arr[first_inner];
         for i in (first_inner + 1)..(len - 1) {
-            if layer_structure.arr.get(i).map_or(false, |l| l.is_signal) {
-                if self.trace_half_width_arr[i] != compare_width {
-                    return true;
-                }
+            if layer_structure.arr.get(i).is_some_and(|l| l.is_signal)
+                && self.trace_half_width_arr[i] != compare_width
+            {
+                return true;
             }
         }
         false
