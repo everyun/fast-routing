@@ -170,6 +170,14 @@ pub struct AutorouteEngine<'b> {
     scratch_collect_obstacles: Option<Vec<Obstacle>>,
     /// The own-net half of the pool.
     scratch_collect_own_net: Option<Vec<(ItemId, u16)>>,
+    /// Per-connection memo of `tile_to_simplex` for every compensated-tree
+    /// tile, flat over slots: `tile_simplex_base[slot] + shape_index`. The
+    /// carve loop rebuilds these per bounds-surviving obstacle otherwise
+    /// (tens of millions of times on Issue039); the board is immutable for
+    /// the whole attempt, so the memo cannot go stale.
+    tile_simplex_base: Vec<u32>,
+    /// The memo cells for [`AutorouteEngine::tile_simplex_base`].
+    tile_simplex_cache: Vec<std::cell::OnceCell<std::rc::Rc<Simplex>>>,
     /// Guard against unbounded recursion in `restrain_shape`.
     restrain_depth: u32,
     /// This connection's allowance, when the caller armed one.
@@ -373,6 +381,8 @@ impl<'b> AutorouteEngine<'b> {
             scratch_grid_hits: Vec::new(),
             scratch_collect_obstacles: None,
             scratch_collect_own_net: None,
+            tile_simplex_base: Vec::new(),
+            tile_simplex_cache: Vec::new(),
             restrain_depth: 0,
             clock: None,
         }
@@ -482,6 +492,8 @@ impl<'b> AutorouteEngine<'b> {
         }
         self.obstacle_rooms.clear();
         self.item_cache = None;
+        self.tile_simplex_base.clear();
+        self.tile_simplex_cache.clear();
         self.drills.clear();
         self.pages.reset_all();
         self.nodes.reset();
@@ -843,6 +855,13 @@ impl<'b> AutorouteEngine<'b> {
             let Some(slot) = self.board.store().slot_of(id) else {
                 continue;
             };
+            let tile_count = tree.item_shapes(slot, id).len();
+            if slot.index() >= self.tile_simplex_base.len() {
+                self.tile_simplex_base.resize(slot.index() + 1, 0);
+            }
+            self.tile_simplex_base[slot.index()] = self.tile_simplex_cache.len() as u32;
+            self.tile_simplex_cache
+                .resize_with(self.tile_simplex_cache.len() + tile_count, Default::default);
             let obstacle = item.is_trace_obstacle(net_no);
             for (index, tile) in tree.item_shapes(slot, id).iter().enumerate() {
                 let Some(shape) = tile.shape.as_ref() else {
@@ -1163,6 +1182,38 @@ impl<'b> AutorouteEngine<'b> {
                 room.alive.then(|| room.shape.clone())
             }
         }
+    }
+
+    /// [`obstacle_shape`](Self::obstacle_shape) with the item arm served from
+    /// the per-connection tile memo — identical shapes, one `tile_to_simplex`
+    /// per tile per connection instead of one per carve hit. Rooms still
+    /// clone: they churn too fast for a memo.
+    pub(crate) fn obstacle_shape_rc(&mut self, obstacle: Obstacle) -> Option<std::rc::Rc<Simplex>> {
+        match obstacle {
+            Obstacle::Item(item, index, slot) => self.item_tile_simplex_rc(slot, item, index),
+            Obstacle::Room(room) => {
+                let room = self.rooms.room(room);
+                room.alive.then(|| std::rc::Rc::new(room.shape.clone()))
+            }
+        }
+    }
+
+    fn item_tile_simplex_rc(
+        &mut self,
+        slot: SlotIndex,
+        item: ItemId,
+        index: u16,
+    ) -> Option<std::rc::Rc<Simplex>> {
+        self.ensure_item_cache();
+        let base = *self.tile_simplex_base.get(slot.index())?;
+        let cell = self.tile_simplex_cache.get(base as usize + index as usize)?;
+        if let Some(rc) = cell.get() {
+            return Some(rc.clone());
+        }
+        let simplex = self.item_tile_at(slot, item, index)?;
+        let rc = std::rc::Rc::new(simplex);
+        let _ = cell.set(rc.clone());
+        Some(rc)
     }
 
     /// The layer *and* the bounding box of one obstacle, read straight off the

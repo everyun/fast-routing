@@ -29,6 +29,7 @@ thread_local! {
     static ROOM_LEAVES: Cell<u64> = const { Cell::new(0) };
     static ROOM_SURVIVORS: Cell<u64> = const { Cell::new(0) };
     static CARVE_NS: Cell<u64> = const { Cell::new(0) };
+    static CARVE_SURVIVORS: Cell<u64> = const { Cell::new(0) };
     static RESTRAIN_NS: Cell<u64> = const { Cell::new(0) };
     static DOORS_NS: Cell<u64> = const { Cell::new(0) };
     static NEIGHBOURS_NS: Cell<u64> = const { Cell::new(0) };
@@ -139,6 +140,13 @@ pub(crate) fn add_carve(started: Option<Instant>, hits: u64) {
     add_count(&CARVE_HITS, hits);
 }
 
+pub(crate) fn add_carve_survivor() {
+    if !is_enabled() {
+        return;
+    }
+    add_count(&CARVE_SURVIVORS, 1);
+}
+
 pub(crate) fn add_restrain(started: Option<Instant>) {
     if started.is_none() {
         return;
@@ -174,7 +182,7 @@ pub fn flush() {
          room_walk_ns={}, room_leaves={}, room_survivors={}, \
          carve_ns={}, restrain_ns={}, doors_ns={}, neighbours_ns={}, \
          complete_rooms={}, complete_shapes={}, collect_obstacles={}, \
-         carve_hits={}, restrains={}, door_calcs={}, neighbour_calls={}",
+         carve_survivors={}, carve_hits={}, restrains={}, door_calcs={}, neighbour_calls={}",
         COMPLETE_ROOM_NS.with(Cell::get),
         COMPLETE_SHAPE_NS.with(Cell::get),
         COLLECT_NS.with(Cell::get),
@@ -191,6 +199,7 @@ pub fn flush() {
         COMPLETE_ROOMS.with(Cell::get),
         COMPLETE_SHAPES.with(Cell::get),
         COLLECT_OBSTACLES.with(Cell::get),
+        CARVE_SURVIVORS.with(Cell::get),
         CARVE_HITS.with(Cell::get),
         RESTRAINS.with(Cell::get),
         DOOR_CALCS.with(Cell::get),

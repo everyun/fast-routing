@@ -182,7 +182,8 @@ impl AutorouteEngine<'_> {
             if obstacle_bounds.is_empty() || !obstacle_bounds.intersects(&bounding) {
                 continue;
             }
-            let Some(obstacle_shape) = self.obstacle_shape(obstacle) else {
+            crate::rooms::attr::add_carve_survivor();
+            let Some(obstacle_shape) = self.obstacle_shape_rc(obstacle) else {
                 continue;
             };
 
