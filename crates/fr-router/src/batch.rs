@@ -69,7 +69,7 @@ use fr_board::board::Board;
 use fr_board::connectivity;
 use fr_board::item::{FixedState, Item, ItemId, ItemKind};
 use fr_board::store::StoreDelta;
-use fr_geometry::planar::Point;
+use fr_geometry::planar::{IntPoint, Point};
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::RouterSettings;
 
@@ -569,6 +569,110 @@ pub fn incomplete_count(board: &mut Board) -> usize {
 // one connection
 // ---------------------------------------------------------------------------
 
+/// The `FRLAB conn`-shaped record for the settle-diff harness, on the
+/// `FR_CONN_TRACE` sink. Field-identical to the lab jar's line
+/// (`app.freerouting.frlab.FrLab`): the cross-implementation match key is
+/// `(pass, net, src anchor)` — item ids are not shared between the two
+/// implementations, pins/vias/traces anchor at centre/first-corner, which are
+/// board coordinates and comparable.
+fn emit_conn_landing(
+    board: &Board,
+    pass_no: i32,
+    entry: WorkItem,
+    first_new_id: ItemId,
+    expansions_before: u64,
+    attempt: &AttemptOutcome,
+) {
+    let (src_type, anchor) = match board.store().get(entry.item).map(|item| &item.kind) {
+        Some(ItemKind::Pin(pin)) => ("Pin", pin.center),
+        Some(ItemKind::Via(via)) => ("Via", via.center),
+        Some(ItemKind::Trace(trace)) => {
+            ("PolylineTrace", point_int(&trace.polyline.first_corner()))
+        }
+        _ => ("Item", IntPoint::new(0, 0)),
+    };
+    // The landing: every item the attempt inserted, pull-tight replacements
+    // included — the store iterates descending id, so the new ids are a prefix.
+    let mut paths = String::new();
+    let mut vias = String::new();
+    let mut trace_count = 0u32;
+    let mut via_count = 0u32;
+    for (id, item) in board.store().iter() {
+        if id < first_new_id {
+            break;
+        }
+        match &item.kind {
+            ItemKind::Trace(trace) => {
+                if trace_count > 0 {
+                    paths.push('|');
+                }
+                trace_count += 1;
+                for (index, corner) in trace.polyline.corner_arr().iter().enumerate() {
+                    if index > 0 {
+                        paths.push(';');
+                    }
+                    let p = point_int(corner);
+                    paths.push_str(&format!("{},{}", p.x, p.y));
+                }
+            }
+            ItemKind::Via(via) => {
+                if via_count > 0 {
+                    vias.push('|');
+                }
+                via_count += 1;
+                vias.push_str(&format!(
+                    "{},{},{}-{}",
+                    via.center.x, via.center.y, via.layers.first, via.layers.last
+                ));
+            }
+            _ => {}
+        }
+    }
+    let state = match attempt.state() {
+        AttemptState::Routed => "ROUTED",
+        AttemptState::NoUnconnectedNets => "NO_UNCONNECTED_NETS",
+        AttemptState::AlreadyConnected => "ALREADY_CONNECTED",
+        AttemptState::ConnectedToPlane => "CONNECTED_TO_PLANE",
+        AttemptState::NotRouted => "FAILED",
+        AttemptState::InsertError => "INSERT_ERROR",
+    };
+    let expansions = fr_metrics::counters::value(fr_metrics::counters::Counter::Expansions)
+        .saturating_sub(expansions_before);
+    crate::maze::trace::conn_landing(&format!(
+        "FRCONN conn pass={pass_no} net={} src={src_type}@{},{} item={} exp={expansions} \
+         ok={state} traces={trace_count} path={paths} vias={via_count}:{vias}",
+        entry.net_no, anchor.x, anchor.y, entry.item,
+    ));
+}
+
+fn point_int(point: &Point) -> IntPoint {
+    match point {
+        Point::Int(p) => *p,
+        other => other.to_float().round(),
+    }
+}
+
+/// Up to four `T@x,y` anchors of an item set, for the `FRCONN aim` diagnostic.
+fn aim_anchors(board: &Board, items: &[ItemId]) -> String {
+    let mut out = String::new();
+    for (index, id) in items.iter().take(4).enumerate() {
+        if index > 0 {
+            out.push(';');
+        }
+        let (kind, p) = match board.store().get(*id).map(|item| &item.kind) {
+            Some(ItemKind::Pin(pin)) => ("Pin", pin.center),
+            Some(ItemKind::Via(via)) => ("Via", via.center),
+            Some(ItemKind::Trace(trace)) => ("Tr", point_int(&trace.polyline.first_corner())),
+            _ => ("?", IntPoint::new(0, 0)),
+        };
+        out.push_str(&format!("{kind}@{},{}", p.x, p.y));
+    }
+    if items.len() > 4 {
+        out.push_str(&format!(";+{}", items.len() - 4));
+    }
+    out
+}
+
 /// Routes one net of one item — `BatchAutorouter.autoroute_item` (`:1256-1366`)
 /// plus `AutorouteEngine.autoroute_connection` (`:127-260`), which the release
 /// splits only because the engine owns the room database.
@@ -617,6 +721,14 @@ pub fn autoroute_item(
     } else {
         (unconnected, connected)
     };
+    if crate::maze::trace::is_enabled() {
+        crate::maze::trace::conn_landing(&format!(
+            "FRCONN aim net={} start={} dest={}",
+            net_no,
+            aim_anchors(board, &start),
+            aim_anchors(board, &destination),
+        ));
+    }
 
     let via_costs = if contains_plane {
         settings.scoring.plane_via_costs()
@@ -1121,6 +1233,8 @@ impl<'r> BatchRouter<'r> {
             }
             self.total_items_routed += 1;
             let first_new_id = board.store().next_id();
+            let expansions_before = crate::maze::trace::is_enabled()
+                .then(|| fr_metrics::counters::value(fr_metrics::counters::Counter::Expansions));
             // `:1315-1318` — the connection's allowance is armed here and
             // travels down to the engine, which the maze loop polls; see
             // `batch::budget`. `connection_budget` is upstream's allowance
@@ -1141,6 +1255,16 @@ impl<'r> BatchRouter<'r> {
                 &mut self.scratch,
             );
             let usage = clock.finish();
+            if let Some(expansions_before) = expansions_before {
+                emit_conn_landing(
+                    board,
+                    ctx.pass_no,
+                    entry,
+                    first_new_id,
+                    expansions_before,
+                    &attempt,
+                );
+            }
             if let Some(incomplete_before) = incomplete_before {
                 crate::optimizer::trace::Conn {
                     pass_no: ctx.pass_no,

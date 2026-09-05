@@ -84,6 +84,15 @@ pub(crate) struct ConnRecord {
     pub init_us: u128,
 }
 
+/// `FRCONN conn …` — one record per *pass-level* attempt (the batch loop's
+/// `autoroute_item`), deliberately field-identical to the lab jar's
+/// `FRLAB conn` line so one diff script serves both sides of the settle-diff
+/// harness. Formatted by the caller (`crate::batch`), which alone knows the
+/// pass number and the attempt's landing items.
+pub(crate) fn conn_landing(line: &str) {
+    write_line(line);
+}
+
 /// `FRCONN` — one record per maze attempt, emitted when the attempt ends.
 pub(crate) fn connection(
     record: &ConnRecord,

@@ -459,6 +459,26 @@ ARCHITECTURE "Budgets".
 
 ## Candidates (recorded ahead of any code change; **no behaviour change yet**)
 
+- **Free-space room decomposition around an SMD pin can seal the pin's start
+  room into a one-exit dead pocket, killing the fanout escape that upstream
+  completes** (candidate owner: the tiling45 room work; evidence
+  `~/fr-work/reports/REPORT-settle-diff.md`). *Upstream behaviour*: on
+  Issue110-RelayModule the fanout escape of U1-32 (net /CAN_RX) succeeds in
+  fanout pass 1 (verified with the rebuilt lab jar's `FRLAB fanout` lines).
+  *Our behaviour*: the same escape fails on every fanout pass with the same
+  signature — one start room, one expansion, frontier empty
+  (`outcome=exhausted, expansions=1`), and the start door's heuristic is
+  232 151.9 although the joined destination pad sits ~102.6K from the pin, i.e.
+  the pin's start room has no door toward the destination at all. The cascade
+  (pass-1 work-list/destination structure on /CAN_RX, and the same door-graph
+  divergence on already-aligned connections) is mapped per connection by the
+  settle-diff harness: lab jar `~/fr-ref/fr-lab-release/freerouting-lab.jar`
+  (`-Dfrlab.conn_trace=1`), our `FR_CONN_TRACE` `FRCONN conn/aim/join` records,
+  and `bench/tools/conn_diff.py`. Sharpest repro: RelayModule, fanout stage,
+  net /CAN_RX, pin U1-32 — one expansion then exhaustion.
+  Status: recorded, unfixed — the fix belongs to the room/door decomposition
+  (`rooms/complete*.rs`, `neighbours*.rs`).
+
 - **Edge.Cuts inner cutouts arrive in the DSN as zero-clearance keepouts, and KiCad
   judges the same geometry at 0.5 mm copper_edge** (candidate owner: `fr-io`).
   *Data* (REPORT-easyeda class (b), evidence `~/fr-work/reports/drc-delta-classification.md`):

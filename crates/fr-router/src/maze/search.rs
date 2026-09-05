@@ -301,6 +301,12 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let mut destination_ok = false;
         for item in self.destination_items.clone() {
             let count = self.engine.tree_shape_count(item);
+            if crate::maze::trace::is_enabled() {
+                crate::maze::trace::conn_landing(&format!(
+                    "FRCONN join net={} item={} tiles={}",
+                    self.engine.ctrl.net_no, item, count,
+                ));
+            }
             for index in 0..count as u16 {
                 let Some(shape) = self.engine.item_tile(item, index) else {
                     continue;
@@ -308,6 +314,13 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 let Some(layer) = self.engine.item_tile_layer(item, index) else {
                     continue;
                 };
+                if crate::maze::trace::is_enabled() {
+                    let b = shape.bounding_box();
+                    crate::maze::trace::conn_landing(&format!(
+                        "FRCONN join-tile net={} item={} layer={} box=[({},{})..({},{})]",
+                        self.engine.ctrl.net_no, item, layer, b.ll.x, b.ll.y, b.ur.x, b.ur.y,
+                    ));
+                }
                 self.destination_distance.join(&shape.bounding_box(), layer);
             }
             destination_ok = true;
