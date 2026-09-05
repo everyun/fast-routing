@@ -919,7 +919,15 @@ pub fn route_with_control(
                 AttemptState::NotRouted
             });
         }
-        Err(_) => outcome.state = Some(AttemptState::InsertError),
+        Err(err) => {
+            if crate::maze::trace::is_enabled() {
+                crate::maze::trace::conn_landing(&format!(
+                    "FRCONN insert_fail net={} err={:?}",
+                    ctrl.net_no, err
+                ));
+            }
+            outcome.state = Some(AttemptState::InsertError);
+        }
     }
     outcome
 }
