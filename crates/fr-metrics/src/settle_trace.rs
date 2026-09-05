@@ -133,7 +133,10 @@ mod imp {
         };
         // `{:?}` is the shortest round-trip form, so `0.0` stays `0.0` the way
         // `Double.toString` prints it; the parser compares numerically anyway.
-        let _ = writeln!(guard.writer(), "FRMETRIC settle {door_id} {section} {g:?} {f:?}");
+        let _ = writeln!(
+            guard.writer(),
+            "FRMETRIC settle {door_id} {section} {g:?} {f:?}"
+        );
     }
 
     pub fn flush() {

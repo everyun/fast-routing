@@ -117,12 +117,18 @@ fn fuzz_normalize_matches_brute_force() {
             }
             Some(expected) => {
                 checked_nonempty += 1;
-                assert!(!got.is_empty(), "non-empty octagon {oct:?} normalized to empty");
+                assert!(
+                    !got.is_empty(),
+                    "non-empty octagon {oct:?} normalized to empty"
+                );
                 assert_eq!(got, expected, "normalize mismatch for {oct:?}");
             }
         }
     }
-    assert!(checked_nonempty > 500 && checked_empty > 100, "coverage: {checked_nonempty}/{checked_empty}");
+    assert!(
+        checked_nonempty > 500 && checked_empty > 100,
+        "coverage: {checked_nonempty}/{checked_empty}"
+    );
 }
 
 #[test]
@@ -159,11 +165,38 @@ fn fuzz_normalize_terminates_on_extreme_bounds() {
     // Simplex::to_int_octagon must not spin or overflow.
     let crit = fr_geometry::planar::limits::Limits::CRIT_INT;
     let cases = [
-        IntOctagon::new(i32::MIN, i32::MIN, i32::MAX, i32::MAX, i32::MIN, i32::MAX, i32::MIN, i32::MAX),
+        IntOctagon::new(
+            i32::MIN,
+            i32::MIN,
+            i32::MAX,
+            i32::MAX,
+            i32::MIN,
+            i32::MAX,
+            i32::MIN,
+            i32::MAX,
+        ),
         IntOctagon::new(-crit, -crit, crit, crit, -crit, crit, -crit, crit),
         IntOctagon::new(0, 0, i32::MAX, i32::MAX, -crit, crit, -crit, crit),
-        IntOctagon::new(i32::MIN, 0, i32::MAX, 0, i32::MIN, i32::MAX, i32::MIN, i32::MAX),
-        IntOctagon::new(i32::MIN + 1, i32::MIN + 1, i32::MAX - 1, i32::MAX - 1, -1, 1, -1, 1),
+        IntOctagon::new(
+            i32::MIN,
+            0,
+            i32::MAX,
+            0,
+            i32::MIN,
+            i32::MAX,
+            i32::MIN,
+            i32::MAX,
+        ),
+        IntOctagon::new(
+            i32::MIN + 1,
+            i32::MIN + 1,
+            i32::MAX - 1,
+            i32::MAX - 1,
+            -1,
+            1,
+            -1,
+            1,
+        ),
         IntOctagon::EMPTY,
     ];
     for c in cases {

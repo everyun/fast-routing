@@ -71,12 +71,7 @@ pub fn in_front_of_pad(
         lower_left_diagonal_x: llx,
         upper_right_diagonal_x: urx,
     } = pad;
-    let (lx, ly, rx, uy) = (
-        left_x as f64,
-        bottom_y as f64,
-        right_x as f64,
-        top_y as f64,
-    );
+    let (lx, ly, rx, uy) = (left_x as f64, bottom_y as f64, right_x as f64, top_y as f64);
     let (ulx, lrx, llx, urx) = (ulx as f64, lrx as f64, llx as f64, urx as f64);
 
     let mut result = match from_side {
@@ -163,7 +158,12 @@ impl ShoveCheck<'_> {
         );
         let mut obstacles = self.scratch.take();
         geom::overlapping_items_with_clearance(
-            board, pad_shape, layer, &[], cl_type, &mut obstacles,
+            board,
+            pad_shape,
+            layer,
+            &[],
+            cl_type,
+            &mut obstacles,
         );
         obstacles.retain(|id| !ignore_items.contains(id));
         if !shape_entries.store_items(board, &obstacles, true, copper_sharing_allowed) {
@@ -178,9 +178,8 @@ impl ShoveCheck<'_> {
                 self.failing_obstacle = Some(via_id);
                 return CheckDrillResult::NotDrillable;
             }
-            let new_via_center = super::drill::try_shove_via_points(
-                board, pad_shape, layer, via_id, cl_type, false,
-            );
+            let new_via_center =
+                super::drill::try_shove_via_points(board, pad_shape, layer, via_id, cl_type, false);
             let Some(&first) = new_via_center.first() else {
                 self.failing_obstacle = Some(via_id);
                 return CheckDrillResult::NotDrillable;
@@ -365,12 +364,9 @@ impl ShoveInsert<'_> {
             &mut obstacles,
         );
         obstacles.retain(|id| !ignore_items.contains(id));
-        let obstacles_shovable = shape_entries.store_items(
-            self.board,
-            &obstacles,
-            true,
-            copper_sharing_allowed,
-        ) && shape_entries.shove_via_list.is_empty();
+        let obstacles_shovable =
+            shape_entries.store_items(self.board, &obstacles, true, copper_sharing_allowed)
+                && shape_entries.shove_via_list.is_empty();
         if !obstacles_shovable {
             let blame = shape_entries.found_obstacle();
             self.blame(blame);

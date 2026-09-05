@@ -58,8 +58,8 @@ fn repo_root() -> PathBuf {
 
 /// Every `*.dsn` under `dir`, recursively, sorted.
 fn walk_dsn(dir: &Path, out: &mut Vec<PathBuf>) {
-    let entries = std::fs::read_dir(dir)
-        .unwrap_or_else(|error| panic!("read {}: {error}", dir.display()));
+    let entries =
+        std::fs::read_dir(dir).unwrap_or_else(|error| panic!("read {}: {error}", dir.display()));
     for entry in entries.flatten() {
         let path = entry.path();
         if path.is_dir() {
@@ -205,9 +205,14 @@ fn every_specctra_fixture_in_the_corpus_imports() {
     for (name, is_dsn) in &manifest {
         let rejected = census.rejected.iter().any(|(got, _)| got == name);
         assert_eq!(
-            !*is_dsn, rejected,
+            !*is_dsn,
+            rejected,
             "{name}: manifest says is_specctra_dsn={is_dsn}, importer {}",
-            if rejected { "rejected it" } else { "accepted it" }
+            if rejected {
+                "rejected it"
+            } else {
+                "accepted it"
+            }
         );
     }
 

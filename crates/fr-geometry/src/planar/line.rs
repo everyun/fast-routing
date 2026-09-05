@@ -228,7 +228,8 @@ impl Line {
         let d2x = (other.b.x - other.a.x) as f64;
         let d2y = (other.b.y - other.a.y) as f64;
         let det1 = (self.a.x as f64) * (self.b.y as f64) - (self.a.y as f64) * (self.b.x as f64);
-        let det2 = (other.a.x as f64) * (other.b.y as f64) - (other.a.y as f64) * (other.b.x as f64);
+        let det2 =
+            (other.a.x as f64) * (other.b.y as f64) - (other.a.y as f64) * (other.b.x as f64);
         let det = d2x * d1y - d2y * d1x;
         if det == 0.0 {
             FloatPoint::new(i32::MAX as f64, i32::MAX as f64)
@@ -264,12 +265,7 @@ impl Line {
             Vector::Int(iv) => (iv.x, iv.y),
             Vector::Rational(_) => panic!("Line translateBy only implemented for integer vectors"),
         };
-        Line::new_from_coords(
-            self.a.x + vx,
-            self.a.y + vy,
-            self.b.x + vx,
-            self.b.y + vy,
-        )
+        Line::new_from_coords(self.a.x + vx, self.a.y + vy, self.b.x + vx, self.b.y + vy)
     }
 
     /// Returns true if this line is axis-parallel.

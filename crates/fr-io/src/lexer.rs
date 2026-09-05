@@ -67,7 +67,13 @@ impl<'a> DsnLexer<'a> {
         let start = self.pos;
         while self.pos < self.input.len() {
             let b = bytes[self.pos];
-            if b.is_ascii_whitespace() || b == b'(' || b == b')' || b == b'"' || b == b'\'' || b == b'#' {
+            if b.is_ascii_whitespace()
+                || b == b'('
+                || b == b')'
+                || b == b'"'
+                || b == b'\''
+                || b == b'#'
+            {
                 break;
             }
             self.pos += 1;
@@ -126,7 +132,10 @@ mod tests {
         let mut lexer = DsnLexer::new(input);
         assert_eq!(lexer.next_token(), Some(Token::OpenParen));
         assert_eq!(lexer.next_token(), Some(Token::Keyword(Keyword::Pcb)));
-        assert_eq!(lexer.next_token(), Some(Token::String("test_board".to_string())));
+        assert_eq!(
+            lexer.next_token(),
+            Some(Token::String("test_board".to_string()))
+        );
         assert_eq!(lexer.next_token(), Some(Token::OpenParen));
         assert_eq!(lexer.next_token(), Some(Token::Keyword(Keyword::Parser)));
         assert_eq!(lexer.next_token(), Some(Token::OpenParen));

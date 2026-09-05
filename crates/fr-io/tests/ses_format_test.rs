@@ -441,7 +441,11 @@ fn a_half_unit_corner_is_written_with_a_decimal_and_reads_back_exactly() {
     let mut design = import(stripped.as_slice()).unwrap();
     // A→B is -45° (y + x = 0), B→C is +45° (y - x = -30001): B is a genuine
     // diagonal∩diagonal corner that cannot be written as an integer.
-    let corners = [(10000.0, -10000.0), (15000.5, -15000.5), (20000.0, -10001.0)];
+    let corners = [
+        (10000.0, -10000.0),
+        (15000.5, -15000.5),
+        (20000.0, -10001.0),
+    ];
     let polyline =
         Polyline::from_exact_corners(&corners).expect("the half-unit corner is representable");
     let original = polyline.clone();

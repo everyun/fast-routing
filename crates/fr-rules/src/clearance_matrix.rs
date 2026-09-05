@@ -206,7 +206,10 @@ impl ClearanceMatrix {
         layer: usize,
         mut value: i32,
     ) {
-        if class_i >= self.class_count || class_j >= self.class_count || layer >= self.layer_structure.len() {
+        if class_i >= self.class_count
+            || class_j >= self.class_count
+            || layer >= self.layer_structure.len()
+        {
             return;
         }
 
@@ -334,7 +337,10 @@ impl ClearanceMatrix {
     /// same asymmetric one used by [`Self::get_value`]. Upstream is unguarded; we return `false`
     /// for out-of-range indices or an empty layer structure.
     pub fn is_layer_dependent(&self, class_i: usize, class_j: usize) -> bool {
-        if class_i >= self.class_count || class_j >= self.class_count || self.layer_structure.is_empty() {
+        if class_i >= self.class_count
+            || class_j >= self.class_count
+            || self.layer_structure.is_empty()
+        {
             return false;
         }
         self.row[class_j].column[class_i].is_layer_dependent()
@@ -410,11 +416,14 @@ impl ClearanceMatrix {
 
         // Append a matrix entry to each old row
         for i in 0..old_class_count {
-            self.row[i].column.push(ClearanceMatrixEntry::new(layer_count));
+            self.row[i]
+                .column
+                .push(ClearanceMatrixEntry::new(layer_count));
         }
 
         // Append the new row
-        self.row.push(ClearanceRow::new(class_name, self.class_count, layer_count));
+        self.row
+            .push(ClearanceRow::new(class_name, self.class_count, layer_count));
 
         // Set the new matrix elements to default values
         for i in 0..old_class_count {

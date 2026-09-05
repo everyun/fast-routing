@@ -99,8 +99,12 @@ fn main() {
     let store = design.board.store();
     let mut both_user_fixed = 0usize;
     for violation in &verdict.violations {
-        let a = store.get(violation.a).map(|i| i.fixed_state.is_user_fixed());
-        let b = store.get(violation.b).map(|i| i.fixed_state.is_user_fixed());
+        let a = store
+            .get(violation.a)
+            .map(|i| i.fixed_state.is_user_fixed());
+        let b = store
+            .get(violation.b)
+            .map(|i| i.fixed_state.is_user_fixed());
         if a == Some(true) && b == Some(true) {
             both_user_fixed += 1;
         }

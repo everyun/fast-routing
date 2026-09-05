@@ -596,9 +596,15 @@ impl<'b> PullTightAlgo<'b> {
     /// is not ported; the gate itself is honoured by
     /// [`crate::insert`], which forces the knob to `-1` for the duration of an
     /// insertion so this path stays off exactly when upstream turns it off.
-    pub fn trace_pull_tight(&mut self, id: ItemId, changed_area: &mut ChangedArea) -> Option<ItemId> {
+    pub fn trace_pull_tight(
+        &mut self,
+        id: ItemId,
+        changed_area: &mut ChangedArea,
+    ) -> Option<ItemId> {
         let prepared = self.prepare_trace(id)?;
-        let TracePrep { layer, polyline, .. } = prepared;
+        let TracePrep {
+            layer, polyline, ..
+        } = prepared;
 
         let new_polyline = self.pull_tight_flavor(&polyline, changed_area)?;
 
@@ -642,9 +648,7 @@ impl<'b> PullTightAlgo<'b> {
         changed_area: &mut ChangedArea,
     ) -> Option<Polyline> {
         match self.board.angle_restriction() {
-            AngleRestriction::None => {
-                self.pull_tight_polyline_any_angle(polyline, changed_area)
-            }
+            AngleRestriction::None => self.pull_tight_polyline_any_angle(polyline, changed_area),
             AngleRestriction::Ninety => self.pull_tight_polyline_90(polyline, changed_area),
             AngleRestriction::FortyFive => self.pull_tight_polyline(polyline, changed_area),
         }
@@ -777,10 +781,11 @@ impl<'b> PullTightAlgo<'b> {
                 if !matches!(item.kind, ItemKind::Pin(_)) || !item.nets.shares_any(nets) {
                     continue;
                 }
-                let half = board
-                    .clearances()
-                    .value_with_margin(clearance_class, item.clearance_class, layer)
-                    / 2;
+                let half = board.clearances().value_with_margin(
+                    clearance_class,
+                    item.clearance_class,
+                    layer,
+                ) / 2;
                 let Some(slot) = board.store().slot_of(id) else {
                     continue;
                 };
@@ -790,9 +795,7 @@ impl<'b> PullTightAlgo<'b> {
                     .iter()
                     .filter(|tile| tile.layer == layer)
                     .filter_map(|tile| tile.shape.as_ref())
-                    .any(|tile| {
-                        query.enlarge(half).intersects(&tile.enlarge(half))
-                    });
+                    .any(|tile| query.enlarge(half).intersects(&tile.enlarge(half)));
                 if touching {
                     result.push(id);
                 }
@@ -814,8 +817,7 @@ impl<'b> PullTightAlgo<'b> {
         };
         let layer = self.keep_point_layer;
         let mut picked = Vec::new();
-        self.board
-            .pick_items(&keep_point, Some(layer), &mut picked);
+        self.board.pick_items(&keep_point, Some(layer), &mut picked);
         picked.retain(|id| {
             self.board
                 .store()
@@ -1017,9 +1019,7 @@ impl<'b> PullTightAlgo<'b> {
         match self.board.angle_restriction() {
             AngleRestriction::None => self.smoothen_start_corner_at_trace_any(id, changed_area),
             AngleRestriction::Ninety => None,
-            AngleRestriction::FortyFive => {
-                self.smoothen_start_corner_at_trace_45(id, changed_area)
-            }
+            AngleRestriction::FortyFive => self.smoothen_start_corner_at_trace_45(id, changed_area),
         }
     }
 
@@ -1408,13 +1408,15 @@ impl<'b> PullTightAlgo<'b> {
                     continue;
                 }
                 if matches!(item.kind, ItemKind::Pin(_)) {
-                    *binding = board.store().revision_of(entry.item).map(|revision| {
-                        BindingObstacle {
-                            item: entry.item,
-                            shape_index: entry.shape_index,
-                            revision,
-                        }
-                    });
+                    *binding =
+                        board
+                            .store()
+                            .revision_of(entry.item)
+                            .map(|revision| BindingObstacle {
+                                item: entry.item,
+                                shape_index: entry.shape_index,
+                                revision,
+                            });
                     return false;
                 }
             }
@@ -1469,11 +1471,11 @@ impl<'b> PullTightAlgo<'b> {
         let Some(item) = self.board.store().get(binding.item) else {
             return false;
         };
-        let half = self
-            .board
-            .clearances()
-            .value_with_margin(self.curr_cl_type, item.clearance_class, self.curr_layer)
-            / 2;
+        let half = self.board.clearances().value_with_margin(
+            self.curr_cl_type,
+            item.clearance_class,
+            self.curr_layer,
+        ) / 2;
         // Same bounding-box pre-filter as the traversal: integer-exact, so a
         // miss here means the symmetric test below would miss too.
         if !shape
@@ -1501,7 +1503,8 @@ impl<'b> PullTightAlgo<'b> {
             return None;
         }
         for index in 2..polyline.arr.len() - 2 {
-            let Some(new_line) = self.reposition_line_base(&polyline.arr, index, changed_area) else {
+            let Some(new_line) = self.reposition_line_base(&polyline.arr, index, changed_area)
+            else {
                 continue;
             };
             self.scratch_lines.clear();
@@ -1511,10 +1514,7 @@ impl<'b> PullTightAlgo<'b> {
             if result.arr.is_empty() {
                 continue;
             }
-            return Some(
-                self.skip_segments_of_length_0(&result)
-                    .unwrap_or(result),
-            );
+            return Some(self.skip_segments_of_length_0(&result).unwrap_or(result));
         }
         None
     }
@@ -1630,10 +1630,8 @@ impl<'b> PullTightAlgo<'b> {
             let layer = self.curr_layer;
             changed_area.join_point(self.check_lines[0].intersection_approx(&line), layer);
             changed_area.join_point(self.check_lines[2].intersection_approx(&line), layer);
-            changed_area
-                .join_point(line_arr[no - 1].intersection_approx(&line_arr[no]), layer);
-            changed_area
-                .join_point(line_arr[no].intersection_approx(&line_arr[no + 1]), layer);
+            changed_area.join_point(line_arr[no - 1].intersection_approx(&line_arr[no]), layer);
+            changed_area.join_point(line_arr[no].intersection_approx(&line_arr[no + 1]), layer);
         }
         new_line
     }
@@ -1879,7 +1877,8 @@ pub(crate) fn signum_as_int(value: f64) -> i32 {
 }
 
 /// `TileShape.is_contained_in(bounding_box)` for a simplex.
-fn shape_is_contained_in(shape: &Simplex, bounds: &IntBox) -> bool {    for index in 0..shape.border_line_count() {
+fn shape_is_contained_in(shape: &Simplex, bounds: &IntBox) -> bool {
+    for index in 0..shape.border_line_count() {
         if !shape.corner_is_bounded(index) {
             return false;
         }

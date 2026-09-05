@@ -569,7 +569,11 @@ fn nested_rollback_restores_only_the_inner_level() {
     }
     board.rollback_to(inner);
 
-    assert_eq!(board.transaction_depth(), 1, "the outer level is still open");
+    assert_eq!(
+        board.transaction_depth(),
+        1,
+        "the outer level is still open"
+    );
     assert_eq!(snapshot(&board), after_outer_work);
     assert_eq!(tree_fingerprint(&board), trees_after_outer_work);
     board.assert_consistent();

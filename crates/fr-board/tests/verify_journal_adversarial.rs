@@ -32,7 +32,12 @@ impl Rng {
 fn trace(rng: &mut Rng) -> Item {
     let n = 2 + rng.below(4) as usize;
     let pts: Vec<IntPoint> = (0..n)
-        .map(|i| IntPoint::new(i as i32 * 1000 + rng.below(7) as i32, rng.below(1000) as i32))
+        .map(|i| {
+            IntPoint::new(
+                i as i32 * 1000 + rng.below(7) as i32,
+                rng.below(1000) as i32,
+            )
+        })
         .collect();
     Item::new(
         NetNos::from_slice(&[1 + rng.below(5) as i32]),

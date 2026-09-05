@@ -392,7 +392,10 @@ fn mixed_point_comparison_matches_the_bigint_oracle() {
             -integral.compare_xy(&rational).signum()
         );
     }
-    assert!(mixed > 100, "mixed Int/Rational comparisons never exercised");
+    assert!(
+        mixed > 100,
+        "mixed Int/Rational comparisons never exercised"
+    );
 }
 
 /// Rational-vs-rational comparison, again against the `BigInt` oracle, using
@@ -646,8 +649,14 @@ fn checked_constructors_enforce_the_envelope() {
 #[test]
 fn arithmetic_tiers_are_exact_at_and_beyond_the_envelope() {
     let c = Limits::CRIT_INT_I64 * 2; // 2^26, the vector-coordinate bound
-    assert_eq!(determinant_exact(c, c, c, -c), -2 * (c as i128) * (c as i128));
-    assert_eq!(scalar_product_exact(c, c, c, c), 2 * (c as i128) * (c as i128));
+    assert_eq!(
+        determinant_exact(c, c, c, -c),
+        -2 * (c as i128) * (c as i128)
+    );
+    assert_eq!(
+        scalar_product_exact(c, c, c, c),
+        2 * (c as i128) * (c as i128)
+    );
 
     let corners = [
         IntPoint::new(CRIT, CRIT),

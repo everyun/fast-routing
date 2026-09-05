@@ -29,7 +29,10 @@ impl Polyline {
             Point::Int(ip) => *ip,
             Point::Rational(_) => point_arr[0].to_float().round(),
         };
-        arr.push(Line::new_from_point_and_dir(pt0, &dir_start.turn_45_degree(2)));
+        arr.push(Line::new_from_point_and_dir(
+            pt0,
+            &dir_start.turn_45_degree(2),
+        ));
 
         for i in 1..point_arr.len() {
             let p_prev = match &point_arr[i - 1] {
@@ -49,7 +52,10 @@ impl Polyline {
             Point::Int(ip) => *ip,
             Point::Rational(_) => point_arr[last_idx].to_float().round(),
         };
-        arr.push(Line::new_from_point_and_dir(pt_last, &dir_end.turn_45_degree(2)));
+        arr.push(Line::new_from_point_and_dir(
+            pt_last,
+            &dir_end.turn_45_degree(2),
+        ));
 
         Polyline { arr }
     }
@@ -94,13 +100,29 @@ impl Polyline {
             let dx = b.0 - a.0;
             let dy = b.1 - a.1;
             Some(if dx == 0.0 {
-                if dy > 0.0 { Direction::UP } else { Direction::DOWN }
+                if dy > 0.0 {
+                    Direction::UP
+                } else {
+                    Direction::DOWN
+                }
             } else if dy == 0.0 {
-                if dx > 0.0 { Direction::RIGHT } else { Direction::LEFT }
+                if dx > 0.0 {
+                    Direction::RIGHT
+                } else {
+                    Direction::LEFT
+                }
             } else if dx == dy {
-                if dx > 0.0 { Direction::RIGHT45 } else { Direction::LEFT45 }
+                if dx > 0.0 {
+                    Direction::RIGHT45
+                } else {
+                    Direction::LEFT45
+                }
             } else if dx == -dy {
-                if dx > 0.0 { Direction::DOWN45 } else { Direction::UP45 }
+                if dx > 0.0 {
+                    Direction::DOWN45
+                } else {
+                    Direction::UP45
+                }
             } else {
                 return None; // not a multiple of 45°
             })
@@ -230,8 +252,7 @@ impl Polyline {
         }
         tmp.push(line_arr[line_arr.len() - 2]);
 
-        if tmp.len() >= 2
-            && !line_arr[line_arr.len() - 1].is_equal_or_opposite(&tmp[tmp.len() - 2])
+        if tmp.len() >= 2 && !line_arr[line_arr.len() - 1].is_equal_or_opposite(&tmp[tmp.len() - 2])
         {
             tmp.push(line_arr[line_arr.len() - 1]);
         }
@@ -398,7 +419,9 @@ impl Polyline {
             let mut corner_to_check = curr_line.intersection_approx(&check_line);
 
             for j in (i + 2)..self.arr.len().saturating_sub(1) {
-                if self.corner_approx(j - 1).distance_square(&check_distance_corner)
+                if self
+                    .corner_approx(j - 1)
+                    .distance_square(&check_distance_corner)
                     > check_dist_square
                 {
                     break;
@@ -439,7 +462,9 @@ impl Polyline {
 
             if i >= 2 {
                 for j in (1..=i - 2).rev() {
-                    if self.corner_approx(j).distance_square(&check_distance_corner_prev)
+                    if self
+                        .corner_approx(j)
+                        .distance_square(&check_distance_corner_prev)
                         > check_dist_square
                     {
                         break;
@@ -451,14 +476,16 @@ impl Polyline {
                     let tmp_curr_from_tmp_prev = tmp_curr_dir.side_of(&tmp_prev_dir);
                     direction_changed = tmp_curr_from_tmp_prev != curr_dir_from_prev_dir;
                     if !direction_changed {
-                        let prev_border_line = if tmp_curr_dir.side_of(&tmp_prev_dir) == Side::OnTheLeft {
-                            self.arr[j].translate(-(half_width as f64))
-                        } else {
-                            self.arr[j].opposite().translate(-(half_width as f64))
-                        };
+                        let prev_border_line =
+                            if tmp_curr_dir.side_of(&tmp_prev_dir) == Side::OnTheLeft {
+                                self.arr[j].translate(-(half_width as f64))
+                            } else {
+                                self.arr[j].opposite().translate(-(half_width as f64))
+                            };
                         if prev_border_line.side_of_float(&corner_to_check) == Side::OnTheLeft
                             && prev_border_line.side_of_point(&self.corner(i)) == Side::OnTheRight
-                            && prev_border_line.side_of_point(&self.corner(i - 1)) == Side::OnTheRight
+                            && prev_border_line.side_of_point(&self.corner(i - 1))
+                                == Side::OnTheRight
                         {
                             cut_dog_ear_lines.push(prev_border_line);
                         }
@@ -833,7 +860,12 @@ impl Polyline {
             .change_length(&last_corner, last_segment_length)
             .round();
 
-        if new_last_corner == self.corner(self.corner_count().saturating_sub(2)).to_float().round() {
+        if new_last_corner
+            == self
+                .corner(self.corner_count().saturating_sub(2))
+                .to_float()
+                .round()
+        {
             return self.skip_lines(new_line_count - 1, new_line_count - 1);
         }
 

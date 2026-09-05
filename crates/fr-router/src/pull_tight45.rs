@@ -440,19 +440,18 @@ impl PullTightAlgo<'_> {
         let prev_corner = prev_line.intersection_approx(&line_arr[no - 1]);
         let next_corner = next_line.intersection_approx(&line_arr[no + 2]);
 
-        let (new_x, new_y, vertical, horizontal) = if prev_corner.x > curr_corner.x
-            && next_corner.x > curr_corner.x
-        {
-            (curr_corner.x.ceil(), curr_corner.y.ceil(), true, false)
-        } else if prev_corner.x < curr_corner.x && next_corner.x < curr_corner.x {
-            (curr_corner.x.floor(), curr_corner.y.floor(), true, false)
-        } else if prev_corner.y > curr_corner.y && next_corner.y > curr_corner.y {
-            (curr_corner.x.ceil(), curr_corner.y.ceil(), false, true)
-        } else if prev_corner.y < curr_corner.y && next_corner.y < curr_corner.y {
-            (curr_corner.x.floor(), curr_corner.y.floor(), false, true)
-        } else {
-            return None;
-        };
+        let (new_x, new_y, vertical, horizontal) =
+            if prev_corner.x > curr_corner.x && next_corner.x > curr_corner.x {
+                (curr_corner.x.ceil(), curr_corner.y.ceil(), true, false)
+            } else if prev_corner.x < curr_corner.x && next_corner.x < curr_corner.x {
+                (curr_corner.x.floor(), curr_corner.y.floor(), true, false)
+            } else if prev_corner.y > curr_corner.y && next_corner.y > curr_corner.y {
+                (curr_corner.x.ceil(), curr_corner.y.ceil(), false, true)
+            } else if prev_corner.y < curr_corner.y && next_corner.y < curr_corner.y {
+                (curr_corner.x.floor(), curr_corner.y.floor(), false, true)
+            } else {
+                return None;
+            };
 
         let new_line_dir = if vertical {
             if prev_corner.y < next_corner.y {
@@ -625,8 +624,7 @@ impl PullTightAlgo<'_> {
             check_lines.extend_from_slice(&arr[..arr.len() - 1]);
             check_lines.push(contact.line);
             check_lines.push(contact.prev_line);
-            let new_line =
-                self.reposition_line_base(&check_lines, arr.len() - 2, changed_area)?;
+            let new_line = self.reposition_line_base(&check_lines, arr.len() - 2, changed_area)?;
             let mut new_lines = Vec::with_capacity(arr.len());
             new_lines.extend_from_slice(&arr[..arr.len() - 2]);
             new_lines.push(new_line);

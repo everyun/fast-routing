@@ -23,7 +23,9 @@ use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
 fn fixture() -> Option<PathBuf> {
     let dir = std::env::var_os("FR_OOS_FIXTURE_DIR")
         .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bench/fixtures-oos"));
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../bench/fixtures-oos")
+        });
     let path = dir.join("easyeda-pcb1.dsn");
     if path.exists() {
         return Some(path);
@@ -79,7 +81,12 @@ fn start_pin_neckdown_routes_the_easyeda_pad_escape() {
         &design.board,
         &design.rules,
         &settings,
-        design.rules.nets.get_by_name_and_subnet("$1N2152", 1).unwrap().net_number,
+        design
+            .rules
+            .nets
+            .get_by_name_and_subnet("$1N2152", 1)
+            .unwrap()
+            .net_number,
     );
     assert!(ctrl.with_neckdown, "the setting must reach the control");
 
@@ -116,7 +123,12 @@ fn without_neckdown_the_same_connection_exhausts() {
         &design.board,
         &design.rules,
         &settings,
-        design.rules.nets.get_by_name_and_subnet("$1N2152", 1).unwrap().net_number,
+        design
+            .rules
+            .nets
+            .get_by_name_and_subnet("$1N2152", 1)
+            .unwrap()
+            .net_number,
     );
     assert!(!ctrl.with_neckdown);
     let mut engine = AutorouteEngine::new(&design.board, &design.rules, ctrl);

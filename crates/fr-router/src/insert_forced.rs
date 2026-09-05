@@ -416,8 +416,13 @@ impl<'b> ForcedInserter<'b> {
         layer: i32,
         attach_smd_allowed: bool,
     ) -> bool {
-        self.check_forced_pad_with(shape, None, layer, attach_smd_allowed, self.ctrl.trace_clearance_class_no)
-            != CheckDrillResult::NotDrillable
+        self.check_forced_pad_with(
+            shape,
+            None,
+            layer,
+            attach_smd_allowed,
+            self.ctrl.trace_clearance_class_no,
+        ) != CheckDrillResult::NotDrillable
     }
 
     /// [`Self::check_forced_pad`] with the pad's own from-side and clearance
@@ -640,8 +645,7 @@ impl<'b> ForcedInserter<'b> {
         let corner_count = combined_polyline.corner_count();
         for (index, shape) in trace_shapes.iter().enumerate() {
             let shape = orthogonalize(shape, orthogonal_mode);
-            let from_side_index = (corner_count + index)
-                .saturating_sub(trace_shapes.len() + 1);
+            let from_side_index = (corner_count + index).saturating_sub(trace_shapes.len() + 1);
             let from_side = FromSide::from_polyline(&combined_polyline, from_side_index, &shape);
             if !self.check_trace_shape_from(&shape, Some(from_side), layer) {
                 last_shape_no = index;
@@ -1343,6 +1347,9 @@ mod tests {
             IntPoint::new(0, 10),
         ));
         assert!(!half_plane.is_empty());
-        assert!(!fr_board::shove::geom::simplex_contained_in(&half_plane, &bounds));
+        assert!(!fr_board::shove::geom::simplex_contained_in(
+            &half_plane,
+            &bounds
+        ));
     }
 }

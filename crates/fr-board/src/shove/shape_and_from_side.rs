@@ -36,7 +36,9 @@ impl ShapeAndFromSide {
         orthogonal: bool,
         in_shove_check: bool,
     ) -> Option<ShapeAndFromSide> {
-        let tree_shape = piece.polyline.offset_shape(piece.compensated_half_width(board), index)?;
+        let tree_shape = piece
+            .polyline
+            .offset_shape(piece.compensated_half_width(board), index)?;
         let mut curr_shape = tree_shape;
         let mut curr_from_side = None;
 
@@ -75,8 +77,7 @@ impl ShapeAndFromSide {
                 from_side_no = end_cutline.and_then(|line| curr_shape.border_line_index(&line));
             }
             if let (Some(no), Some(cut_line)) = (from_side_no, curr_cut_line) {
-                let border_intersection =
-                    cut_line.intersection_approx(&curr_shape.border_line(no));
+                let border_intersection = cut_line.intersection_approx(&curr_shape.border_line(no));
                 curr_from_side = Some(FromSide::raw(no as i32, Some(border_intersection)));
             }
         }
@@ -93,7 +94,11 @@ impl ShapeAndFromSide {
 }
 
 /// `calc_cutline_at_end` (`:74-91`).
-fn calc_cutline_at_end(index: usize, trace_lines: &Polyline, compensated_half_width: i32) -> Option<Line> {
+fn calc_cutline_at_end(
+    index: usize,
+    trace_lines: &Polyline,
+    compensated_half_width: i32,
+) -> Option<Line> {
     let line_count = trace_lines.arr.len();
     if line_count < 3 {
         return None;
@@ -116,7 +121,11 @@ fn calc_cutline_at_end(index: usize, trace_lines: &Polyline, compensated_half_wi
 }
 
 /// `calc_cutline_at_start` (`:93-107`).
-fn calc_cutline_at_start(index: usize, trace_lines: &Polyline, compensated_half_width: i32) -> Option<Line> {
+fn calc_cutline_at_start(
+    index: usize,
+    trace_lines: &Polyline,
+    compensated_half_width: i32,
+) -> Option<Line> {
     if trace_lines.arr.len() < 3 {
         return None;
     }

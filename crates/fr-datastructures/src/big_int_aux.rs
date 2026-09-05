@@ -127,18 +127,15 @@ mod tests {
     fn add_rational_coordinates_same_and_different_denominator() {
         let a = (BigInt::from(1), BigInt::from(2), BigInt::from(3));
         let b = (BigInt::from(4), BigInt::from(5), BigInt::from(3));
-        let (x, y, z) = BigIntAux::add_rational_coordinates(
-            (&a.0, &a.1, &a.2),
-            (&b.0, &b.1, &b.2),
+        let (x, y, z) = BigIntAux::add_rational_coordinates((&a.0, &a.1, &a.2), (&b.0, &b.1, &b.2));
+        assert_eq!(
+            (x, y, z),
+            (BigInt::from(5), BigInt::from(7), BigInt::from(3))
         );
-        assert_eq!((x, y, z), (BigInt::from(5), BigInt::from(7), BigInt::from(3)));
 
         let c = (BigInt::from(1), BigInt::from(1), BigInt::from(2));
         let d = (BigInt::from(1), BigInt::from(1), BigInt::from(3));
-        let (x, y, z) = BigIntAux::add_rational_coordinates(
-            (&c.0, &c.1, &c.2),
-            (&d.0, &d.1, &d.2),
-        );
+        let (x, y, z) = BigIntAux::add_rational_coordinates((&c.0, &c.1, &c.2), (&d.0, &d.1, &d.2));
         assert_eq!(z, BigInt::from(6));
         assert_eq!(x, BigInt::from(1) * 3 + BigInt::from(1) * 2); // 5
         assert_eq!(y, BigInt::from(5));

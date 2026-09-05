@@ -40,7 +40,10 @@ fn the_reserve_moves_the_work_deadline_off_the_hard_one() {
     );
 
     // 4 s of a 100 s budget is well under the quarter cap, so it is taken whole.
-    assert_eq!(reserve_job_tail(Duration::from_secs(4)), Duration::from_secs(4));
+    assert_eq!(
+        reserve_job_tail(Duration::from_secs(4)),
+        Duration::from_secs(4)
+    );
     assert_eq!(job_tail_reserve(), Duration::from_secs(4));
 
     let work = fr_router::JobDeadline::ambient()

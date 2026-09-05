@@ -35,9 +35,7 @@
 
 use fr_board::item::ItemId;
 use fr_datastructures::signum::Signum;
-use fr_geometry::planar::{
-    Direction, FloatPoint, IntOctagon, Line, Point, Polyline, Side, Vector,
-};
+use fr_geometry::planar::{Direction, FloatPoint, IntOctagon, Line, Point, Polyline, Side, Vector};
 
 use crate::insert_forced::ChangedArea;
 use crate::pull_tight::{
@@ -149,7 +147,8 @@ impl PullTightAlgo<'_> {
 
         for i in 0..=last_index {
             let mut skip_line = false;
-            let new_a = new_lines[new_line_index - 1].intersection_approx(&new_lines[new_line_index]);
+            let new_a =
+                new_lines[new_line_index - 1].intersection_approx(&new_lines[new_line_index]);
             let new_b = polyline.corner_approx(i + 2);
             // `:73`: the third containment test reads the *original* polyline
             // at `new_line_index`, not at `i`. Transcribed as written.
@@ -158,10 +157,7 @@ impl PullTightAlgo<'_> {
                 Some(octagon) => {
                     octagon_contains_float(octagon, &new_a)
                         && octagon_contains_float(octagon, &new_b)
-                        && octagon_contains_float(
-                            octagon,
-                            &polyline.corner_approx(new_line_index),
-                        )
+                        && octagon_contains_float(octagon, &polyline.corner_approx(new_line_index))
                 }
             };
 
@@ -252,9 +248,7 @@ impl PullTightAlgo<'_> {
                         }
                     }
                     if ok {
-                        if let Some(shape) =
-                            curr_polyline.offset_shape(self.curr_half_width(), 0)
-                        {
+                        if let Some(shape) = curr_polyline.offset_shape(self.curr_half_width(), 0) {
                             skip_line = self.check_trace_shape(&shape);
                         }
                     }
@@ -483,8 +477,7 @@ impl PullTightAlgo<'_> {
             let tmp = Polyline::new_from_lines(&curr_lines);
             let mut check_ok = false;
             if tmp.arr.len() == curr_lines.len() && keep_before_ind >= 1 {
-                if let Some(shape) = tmp.offset_shape(self.curr_half_width(), keep_before_ind - 1)
-                {
+                if let Some(shape) = tmp.offset_shape(self.curr_half_width(), keep_before_ind - 1) {
                     check_ok = self.check_trace_shape(&shape);
                 }
             }
@@ -646,8 +639,7 @@ impl PullTightAlgo<'_> {
         }
         let translate_line = line_arr[start_no + 2];
         let mut prev_corner = line_arr[start_no].intersection_approx(&line_arr[start_no + 1]);
-        let mut next_corner =
-            line_arr[start_no + 3].intersection_approx(&line_arr[start_no + 4]);
+        let mut next_corner = line_arr[start_no + 3].intersection_approx(&line_arr[start_no + 4]);
         let mut prev_dist = translate_line.signed_distance(&prev_corner);
         let mut corners_skipped_before = 0usize;
         let mut corners_skipped_after = 0usize;
@@ -822,8 +814,7 @@ impl PullTightAlgo<'_> {
                     let reduced = polyline.skip_lines(i + 1, i + 1);
                     if reduced.arr.len() == polyline.arr.len() - 1 {
                         let shape_no = if j == 0 { i } else { i - 1 };
-                        if let Some(shape) =
-                            reduced.offset_shape(self.curr_half_width(), shape_no)
+                        if let Some(shape) = reduced.offset_shape(self.curr_half_width(), shape_no)
                         {
                             if self.check_trace_shape(&shape) {
                                 let layer = self.curr_layer();
@@ -861,8 +852,7 @@ impl PullTightAlgo<'_> {
                     let reduced = polyline.skip_lines(i + 1, i + 2);
                     if reduced.arr.len() == polyline.arr.len() - 2 {
                         let shape_no = if j == 0 { i } else { i - 1 };
-                        if let Some(shape) =
-                            reduced.offset_shape(self.curr_half_width(), shape_no)
+                        if let Some(shape) = reduced.offset_shape(self.curr_half_width(), shape_no)
                         {
                             if self.check_trace_shape(&shape) {
                                 let layer = self.curr_layer();
@@ -1149,7 +1139,10 @@ mod tests {
     #[test]
     fn octagon_contains_float_is_the_complement_of_is_outside() {
         let octagon = IntOctagon::new(0, 0, 100, 100, -100, 100, 0, 200);
-        assert!(octagon_contains_float(&octagon, &FloatPoint::new(50.0, 50.0)));
+        assert!(octagon_contains_float(
+            &octagon,
+            &FloatPoint::new(50.0, 50.0)
+        ));
         assert!(!octagon_contains_float(
             &octagon,
             &FloatPoint::new(-0.5, 50.0)

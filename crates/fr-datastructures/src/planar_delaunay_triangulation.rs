@@ -257,7 +257,10 @@ impl<T: Clone> PlanarDelaunayTriangulation<T> {
                             (otri.v[1], otri.v[2]),
                             (otri.v[2], otri.v[0]),
                         ];
-                        if other_edges.iter().any(|&(oa, ob)| (ea == oa && eb == ob) || (ea == ob && eb == oa)) {
+                        if other_edges
+                            .iter()
+                            .any(|&(oa, ob)| (ea == oa && eb == ob) || (ea == ob && eb == oa))
+                        {
                             shared = true;
                             break;
                         }
@@ -305,10 +308,7 @@ impl<T: Clone> PlanarDelaunayTriangulation<T> {
             }
         }
 
-        PlanarDelaunayTriangulation {
-            vertices,
-            edges,
-        }
+        PlanarDelaunayTriangulation { vertices, edges }
     }
 
     /// Returns all Delaunay triangulation edges between input points.
@@ -359,9 +359,7 @@ impl<T: Clone> PlanarDelaunayTriangulation<T> {
 
     fn find_vertex_index(&self, pt: &Point2D) -> Option<usize> {
         self.vertices.iter().position(|v| {
-            !v.is_super
-                && (v.point.x - pt.x).abs() < 1e-6
-                && (v.point.y - pt.y).abs() < 1e-6
+            !v.is_super && (v.point.x - pt.x).abs() < 1e-6 && (v.point.y - pt.y).abs() < 1e-6
         })
     }
 }

@@ -259,7 +259,8 @@ impl ShoveInsert<'_> {
             cl_type,
             &mut obstacles,
         );
-        let stored = shape_entries.store_items(self.board, &obstacles, false, copper_sharing_allowed);
+        let stored =
+            shape_entries.store_items(self.board, &obstacles, false, copper_sharing_allowed);
         self.scratch.give(obstacles);
         if !stored {
             return true;
@@ -294,14 +295,8 @@ impl ShoveInsert<'_> {
                     .max_width()
                 + shape_radius;
             let max_dist_square = max_dist * max_dist;
-            let try_via_centers = try_shove_via_points(
-                self.board,
-                obstacle_shape,
-                layer,
-                via_id,
-                cl_type,
-                true,
-            );
+            let try_via_centers =
+                try_shove_via_points(self.board, obstacle_shape, layer, via_id, cl_type, true);
             let mut chosen: Option<IntVector> = None;
             for (i, candidate) in try_via_centers.iter().enumerate() {
                 if i != 0

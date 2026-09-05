@@ -273,8 +273,7 @@ impl ShoveCheck<'_> {
                 }
             }
             if pad.trace_pen_half_width > 0 {
-                let start_trace_shape =
-                    circle_tile(location, pad.trace_pen_half_width, orthogonal);
+                let start_trace_shape = circle_tile(location, pad.trace_pen_half_width, orthogonal);
                 if self.check_forced_pad(
                     &start_trace_shape,
                     Some(from_side),
@@ -355,8 +354,7 @@ impl ShoveInsert<'_> {
                 }
             }
             if pad.trace_pen_half_width > 0 {
-                let start_trace_shape =
-                    circle_tile(location, pad.trace_pen_half_width, orthogonal);
+                let start_trace_shape = circle_tile(location, pad.trace_pen_half_width, orthogonal);
                 if !self.forced_pad(
                     &start_trace_shape,
                     Some(from_side),

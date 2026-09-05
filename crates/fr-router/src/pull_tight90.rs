@@ -118,9 +118,9 @@ impl PullTightAlgo<'_> {
         while i <= n {
             let mut skip_lines = false;
             // `:75` — the corner this window would drop must be in the clip.
-            let in_clip_shape = self.clip_shape().is_none_or(|clip| {
-                clip.contains_float_point(&polyline.corner_approx(i - 3))
-            });
+            let in_clip_shape = self
+                .clip_shape()
+                .is_none_or(|clip| clip.contains_float_point(&polyline.corner_approx(i - 3)));
             if in_clip_shape {
                 let check_lines = [
                     new_lines[new_lines.len() - 2],
@@ -150,10 +150,8 @@ impl PullTightAlgo<'_> {
                 if skip_lines {
                     // `:101-106` — both the merged corner and the skipped one
                     // join the changed area.
-                    changed_area.join_point(
-                        check_lines[1].intersection_approx(&check_lines[2]),
-                        layer,
-                    );
+                    changed_area
+                        .join_point(check_lines[1].intersection_approx(&check_lines[2]), layer);
                     changed_area.join_point(
                         polyline.arr[i - 2].intersection_approx(&polyline.arr[i - 3]),
                         layer,

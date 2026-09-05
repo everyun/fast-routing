@@ -73,8 +73,17 @@ fn random_octagon(rng: &mut Rng, pool: i32) -> Simplex {
     // Chamfer as drawn can exceed the box side — `to_simplex`'s
     // remove_redundant_lines absorbs the over-cut.
     let c = rng.coord(pool).unsigned_abs() as i32 / 4;
-    IntOctagon::new(lx, ly, rx, uy, lx - uy + c, rx - ly - c, lx + ly + c, rx + uy - c)
-        .to_simplex()
+    IntOctagon::new(
+        lx,
+        ly,
+        rx,
+        uy,
+        lx - uy + c,
+        rx - ly - c,
+        lx + ly + c,
+        rx + uy - c,
+    )
+    .to_simplex()
 }
 
 /// A random free simplex: 3..=6 half-planes with arbitrary (not just 45°)
@@ -160,23 +169,63 @@ fn random_tile(rng: &mut Rng, pool: i32) -> Simplex {
 fn scripted_pairs() -> Vec<(Simplex, Simplex, &'static str)> {
     let mut out: Vec<(Simplex, Simplex, &'static str)> = Vec::new();
     let base = IntBox::new(0, 0, 100, 100).to_simplex();
-    out.push((base.clone(), IntBox::new(50, 50, 150, 150).to_simplex(), "overlap"));
-    out.push((base.clone(), IntBox::new(100, 0, 200, 100).to_simplex(), "shared edge"));
-    out.push((base.clone(), IntBox::new(101, 0, 200, 100).to_simplex(), "1-gap"));
-    out.push((base.clone(), IntBox::new(100, 100, 200, 200).to_simplex(), "corner touch"));
-    out.push((base.clone(), IntBox::new(10, 10, 90, 90).to_simplex(), "contained"));
+    out.push((
+        base.clone(),
+        IntBox::new(50, 50, 150, 150).to_simplex(),
+        "overlap",
+    ));
+    out.push((
+        base.clone(),
+        IntBox::new(100, 0, 200, 100).to_simplex(),
+        "shared edge",
+    ));
+    out.push((
+        base.clone(),
+        IntBox::new(101, 0, 200, 100).to_simplex(),
+        "1-gap",
+    ));
+    out.push((
+        base.clone(),
+        IntBox::new(100, 100, 200, 200).to_simplex(),
+        "corner touch",
+    ));
+    out.push((
+        base.clone(),
+        IntBox::new(10, 10, 90, 90).to_simplex(),
+        "contained",
+    ));
     out.push((base.clone(), base.clone(), "identical"));
-    out.push((base.clone(), IntBox::new(200, 200, 300, 300).to_simplex(), "disjoint"));
+    out.push((
+        base.clone(),
+        IntBox::new(200, 200, 300, 300).to_simplex(),
+        "disjoint",
+    ));
     // A 45° chamfer exactly resting on the box's corner: the diagonal through
     // (50, 0)-(0, 50) style cuts; the octagon occupies [0,100]^2 with its
     // corners cut at chamfer 50.
     let chamfer = IntOctagon::new(0, 0, 100, 100, -50, 50, 50, 150).to_simplex();
-    out.push((chamfer.clone(), IntBox::new(100, 50, 200, 150).to_simplex(), "oct/box edge"));
-    out.push((chamfer.clone(), IntBox::new(99, 99, 200, 200).to_simplex(), "oct/box 1-inside"));
-    out.push((chamfer, IntBox::new(100, 100, 200, 200).to_simplex(), "oct/box corner touch"));
+    out.push((
+        chamfer.clone(),
+        IntBox::new(100, 50, 200, 150).to_simplex(),
+        "oct/box edge",
+    ));
+    out.push((
+        chamfer.clone(),
+        IntBox::new(99, 99, 200, 200).to_simplex(),
+        "oct/box 1-inside",
+    ));
+    out.push((
+        chamfer,
+        IntBox::new(100, 100, 200, 200).to_simplex(),
+        "oct/box corner touch",
+    ));
     // Degenerate pairs: an empty box and a zero-height box against a real one.
     out.push((base.clone(), IntBox::EMPTY.to_simplex(), "empty"));
-    out.push((base.clone(), IntBox::new(50, 50, 60, 50).to_simplex(), "flat box inside"));
+    out.push((
+        base.clone(),
+        IntBox::new(50, 50, 60, 50).to_simplex(),
+        "flat box inside",
+    ));
     out
 }
 
@@ -238,7 +287,13 @@ fn random_tile_pairs_match_the_exact_construction() {
     }
     // Guard against a deck so stacked the property is vacuous: both answers
     // must show up in bulk.
-    assert!(overlaps > pairs / 20, "too few positives: {overlaps}/{pairs}");
-    assert!(overlaps < pairs * 19 / 20, "too few negatives: {overlaps}/{pairs}");
+    assert!(
+        overlaps > pairs / 20,
+        "too few positives: {overlaps}/{pairs}"
+    );
+    assert!(
+        overlaps < pairs * 19 / 20,
+        "too few negatives: {overlaps}/{pairs}"
+    );
     assert!(small_pool > pairs / 4);
 }

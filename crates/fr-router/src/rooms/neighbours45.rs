@@ -1171,7 +1171,10 @@ mod tests {
             &mut touched,
         );
         // 6, 7, 0, 1 — and nothing else.
-        assert_eq!(touched, [true, true, false, false, false, false, true, true]);
+        assert_eq!(
+            touched,
+            [true, true, false, false, false, false, true, true]
+        );
     }
 
     #[test]
@@ -1306,9 +1309,8 @@ mod tests {
             .collect();
         for x in (0..=1000).step_by(37) {
             for y in (0..=1000).step_by(37) {
-                let point = fr_geometry::planar::Point::Int(fr_geometry::planar::IntPoint::new(
-                    x, y,
-                ));
+                let point =
+                    fr_geometry::planar::Point::Int(fr_geometry::planar::IntPoint::new(x, y));
                 let covered = room.to_simplex().contains(&point)
                     || gaps
                         .iter()

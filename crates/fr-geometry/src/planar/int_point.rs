@@ -236,7 +236,11 @@ impl IntPoint {
     /// Calculates a 45-degree corner point `p` so that lines `(self, p)` and
     /// `(p, to_point)` are multiples of 45°. Returns `None` if the line `(self,
     /// to_point)` is already a multiple of 45°.
-    pub fn fortyfive_degree_corner(&self, to_point: &IntPoint, left_turn: bool) -> Option<IntPoint> {
+    pub fn fortyfive_degree_corner(
+        &self,
+        to_point: &IntPoint,
+        left_turn: bool,
+    ) -> Option<IntPoint> {
         let dx = to_point.x - self.x;
         let dy = to_point.y - self.y;
 

@@ -124,7 +124,8 @@ impl NetClasses {
             if !via_match {
                 return false;
             }
-            (0..c.layer_count()).all(|layer| c.get_trace_half_width(layer) == trace_half_width_arr[layer])
+            (0..c.layer_count())
+                .all(|layer| c.get_trace_half_width(layer) == trace_half_width_arr[layer])
         })
     }
 

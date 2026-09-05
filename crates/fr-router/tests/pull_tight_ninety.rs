@@ -119,7 +119,9 @@ fn violations(fixture: &TestFixture) -> usize {
 #[test]
 fn a_ninety_degree_board_never_gets_a_diagonal_from_pull_tight() {
     let mut fixture = TestFixture::two_layer_with_pads();
-    fixture.board.set_angle_restriction(AngleRestriction::Ninety);
+    fixture
+        .board
+        .set_angle_restriction(AngleRestriction::Ninety);
     let corners = staircase(IntPoint::new(-2000, -600), 8, 120);
     let id = insert(&mut fixture.board, &corners, TEST_NET);
     assert_eq!(violations(&fixture), 0, "the fixture must start clean");
@@ -127,7 +129,10 @@ fn a_ninety_degree_board_never_gets_a_diagonal_from_pull_tight() {
     let _ = pull_tight(&mut fixture, id);
 
     let segments = segments_of(&fixture.board, TEST_NET);
-    assert!(!segments.is_empty(), "the staircase must survive optimization");
+    assert!(
+        !segments.is_empty(),
+        "the staircase must survive optimization"
+    );
     for (dx, dy) in &segments {
         assert!(
             *dx == 0.0 || *dy == 0.0,
@@ -156,7 +161,9 @@ fn a_ninety_degree_board_still_loses_a_redundant_jog() {
         IntPoint::new(600, -900),
     ];
     let mut fixture = TestFixture::two_layer_with_pads();
-    fixture.board.set_angle_restriction(AngleRestriction::Ninety);
+    fixture
+        .board
+        .set_angle_restriction(AngleRestriction::Ninety);
     let id = insert(&mut fixture.board, &bump, TEST_NET);
     let before: usize = polylines_of(&fixture.board, TEST_NET)
         .iter()
@@ -174,7 +181,10 @@ fn a_ninety_degree_board_still_loses_a_redundant_jog() {
         "the bump should be optimized away: {before} corners before, {after} after"
     );
     for (dx, dy) in segments_of(&fixture.board, TEST_NET) {
-        assert!(dx == 0.0 || dy == 0.0, "still axis-aligned: dx={dx}, dy={dy}");
+        assert!(
+            dx == 0.0 || dy == 0.0,
+            "still axis-aligned: dx={dx}, dy={dy}"
+        );
     }
 }
 
@@ -187,10 +197,16 @@ fn fork_smoothing_is_a_noop_on_a_ninety_degree_board() {
     const FORK: IntPoint = IntPoint { x: -1500, y: 900 };
     let main = [FORK, IntPoint { x: 1500, y: 900 }];
     let stub = [FORK, IntPoint { x: -1500, y: -500 }];
-    let branch = [FORK, IntPoint { x: -1100, y: 1300 }, IntPoint { x: -300, y: 1300 }];
+    let branch = [
+        FORK,
+        IntPoint { x: -1100, y: 1300 },
+        IntPoint { x: -300, y: 1300 },
+    ];
 
     let mut fixture = TestFixture::two_layer_with_pads();
-    fixture.board.set_angle_restriction(AngleRestriction::Ninety);
+    fixture
+        .board
+        .set_angle_restriction(AngleRestriction::Ninety);
     insert(&mut fixture.board, &main, TEST_NET);
     insert(&mut fixture.board, &stub, TEST_NET);
     let branch_id = insert(&mut fixture.board, &branch, TEST_NET);

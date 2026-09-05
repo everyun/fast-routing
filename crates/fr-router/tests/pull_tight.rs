@@ -82,9 +82,7 @@ fn traces_of(board: &Board, net: i32) -> Vec<ItemId> {
     let mut ids: Vec<ItemId> = board
         .store()
         .iter()
-        .filter(|(_, item)| {
-            matches!(item.kind, ItemKind::Trace(_)) && item.nets.contains(net)
-        })
+        .filter(|(_, item)| matches!(item.kind, ItemKind::Trace(_)) && item.nets.contains(net))
         .map(|(id, _)| id)
         .collect();
     ids.sort_unstable();
@@ -105,8 +103,14 @@ fn corner_total(board: &Board, net: i32) -> usize {
 fn whole_board_area(board: &Board) -> ChangedArea {
     let mut area = ChangedArea::new(board.layers().len());
     for layer in 0..board.layers().len() as i32 {
-        area.join_point(fr_geometry::planar::FloatPoint::new(-3_000.0, -1_500.0), layer);
-        area.join_point(fr_geometry::planar::FloatPoint::new(3_000.0, 1_500.0), layer);
+        area.join_point(
+            fr_geometry::planar::FloatPoint::new(-3_000.0, -1_500.0),
+            layer,
+        );
+        area.join_point(
+            fr_geometry::planar::FloatPoint::new(3_000.0, 1_500.0),
+            layer,
+        );
     }
     area
 }
@@ -131,7 +135,10 @@ fn staircase_on_an_empty_board_collapses_toward_a_straight_line() {
         None,
         0,
     );
-    assert!(algo.trace_pull_tight(id, &mut area).is_some(), "must change");
+    assert!(
+        algo.trace_pull_tight(id, &mut area).is_some(),
+        "must change"
+    );
 
     let after = corner_total(&fixture.board, TEST_NET);
     assert!(
@@ -258,7 +265,10 @@ fn pull_tight_never_increases_the_violation_count() {
         0,
     );
     let before = algo.trace_polyline_violations(id).expect("trace is there");
-    assert!(before > 0, "fixture must start dirty for this to mean anything");
+    assert!(
+        before > 0,
+        "fixture must start dirty for this to mean anything"
+    );
 
     let new_id = algo.trace_pull_tight(id, &mut area).unwrap_or(id);
     let after = algo.trace_polyline_violations(new_id).unwrap_or(0);
@@ -515,7 +525,10 @@ fn the_oracle_uses_the_symmetric_drc_enlargement_not_the_compensated_tree() {
     // The obstacle: /F's diagonal on `x+y = 109525`.
     board
         .insert_trace_points(
-            &[IntPoint::new(787400, -677875), IntPoint::new(766303, -656778)],
+            &[
+                IntPoint::new(787400, -677875),
+                IntPoint::new(766303, -656778),
+            ],
             0,
             HALF_WIDTH,
             NetNos::of(2),
@@ -588,7 +601,10 @@ fn the_stall_guard_is_upstreams_constant_in_wall_mode_and_rounds_otherwise() {
         StallGuard::Wall(Duration::from_millis(1_000)),
     );
     assert_eq!(
-        StallGuard::for_mode(BudgetMode::Deterministic, TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS),
+        StallGuard::for_mode(
+            BudgetMode::Deterministic,
+            TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS
+        ),
         StallGuard::Rounds(1_000 * ROUNDS_PER_VIRTUAL_MS),
     );
     // The generous side: the deterministic guard must not bind before the wall

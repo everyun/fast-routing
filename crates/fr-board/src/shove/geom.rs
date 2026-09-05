@@ -8,9 +8,7 @@
 //! reached from a shove, and because `overlapping_items_with_clearance` needs
 //! the board's clearance matrix, which the geometry crate does not know about.
 
-use fr_geometry::planar::{
-FloatPoint, IntBox, IntOctagon, IntPoint, Line, Point, Side, Simplex,
-};
+use fr_geometry::planar::{FloatPoint, IntBox, IntOctagon, IntPoint, Line, Point, Side, Simplex};
 
 use crate::board::Board;
 use crate::clearance::ClearanceSource;
@@ -87,7 +85,9 @@ pub fn nearest_border_point(shape: &Simplex, from_point: &Point) -> Option<Point
     let mut prev_ind = line_count - 2;
     let mut curr_ind = line_count - 1;
     for next_ind in 0..line_count {
-        let projection = shape.border_line(curr_ind).perpendicular_projection(from_point);
+        let projection = shape
+            .border_line(curr_ind)
+            .perpendicular_projection(from_point);
         let prev_ok = !shape.corner_is_bounded(curr_ind)
             || shape.border_line(prev_ind).side_of_point(&projection) == Side::OnTheRight;
         let next_ok = !shape.corner_is_bounded(next_ind)
@@ -230,7 +230,10 @@ pub fn octagon_nearest_border_projections(
     let mut candidates: Vec<(f64, IntPoint)> = Vec::with_capacity(8);
     for dir in 0..8 {
         let border_point = octagon_border_point(shape, point, dir);
-        candidates.push((inside.distance_square(&border_point.to_float()), border_point));
+        candidates.push((
+            inside.distance_square(&border_point.to_float()),
+            border_point,
+        ));
     }
     // Stable so that equal distances keep upstream's direction order.
     candidates.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
@@ -342,7 +345,9 @@ pub fn overlapping_items_with_clearance(
         let Some(item) = board.store().get(*id) else {
             return false;
         };
-        let clearance = board.clearances().value(cl_class, item.clearance_class, layer);
+        let clearance = board
+            .clearances()
+            .value(cl_class, item.clearance_class, layer);
         let half_clearance = clearance / 2;
         if half_clearance != curr_half_clearance {
             curr_half_clearance = half_clearance;
@@ -358,7 +363,9 @@ pub fn overlapping_items_with_clearance(
             let Some(tile_shape) = tile.shape.as_ref() else {
                 return false;
             };
-            tile_shape.enlarge(half_clearance).intersects(&curr_offset_tile)
+            tile_shape
+                .enlarge(half_clearance)
+                .intersects(&curr_offset_tile)
         })
     });
 }

@@ -284,7 +284,8 @@ pub fn check_shove_trace_line(
         if !door.alive {
             continue;
         }
-        let (first_room, second_room, dimension) = (door.first_room, door.second_room, door.dimension);
+        let (first_room, second_room, dimension) =
+            (door.first_room, door.second_room, door.dimension);
         if engine.rooms.room(first_room).kind == RoomKind::Obstacle
             && engine.rooms.room(second_room).kind == RoomKind::Obstacle
         {
@@ -436,7 +437,9 @@ fn section_segment(
     offset: f64,
     index: usize,
 ) -> Option<FloatLine> {
-    all_section_segments(engine, door, offset).get(index).copied()
+    all_section_segments(engine, door, offset)
+        .get(index)
+        .copied()
 }
 
 /// `ExpansionDoor.get_section_segments(offset)`.
@@ -461,7 +464,11 @@ fn trace_geometry(
     let fr_board::item::ItemKind::Trace(trace) = &item.kind else {
         return None;
     };
-    Some((trace.polyline.clone(), trace.half_width, item.clearance_class))
+    Some((
+        trace.polyline.clone(),
+        trace.half_width,
+        item.clearance_class,
+    ))
 }
 
 /// `IntBox` and `ConvexShape` come in through the door-width comparison; keep

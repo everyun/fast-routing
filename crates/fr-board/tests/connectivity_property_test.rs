@@ -22,7 +22,7 @@ use std::collections::VecDeque;
 use fr_board::board::{Board, LayerStructure};
 use fr_board::clearance::ClearanceTable;
 use fr_board::item::{
-    AreaShape, ConductionArea, FixedState, Item, ItemId, ItemKind, LayerRange, PlacedArea, Pin, Via,
+    AreaShape, ConductionArea, FixedState, Item, ItemId, ItemKind, LayerRange, Pin, PlacedArea, Via,
 };
 use fr_board::shape::{Padstack, TileShape};
 use fr_board::store::ItemStore;
@@ -317,7 +317,10 @@ fn components_equal_a_brute_force_flood_fill_after_a_mutation_storm() {
         let mut board = new_board();
         for step in 0..50 {
             let label = mutate(&mut board, &mut rng);
-            assert_partitions_match(&mut board, &format!("seed {seed}, step {step}, after {label}"));
+            assert_partitions_match(
+                &mut board,
+                &format!("seed {seed}, step {step}, after {label}"),
+            );
         }
     }
 }
@@ -419,6 +422,9 @@ fn dirty_flags_are_set_by_every_mutation_that_touches_a_net() {
     assert!(board.connectivity().is_dirty(2));
     assert!(!board.connectivity().is_dirty(1));
     assert!(!board.connectivity().is_dirty(3));
-    assert_eq!(board.connectivity().dirty_nets().collect::<Vec<_>>(), vec![2]);
+    assert_eq!(
+        board.connectivity().dirty_nets().collect::<Vec<_>>(),
+        vec![2]
+    );
     assert_partitions_match(&mut board, "after a single-net insert");
 }

@@ -139,7 +139,11 @@ pub fn report(design: &ImportedDesign, source: &str, options: &ReportOptions) ->
 
     let mut out = String::with_capacity(256 * violations.len() + 512);
     out.push_str("{\n  \"$schema\": \"https://schemas.kicad.org/drc.v1.json\",\n");
-    let _ = writeln!(out, "  \"coordinate_units\": {},", quote(&options.unit_name));
+    let _ = writeln!(
+        out,
+        "  \"coordinate_units\": {},",
+        quote(&options.unit_name)
+    );
     let _ = writeln!(out, "  \"source\": {},", quote(source));
     let _ = writeln!(out, "  \"generator\": \"fr-check drc_report\",");
     out.push_str("  \"violations\": [");

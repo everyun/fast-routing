@@ -1384,7 +1384,10 @@ fn a_concave_keepout_is_stored_as_a_polygon_and_split_for_the_tree() {
     //    covered, the notch is not, and no piece is the bounding octagon that used to stand in.
     let slot = design.board.store().slot_of(id).expect("a stored item");
     let shapes = design.board.default_tree().item_shapes(slot, id);
-    let pieces: Vec<_> = shapes.iter().filter_map(|entry| entry.shape.as_ref()).collect();
+    let pieces: Vec<_> = shapes
+        .iter()
+        .filter_map(|entry| entry.shape.as_ref())
+        .collect();
     assert!(pieces.len() > 1, "an L cannot be one convex tile");
     let covers = |x: i32, y: i32| {
         let point = Point::Int(IntPoint::new(x, y));
@@ -1460,10 +1463,7 @@ fn snap_angle_keywords_map_to_the_enum_ordinal() {
         ninety.rules.get_trace_angle_restriction(),
         RulesRestriction::NinetyDegree
     );
-    assert_eq!(
-        ninety.board.angle_restriction(),
-        BoardRestriction::Ninety
-    );
+    assert_eq!(ninety.board.angle_restriction(), BoardRestriction::Ninety);
 
     let none = synthetic(&snap_board("(snap_angle none)"));
     assert_eq!(

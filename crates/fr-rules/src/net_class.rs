@@ -161,7 +161,12 @@ impl NetClass {
         }
 
         let mut first_inner = 1;
-        while first_inner < len && !layer_structure.arr.get(first_inner).map_or(false, |l| l.is_signal) {
+        while first_inner < len
+            && !layer_structure
+                .arr
+                .get(first_inner)
+                .map_or(false, |l| l.is_signal)
+        {
             first_inner += 1;
         }
         if first_inner >= len.saturating_sub(1) {

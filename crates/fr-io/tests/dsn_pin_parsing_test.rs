@@ -62,7 +62,8 @@ fn fractional_coordinates_are_not_truncated() {
 #[test]
 fn extra_trailing_scopes_do_not_shift_coordinates() {
     // Some exporters append (pin_array ...) / (property ...) sub-scopes.
-    let dsn = r#"(pcb b (library (image img (pin PS (rotate 90) 5 100 200 (property (index 7))))))"#;
+    let dsn =
+        r#"(pcb b (library (image img (pin PS (rotate 90) 5 100 200 (property (index 7))))))"#;
     let pins = pkg_pins(dsn, "");
     assert_eq!(pins[0].1, "5");
     assert_eq!(pins[0].4, 90.0);
@@ -86,7 +87,9 @@ fn all_fixture_pins_match_an_independent_text_oracle() {
 
     let mut stack = vec![root];
     while let Some(dir) = stack.pop() {
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in rd.flatten() {
             let path = entry.path();
             if path.is_dir() {
@@ -96,7 +99,9 @@ fn all_fixture_pins_match_an_independent_text_oracle() {
             if path.extension().and_then(|e| e.to_str()) != Some("dsn") {
                 continue;
             }
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
             let Ok(doc) = parse_dsn(&text) else { continue };
             files += 1;
 
@@ -179,10 +184,7 @@ fn all_fixture_pins_match_an_independent_text_oracle() {
     );
 }
 
-fn cmpkey(
-    a: &(String, f64, f64),
-    b: &(String, f64, f64),
-) -> std::cmp::Ordering {
+fn cmpkey(a: &(String, f64, f64), b: &(String, f64, f64)) -> std::cmp::Ordering {
     a.0.cmp(&b.0)
         .then(a.1.partial_cmp(&b.1).unwrap())
         .then(a.2.partial_cmp(&b.2).unwrap())

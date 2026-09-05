@@ -243,12 +243,15 @@ impl LineSegment {
         if start_point_side == Side::Collinear && end_point_side == Side::Collinear {
             let this_sorted = self.sort_endpoints_in_xy();
             let other_sorted = other.sort_endpoints_in_xy();
-            let (left_line, right_line) =
-                if this_sorted.start_point().compare_xy(&other_sorted.start_point()) <= 0 {
-                    (this_sorted, other_sorted)
-                } else {
-                    (other_sorted, this_sorted)
-                };
+            let (left_line, right_line) = if this_sorted
+                .start_point()
+                .compare_xy(&other_sorted.start_point())
+                <= 0
+            {
+                (this_sorted, other_sorted)
+            } else {
+                (other_sorted, this_sorted)
+            };
             let cmp = left_line.end_point().compare_xy(&right_line.start_point());
             if cmp < 0 {
                 return Vec::new();
@@ -511,7 +514,9 @@ impl LineSegment {
                 let prev_line_side_of_is = prev_line.side_of_point(&is);
                 let next_line_side_of_is = next_line.side_of_point(&is);
 
-                if prev_line_side_of_is != Side::OnTheLeft && next_line_side_of_is != Side::OnTheLeft {
+                if prev_line_side_of_is != Side::OnTheLeft
+                    && next_line_side_of_is != Side::OnTheLeft
+                {
                     if prev_line_side_of_is == Side::Collinear {
                         let prev_prev_corner = if edge_line_no == 0 {
                             &corners[edge_count - 1]

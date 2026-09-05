@@ -33,8 +33,10 @@ fn line_intersection_can_produce_degenerate_triples() {
     let l = Line::new_from_coords(0, 0, 3, 7);
     match l.intersection(&l) {
         Point::Rational(r) => {
-            assert_eq!((r.x.to_string(), r.y.to_string(), r.z.to_string()),
-                       ("0".into(), "0".into(), "0".into()));
+            assert_eq!(
+                (r.x.to_string(), r.y.to_string(), r.z.to_string()),
+                ("0".into(), "0".into(), "0".into())
+            );
         }
         other => panic!("expected the all-zero rational triple, got {other:?}"),
     }

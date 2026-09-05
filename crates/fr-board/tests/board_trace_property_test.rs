@@ -219,8 +219,8 @@ fn split_pieces_inherit_every_attribute() {
         let mut rng = Rng::new(seed.wrapping_mul(0xD1B5_4A32_D192_ED03));
         let mut board = new_board();
         let corners = walk(&mut rng, 3);
-        let Some(polyline) = Some(Polyline::from_int_points(&corners))
-            .filter(|p| p.corner_count() >= 2)
+        let Some(polyline) =
+            Some(Polyline::from_int_points(&corners)).filter(|p| p.corner_count() >= 2)
         else {
             continue;
         };

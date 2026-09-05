@@ -66,7 +66,12 @@ impl SesWriter {
 
         // 1. Placement scope
         writeln!(out, "  (placement").unwrap();
-        writeln!(out, "    (resolution {} {})", self.unit, self.resolution as i64).unwrap();
+        writeln!(
+            out,
+            "    (resolution {} {})",
+            self.unit, self.resolution as i64
+        )
+        .unwrap();
         for pkg in packages {
             let placed_comps: Vec<&DsnComponent> = components
                 .iter()
@@ -102,7 +107,12 @@ impl SesWriter {
 
         // 3. Routes scope
         writeln!(out, "  (routes").unwrap();
-        writeln!(out, "    (resolution {} {})", self.unit, self.resolution as i64).unwrap();
+        writeln!(
+            out,
+            "    (resolution {} {})",
+            self.unit, self.resolution as i64
+        )
+        .unwrap();
         writeln!(out, "    (parser").unwrap();
         writeln!(out, "      (string_quote \")").unwrap();
         writeln!(out, "      (host_cad \"Freerouting-Rust\")").unwrap();
@@ -113,7 +123,9 @@ impl SesWriter {
         writeln!(out, "    (library_out").unwrap();
         let mut written_padstacks = HashSet::new();
         for padstack in padstacks {
-            if padstack.name.to_ascii_lowercase().contains("via") && written_padstacks.insert(padstack.name.clone()) {
+            if padstack.name.to_ascii_lowercase().contains("via")
+                && written_padstacks.insert(padstack.name.clone())
+            {
                 writeln!(out, "      (padstack \"{}\"", padstack.name).unwrap();
                 for shape in &padstack.shapes {
                     write!(out, "        (shape ({} {}", shape.shape_type, shape.layer).unwrap();
@@ -121,7 +133,10 @@ impl SesWriter {
                         let dim_val = if dim.fract() == 0.0 {
                             format!("{:.0}", dim)
                         } else {
-                            format!("{:.4}", dim).trim_end_matches('0').trim_end_matches('.').to_string()
+                            format!("{:.4}", dim)
+                                .trim_end_matches('0')
+                                .trim_end_matches('.')
+                                .to_string()
                         };
                         write!(out, " {}", dim_val).unwrap();
                     }
@@ -136,7 +151,8 @@ impl SesWriter {
         // 5. Network out scope (wires & vias per net)
         writeln!(out, "    (network_out").unwrap();
         for net_name in net_names {
-            let net_wires: Vec<&DsnWire> = wires.iter().filter(|w| &w.net_name == net_name).collect();
+            let net_wires: Vec<&DsnWire> =
+                wires.iter().filter(|w| &w.net_name == net_name).collect();
             let net_vias: Vec<&DsnVia> = vias.iter().filter(|v| &v.net_name == net_name).collect();
 
             if net_wires.is_empty() && net_vias.is_empty() {

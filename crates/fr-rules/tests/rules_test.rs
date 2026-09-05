@@ -54,7 +54,10 @@ fn test_layer_structure() {
     assert_eq!(ls.get_no("nonexistent"), None);
 
     assert_eq!(ls.get_signal_layer(0).map(|l| l.name.as_str()), Some("top"));
-    assert_eq!(ls.get_signal_layer(1).map(|l| l.name.as_str()), Some("inner_1"));
+    assert_eq!(
+        ls.get_signal_layer(1).map(|l| l.name.as_str()),
+        Some("inner_1")
+    );
     assert_eq!(ls.get_signal_layer_no(2), Some(2));
     assert_eq!(ls.get_layer_no(3), Some(3));
 }
@@ -75,7 +78,10 @@ fn test_clearance_matrix_basic() {
     // Check default value initialization (class 1 to class 1 should be 120)
     for layer in 0..4 {
         assert_eq!(cm.get_value(1, 1, layer, false), 120);
-        assert_eq!(cm.get_value(1, 1, layer, true), 120 + CLEARANCE_SAFETY_MARGIN);
+        assert_eq!(
+            cm.get_value(1, 1, layer, true),
+            120 + CLEARANCE_SAFETY_MARGIN
+        );
     }
 
     // Out-of-bounds queries return 0
@@ -210,15 +216,32 @@ fn test_via_info_and_via_infos() {
     assert_eq!(via_infos.count(), 0);
     assert!(via_infos.is_empty());
 
-    let ps1 = Padstack::new("ps1", 1, vec![Some(PadShape::Circle { radius: 50 })], true, false);
+    let ps1 = Padstack::new(
+        "ps1",
+        1,
+        vec![Some(PadShape::Circle { radius: 50 })],
+        true,
+        false,
+    );
     let via1 = ViaInfo::new("via1", ps1, 1, true);
 
-    let ps2 = Padstack::new("ps2", 2, vec![Some(PadShape::Circle { radius: 80 })], true, false);
+    let ps2 = Padstack::new(
+        "ps2",
+        2,
+        vec![Some(PadShape::Circle { radius: 80 })],
+        true,
+        false,
+    );
     let via2 = ViaInfo::new("via2", ps2, 1, false);
 
     assert!(via_infos.add(via1));
     assert!(via_infos.add(via2));
-    assert!(!via_infos.add(ViaInfo::new("via1", Padstack::new("ps_dup", 3, vec![], true, false), 1, true)));
+    assert!(!via_infos.add(ViaInfo::new(
+        "via1",
+        Padstack::new("ps_dup", 3, vec![], true, false),
+        1,
+        true
+    )));
 
     assert_eq!(via_infos.count(), 2);
     assert!(via_infos.name_exists("via1"));
@@ -226,7 +249,12 @@ fn test_via_info_and_via_infos() {
     assert!(!via_infos.name_exists("via3"));
 
     assert_eq!(via_infos.get(0).map(|v| v.name()), Some("via1"));
-    assert_eq!(via_infos.get_by_name("via2").map(|v| v.attach_smd_allowed()), Some(false));
+    assert_eq!(
+        via_infos
+            .get_by_name("via2")
+            .map(|v| v.attach_smd_allowed()),
+        Some(false)
+    );
 
     assert!(via_infos.remove("via1"));
     assert_eq!(via_infos.count(), 1);
@@ -346,7 +374,10 @@ fn test_net_and_nets() {
     assert_eq!(nets.get(0), None);
     assert_eq!(nets.get(4), None);
 
-    assert_eq!(nets.get_by_name_and_subnet("gnd", 1).map(|n| n.net_number), Some(1));
+    assert_eq!(
+        nets.get_by_name_and_subnet("gnd", 1).map(|n| n.net_number),
+        Some(1)
+    );
     assert_eq!(nets.get_by_name("clk").len(), 1);
 
     assert!(Nets::is_normal_net_no(1));
@@ -425,7 +456,10 @@ fn test_board_rules_aggregation() {
 
     // Angle restriction & ignore conduction
     rules.set_trace_angle_restriction(AngleRestriction::NinetyDegree);
-    assert_eq!(rules.get_trace_angle_restriction(), AngleRestriction::NinetyDegree);
+    assert_eq!(
+        rules.get_trace_angle_restriction(),
+        AngleRestriction::NinetyDegree
+    );
 
     rules.set_ignore_conduction(false);
     assert!(!rules.get_ignore_conduction());
@@ -527,8 +561,20 @@ fn test_net_class_extended_properties() {
 #[test]
 fn test_via_rule_swap_indices() {
     let mut vr = ViaRule::new("test_swap");
-    let ps1 = Padstack::new("p1", 1, vec![Some(PadShape::Circle { radius: 10 })], true, false);
-    let ps2 = Padstack::new("p2", 2, vec![Some(PadShape::Circle { radius: 20 })], true, false);
+    let ps1 = Padstack::new(
+        "p1",
+        1,
+        vec![Some(PadShape::Circle { radius: 10 })],
+        true,
+        false,
+    );
+    let ps2 = Padstack::new(
+        "p2",
+        2,
+        vec![Some(PadShape::Circle { radius: 20 })],
+        true,
+        false,
+    );
     vr.append_via(ViaInfo::new("v1", ps1, 1, true));
     vr.append_via(ViaInfo::new("v2", ps2, 1, true));
 
@@ -604,8 +650,16 @@ fn test_clearance_matrix_max_value_cache_is_monotonic() {
     // Lower it again: the stored cell drops, the caches do not.
     cm.set_value_symmetric(1, 1, 40);
     assert_eq!(cm.get_value(1, 1, 0, false), 40);
-    assert_eq!(cm.max_value_for_class(1, 0), 400, "upstream never lowers the row max cache");
-    assert_eq!(cm.max_value_on_layer(0), 400, "upstream never lowers the layer max cache");
+    assert_eq!(
+        cm.max_value_for_class(1, 0),
+        400,
+        "upstream never lowers the row max cache"
+    );
+    assert_eq!(
+        cm.max_value_on_layer(0),
+        400,
+        "upstream never lowers the layer max cache"
+    );
 
     cm.recompute_max_values();
     assert_eq!(cm.max_value_for_class(1, 0), 40);
@@ -627,9 +681,21 @@ fn test_clearance_matrix_remove_class_resets_row_max_caches() {
     cm.remove_class(2);
 
     assert_eq!(cm.class_count(), 2);
-    assert_eq!(cm.get_value(1, 1, 0, false), 100, "surviving cells keep their values");
-    assert_eq!(cm.max_value_for_class(1, 0), 0, "per-row caches are reallocated to zero");
-    assert_eq!(cm.max_value_on_layer(0), 600, "the global cache keeps the pre-removal maximum");
+    assert_eq!(
+        cm.get_value(1, 1, 0, false),
+        100,
+        "surviving cells keep their values"
+    );
+    assert_eq!(
+        cm.max_value_for_class(1, 0),
+        0,
+        "per-row caches are reallocated to zero"
+    );
+    assert_eq!(
+        cm.max_value_on_layer(0),
+        600,
+        "the global cache keeps the pre-removal maximum"
+    );
 
     cm.recompute_max_values();
     assert_eq!(cm.max_value_for_class(1, 0), 100);
@@ -666,7 +732,11 @@ fn test_clearance_matrix_compensation_uses_rounded_up_storage() {
     let mut cm = ClearanceMatrix::default_instance(ls, 0);
 
     cm.set_value_symmetric(1, 1, 15);
-    assert_eq!(cm.get_value(1, 1, 0, false), 16, "odd values round up to the next even integer");
+    assert_eq!(
+        cm.get_value(1, 1, 0, false),
+        16,
+        "odd values round up to the next even integer"
+    );
     assert_eq!(cm.clearance_compensation_value(1, 0), 8);
     // The safety margin is never folded into the compensation value.
     assert_eq!(cm.get_value(1, 1, 0, true), 16 + CLEARANCE_SAFETY_MARGIN);
@@ -685,8 +755,15 @@ fn test_clearance_matrix_append_class_snapshots_the_default_class() {
 
     assert!(cm.append_class("signal"));
     assert_eq!(cm.get_no("SIGNAL"), Some(2), "get_no is case-insensitive");
-    assert_eq!(cm.get_name(2), Some("signal"), "get_name keeps the stored casing");
-    assert!(!cm.append_class("SIGNAL"), "duplicate names are rejected case-insensitively");
+    assert_eq!(
+        cm.get_name(2),
+        Some("signal"),
+        "get_name keeps the stored casing"
+    );
+    assert!(
+        !cm.append_class("SIGNAL"),
+        "duplicate names are rejected case-insensitively"
+    );
 
     for layer in 0..2 {
         assert_eq!(cm.get_value(2, 1, layer, false), 240);
@@ -732,7 +809,10 @@ fn test_default_clearance_classes_have_stable_indices() {
     // Re-running is a no-op that reports the existing indices (append_class returns false, but
     // Structure.append_clearance_class re-reads get_no regardless).
     let again = create_default_clearance_classes(&mut cm);
-    assert_eq!(again.iter().map(|(i, _)| *i).collect::<Vec<_>>(), vec![2, 3, 4, 5]);
+    assert_eq!(
+        again.iter().map(|(i, _)| *i).collect::<Vec<_>>(),
+        vec![2, 3, 4, 5]
+    );
     assert_eq!(cm.class_count(), 6);
 
     // A non-reserved name gets a matrix class but no item-class binding.
@@ -750,7 +830,10 @@ fn test_wire_alias_is_case_sensitive() {
     assert!(!is_wire_alias("Wire"));
     assert!(!is_wire_alias("WIRE"));
     assert_eq!(WIRE_CLASS_NAME, "wire");
-    assert_eq!(WIRE_CLEARANCE_CLASS_NO, BoardRules::default_clearance_class());
+    assert_eq!(
+        WIRE_CLEARANCE_CLASS_NO,
+        BoardRules::default_clearance_class()
+    );
 
     // The reserved item-class switch is likewise case-sensitive (Structure.java:729-734).
     assert_eq!(reserved_item_class("via"), Some(ItemClass::Via));
@@ -919,13 +1002,31 @@ fn test_network_class_pair_drops_three_part_names() {
 #[test]
 fn test_net_class_derived_clearance_class_names() {
     assert_eq!(CLASS_CLEARANCE_SEPARATOR, '-');
-    assert_eq!(net_class_item_clearance_class_name("SIGNAL", "wire"), "SIGNAL");
-    assert_eq!(net_class_item_clearance_class_name("SIGNAL", "via"), "SIGNAL-via");
-    assert_eq!(net_class_item_clearance_class_name("SIGNAL", "smd"), "SIGNAL-smd");
-    assert_eq!(net_class_item_clearance_class_name("SIGNAL", "pin"), "SIGNAL-pin");
-    assert_eq!(net_class_item_clearance_class_name("SIGNAL", "area"), "SIGNAL-area");
+    assert_eq!(
+        net_class_item_clearance_class_name("SIGNAL", "wire"),
+        "SIGNAL"
+    );
+    assert_eq!(
+        net_class_item_clearance_class_name("SIGNAL", "via"),
+        "SIGNAL-via"
+    );
+    assert_eq!(
+        net_class_item_clearance_class_name("SIGNAL", "smd"),
+        "SIGNAL-smd"
+    );
+    assert_eq!(
+        net_class_item_clearance_class_name("SIGNAL", "pin"),
+        "SIGNAL-pin"
+    );
+    assert_eq!(
+        net_class_item_clearance_class_name("SIGNAL", "area"),
+        "SIGNAL-area"
+    );
     // Case-sensitive alias: "Wire" is an ordinary item class name.
-    assert_eq!(net_class_item_clearance_class_name("SIGNAL", "Wire"), "SIGNAL-Wire");
+    assert_eq!(
+        net_class_item_clearance_class_name("SIGNAL", "Wire"),
+        "SIGNAL-Wire"
+    );
 
     assert_eq!(
         default_via_info_name("Via[0-1]_800:400_um", "SIGNAL"),
@@ -939,7 +1040,13 @@ fn test_net_class_derived_clearance_class_names() {
         .collect();
     assert_eq!(
         expected,
-        vec!["SIGNAL", "SIGNAL-via", "SIGNAL-smd", "SIGNAL-pin", "SIGNAL-area"]
+        vec![
+            "SIGNAL",
+            "SIGNAL-via",
+            "SIGNAL-smd",
+            "SIGNAL-pin",
+            "SIGNAL-area"
+        ]
     );
 }
 
@@ -1022,9 +1129,15 @@ fn test_router_settings_defaults_match_default_settings() {
     assert_eq!(s.optimizer.additional_ripup_cost_factor_at_start, 10);
     assert_eq!(s.optimizer.trace_ripup_cost_factor, 0.6);
     assert_eq!(s.optimizer.max_autoroute_passes, 6);
-    assert_eq!(s.optimizer.board_update_strategy, BoardUpdateStrategy::Greedy);
+    assert_eq!(
+        s.optimizer.board_update_strategy,
+        BoardUpdateStrategy::Greedy
+    );
     assert_eq!(s.optimizer.hybrid_ratio, "1:1");
-    assert_eq!(s.optimizer.item_selection_strategy, ItemSelectionStrategy::Prioritized);
+    assert_eq!(
+        s.optimizer.item_selection_strategy,
+        ItemSelectionStrategy::Prioritized
+    );
 }
 
 /// Three getters in one class with three different null policies
@@ -1038,7 +1151,10 @@ fn test_router_settings_null_policies() {
     s.fanout.enabled = None;
 
     assert!(s.run_router(), "getRunRouter() defaults to true when unset");
-    assert!(!s.run_optimizer(), "getRunOptimizer() defaults to false when unset");
+    assert!(
+        !s.run_optimizer(),
+        "getRunOptimizer() defaults to false when unset"
+    );
     assert!(s.run_fanout(), "getRunFanout() defaults to true when unset");
     assert!(
         !s.is_fanout_enabled(),
@@ -1073,8 +1189,16 @@ fn test_apply_board_specific_optimizations_all_signal_layers() {
     //                    vertAdd  = 0.1*round(10*100/200) = 0.5,
     //                    seed prefIsHorizontal = (200 < 100) = false.
     let aspect = BoardAspectRatio::from_bounding_box(200.0, 100.0);
-    assert_close(aspect.horizontal_add_costs_against_preferred_dir(), 2.0, "horizAdd");
-    assert_close(aspect.vertical_add_costs_against_preferred_dir(), 0.5, "vertAdd");
+    assert_close(
+        aspect.horizontal_add_costs_against_preferred_dir(),
+        2.0,
+        "horizAdd",
+    );
+    assert_close(
+        aspect.vertical_add_costs_against_preferred_dir(),
+        0.5,
+        "vertAdd",
+    );
     assert!(!aspect.preferred_direction_is_horizontal_seed());
 
     s.apply_board_specific_optimizations(aspect, &ls);
@@ -1094,10 +1218,26 @@ fn test_apply_board_specific_optimizations_all_signal_layers() {
     assert_close(s.preferred_direction_trace_costs(2), 1.0, "pref[2]");
     assert_close(s.preferred_direction_trace_costs(3), 1.0 + outer, "pref[3]");
 
-    assert_close(s.against_preferred_direction_trace_costs(0), 1.0 + 2.0 + outer, "und[0]");
-    assert_close(s.against_preferred_direction_trace_costs(1), 1.0 + 0.5, "und[1]");
-    assert_close(s.against_preferred_direction_trace_costs(2), 1.0 + 2.0, "und[2]");
-    assert_close(s.against_preferred_direction_trace_costs(3), 1.0 + 0.5 + outer, "und[3]");
+    assert_close(
+        s.against_preferred_direction_trace_costs(0),
+        1.0 + 2.0 + outer,
+        "und[0]",
+    );
+    assert_close(
+        s.against_preferred_direction_trace_costs(1),
+        1.0 + 0.5,
+        "und[1]",
+    );
+    assert_close(
+        s.against_preferred_direction_trace_costs(2),
+        1.0 + 2.0,
+        "und[2]",
+    );
+    assert_close(
+        s.against_preferred_direction_trace_costs(3),
+        1.0 + 0.5 + outer,
+        "und[3]",
+    );
 
     // Every layer is routable and inherits the default bend cost.
     for i in 0..4 {
@@ -1107,7 +1247,11 @@ fn test_apply_board_specific_optimizations_all_signal_layers() {
     assert!(s.board_specific_trace_costs_applied());
 
     // get_horizontal / get_vertical map (pref, undesired) through the preferred direction.
-    assert_close(s.horizontal_trace_costs(0), s.preferred_direction_trace_costs(0), "h[0]");
+    assert_close(
+        s.horizontal_trace_costs(0),
+        s.preferred_direction_trace_costs(0),
+        "h[0]",
+    );
     assert_close(
         s.vertical_trace_costs(0),
         s.against_preferred_direction_trace_costs(0),
@@ -1118,7 +1262,11 @@ fn test_apply_board_specific_optimizations_all_signal_layers() {
         s.against_preferred_direction_trace_costs(1),
         "h[1]",
     );
-    assert_close(s.vertical_trace_costs(1), s.preferred_direction_trace_costs(1), "v[1]");
+    assert_close(
+        s.vertical_trace_costs(1),
+        s.preferred_direction_trace_costs(1),
+        "v[1]",
+    );
 
     let costs = s.trace_cost_arr();
     assert_eq!(costs.len(), 4);
@@ -1143,13 +1291,28 @@ fn test_apply_board_specific_optimizations_skips_non_signal_layers() {
     let aspect = BoardAspectRatio::from_bounding_box(100.0, 200.0);
     s.apply_board_specific_optimizations(aspect, &ls);
 
-    assert!(!s.preferred_direction_is_horizontal(0), "signal layer 0 flips the seed to false");
-    assert!(!s.preferred_direction_is_horizontal(1), "a plane layer does not flip");
-    assert!(!s.preferred_direction_is_horizontal(2), "a plane layer does not flip");
-    assert!(s.preferred_direction_is_horizontal(3), "the next signal layer flips back");
+    assert!(
+        !s.preferred_direction_is_horizontal(0),
+        "signal layer 0 flips the seed to false"
+    );
+    assert!(
+        !s.preferred_direction_is_horizontal(1),
+        "a plane layer does not flip"
+    );
+    assert!(
+        !s.preferred_direction_is_horizontal(2),
+        "a plane layer does not flip"
+    );
+    assert!(
+        s.preferred_direction_is_horizontal(3),
+        "the next signal layer flips back"
+    );
 
     assert!(s.layer_active(0));
-    assert!(!s.layer_active(1), "non-signal layers are forced non-routable");
+    assert!(
+        !s.layer_active(1),
+        "non-signal layers are forced non-routable"
+    );
     assert!(!s.layer_active(2));
     assert!(s.layer_active(3));
 
@@ -1157,10 +1320,26 @@ fn test_apply_board_specific_optimizations_skips_non_signal_layers() {
     for i in 0..4 {
         assert_close(s.preferred_direction_trace_costs(i), 1.0, "pref");
     }
-    assert_close(s.against_preferred_direction_trace_costs(0), 1.0 + 2.0, "und[0]");
-    assert_close(s.against_preferred_direction_trace_costs(1), 1.0 + 2.0, "und[1]");
-    assert_close(s.against_preferred_direction_trace_costs(2), 1.0 + 2.0, "und[2]");
-    assert_close(s.against_preferred_direction_trace_costs(3), 1.0 + 0.5, "und[3]");
+    assert_close(
+        s.against_preferred_direction_trace_costs(0),
+        1.0 + 2.0,
+        "und[0]",
+    );
+    assert_close(
+        s.against_preferred_direction_trace_costs(1),
+        1.0 + 2.0,
+        "und[1]",
+    );
+    assert_close(
+        s.against_preferred_direction_trace_costs(2),
+        1.0 + 2.0,
+        "und[2]",
+    );
+    assert_close(
+        s.against_preferred_direction_trace_costs(3),
+        1.0 + 0.5,
+        "und[3]",
+    );
 }
 
 /// A user-supplied `preferred_direction_horizontal` is preserved, but the internal alternating
@@ -1176,7 +1355,10 @@ fn test_apply_board_specific_optimizations_preserves_explicit_direction() {
     // Seed = (200 < 100) = false, so without the override layer 0 would be `true`.
     s.apply_board_specific_optimizations(BoardAspectRatio::from_bounding_box(200.0, 100.0), &ls);
 
-    assert!(!s.preferred_direction_is_horizontal(0), "the explicit value survives");
+    assert!(
+        !s.preferred_direction_is_horizontal(0),
+        "the explicit value survives"
+    );
     assert!(!s.preferred_direction_is_horizontal(1));
     assert!(s.preferred_direction_is_horizontal(2));
     assert!(!s.preferred_direction_is_horizontal(3));
@@ -1204,19 +1386,31 @@ fn test_apply_board_specific_optimizations_is_latched() {
 
     // Re-running must not add the outer-layer surcharge a second time.
     s.apply_board_specific_optimizations(aspect, &ls);
-    assert_close(s.preferred_direction_trace_costs(0), first, "pref[0] after a second run");
+    assert_close(
+        s.preferred_direction_trace_costs(0),
+        first,
+        "pref[0] after a second run",
+    );
 
     // An explicit cost keeps its value across a further run and is clamped to >= 0.1.
     s.set_preferred_direction_trace_costs(1, 0.01);
     assert_close(s.preferred_direction_trace_costs(1), 0.1, "clamped to 0.1");
     s.apply_board_specific_optimizations(aspect, &ls);
-    assert_close(s.preferred_direction_trace_costs(1), 0.1, "explicit cost survives");
+    assert_close(
+        s.preferred_direction_trace_costs(1),
+        0.1,
+        "explicit cost survives",
+    );
 
     // Changing the layer count clears the latch and re-derives.
     let ls6 = create_test_layer_structure(6);
     s.apply_board_specific_optimizations_if_needed(aspect, &ls6);
     assert_eq!(s.layer_count(), 6);
-    assert_close(s.preferred_direction_trace_costs(1), 1.0, "re-derived for the new stackup");
+    assert_close(
+        s.preferred_direction_trace_costs(1),
+        1.0,
+        "re-derived for the new stackup",
+    );
 }
 
 /// `setLayerCount` resets the per-layer flags and refills both cost arrays with 1.0
@@ -1229,7 +1423,11 @@ fn test_router_settings_layer_defaults_and_bend_cost_clamp() {
     assert!(!s.layer_active(0));
     assert!(!s.preferred_direction_is_horizontal(0));
     assert_close(s.bend_cost(0), 0.0, "bend cost out of range");
-    assert_close(s.preferred_direction_trace_costs(0), 0.0, "pref out of range");
+    assert_close(
+        s.preferred_direction_trace_costs(0),
+        0.0,
+        "pref out of range",
+    );
 
     s.set_layer_count(4);
     assert_eq!(s.layer_count(), 4);
@@ -1237,7 +1435,11 @@ fn test_router_settings_layer_defaults_and_bend_cost_clamp() {
         assert!(s.layer_active(i));
         assert_eq!(s.preferred_direction_is_horizontal(i), i % 2 == 1);
         assert_close(s.preferred_direction_trace_costs(i), 1.0, "pref seed");
-        assert_close(s.against_preferred_direction_trace_costs(i), 1.0, "und seed");
+        assert_close(
+            s.against_preferred_direction_trace_costs(i),
+            1.0,
+            "und seed",
+        );
     }
 
     s.set_bend_cost(0, 42.0);
@@ -1247,7 +1449,11 @@ fn test_router_settings_layer_defaults_and_bend_cost_clamp() {
 
     // An unset per-layer bend cost falls back to the (clamped) scoring default.
     s.scoring.default_bend_cost = Some(50.0);
-    assert_close(s.bend_cost(2), MAX_BEND_COST, "default bend cost is clamped on read");
+    assert_close(
+        s.bend_cost(2),
+        MAX_BEND_COST,
+        "default bend cost is clamped on read",
+    );
     s.scoring.default_bend_cost = None;
     assert_close(s.bend_cost(2), 0.0, "absent default bend cost reads as 0.0");
 
@@ -1264,7 +1470,10 @@ fn test_router_settings_validate() {
     s.trace_pull_tight_accuracy = 0;
     s.validate();
     assert_eq!(s.max_passes, i32::MAX, "0 means no limit");
-    assert_eq!(s.trace_pull_tight_accuracy, DEFAULT_TRACE_PULL_TIGHT_ACCURACY);
+    assert_eq!(
+        s.trace_pull_tight_accuracy,
+        DEFAULT_TRACE_PULL_TIGHT_ACCURACY
+    );
 
     let mut s = RouterSettings::default();
     s.max_passes = -1;
@@ -1293,4 +1502,3 @@ fn test_router_settings_validate() {
     assert_eq!(s.max_threads, 1);
     assert_eq!(s.optimizer.max_threads, 1);
 }
-

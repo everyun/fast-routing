@@ -50,7 +50,6 @@ fn staircase() -> Vec<IntPoint> {
     corners
 }
 
-
 /// Every trace of `net` on the board, ascending by id.
 fn traces_of(board: &Board, net: i32) -> Vec<ItemId> {
     let mut ids: Vec<ItemId> = board
@@ -86,9 +85,8 @@ fn insert_staircase(pull_tight: bool) -> (Option<Point>, usize) {
     let corners = staircase();
     let polyline = Polyline::from_int_points(&corners);
     let ok_point = {
-        let mut inserter =
-            ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds())
-                .with_insert_pull_tight(pull_tight);
+        let mut inserter = ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds())
+            .with_insert_pull_tight(pull_tight);
         inserter.insert_forced_trace_polyline(&polyline, TEST_HALF_WIDTH, 0, i32::MAX)
     };
     (ok_point, corner_total(&fixture.board, TEST_NET))
@@ -150,9 +148,8 @@ fn the_keep_point_stays_a_corner_of_the_nets_copper() {
     let ctrl = fixture.control();
     let polyline = Polyline::from_int_points(&staircase());
     let ok_point = {
-        let mut inserter =
-            ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds())
-                .with_insert_pull_tight(true);
+        let mut inserter = ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds())
+            .with_insert_pull_tight(true);
         inserter
             .insert_forced_trace_polyline(&polyline, TEST_HALF_WIDTH, 0, i32::MAX)
             .expect("no damage")
@@ -185,9 +182,8 @@ fn insert_over_foreign(pull_tight: bool) -> (usize, bool) {
     let ctrl = fixture.control();
     let polyline = Polyline::from_int_points(&staircase());
     {
-        let mut inserter =
-            ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds())
-                .with_insert_pull_tight(pull_tight);
+        let mut inserter = ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds())
+            .with_insert_pull_tight(pull_tight);
         inserter.insert_forced_trace_polyline(&polyline, TEST_HALF_WIDTH, 0, i32::MAX);
     }
     let one_piece = fixture.board.net_component_count(FOREIGN_NET) <= 1;

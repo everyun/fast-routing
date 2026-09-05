@@ -256,7 +256,10 @@ impl<'a> ShoveInsert<'a> {
 /// one function: every `insert`-family entry point that upstream documents as
 /// *"the database may be damaged"* is wrapped in it, so a failed shove is a
 /// no-op instead of a caller-owned undo.
-pub fn in_transaction<R>(board: &mut Board, body: impl FnOnce(&mut Board) -> (bool, R)) -> (bool, R) {
+pub fn in_transaction<R>(
+    board: &mut Board,
+    body: impl FnOnce(&mut Board) -> (bool, R),
+) -> (bool, R) {
     let mark = board.begin();
     let (ok, result) = body(board);
     if ok {

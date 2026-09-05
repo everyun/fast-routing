@@ -72,7 +72,13 @@ impl Workspace {
     fn entries(&self) -> Vec<String> {
         let mut names: Vec<String> = std::fs::read_dir(&self.dir)
             .expect("the directory is readable")
-            .map(|entry| entry.expect("an entry").file_name().to_string_lossy().into_owned())
+            .map(|entry| {
+                entry
+                    .expect("an entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
             .collect();
         names.sort();
         names
@@ -123,9 +129,15 @@ fn the_session_is_on_disk_before_the_referee_runs() {
 
     // And it is the real session, not a placeholder the referee would have finished.
     let written = std::fs::read_to_string(&ses).expect("the session was written");
-    assert_eq!(written, report.ses, "the file and the report carry one text");
+    assert_eq!(
+        written, report.ses,
+        "the file and the report carry one text"
+    );
     assert!(written.starts_with("(session board.ses"), "{written}");
-    assert!(written.contains("(wire"), "the routed copper is in it: {written}");
+    assert!(
+        written.contains("(wire"),
+        "the routed copper is in it: {written}"
+    );
     assert_eq!(report.session_path.as_deref(), Some(ses.as_path()));
 }
 
@@ -136,10 +148,7 @@ fn the_session_is_on_disk_before_the_referee_runs() {
 fn the_write_leaves_no_temporary_behind() {
     let workspace = Workspace::new("atomic");
     let ses = workspace.path("out.ses");
-    job()
-        .with_session_path(&ses)
-        .run()
-        .expect("the job runs");
+    job().with_session_path(&ses).run().expect("the job runs");
     assert_eq!(workspace.entries(), vec!["out.ses".to_string()]);
 
     // A second run over the same path replaces it rather than appending to it.

@@ -144,7 +144,8 @@ impl<K: Clone + Ord, V: Clone> UndoableObjects<K, V> {
                     node
                 } else if let Some(&(prev_lvl, ref prev_val)) = node.undo_history.last() {
                     let mut prev_node = UndoableNode::new(prev_val.clone(), prev_lvl);
-                    prev_node.undo_history = node.undo_history[..node.undo_history.len() - 1].to_vec();
+                    prev_node.undo_history =
+                        node.undo_history[..node.undo_history.len() - 1].to_vec();
                     prev_node
                 } else {
                     // Created on current level and deleted on current level: no prior undo state needed
@@ -174,11 +175,7 @@ impl<K: Clone + Ord, V: Clone> UndoableObjects<K, V> {
     /// Appends cancelled (removed/reverted) objects to `cancelled_objects` and
     /// restored objects to `restored_objects`.
     /// Returns `false` if already at base level 0.
-    pub fn undo(
-        &mut self,
-        cancelled_objects: &mut Vec<V>,
-        restored_objects: &mut Vec<V>,
-    ) -> bool {
+    pub fn undo(&mut self, cancelled_objects: &mut Vec<V>, restored_objects: &mut Vec<V>) -> bool {
         if self.stack_level == 0 {
             return false;
         }
@@ -234,11 +231,7 @@ impl<K: Clone + Ord, V: Clone> UndoableObjects<K, V> {
     ///
     /// Appends cancelled objects to `cancelled_objects` and restored objects to `restored_objects`.
     /// Returns `false` if already at the top level or redo is unavailable.
-    pub fn redo(
-        &mut self,
-        cancelled_objects: &mut Vec<V>,
-        restored_objects: &mut Vec<V>,
-    ) -> bool {
+    pub fn redo(&mut self, cancelled_objects: &mut Vec<V>, restored_objects: &mut Vec<V>) -> bool {
         if !self.redo_possible || self.stack_level >= self.deleted_objects_stack.len() {
             return false;
         }
@@ -364,19 +357,43 @@ mod tests {
     #[test]
     fn test_insert_and_get() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "Item1".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "Item1".into(),
+            },
+        );
         assert_eq!(db.len(), 1);
-        assert_eq!(db.get(&1), Some(&MockItem { id: 1, name: "Item1".into() }));
+        assert_eq!(
+            db.get(&1),
+            Some(&MockItem {
+                id: 1,
+                name: "Item1".into()
+            })
+        );
     }
 
     #[test]
     fn test_undo_redo_insert() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "Base".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "Base".into(),
+            },
+        );
 
         db.generate_snapshot();
         assert_eq!(db.stack_level(), 1);
-        db.insert(2, MockItem { id: 2, name: "Created".into() });
+        db.insert(
+            2,
+            MockItem {
+                id: 2,
+                name: "Created".into(),
+            },
+        );
         assert_eq!(db.len(), 2);
 
         let mut cancelled = Vec::new();
@@ -389,13 +406,25 @@ mod tests {
 
         assert!(db.redo(&mut cancelled, &mut restored));
         assert_eq!(db.len(), 2);
-        assert_eq!(db.get(&2), Some(&MockItem { id: 2, name: "Created".into() }));
+        assert_eq!(
+            db.get(&2),
+            Some(&MockItem {
+                id: 2,
+                name: "Created".into()
+            })
+        );
     }
 
     #[test]
     fn test_undo_redo_modify() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "Original".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "Original".into(),
+            },
+        );
 
         db.generate_snapshot();
         db.save_for_undo(&1);
@@ -416,7 +445,13 @@ mod tests {
     #[test]
     fn test_undo_redo_delete() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "ToDelete".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "ToDelete".into(),
+            },
+        );
 
         db.generate_snapshot();
         assert!(db.delete(&1));
@@ -425,7 +460,13 @@ mod tests {
         let mut cancelled = Vec::new();
         let mut restored = Vec::new();
         assert!(db.undo(&mut cancelled, &mut restored));
-        assert_eq!(db.get(&1), Some(&MockItem { id: 1, name: "ToDelete".into() }));
+        assert_eq!(
+            db.get(&1),
+            Some(&MockItem {
+                id: 1,
+                name: "ToDelete".into()
+            })
+        );
 
         assert!(db.redo(&mut cancelled, &mut restored));
         assert_eq!(db.get(&1), None);
@@ -434,11 +475,23 @@ mod tests {
     #[test]
     fn test_undo_redo_delete_then_reinsert_same_key() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "Old".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "Old".into(),
+            },
+        );
 
         db.generate_snapshot();
         assert!(db.delete(&1));
-        db.insert(1, MockItem { id: 1, name: "New".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "New".into(),
+            },
+        );
         assert_eq!(db.get(&1).unwrap().name, "New");
 
         let mut cancelled = Vec::new();
@@ -451,7 +504,10 @@ mod tests {
         assert!(db.redo(&mut cancelled, &mut restored));
         assert_eq!(
             db.get(&1),
-            Some(&MockItem { id: 1, name: "New".into() }),
+            Some(&MockItem {
+                id: 1,
+                name: "New".into()
+            }),
             "redo must re-apply the deletion before the re-creation"
         );
         assert!(cancelled.iter().any(|item| item.name == "Old"));
@@ -462,7 +518,13 @@ mod tests {
     fn test_plain_insert_undo_redo_round_trip() {
         let mut db = UndoableObjects::new();
         db.generate_snapshot();
-        db.insert(7, MockItem { id: 7, name: "Fresh".into() });
+        db.insert(
+            7,
+            MockItem {
+                id: 7,
+                name: "Fresh".into(),
+            },
+        );
 
         let mut cancelled = Vec::new();
         let mut restored = Vec::new();
@@ -470,18 +532,36 @@ mod tests {
         assert_eq!(db.get(&7), None);
 
         assert!(db.redo(&mut cancelled, &mut restored));
-        assert_eq!(db.get(&7), Some(&MockItem { id: 7, name: "Fresh".into() }));
+        assert_eq!(
+            db.get(&7),
+            Some(&MockItem {
+                id: 7,
+                name: "Fresh".into()
+            })
+        );
         assert_eq!(db.stack_level(), 1);
     }
 
     #[test]
     fn test_mutation_after_undo_cancels_redo() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "Old".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "Old".into(),
+            },
+        );
 
         db.generate_snapshot();
         assert!(db.delete(&1));
-        db.insert(1, MockItem { id: 1, name: "New".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "New".into(),
+            },
+        );
 
         let mut cancelled = Vec::new();
         let mut restored = Vec::new();
@@ -489,7 +569,13 @@ mod tests {
         assert!(db.is_redo_possible());
 
         // A fresh mutation after undo must cancel the pending redo.
-        db.insert(2, MockItem { id: 2, name: "Other".into() });
+        db.insert(
+            2,
+            MockItem {
+                id: 2,
+                name: "Other".into(),
+            },
+        );
         assert!(!db.is_redo_possible());
         assert!(!db.redo(&mut cancelled, &mut restored));
         assert_eq!(db.get(&1).unwrap().name, "Old");
@@ -499,7 +585,13 @@ mod tests {
     #[test]
     fn test_pop_snapshot_commits() {
         let mut db = UndoableObjects::new();
-        db.insert(1, MockItem { id: 1, name: "Original".into() });
+        db.insert(
+            1,
+            MockItem {
+                id: 1,
+                name: "Original".into(),
+            },
+        );
 
         db.generate_snapshot();
         db.save_for_undo(&1);

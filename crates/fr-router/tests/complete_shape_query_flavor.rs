@@ -35,10 +35,7 @@ fn probe_shapes() -> (fr_geometry::planar::IntBox, Simplex) {
     (bound, contained)
 }
 
-fn gather(
-    engine: &mut fr_router::engine::AutorouteEngine<'_>,
-    query: &TileShape,
-) -> Vec<Obstacle> {
+fn gather(engine: &mut fr_router::engine::AutorouteEngine<'_>, query: &TileShape) -> Vec<Obstacle> {
     let mut obstacles = Vec::new();
     let mut own_net = Vec::new();
     engine.overlapping_obstacles_tile(query, Some(0), 0, &mut obstacles, &mut own_net);

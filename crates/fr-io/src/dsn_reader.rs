@@ -102,10 +102,7 @@ impl DsnReader {
             return Err("Empty DSN document".to_string());
         }
 
-        let raw_name = items
-            .get(1)
-            .and_then(|e| e.atom())
-            .unwrap_or("unnamed_pcb");
+        let raw_name = items.get(1).and_then(|e| e.atom()).unwrap_or("unnamed_pcb");
         let pcb_name = if raw_name.trim().is_empty() {
             "unnamed_pcb".to_string()
         } else {
@@ -142,11 +139,21 @@ impl DsnReader {
     fn extract_parser(list: &[SExpr], doc: &mut DsnDocument) {
         for item in list.iter().skip(1) {
             if let Some(sub) = item.list() {
-                if sub.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("unit")).unwrap_or(false) {
+                if sub
+                    .first()
+                    .and_then(|e| e.atom())
+                    .map(|s| s.eq_ignore_ascii_case("unit"))
+                    .unwrap_or(false)
+                {
                     if let Some(unit_str) = sub.get(1).and_then(|e| e.atom()) {
                         doc.unit = unit_str.to_string();
                     }
-                } else if sub.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("resolution")).unwrap_or(false) {
+                } else if sub
+                    .first()
+                    .and_then(|e| e.atom())
+                    .map(|s| s.eq_ignore_ascii_case("resolution"))
+                    .unwrap_or(false)
+                {
                     if let Some(unit_str) = sub.get(1).and_then(|e| e.atom()) {
                         doc.unit = unit_str.to_string();
                     }
@@ -178,11 +185,20 @@ impl DsnReader {
             if let Some(sub) = item.list() {
                 let tag = sub.first().and_then(|e| e.atom()).unwrap_or("");
                 if tag.eq_ignore_ascii_case("layer") {
-                    let layer_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("unnamed_layer").to_string();
+                    let layer_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("unnamed_layer")
+                        .to_string();
                     let mut layer_type = "signal".to_string();
                     for child in sub.iter().skip(2) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("type")).unwrap_or(false) {
+                            if c_list
+                                .first()
+                                .and_then(|e| e.atom())
+                                .map(|s| s.eq_ignore_ascii_case("type"))
+                                .unwrap_or(false)
+                            {
                                 if let Some(t) = c_list.get(1).and_then(|e| e.atom()) {
                                     layer_type = t.to_string();
                                 }
@@ -197,7 +213,12 @@ impl DsnReader {
                 } else if tag.eq_ignore_ascii_case("boundary") {
                     for child in sub.iter().skip(1) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("path")).unwrap_or(false) {
+                            if c_list
+                                .first()
+                                .and_then(|e| e.atom())
+                                .map(|s| s.eq_ignore_ascii_case("path"))
+                                .unwrap_or(false)
+                            {
                                 let mut nums = Vec::new();
                                 for val in c_list.iter().skip(3) {
                                     if let Some(n) = val.number() {
@@ -206,7 +227,10 @@ impl DsnReader {
                                 }
                                 for chunk in nums.chunks(2) {
                                     if chunk.len() == 2 {
-                                        doc.boundary_points.push(DsnPoint { x: chunk[0], y: chunk[1] });
+                                        doc.boundary_points.push(DsnPoint {
+                                            x: chunk[0],
+                                            y: chunk[1],
+                                        });
                                     }
                                 }
                             }
@@ -220,16 +244,39 @@ impl DsnReader {
     fn extract_placement(list: &[SExpr], doc: &mut DsnDocument) {
         for item in list.iter().skip(1) {
             if let Some(sub) = item.list() {
-                if sub.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("component")).unwrap_or(false) {
-                    let pkg_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("unnamed_pkg").to_string();
+                if sub
+                    .first()
+                    .and_then(|e| e.atom())
+                    .map(|s| s.eq_ignore_ascii_case("component"))
+                    .unwrap_or(false)
+                {
+                    let pkg_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("unnamed_pkg")
+                        .to_string();
                     for child in sub.iter().skip(2) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("place")).unwrap_or(false) {
-                                let comp_name = c_list.get(1).and_then(|e| e.atom()).unwrap_or("unnamed_comp").to_string();
+                            if c_list
+                                .first()
+                                .and_then(|e| e.atom())
+                                .map(|s| s.eq_ignore_ascii_case("place"))
+                                .unwrap_or(false)
+                            {
+                                let comp_name = c_list
+                                    .get(1)
+                                    .and_then(|e| e.atom())
+                                    .unwrap_or("unnamed_comp")
+                                    .to_string();
                                 let x = c_list.get(2).and_then(|e| e.number()).unwrap_or(0.0);
                                 let y = c_list.get(3).and_then(|e| e.number()).unwrap_or(0.0);
-                                let side = c_list.get(4).and_then(|e| e.atom()).unwrap_or("front").to_string();
-                                let rotation = c_list.get(5).and_then(|e| e.number()).unwrap_or(0.0);
+                                let side = c_list
+                                    .get(4)
+                                    .and_then(|e| e.atom())
+                                    .unwrap_or("front")
+                                    .to_string();
+                                let rotation =
+                                    c_list.get(5).and_then(|e| e.number()).unwrap_or(0.0);
                                 doc.components.push(DsnComponent {
                                     name: comp_name,
                                     package_name: pkg_name.clone(),
@@ -251,12 +298,25 @@ impl DsnReader {
             if let Some(sub) = item.list() {
                 let tag = sub.first().and_then(|e| e.atom()).unwrap_or("");
                 if tag.eq_ignore_ascii_case("image") {
-                    let pkg_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("unnamed_pkg").to_string();
+                    let pkg_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("unnamed_pkg")
+                        .to_string();
                     let mut pins = Vec::new();
                     for child in sub.iter().skip(2) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("pin")).unwrap_or(false) {
-                                let padstack_name = c_list.get(1).and_then(|e| e.atom()).unwrap_or("default").to_string();
+                            if c_list
+                                .first()
+                                .and_then(|e| e.atom())
+                                .map(|s| s.eq_ignore_ascii_case("pin"))
+                                .unwrap_or(false)
+                            {
+                                let padstack_name = c_list
+                                    .get(1)
+                                    .and_then(|e| e.atom())
+                                    .unwrap_or("default")
+                                    .to_string();
                                 // Positional grammar: (pin <padstack> [(rotate <deg>)] <pin_id> <x> <y>).
                                 // Pin ids may be numeric ("1") or alphanumeric ("A7"), so the first
                                 // non-list element is the pin id and the next two numbers are x / y.
@@ -265,8 +325,15 @@ impl DsnReader {
                                 let mut coords = Vec::new();
                                 for elem in c_list.iter().skip(2) {
                                     if let Some(e_list) = elem.list() {
-                                        if e_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("rotate")).unwrap_or(false) {
-                                            if let Some(deg) = e_list.get(1).and_then(|e| e.number()) {
+                                        if e_list
+                                            .first()
+                                            .and_then(|e| e.atom())
+                                            .map(|s| s.eq_ignore_ascii_case("rotate"))
+                                            .unwrap_or(false)
+                                        {
+                                            if let Some(deg) =
+                                                e_list.get(1).and_then(|e| e.number())
+                                            {
                                                 rotation = deg;
                                             }
                                         }
@@ -297,14 +364,31 @@ impl DsnReader {
                         outlines: Vec::new(),
                     });
                 } else if tag.eq_ignore_ascii_case("padstack") {
-                    let padstack_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("padstack").to_string();
+                    let padstack_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("padstack")
+                        .to_string();
                     let mut shapes = Vec::new();
                     for child in sub.iter().skip(2) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("shape")).unwrap_or(false) {
+                            if c_list
+                                .first()
+                                .and_then(|e| e.atom())
+                                .map(|s| s.eq_ignore_ascii_case("shape"))
+                                .unwrap_or(false)
+                            {
                                 if let Some(shape_item) = c_list.get(1).and_then(|e| e.list()) {
-                                    let shape_type = shape_item.first().and_then(|e| e.atom()).unwrap_or("circle").to_string();
-                                    let layer = shape_item.get(1).and_then(|e| e.atom()).unwrap_or("F.Cu").to_string();
+                                    let shape_type = shape_item
+                                        .first()
+                                        .and_then(|e| e.atom())
+                                        .unwrap_or("circle")
+                                        .to_string();
+                                    let layer = shape_item
+                                        .get(1)
+                                        .and_then(|e| e.atom())
+                                        .unwrap_or("F.Cu")
+                                        .to_string();
                                     let mut dims = Vec::new();
                                     for dim_val in shape_item.iter().skip(2) {
                                         if let Some(n) = dim_val.number() {
@@ -345,11 +429,20 @@ impl DsnReader {
             if let Some(sub) = item.list() {
                 let tag = sub.first().and_then(|e| e.atom()).unwrap_or("");
                 if tag.eq_ignore_ascii_case("net") {
-                    let net_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("unnamed_net").to_string();
+                    let net_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("unnamed_net")
+                        .to_string();
                     let mut pins = Vec::new();
                     for child in sub.iter().skip(2) {
                         if let Some(c_list) = child.list() {
-                            if c_list.first().and_then(|e| e.atom()).map(|s| s.eq_ignore_ascii_case("pins")).unwrap_or(false) {
+                            if c_list
+                                .first()
+                                .and_then(|e| e.atom())
+                                .map(|s| s.eq_ignore_ascii_case("pins"))
+                                .unwrap_or(false)
+                            {
                                 for pin_val in c_list.iter().skip(1) {
                                     if let Some(pin_str) = pin_val.atom() {
                                         if let Some((comp, pin)) = pin_str.rsplit_once('-') {
@@ -370,7 +463,11 @@ impl DsnReader {
                         is_plane: false,
                     });
                 } else if tag.eq_ignore_ascii_case("class") {
-                    let class_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("default").to_string();
+                    let class_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("default")
+                        .to_string();
                     let mut net_names = Vec::new();
                     let mut width = None;
                     let mut clearance = None;
@@ -384,7 +481,9 @@ impl DsnReader {
                             if c_tag.eq_ignore_ascii_case("circuit") {
                                 for sub_c in c_list.iter().skip(1) {
                                     if let Some(sc_list) = sub_c.list() {
-                                        if let Some(via_name) = sc_list.get(1).and_then(|e| e.atom()) {
+                                        if let Some(via_name) =
+                                            sc_list.get(1).and_then(|e| e.atom())
+                                        {
                                             via_rule = Some(via_name.to_string());
                                         }
                                     }
@@ -392,7 +491,8 @@ impl DsnReader {
                             } else if c_tag.eq_ignore_ascii_case("rule") {
                                 for sub_r in c_list.iter().skip(1) {
                                     if let Some(sr_list) = sub_r.list() {
-                                        let r_tag = sr_list.first().and_then(|e| e.atom()).unwrap_or("");
+                                        let r_tag =
+                                            sr_list.first().and_then(|e| e.atom()).unwrap_or("");
                                         if r_tag.eq_ignore_ascii_case("width") {
                                             width = sr_list.get(1).and_then(|e| e.number());
                                         } else if r_tag.eq_ignore_ascii_case("clearance") {
@@ -445,7 +545,10 @@ impl DsnReader {
                                 }
                                 for chunk in nums.chunks(2) {
                                     if chunk.len() == 2 {
-                                        points.push(DsnPoint { x: chunk[0], y: chunk[1] });
+                                        points.push(DsnPoint {
+                                            x: chunk[0],
+                                            y: chunk[1],
+                                        });
                                     }
                                 }
                             } else if c_tag.eq_ignore_ascii_case("net") {
@@ -468,7 +571,11 @@ impl DsnReader {
                         fixed_type,
                     });
                 } else if tag.eq_ignore_ascii_case("via") {
-                    let padstack_name = sub.get(1).and_then(|e| e.atom()).unwrap_or("via").to_string();
+                    let padstack_name = sub
+                        .get(1)
+                        .and_then(|e| e.atom())
+                        .unwrap_or("via")
+                        .to_string();
                     let x = sub.get(2).and_then(|e| e.number()).unwrap_or(0.0);
                     let y = sub.get(3).and_then(|e| e.number()).unwrap_or(0.0);
                     let mut net_name = "GND".to_string();

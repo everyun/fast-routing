@@ -25,7 +25,10 @@ fn integer_corners_build_the_same_polyline_as_from_int_points() {
 }
 
 fn from_ints(points: &[IntPoint]) -> Polyline {
-    let corners: Vec<(f64, f64)> = points.iter().map(|p| (f64::from(p.x), f64::from(p.y))).collect();
+    let corners: Vec<(f64, f64)> = points
+        .iter()
+        .map(|p| (f64::from(p.x), f64::from(p.y)))
+        .collect();
     Polyline::from_exact_corners(&corners).expect("integer corners are representable")
 }
 
@@ -65,7 +68,9 @@ fn exact_corners_reproduce_a_polyline_built_from_lines() {
         })
         .collect();
     assert!(
-        corners.iter().any(|&(x, y)| x.fract() != 0.0 || y.fract() != 0.0),
+        corners
+            .iter()
+            .any(|&(x, y)| x.fract() != 0.0 || y.fract() != 0.0),
         "the fixture must contain a half-unit corner: {corners:?}"
     );
     let rebuilt = Polyline::from_exact_corners(&corners).expect("representable");

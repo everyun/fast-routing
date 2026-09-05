@@ -284,11 +284,13 @@ fn no_fanout_is_accepted_and_reports_zero_escapes() {
         "--no-optimizer".as_ref(),
     ]);
     let report = stdout(&output);
-    assert_eq!(code(&output), 0, "stdout: {report}\nstderr: {}", stderr(&output));
-    assert!(
-        report.contains("0 pins fanned out"),
-        "{report}"
+    assert_eq!(
+        code(&output),
+        0,
+        "stdout: {report}\nstderr: {}",
+        stderr(&output)
     );
+    assert!(report.contains("0 pins fanned out"), "{report}");
 }
 
 // =================================================================================================
@@ -527,7 +529,9 @@ fn settle_trace_writes_the_frlab_shaped_records() {
     assert_eq!(code(&output), 0, "stderr: {}", stderr(&output));
 
     let log = std::fs::read_to_string(&trace).expect("the trace was written");
-    let mut lines = log.lines().filter(|line| line.starts_with("FRMETRIC settle "));
+    let mut lines = log
+        .lines()
+        .filter(|line| line.starts_with("FRMETRIC settle "));
     let first = lines.next().expect("at least one settle record");
     // `FRMETRIC settle <door_id> <section> <g> <f>` — four fields after the tag.
     let fields: Vec<&str> = first.split_whitespace().collect();

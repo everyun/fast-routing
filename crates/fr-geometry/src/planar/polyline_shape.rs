@@ -50,7 +50,9 @@ impl PolylineShape {
 
     /// Smallest surrounding octagon.
     pub fn bounding_octagon(&self) -> IntOctagon {
-        self.polyline.bounding_octagon().offset(self.half_width as f64)
+        self.polyline
+            .bounding_octagon()
+            .offset(self.half_width as f64)
     }
 
     /// Decomposes this shape into convex Simplex pieces.

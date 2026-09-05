@@ -20,7 +20,11 @@ fn ident(store: &fr_board::store::ItemStore, id: ItemId) -> String {
             let b = t.last_corner().to_float();
             format!("trace({:.0},{:.0},{:.0},{:.0})", a.x, a.y, b.x, b.y)
         }
-        other => format!("{}#{:?}", std::any::type_name_of_val(other), std::mem::discriminant(other)),
+        other => format!(
+            "{}#{:?}",
+            std::any::type_name_of_val(other),
+            std::mem::discriminant(other)
+        ),
     }
 }
 
@@ -52,7 +56,10 @@ fn main() {
             let a = store.get(v.a).unwrap();
             let b = store.get(v.b).unwrap();
             let uf = a.fixed_state.is_user_fixed() && b.fixed_state.is_user_fixed();
-            format!("L{} E{} A{:.0} uf={} | {} | {}", v.layer, v.expected, v.actual, uf, x, y)
+            format!(
+                "L{} E{} A{:.0} uf={} | {} | {}",
+                v.layer, v.expected, v.actual, uf, x, y
+            )
         })
         .collect();
     lines.sort();

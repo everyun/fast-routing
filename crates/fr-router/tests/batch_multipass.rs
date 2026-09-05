@@ -124,9 +124,7 @@ fn route(name: &str, max_passes: i32) -> Option<(fr_router::RunOutcome, usize, f
 
 #[test]
 fn issue026_runs_eight_passes_and_never_ends_below_its_best_board() {
-    let Some((outcome, incompletes, score)) =
-        route("Issue026-J2_reference.dsn", 8)
-    else {
+    let Some((outcome, incompletes, score)) = route("Issue026-J2_reference.dsn", 8) else {
         return;
     };
 
@@ -154,7 +152,10 @@ fn issue026_runs_eight_passes_and_never_ends_below_its_best_board() {
         );
     }
 
-    assert!(!outcome.passes.is_empty(), "the loop must run at least once");
+    assert!(
+        !outcome.passes.is_empty(),
+        "the loop must run at least once"
+    );
     assert!(outcome.passes.len() <= 8, "the pass cap holds");
     assert!(outcome.stop_reason.is_some(), "every exit has a reason");
 

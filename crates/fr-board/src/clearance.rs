@@ -255,7 +255,11 @@ mod tests {
         // so the stored value stays even and never wraps negative.
         table.set_value(2, 2, i32::MAX);
         assert_eq!(table.value(2, 2, 0), i32::MAX - 1);
-        assert_eq!(table.value(2, 2, 0) % 2, 0, "every stored clearance is even");
+        assert_eq!(
+            table.value(2, 2, 0) % 2,
+            0,
+            "every stored clearance is even"
+        );
     }
 
     #[test]

@@ -24,9 +24,18 @@ fn test_fortyfive_degree_corner_all_eight_octants() {
     assert_eq!(c_right, IntPoint::new(0, 6));
 
     // Collinear with 45° should return None
-    assert_eq!(p0.fortyfive_degree_corner(&IntPoint::new(10, 10), true), None);
-    assert_eq!(p0.fortyfive_degree_corner(&IntPoint::new(10, 0), true), None);
-    assert_eq!(p0.fortyfive_degree_corner(&IntPoint::new(0, 10), true), None);
+    assert_eq!(
+        p0.fortyfive_degree_corner(&IntPoint::new(10, 10), true),
+        None
+    );
+    assert_eq!(
+        p0.fortyfive_degree_corner(&IntPoint::new(10, 0), true),
+        None
+    );
+    assert_eq!(
+        p0.fortyfive_degree_corner(&IntPoint::new(0, 10), true),
+        None
+    );
 }
 
 #[test]
@@ -35,13 +44,25 @@ fn test_ninety_degree_corner_quadrants() {
 
     // (+x, +y)
     let p = IntPoint::new(10, 20);
-    assert_eq!(p0.ninety_degree_corner(&p, true).unwrap(), IntPoint::new(10, 0));
-    assert_eq!(p0.ninety_degree_corner(&p, false).unwrap(), IntPoint::new(0, 20));
+    assert_eq!(
+        p0.ninety_degree_corner(&p, true).unwrap(),
+        IntPoint::new(10, 0)
+    );
+    assert_eq!(
+        p0.ninety_degree_corner(&p, false).unwrap(),
+        IntPoint::new(0, 20)
+    );
 
     // (-x, +y)
     let p = IntPoint::new(-10, 20);
-    assert_eq!(p0.ninety_degree_corner(&p, true).unwrap(), IntPoint::new(0, 20));
-    assert_eq!(p0.ninety_degree_corner(&p, false).unwrap(), IntPoint::new(-10, 0));
+    assert_eq!(
+        p0.ninety_degree_corner(&p, true).unwrap(),
+        IntPoint::new(0, 20)
+    );
+    assert_eq!(
+        p0.ninety_degree_corner(&p, false).unwrap(),
+        IntPoint::new(-10, 0)
+    );
 
     // Already orthogonal -> None
     assert_eq!(p0.ninety_degree_corner(&IntPoint::new(10, 0), true), None);
@@ -66,13 +87,19 @@ fn test_perpendicular_projection_exact_grid_and_rational() {
     // Horizontal line y = 0
     let line = Line::new_from_coords(0, 0, 10, 0);
     let p = IntPoint::new(5, 7);
-    assert_eq!(p.perpendicular_projection(&line), Point::Int(IntPoint::new(5, 0)));
+    assert_eq!(
+        p.perpendicular_projection(&line),
+        Point::Int(IntPoint::new(5, 0))
+    );
 
     // Diagonal line through (0, 0) and (10, 10)
     let diag = Line::new_from_coords(0, 0, 10, 10);
     let p = IntPoint::new(0, 10);
     // Projection of (0, 10) onto y = x is (5, 5)
-    assert_eq!(p.perpendicular_projection(&diag), Point::Int(IntPoint::new(5, 5)));
+    assert_eq!(
+        p.perpendicular_projection(&diag),
+        Point::Int(IntPoint::new(5, 5))
+    );
 }
 
 #[test]

@@ -8,9 +8,7 @@
 //! write inside that fallback loop is dropped, as the conformance appendix
 //! prescribes.
 
-use fr_geometry::planar::{
-    FloatLine, FloatPoint, LineSegment, Point, Polyline, Side, Simplex,
-};
+use fr_geometry::planar::{FloatLine, FloatPoint, LineSegment, Point, Polyline, Side, Simplex};
 
 use super::geom;
 
@@ -135,9 +133,7 @@ impl FromSide {
             };
             let next_side = check_line.side_of_float(&next_corner);
             if prev_side != next_side {
-                let curr_intersection = shape
-                    .border_line(i - 1)
-                    .intersection_approx(&check_line);
+                let curr_intersection = shape.border_line(i - 1).intersection_approx(&check_line);
                 if curr_intersection.distance_square(&start_corner)
                     < curr_intersection.distance_square(&end_corner)
                 {

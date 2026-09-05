@@ -85,10 +85,7 @@ fn build_disabled_asm() -> Option<String> {
 
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
     let output = Command::new(cargo)
-        .args([
-            "rustc",
-            "--manifest-path",
-        ])
+        .args(["rustc", "--manifest-path"])
         .arg(&manifest)
         .args([
             "--lib",

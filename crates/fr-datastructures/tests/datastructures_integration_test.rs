@@ -80,7 +80,10 @@ fn test_delaunay_triangulation_and_mst() {
     assert_eq!(mst.len(), 8);
 
     // For a regular 3x3 grid of step 10.0, standard MST weight is 8 * 10.0 = 80.0
-    let total_mst_length: f64 = mst.iter().map(|e: &DelaunayEdge<(i32, i32)>| e.distance).sum();
+    let total_mst_length: f64 = mst
+        .iter()
+        .map(|e: &DelaunayEdge<(i32, i32)>| e.distance)
+        .sum();
     assert!((total_mst_length - 80.0).abs() < 1e-4);
 }
 
@@ -186,7 +189,10 @@ fn test_undoable_objects_nested_transactions() {
 fn test_identifier_type_and_writer() {
     let ident = IdentifierType::specctra_default();
     assert_eq!(ident.format_identifier("net_normal"), "net_normal");
-    assert_eq!(ident.format_identifier("net with space"), "\"net with space\"");
+    assert_eq!(
+        ident.format_identifier("net with space"),
+        "\"net with space\""
+    );
     assert_eq!(ident.format_identifier("(parens)"), "\"(parens)\"");
 
     let mut buf = Vec::new();

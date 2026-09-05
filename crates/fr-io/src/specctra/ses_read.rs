@@ -397,7 +397,12 @@ impl SesFileReader<'_, '_> {
 
         let corners: Vec<(f64, f64)> = coordinates
             .chunks_exact(2)
-            .map(|pair| (self.scale.ses_to_board(pair[0]), self.scale.ses_to_board(pair[1])))
+            .map(|pair| {
+                (
+                    self.scale.ses_to_board(pair[0]),
+                    self.scale.ses_to_board(pair[1]),
+                )
+            })
             .collect();
         // Corners carrying an exact half unit (the writer's
         // `SesFileWriter::coordinate_text`) rebuild the polyline they came

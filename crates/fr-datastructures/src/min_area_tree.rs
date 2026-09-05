@@ -170,7 +170,10 @@ impl<S: BoundingShape, T> MinAreaTree<S, T> {
         }
 
         let leaf_to_replace = curr;
-        let leaf_to_replace_bounds = self.nodes[leaf_to_replace].bounding_shape().unwrap().clone();
+        let leaf_to_replace_bounds = self.nodes[leaf_to_replace]
+            .bounding_shape()
+            .unwrap()
+            .clone();
         let leaf_to_replace_parent = self.nodes[leaf_to_replace].parent();
 
         let new_bounds = bounding_shape.union(&leaf_to_replace_bounds);

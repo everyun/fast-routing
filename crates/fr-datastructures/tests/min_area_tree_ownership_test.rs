@@ -36,7 +36,10 @@ fn every_payload_is_dropped_exactly_once() {
         for i in 0..200i32 {
             let id = tree.insert(
                 boxes(i),
-                DropSpy { id: i as usize, log: Rc::clone(&log) },
+                DropSpy {
+                    id: i as usize,
+                    log: Rc::clone(&log),
+                },
                 i as usize,
             );
             ids.push((i as usize, id));
@@ -49,7 +52,11 @@ fn every_payload_is_dropped_exactly_once() {
             let before = log.borrow().len();
             let got = tree.remove(*id).expect("leaf present");
             assert_eq!(got.id, *want);
-            assert_eq!(log.borrow().len(), before, "payload dropped while still owned");
+            assert_eq!(
+                log.borrow().len(),
+                before,
+                "payload dropped while still owned"
+            );
             drop(got);
             assert_eq!(log.borrow().len(), before + 1);
         }
@@ -79,7 +86,14 @@ fn clear_drops_each_payload_once() {
     let log = Rc::new(RefCell::new(Vec::new()));
     let mut tree = MinAreaTree::new();
     for i in 0..50i32 {
-        tree.insert(boxes(i), DropSpy { id: i as usize, log: Rc::clone(&log) }, 0);
+        tree.insert(
+            boxes(i),
+            DropSpy {
+                id: i as usize,
+                log: Rc::clone(&log),
+            },
+            0,
+        );
     }
     tree.clear();
     let mut seen = log.borrow().clone();
@@ -123,7 +137,11 @@ fn interleaved_insert_remove_matches_brute_force_queries() {
         BoundingBox2D::new(100, 10, 400, 30),
         BoundingBox2D::new(-50, -50, 5000, 5000),
     ] {
-        let mut got: Vec<i32> = tree.overlaps(&q).into_iter().map(|(_, _, v, _)| *v).collect();
+        let mut got: Vec<i32> = tree
+            .overlaps(&q)
+            .into_iter()
+            .map(|(_, _, v, _)| *v)
+            .collect();
         let mut want: Vec<i32> = live
             .iter()
             .filter(|(_, b)| {

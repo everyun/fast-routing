@@ -172,13 +172,33 @@ impl IntOctagon {
     pub fn border_line(&self, no: usize) -> Line {
         let (ax, ay, bx, by) = match no {
             0 => (0, self.bottom_y, 1, self.bottom_y),
-            1 => (self.lower_right_diagonal_x, 0, self.lower_right_diagonal_x + 1, 1),
+            1 => (
+                self.lower_right_diagonal_x,
+                0,
+                self.lower_right_diagonal_x + 1,
+                1,
+            ),
             2 => (self.right_x, 0, self.right_x, 1),
-            3 => (self.upper_right_diagonal_x, 0, self.upper_right_diagonal_x - 1, 1),
+            3 => (
+                self.upper_right_diagonal_x,
+                0,
+                self.upper_right_diagonal_x - 1,
+                1,
+            ),
             4 => (0, self.top_y, -1, self.top_y),
-            5 => (self.upper_left_diagonal_x, 0, self.upper_left_diagonal_x - 1, -1),
+            5 => (
+                self.upper_left_diagonal_x,
+                0,
+                self.upper_left_diagonal_x - 1,
+                -1,
+            ),
             6 => (self.left_x, 0, self.left_x, -1),
-            7 => (self.lower_left_diagonal_x, 0, self.lower_left_diagonal_x + 1, -1),
+            7 => (
+                self.lower_left_diagonal_x,
+                0,
+                self.lower_left_diagonal_x + 1,
+                -1,
+            ),
             _ => panic!("IntOctagon.border_line: out of range"),
         };
         Line::new_from_coords(ax, ay, bx, by)
@@ -216,12 +236,16 @@ impl IntOctagon {
             return IntOctagon::EMPTY;
         }
         let ulx = self.upper_left_diagonal_x.max(other.upper_left_diagonal_x);
-        let lrx = self.lower_right_diagonal_x.min(other.lower_right_diagonal_x);
+        let lrx = self
+            .lower_right_diagonal_x
+            .min(other.lower_right_diagonal_x);
         if ulx > lrx {
             return IntOctagon::EMPTY;
         }
         let llx = self.lower_left_diagonal_x.max(other.lower_left_diagonal_x);
-        let urx = self.upper_right_diagonal_x.min(other.upper_right_diagonal_x);
+        let urx = self
+            .upper_right_diagonal_x
+            .min(other.upper_right_diagonal_x);
         if llx > urx {
             return IntOctagon::EMPTY;
         }
@@ -240,7 +264,9 @@ impl IntOctagon {
         }
         let (vx, vy) = match vector {
             Vector::Int(iv) => (iv.x, iv.y),
-            Vector::Rational(_) => panic!("IntOctagon translateBy only implemented for integer vectors"),
+            Vector::Rational(_) => {
+                panic!("IntOctagon translateBy only implemented for integer vectors")
+            }
         };
         IntOctagon::new(
             self.left_x + vx,

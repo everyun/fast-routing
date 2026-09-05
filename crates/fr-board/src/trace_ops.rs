@@ -518,7 +518,8 @@ impl Board {
         other_polyline: &Polyline,
     ) -> Option<SplitStep> {
         for other_index in 1..other_polyline.arr.len().saturating_sub(1) {
-            let Some(other_segment) = LineSegment::from_polyline(other_polyline, other_index) else {
+            let Some(other_segment) = LineSegment::from_polyline(other_polyline, other_index)
+            else {
                 continue;
             };
             let crossing = segment.intersection(&other_segment);
@@ -858,9 +859,11 @@ impl Board {
     fn collect_net_traces(&self, net_no: i32, out: &mut Vec<ItemId>) {
         out.clear();
         if net_no < 0 {
-            out.extend(self.store().iter().filter_map(|(id, item)| {
-                matches!(item.kind, ItemKind::Trace(_)).then_some(id)
-            }));
+            out.extend(
+                self.store()
+                    .iter()
+                    .filter_map(|(id, item)| matches!(item.kind, ItemKind::Trace(_)).then_some(id)),
+            );
             return;
         }
         out.extend(
@@ -893,9 +896,11 @@ mod tests {
             LayerStructure::signal_layers(3),
             ClearanceTable::uniform(3, 3, 20),
         );
-        board
-            .padstacks_mut()
-            .push(Padstack::uniform(0, 2, Shape::Box(IntBox::new(-40, -40, 40, 40))));
+        board.padstacks_mut().push(Padstack::uniform(
+            0,
+            2,
+            Shape::Box(IntBox::new(-40, -40, 40, 40)),
+        ));
         board
     }
 
@@ -1055,10 +1060,7 @@ mod tests {
             );
             board
                 .insert_trace_without_cleaning(
-                    Polyline::from_int_points(&[
-                        IntPoint::new(1000, 0),
-                        IntPoint::new(1000, 1000),
-                    ]),
+                    Polyline::from_int_points(&[IntPoint::new(1000, 0), IntPoint::new(1000, 1000)]),
                     0,
                     half_width,
                     NetNos::of(net),
@@ -1091,7 +1093,10 @@ mod tests {
             1,
             &[IntPoint::new(1000, 0), IntPoint::new(1000, -1000)],
         );
-        assert!(!board.combine_trace(a), "two contacts at the corner is a fork");
+        assert!(
+            !board.combine_trace(a),
+            "two contacts at the corner is a fork"
+        );
     }
 
     #[test]

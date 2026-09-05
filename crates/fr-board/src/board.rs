@@ -57,7 +57,9 @@ use crate::connectivity::{self, Connectivity};
 use crate::item::{FixedState, Item, ItemId, ItemKind, PolylineTrace, Via};
 use crate::journal::Mark;
 use crate::net_nos::NetNos;
-use crate::search_tree::{SearchTree, SearchTreeManager, ShapeContext, TreeEntry, MAX_TREE_SHAPE_WIDTH};
+use crate::search_tree::{
+    SearchTree, SearchTreeManager, ShapeContext, TreeEntry, MAX_TREE_SHAPE_WIDTH,
+};
 use crate::shape::{AngleRestriction, PadstackTable, TileShape};
 use crate::store::{ItemStore, StoreDelta};
 
@@ -432,8 +434,7 @@ impl Board {
     /// A clearance class outside the matrix is forced to 0, exactly as upstream
     /// does (it warns; this crate has no logger yet).
     pub fn insert_item(&mut self, mut item: Item) -> ItemId {
-        if item.clearance_class < 0
-            || item.clearance_class >= self.clearances.class_count() as i32
+        if item.clearance_class < 0 || item.clearance_class >= self.clearances.class_count() as i32
         {
             item.clearance_class = 0;
         }
@@ -1022,7 +1023,12 @@ impl Board {
 
     /// Upstream `BasicBoard.insertPin` (`:336-346`) — note that inserting a pin
     /// **does not** split traces.
-    pub fn insert_pin(&mut self, pin: crate::item::Pin, nets: NetNos, clearance_class: i32) -> ItemId {
+    pub fn insert_pin(
+        &mut self,
+        pin: crate::item::Pin,
+        nets: NetNos,
+        clearance_class: i32,
+    ) -> ItemId {
         self.insert_item(Item::new(
             nets,
             clearance_class,
@@ -1059,9 +1065,14 @@ impl Board {
         out: &mut Vec<ItemId>,
     ) {
         let mut stack = fr_datastructures::arena_shape_tree::QueryStack::new();
-        self.trees
-            .default_tree()
-            .overlapping_items(&self.store, shape, layer, ignore_nets, &mut stack, out);
+        self.trees.default_tree().overlapping_items(
+            &self.store,
+            shape,
+            layer,
+            ignore_nets,
+            &mut stack,
+            out,
+        );
     }
 
     /// Tree entries overlapping `shape` on `layer`, sorted descending by id
@@ -1203,9 +1214,11 @@ mod tests {
             LayerStructure::signal_layers(3),
             ClearanceTable::uniform(3, 3, 20),
         );
-        board
-            .padstacks_mut()
-            .push(Padstack::uniform(0, 2, Shape::Box(IntBox::new(-40, -40, 40, 40))));
+        board.padstacks_mut().push(Padstack::uniform(
+            0,
+            2,
+            Shape::Box(IntBox::new(-40, -40, 40, 40)),
+        ));
         board
     }
 
@@ -1302,10 +1315,7 @@ mod tests {
             99,
             FixedState::Unfixed,
             ItemKind::Trace(PolylineTrace {
-                polyline: Polyline::from_int_points(&[
-                    IntPoint::new(0, 0),
-                    IntPoint::new(1000, 0),
-                ]),
+                polyline: Polyline::from_int_points(&[IntPoint::new(0, 0), IntPoint::new(1000, 0)]),
                 layer: 0,
                 half_width: 50,
             }),
@@ -1353,7 +1363,13 @@ mod tests {
     #[test]
     fn rollback_restores_the_trees_and_the_connectivity() {
         let mut board = board();
-        let kept = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
+        let kept = straight(
+            &mut board,
+            1,
+            0,
+            IntPoint::new(0, 0),
+            IntPoint::new(1000, 0),
+        );
         assert_eq!(board.net_component_count(1), 1);
 
         let mark = board.begin();
@@ -1460,7 +1476,13 @@ mod tests {
     #[test]
     fn normal_contacts_are_exact_end_corners_only() {
         let mut board = board();
-        let a = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
+        let a = straight(
+            &mut board,
+            1,
+            0,
+            IntPoint::new(0, 0),
+            IntPoint::new(1000, 0),
+        );
         let b = straight(
             &mut board,
             1,
@@ -1492,13 +1514,31 @@ mod tests {
     #[test]
     fn adopting_a_snapshot_restores_the_items_and_the_trees() {
         let mut board = board();
-        let kept = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
-        let doomed = straight(&mut board, 1, 1, IntPoint::new(0, 500), IntPoint::new(1000, 500));
+        let kept = straight(
+            &mut board,
+            1,
+            0,
+            IntPoint::new(0, 0),
+            IntPoint::new(1000, 0),
+        );
+        let doomed = straight(
+            &mut board,
+            1,
+            1,
+            IntPoint::new(0, 500),
+            IntPoint::new(1000, 500),
+        );
         let snapshot = board.store().clone();
         let reference = board.clone();
 
         board.remove_item(doomed);
-        let added = straight(&mut board, 2, 2, IntPoint::new(0, 900), IntPoint::new(900, 900));
+        let added = straight(
+            &mut board,
+            2,
+            2,
+            IntPoint::new(0, 900),
+            IntPoint::new(900, 900),
+        );
         assert_eq!(board.default_tree().leaf_count(), 2);
 
         let delta = board.adopt_store(snapshot);
@@ -1526,8 +1566,20 @@ mod tests {
     #[test]
     fn adopting_a_snapshot_relocates_an_item_that_changed_slots() {
         let mut board = board();
-        let a = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
-        let b = straight(&mut board, 1, 1, IntPoint::new(0, 500), IntPoint::new(1000, 500));
+        let a = straight(
+            &mut board,
+            1,
+            0,
+            IntPoint::new(0, 0),
+            IntPoint::new(1000, 0),
+        );
+        let b = straight(
+            &mut board,
+            1,
+            1,
+            IntPoint::new(0, 500),
+            IntPoint::new(1000, 500),
+        );
         let snapshot = board.store().clone();
         let slot_before = board.store().slot_of(b).expect("b is live");
 
@@ -1565,15 +1617,30 @@ mod tests {
     #[test]
     fn swapping_a_store_hands_the_old_one_back() {
         let mut board = board();
-        let first = straight(&mut board, 1, 0, IntPoint::new(0, 0), IntPoint::new(1000, 0));
+        let first = straight(
+            &mut board,
+            1,
+            0,
+            IntPoint::new(0, 0),
+            IntPoint::new(1000, 0),
+        );
         let mut buffer = board.store().clone();
 
-        let second = straight(&mut board, 1, 1, IntPoint::new(0, 500), IntPoint::new(1000, 500));
+        let second = straight(
+            &mut board,
+            1,
+            1,
+            IntPoint::new(0, 500),
+            IntPoint::new(1000, 500),
+        );
         let mut delta = StoreDelta::new();
         board.swap_store(&mut buffer, &mut delta);
 
         assert_eq!(delta.removed, vec![second]);
-        assert!(buffer.contains(second), "the buffer holds the displaced board");
+        assert!(
+            buffer.contains(second),
+            "the buffer holds the displaced board"
+        );
         assert!(!board.store().contains(second));
         assert!(board.store().contains(first));
         board.assert_consistent();

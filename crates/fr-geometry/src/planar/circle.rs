@@ -144,12 +144,14 @@ impl Circle {
             return self.bounding_octagon().to_simplex();
         }
 
-        let mut tangent_lines = vec![Line::new_from_coords(0, 0, 0, 0); quadrant_division_count * 4];
+        let mut tangent_lines =
+            vec![Line::new_from_coords(0, 0, 0, 0); quadrant_division_count * 4];
         for i in 0..quadrant_division_count {
             let border_delta = if i == 0 {
                 IntVector::new(self.radius, 0)
             } else {
-                let curr_angle = (i as f64) * std::f64::consts::PI / (2.0 * quadrant_division_count as f64);
+                let curr_angle =
+                    (i as f64) * std::f64::consts::PI / (2.0 * quadrant_division_count as f64);
                 let curr_x = (curr_angle.sin() * self.radius as f64).ceil() as i32;
                 let curr_y = (curr_angle.cos() * self.radius as f64).ceil() as i32;
                 IntVector::new(curr_x, curr_y)
@@ -160,8 +162,10 @@ impl Circle {
             let curr_tangent = Line::new_from_point_and_dir(curr_a, &curr_dir);
 
             tangent_lines[quadrant_division_count + i] = curr_tangent;
-            tangent_lines[2 * quadrant_division_count + i] = curr_tangent.turn_90_degree(1, &self.center);
-            tangent_lines[3 * quadrant_division_count + i] = curr_tangent.turn_90_degree(2, &self.center);
+            tangent_lines[2 * quadrant_division_count + i] =
+                curr_tangent.turn_90_degree(1, &self.center);
+            tangent_lines[3 * quadrant_division_count + i] =
+                curr_tangent.turn_90_degree(2, &self.center);
             tangent_lines[i] = curr_tangent.turn_90_degree(3, &self.center);
         }
 
@@ -238,7 +242,9 @@ impl Circle {
         }
         let iv = match vector {
             Vector::Int(iv) => *iv,
-            Vector::Rational(_) => panic!("Circle translateBy only implemented for integer vectors"),
+            Vector::Rational(_) => {
+                panic!("Circle translateBy only implemented for integer vectors")
+            }
         };
         Circle::new(self.center.translate_by_int(&iv), self.radius)
     }
@@ -246,7 +252,10 @@ impl Circle {
     /// Checks if this circle intersects another circle.
     pub fn intersects_circle(&self, other: &Circle) -> bool {
         let r_sum = (self.radius + other.radius) as f64;
-        self.center.to_float().distance_square(&other.center.to_float()) <= r_sum * r_sum
+        self.center
+            .to_float()
+            .distance_square(&other.center.to_float())
+            <= r_sum * r_sum
     }
 
     /// Checks if this circle intersects an `IntBox`.

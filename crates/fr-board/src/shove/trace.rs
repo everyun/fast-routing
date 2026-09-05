@@ -25,7 +25,7 @@
 //! shoving, so both filters are transcribed literally.
 
 use fr_geometry::planar::{
-Direction, FloatPoint, IntBox, Line, LineSegment, Point, Polyline, Simplex,
+    Direction, FloatPoint, IntBox, Line, LineSegment, Point, Polyline, Simplex,
 };
 
 use super::entries::{
@@ -166,8 +166,7 @@ pub fn check_shove_segment(
             let via_radius = 0.5 * via_box.max_width();
             let mut curr_ok_length = projection - via_radius - trace_half_width as f64;
             if !compensation_used {
-                curr_ok_length -=
-                    board.clearances().value(cl_type, via_cl_class, layer) as f64;
+                curr_ok_length -= board.clearances().value(cl_type, via_cl_class, layer) as f64;
             }
             if curr_ok_length <= 0.0 {
                 return 0.0;
@@ -215,12 +214,13 @@ pub fn check_shove_segment(
                 if shove_ok_length <= 0.0 {
                     return 0.0;
                 }
-                let mut projection = start_corner_approx
-                    .scalar_product(&end_corner_approx, &curr_line_segment.start_point_approx())
-                    .min(
-                        start_corner_approx
-                            .scalar_product(&end_corner_approx, &curr_line_segment.end_point_approx()),
-                    );
+                let mut projection =
+                    start_corner_approx
+                        .scalar_product(&end_corner_approx, &curr_line_segment.start_point_approx())
+                        .min(start_corner_approx.scalar_product(
+                            &end_corner_approx,
+                            &curr_line_segment.end_point_approx(),
+                        ));
                 projection /= segment_length;
                 let mut curr_ok_length = shove_ok_length + projection
                     - trace_half_width as f64
@@ -229,10 +229,11 @@ pub fn check_shove_segment(
                 // *tree compensation* when compensation is on, not the
                 // asymmetric matrix value (`:145-149`).
                 if compensation_used {
-                    curr_ok_length -= board
-                        .clearances()
-                        .tree_compensation(piece.cl_class, cl_type, layer)
-                        as f64;
+                    curr_ok_length -=
+                        board
+                            .clearances()
+                            .tree_compensation(piece.cl_class, cl_type, layer)
+                            as f64;
                 } else {
                     curr_ok_length -=
                         board.clearances().value(cl_type, piece.cl_class, layer) as f64;
@@ -309,12 +310,14 @@ pub fn check_trace_segment(
                 trace_half_width as f64
                     + board
                         .clearances()
-                        .compensation_value(item.clearance_class, layer) as f64,
+                        .compensation_value(item.clearance_class, layer)
+                        as f64,
             )
         } else {
-            let clearance_value = board
-                .clearances()
-                .value(item.clearance_class, cl_class_no, layer);
+            let clearance_value =
+                board
+                    .clearances()
+                    .value(item.clearance_class, cl_class_no, layer);
             (
                 shape_to_check.offset(clearance_value as f64),
                 trace_half_width as f64 + clearance_value as f64,
@@ -575,10 +578,12 @@ impl ShoveCheck<'_> {
                 } else {
                     match &curr_item.kind {
                         ItemKind::ConductionArea(area) => area.is_obstacle,
-                        ItemKind::ObstacleArea(area) => !matches!(
-                            area.kind,
-                            ObstacleKind::ViaKeepout | ObstacleKind::ComponentKeepout
-                        ) && !curr_item.is_routable(),
+                        ItemKind::ObstacleArea(area) => {
+                            !matches!(
+                                area.kind,
+                                ObstacleKind::ViaKeepout | ObstacleKind::ComponentKeepout
+                            ) && !curr_item.is_routable()
+                        }
                         ItemKind::Trace(trace) => {
                             if curr_item.is_shove_fixed() {
                                 // A shove-fixed trace exit stub has to be
@@ -660,7 +665,8 @@ impl ShoveCheck<'_> {
                 board.normal_contacts_at(obstacle_id, &point, &mut contacts);
                 for &contact_id in contacts.iter() {
                     if let Some(contact) = board.store().get(contact_id) {
-                        if matches!(contact.kind, ItemKind::Trace(_)) && contact.is_on_layer(layer) {
+                        if matches!(contact.kind, ItemKind::Trace(_)) && contact.is_on_layer(layer)
+                        {
                             try_spring_over = false;
                         }
                     }
@@ -683,8 +689,8 @@ impl ShoveCheck<'_> {
                     }
                 }
                 ItemKind::Pin(_) | ItemKind::Via(_) => {
-                    obstacle_shape =
-                        tree_shape_on_layer(board, obstacle_id, layer).map(|s| geom::tile_to_simplex(&s));
+                    obstacle_shape = tree_shape_on_layer(board, obstacle_id, layer)
+                        .map(|s| geom::tile_to_simplex(&s));
                 }
                 _ => try_spring_over = false,
             }
@@ -743,8 +749,9 @@ impl ShoveCheck<'_> {
             side_diff += border_line_count;
         } else if side_diff == 0 {
             let compare_corner = offset_shape.corner_approx(first_intersection_side_no as usize);
-            let first_intersection = polyline.arr[first_intersection_line_no]
-                .intersection_approx(&offset_shape.border_line(first_intersection_side_no as usize));
+            let first_intersection = polyline.arr[first_intersection_line_no].intersection_approx(
+                &offset_shape.border_line(first_intersection_side_no as usize),
+            );
             let second_intersection = polyline.arr[last_intersection_line_no]
                 .intersection_approx(&offset_shape.border_line(last_intersection_side_no as usize));
             if compare_corner.distance(&second_intersection)
@@ -1170,7 +1177,12 @@ fn connection_points(board: &Board, id: ItemId) -> Vec<Point> {
 
 /// `Polyline.reverse()`: the lines back to front, each flipped.
 pub fn reverse_polyline(polyline: &Polyline) -> Polyline {
-    let reversed: Vec<Line> = polyline.arr.iter().rev().map(|line| line.opposite()).collect();
+    let reversed: Vec<Line> = polyline
+        .arr
+        .iter()
+        .rev()
+        .map(|line| line.opposite())
+        .collect();
     Polyline::new_from_lines(&reversed)
 }
 

@@ -147,7 +147,9 @@ impl Point {
                 let rb = RationalPoint::from_int_point(b);
                 Vector::Rational(a.difference_by_rational(&rb))
             }
-            (Point::Rational(a), Point::Rational(b)) => Vector::Rational(a.difference_by_rational(b)),
+            (Point::Rational(a), Point::Rational(b)) => {
+                Vector::Rational(a.difference_by_rational(b))
+            }
         }
     }
 

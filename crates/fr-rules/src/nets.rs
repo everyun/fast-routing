@@ -61,9 +61,9 @@ impl Nets {
 
     /// Returns the net with the given name and subnet number (case-insensitive), or `None` if not found.
     pub fn get_by_name_and_subnet(&self, name: &str, subnet_number: i32) -> Option<&Net> {
-        self.net_arr.iter().find(|net| {
-            net.name.eq_ignore_ascii_case(name) && net.subnet_number == subnet_number
-        })
+        self.net_arr
+            .iter()
+            .find(|net| net.name.eq_ignore_ascii_case(name) && net.subnet_number == subnet_number)
     }
 
     /// Returns all subnets with the given name (case-insensitive).
@@ -83,7 +83,13 @@ impl Nets {
         net_class_index: usize,
     ) -> &Net {
         let new_net_no = (self.net_arr.len() + 1) as i32;
-        let new_net = Net::new(name, subnet_number, new_net_no, contains_plane, net_class_index);
+        let new_net = Net::new(
+            name,
+            subnet_number,
+            new_net_no,
+            contains_plane,
+            net_class_index,
+        );
         self.net_arr.push(new_net);
         self.net_arr.last().unwrap()
     }

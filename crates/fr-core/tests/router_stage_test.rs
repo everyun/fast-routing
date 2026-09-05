@@ -72,7 +72,11 @@ fn one_maze_pass_completes_both_nets_without_a_violation() {
     assert_eq!(router.fanouted, 0, "fanout is off by default");
 
     // The referee is the judge, not the router's own bookkeeping — and the two must agree.
-    assert_eq!(report.stats.incomplete_count, 0, "{:?}", report.connectivity);
+    assert_eq!(
+        report.stats.incomplete_count, 0,
+        "{:?}",
+        report.connectivity
+    );
     assert_eq!(router.incomplete_count, 0);
     assert_eq!(
         report.stats.clearance_violation_count, 0,

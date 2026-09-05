@@ -76,9 +76,7 @@ impl ConnectionPoints {
 /// The connection points of `item` (`drc-connectivity.md` §4.3).
 pub fn connection_points(item: &Item) -> ConnectionPoints {
     match &item.kind {
-        ItemKind::Trace(trace) => {
-            ConnectionPoints::Two(trace.first_corner(), trace.last_corner())
-        }
+        ItemKind::Trace(trace) => ConnectionPoints::Two(trace.first_corner(), trace.last_corner()),
         ItemKind::Pin(pin) => ConnectionPoints::One(Point::Int(pin.center)),
         ItemKind::Via(via) => ConnectionPoints::One(Point::Int(via.center)),
         _ => ConnectionPoints::None,
@@ -93,9 +91,7 @@ pub fn connection_points(item: &Item) -> ConnectionPoints {
 /// geometric predicate.
 pub fn touches_at(candidate: &Item, point: &Point) -> bool {
     match &candidate.kind {
-        ItemKind::Trace(trace) => {
-            trace.first_corner() == *point || trace.last_corner() == *point
-        }
+        ItemKind::Trace(trace) => trace.first_corner() == *point || trace.last_corner() == *point,
         ItemKind::Pin(pin) => Point::Int(pin.center) == *point,
         ItemKind::Via(via) => Point::Int(via.center) == *point,
         ItemKind::ConductionArea(area) => placed_area_pieces(&area.area)
@@ -284,12 +280,7 @@ impl Connectivity {
 // `std::iter::repeat_n` would read better than `repeat().take()` but needs
 // Rust 1.82; the workspace MSRV is 1.75.
 #[allow(clippy::manual_repeat_n)]
-fn rebuild(
-    net_no: i32,
-    store: &ItemStore,
-    components: &mut NetComponents,
-    scratch: &mut Scratch,
-) {
+fn rebuild(net_no: i32, store: &ItemStore, components: &mut NetComponents, scratch: &mut Scratch) {
     components.members.clear();
     components.labels.clear();
     components.count = 0;
@@ -368,7 +359,12 @@ fn rebuild(
                 continue;
             };
             if shares_layer(item, other_item) && touches_at(item, point) {
-                union(&mut scratch.parent, &mut scratch.size, position as u32, *other);
+                union(
+                    &mut scratch.parent,
+                    &mut scratch.size,
+                    position as u32,
+                    *other,
+                );
             }
         }
     }
@@ -468,7 +464,11 @@ mod tests {
     #[test]
     fn traces_meeting_end_to_end_are_one_component() {
         let mut store = ItemStore::new();
-        store.insert(trace(&[1], 0, &[IntPoint::new(0, 0), IntPoint::new(100, 0)]));
+        store.insert(trace(
+            &[1],
+            0,
+            &[IntPoint::new(0, 0), IntPoint::new(100, 0)],
+        ));
         store.insert(trace(
             &[1],
             0,
@@ -499,8 +499,16 @@ mod tests {
     #[test]
     fn traces_on_different_layers_do_not_connect_without_a_via() {
         let mut store = ItemStore::new();
-        let a = store.insert(trace(&[1], 0, &[IntPoint::new(0, 0), IntPoint::new(100, 0)]));
-        let b = store.insert(trace(&[1], 1, &[IntPoint::new(100, 0), IntPoint::new(200, 0)]));
+        let a = store.insert(trace(
+            &[1],
+            0,
+            &[IntPoint::new(0, 0), IntPoint::new(100, 0)],
+        ));
+        let b = store.insert(trace(
+            &[1],
+            1,
+            &[IntPoint::new(100, 0), IntPoint::new(200, 0)],
+        ));
         let mut connectivity = Connectivity::new();
         assert_eq!(connectivity.component_count(1, &store), 2);
         assert!(!connectivity.are_connected(1, &store, a, b));
@@ -515,7 +523,11 @@ mod tests {
     fn a_pour_joins_every_item_whose_connection_point_it_contains() {
         let mut store = ItemStore::new();
         store.insert(pour(&[1], 0, IntBox::new(-1000, -1000, 1000, 1000)));
-        store.insert(trace(&[1], 0, &[IntPoint::new(0, 0), IntPoint::new(500, 0)]));
+        store.insert(trace(
+            &[1],
+            0,
+            &[IntPoint::new(0, 0), IntPoint::new(500, 0)],
+        ));
         store.insert(trace(
             &[1],
             0,
@@ -532,8 +544,16 @@ mod tests {
     #[test]
     fn a_different_net_is_never_joined() {
         let mut store = ItemStore::new();
-        store.insert(trace(&[1], 0, &[IntPoint::new(0, 0), IntPoint::new(100, 0)]));
-        store.insert(trace(&[2], 0, &[IntPoint::new(100, 0), IntPoint::new(200, 0)]));
+        store.insert(trace(
+            &[1],
+            0,
+            &[IntPoint::new(0, 0), IntPoint::new(100, 0)],
+        ));
+        store.insert(trace(
+            &[2],
+            0,
+            &[IntPoint::new(100, 0), IntPoint::new(200, 0)],
+        ));
         let mut connectivity = Connectivity::new();
         assert_eq!(connectivity.component_count(1, &store), 1);
         assert_eq!(connectivity.component_count(2, &store), 1);
@@ -542,7 +562,11 @@ mod tests {
     #[test]
     fn dirty_flags_are_per_net_and_cleared_by_a_query() {
         let mut store = ItemStore::new();
-        let a = store.insert(trace(&[1], 0, &[IntPoint::new(0, 0), IntPoint::new(100, 0)]));
+        let a = store.insert(trace(
+            &[1],
+            0,
+            &[IntPoint::new(0, 0), IntPoint::new(100, 0)],
+        ));
         let mut connectivity = Connectivity::new();
         assert!(connectivity.is_dirty(1), "never queried == dirty");
         connectivity.component_count(1, &store);
@@ -559,7 +583,11 @@ mod tests {
     #[test]
     fn labels_are_assigned_in_ascending_member_order() {
         let mut store = ItemStore::new();
-        let first = store.insert(trace(&[1], 0, &[IntPoint::new(0, 0), IntPoint::new(100, 0)]));
+        let first = store.insert(trace(
+            &[1],
+            0,
+            &[IntPoint::new(0, 0), IntPoint::new(100, 0)],
+        ));
         let second = store.insert(trace(
             &[1],
             0,

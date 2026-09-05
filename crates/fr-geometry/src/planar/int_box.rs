@@ -479,7 +479,11 @@ impl IntBox {
             result[2] = IntBox::new(b2.ll.x, c.ll.y, b2.ur.x, b2.ur.y);
         }
 
-        result.iter().filter(|b| b.dimension() == 2).copied().collect()
+        result
+            .iter()
+            .filter(|b| b.dimension() == 2)
+            .copied()
+            .collect()
     }
 
     /// Cuts `inner` out of this box.

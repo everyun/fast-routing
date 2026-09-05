@@ -85,7 +85,9 @@ fn issue026_runs_import_check_and_ses() {
     // `(pcb …)` on this fixture is the exporter's absolute path, not the file's stem — which is
     // exactly why the session's `(base_design …)` uses the *file* name instead.
     assert!(
-        report.pcb_name.ends_with("e-con_STEEReoCAM_Nano_FFC_MiniSAS_Adapter.dsn"),
+        report
+            .pcb_name
+            .ends_with("e-con_STEEReoCAM_Nano_FFC_MiniSAS_Adapter.dsn"),
         "unexpected (pcb …) token: {}",
         report.pcb_name
     );

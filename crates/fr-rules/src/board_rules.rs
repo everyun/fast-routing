@@ -136,12 +136,16 @@ impl BoardRules {
 
     /// Returns the default net class used for all nets without a specialized rule.
     pub fn get_default_net_class(&self) -> &NetClass {
-        self.net_classes.get(0).expect("default net class must exist")
+        self.net_classes
+            .get(0)
+            .expect("default net class must exist")
     }
 
     /// Returns a mutable reference to the default net class.
     pub fn get_default_net_class_mut(&mut self) -> &mut NetClass {
-        self.net_classes.get_mut(0).expect("default net class must exist")
+        self.net_classes
+            .get_mut(0)
+            .expect("default net class must exist")
     }
 
     /// Creates the initial default net class if net classes are empty.
@@ -156,7 +160,9 @@ impl BoardRules {
     /// the G1.1 golden gate on seven fixtures.
     pub fn create_default_net_class(&mut self) {
         if self.net_classes.is_empty() {
-            let idx = self.net_classes.append("default", &self.layer_structure, false);
+            let idx = self
+                .net_classes
+                .append("default", &self.layer_structure, false);
             let default_nc = self.net_classes.get_mut(idx).unwrap();
             default_nc.set_trace_half_width(1500);
             default_nc.set_trace_clearance_class(1);
@@ -165,7 +171,9 @@ impl BoardRules {
 
     /// Creates an empty new net rule with an internally created name.
     pub fn get_new_net_class(&mut self) -> usize {
-        let idx = self.net_classes.append_with_generated_name(&self.layer_structure);
+        let idx = self
+            .net_classes
+            .append_with_generated_name(&self.layer_structure);
         let default_cl = self.get_default_net_class().get_trace_clearance_class();
         let default_via_rule = self.get_default_via_rule().cloned();
         let default_width = self.get_default_net_class().get_trace_half_width(0);
@@ -191,7 +199,9 @@ impl BoardRules {
 
     /// Appends a new net class initialized with default properties.
     pub fn append_net_class(&mut self) -> usize {
-        let idx = self.net_classes.append_with_generated_name(&self.layer_structure);
+        let idx = self
+            .net_classes
+            .append_with_generated_name(&self.layer_structure);
         let default_cl = self.get_default_net_class().get_trace_clearance_class();
         let default_via_rule = self.get_default_net_class().get_via_rule().cloned();
         let default_width = self.get_default_net_class().get_trace_half_width(0);
@@ -207,7 +217,10 @@ impl BoardRules {
         if let Some(pos) = self.net_classes.iter().position(|c| c.name == name) {
             return pos;
         }
-        let default_item_cl = self.get_default_net_class().default_item_clearance_classes.clone();
+        let default_item_cl = self
+            .get_default_net_class()
+            .default_item_clearance_classes
+            .clone();
         let default_via_rule = self.get_default_net_class().get_via_rule().cloned();
         let default_width = self.get_default_net_class().get_trace_half_width(0);
         let default_cl = self.get_default_net_class().get_trace_clearance_class();
@@ -254,7 +267,9 @@ impl BoardRules {
                 let curr_from_layer = curr_padstack.from_layer();
                 let curr_to_layer = curr_padstack.to_layer();
 
-                let existing_via = default_rule.get_layer_range(curr_from_layer, curr_to_layer).cloned();
+                let existing_via = default_rule
+                    .get_layer_range(curr_from_layer, curr_to_layer)
+                    .cloned();
                 if let Some(existing) = existing_via {
                     let new_shape = curr_padstack.get_shape(curr_from_layer);
                     let existing_shape = existing.padstack().get_shape(curr_from_layer);
@@ -303,7 +318,8 @@ impl BoardRules {
             }
             for item_class in ItemClass::ALL {
                 if nc.default_item_clearance_classes.get(item_class) as usize == from_no {
-                    nc.default_item_clearance_classes.set(item_class, to_no as i32);
+                    nc.default_item_clearance_classes
+                        .set(item_class, to_no as i32);
                 }
             }
         }
@@ -343,7 +359,8 @@ impl BoardRules {
             for item_class in ItemClass::ALL {
                 let curr_no = nc.default_item_clearance_classes.get(item_class) as usize;
                 if curr_no > index {
-                    nc.default_item_clearance_classes.set(item_class, (curr_no - 1) as i32);
+                    nc.default_item_clearance_classes
+                        .set(item_class, (curr_no - 1) as i32);
                 }
             }
         }

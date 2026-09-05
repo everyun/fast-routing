@@ -278,8 +278,7 @@ impl AutorouteEngine<'_> {
                     let ignore_expansion_room = matches!(obstacle, Obstacle::Room(_))
                         && ignore_shape
                             .map(|ignore| {
-                                let intersection =
-                                    candidate.shape.intersection(&obstacle_shape);
+                                let intersection = candidate.shape.intersection(&obstacle_shape);
                                 geom::contains_shape(ignore, &intersection)
                             })
                             .unwrap_or(false);
@@ -372,8 +371,8 @@ impl AutorouteEngine<'_> {
                     shape: piece,
                     contained: shape_to_be_contained.clone(),
                     oct: None,
-                bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                    bbox: std::cell::Cell::new(None),
+                    sat: std::cell::RefCell::new(None),
                 });
             }
             crate::rooms::attr::add_restrain(restrain_started);
@@ -492,8 +491,8 @@ impl AutorouteEngine<'_> {
                     shape: section,
                     contained,
                     oct: None,
-                bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                    bbox: std::cell::Cell::new(None),
+                    sat: std::cell::RefCell::new(None),
                 }
             })
             .collect();
@@ -766,8 +765,7 @@ fn sat_overlap(
         return Some(false);
     }
     let (corners_b, verified_b) = obstacle_sat?;
-    if candidate.shape.sat_separates(corners_b)? || obstacle_shape.sat_separates(&memo_a.corners)?
-    {
+    if candidate.shape.sat_separates(corners_b)? || obstacle_shape.sat_separates(&memo_a.corners)? {
         return Some(false);
     }
     // No separating line: exact iff both hulls are verified genuine polygons.
@@ -872,8 +870,7 @@ mod tests {
             // The signature of the old fallback: a section that *is* its own
             // contained shape.
             assert!(
-                section.contained.is_empty()
-                    || section.contained.area() < section.shape.area(),
+                section.contained.is_empty() || section.contained.area() < section.shape.area(),
                 "a section must never carry itself as its contained shape"
             );
             assert!(
@@ -964,7 +961,9 @@ mod tests {
                 &mut own_net,
             );
             assert!(
-                obstacles.iter().any(|o| matches!(o, Obstacle::Item(_, _, _)))
+                obstacles
+                    .iter()
+                    .any(|o| matches!(o, Obstacle::Item(_, _, _)))
                     && obstacles.contains(&Obstacle::Room(room)),
                 "the probe must see both obstacle kinds on {:?}",
                 obstacles.len()

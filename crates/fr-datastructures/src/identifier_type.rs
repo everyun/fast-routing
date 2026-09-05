@@ -122,7 +122,10 @@ mod tests {
     #[test]
     fn test_spaces_and_parentheses_quoted() {
         let ident = IdentifierType::specctra_default();
-        assert_eq!(ident.format_identifier("Net with space"), "\"Net with space\"");
+        assert_eq!(
+            ident.format_identifier("Net with space"),
+            "\"Net with space\""
+        );
         assert_eq!(ident.format_identifier("U1(VCC)"), "\"U1(VCC)\"");
     }
 

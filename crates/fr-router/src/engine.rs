@@ -671,8 +671,7 @@ impl<'b> AutorouteEngine<'b> {
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
         self.scratch_hit_bounds.clear();
-        let ordered =
-            self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
+        let ordered = self.collect_obstacles_tile(query_tile, layer, net_no, obstacles, own_net);
         if !ordered {
             let sort_started = crate::rooms::attr::start();
             self.sort_obstacles_for_completion_paired(obstacles);
@@ -784,7 +783,9 @@ impl<'b> AutorouteEngine<'b> {
                 own_net_out.push((cached.item, cached.index));
             }
         };
-        let ItemCache { layers, marks, gen, .. } = item_cache;
+        let ItemCache {
+            layers, marks, gen, ..
+        } = item_cache;
         let Some(layer_items) = layers.get(layer as usize) else {
             return;
         };
@@ -897,7 +898,10 @@ impl<'b> AutorouteEngine<'b> {
                 // id, ascending shape index. The linear scan then emits an
                 // ordered run and the grid only has to sort its hit indices.
                 items.sort_unstable_by_key(|cached| {
-                    (std::cmp::Reverse(i64::from(cached.item.raw())), cached.index)
+                    (
+                        std::cmp::Reverse(i64::from(cached.item.raw())),
+                        cached.index,
+                    )
                 });
                 marks = marks.max(items.len());
                 let grid = if items.len() >= GRID_MIN_ITEMS {
@@ -1206,7 +1210,9 @@ impl<'b> AutorouteEngine<'b> {
     ) -> Option<std::rc::Rc<Simplex>> {
         self.ensure_item_cache();
         let base = *self.tile_simplex_base.get(slot.index())?;
-        let cell = self.tile_simplex_cache.get(base as usize + index as usize)?;
+        let cell = self
+            .tile_simplex_cache
+            .get(base as usize + index as usize)?;
         if let Some(rc) = cell.get() {
             return Some(rc.clone());
         }

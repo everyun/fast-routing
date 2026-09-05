@@ -158,7 +158,10 @@ mod tests {
     fn determinant_promotes_to_i128_on_overflow() {
         // Envelope corner: still on the i64 path, and exact.
         let c = Limits::CRIT_INT_I64 * 2;
-        assert_eq!(determinant_exact(c, -c, c, c), 2 * (c as i128) * (c as i128));
+        assert_eq!(
+            determinant_exact(c, -c, c, c),
+            2 * (c as i128) * (c as i128)
+        );
         // The i64 products overflow here; the i128 path must stay exact.
         let big = i64::MAX / 2;
         assert_eq!(

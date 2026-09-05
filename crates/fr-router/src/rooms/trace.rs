@@ -146,7 +146,6 @@ fn write_line(record: &str) {
     let _ = guard.writer().flush();
 }
 
-
 enum Sink {
     Stderr(BufWriter<Stderr>),
     File(BufWriter<File>),

@@ -33,7 +33,12 @@ fn snapshot(board: &Board) -> Vec<String> {
     board
         .store()
         .iter()
-        .map(|(id, item)| format!("{id:?} {:?} {:?} {:?}", item.nets, item.fixed_state, item.kind))
+        .map(|(id, item)| {
+            format!(
+                "{id:?} {:?} {:?} {:?}",
+                item.nets, item.fixed_state, item.kind
+            )
+        })
         .collect()
 }
 
@@ -41,9 +46,7 @@ fn traces_of(board: &Board, net_no: i32) -> Vec<ItemId> {
     board
         .store()
         .iter()
-        .filter(|(_, item)| {
-            matches!(item.kind, ItemKind::Trace(_)) && item.contains_net(net_no)
-        })
+        .filter(|(_, item)| matches!(item.kind, ItemKind::Trace(_)) && item.contains_net(net_no))
         .map(|(id, _)| id)
         .collect()
 }
@@ -72,7 +75,11 @@ fn a_blocking_foreign_trace_is_pushed_aside_and_stays_connected() {
     let centers = fixture.pad_centers();
     let obstacle = fixture.trace_id();
     let obstacle_corners = {
-        let item = fixture.board.store().get(obstacle).expect("the fixture trace");
+        let item = fixture
+            .board
+            .store()
+            .get(obstacle)
+            .expect("the fixture trace");
         let ItemKind::Trace(trace) = &item.kind else {
             panic!("the fixture trace is a trace");
         };
@@ -312,7 +319,10 @@ fn the_transaction_equals_the_eager_insert_plus_undo() {
             }
         }
 
-        assert_eq!(eager_results, txn_results, "same verdicts (freeze={freeze})");
+        assert_eq!(
+            eager_results, txn_results,
+            "same verdicts (freeze={freeze})"
+        );
         assert_eq!(
             snapshot(&eager.board),
             snapshot(&transactional.board),

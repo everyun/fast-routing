@@ -43,7 +43,12 @@ fn snapshot(board: &Board) -> Vec<String> {
     board
         .store()
         .iter()
-        .map(|(id, item)| format!("{id:?} {:?} {:?} {:?}", item.nets, item.fixed_state, item.kind))
+        .map(|(id, item)| {
+            format!(
+                "{id:?} {:?} {:?} {:?}",
+                item.nets, item.fixed_state, item.kind
+            )
+        })
         .collect()
 }
 

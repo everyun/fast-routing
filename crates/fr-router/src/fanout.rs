@@ -836,15 +836,20 @@ mod tests {
         let mut config = FanoutConfig::from_settings(&settings, 1000.0);
         let mut total = 0usize;
         let mut scratch = ContactScratch::new();
-        let mut budget = |config: &FanoutConfig,
-                          board: &mut fr_board::board::Board,
-                          pass_no: i32|
-         -> i32 {
-            fanout_pass(
-                board, &rules, &settings, config, &[], pass_no, &mut total, &mut scratch,
-            )
-            .ripup_costs
-        };
+        let mut budget =
+            |config: &FanoutConfig, board: &mut fr_board::board::Board, pass_no: i32| -> i32 {
+                fanout_pass(
+                    board,
+                    &rules,
+                    &settings,
+                    config,
+                    &[],
+                    pass_no,
+                    &mut total,
+                    &mut scratch,
+                )
+                .ripup_costs
+            };
 
         assert_eq!(
             budget(&config, &mut fixture.board, 0),
@@ -1070,10 +1075,7 @@ mod tests {
     /// deadline, which is [`JobDeadline::NONE`] unless `--job-timeout` armed it.
     #[test]
     fn an_unarmed_deadline_never_stops_the_stage() {
-        let config = FanoutConfig::from_settings(
-            &TestFixture::two_layer_with_pads().settings,
-            1.0,
-        );
+        let config = FanoutConfig::from_settings(&TestFixture::two_layer_with_pads().settings, 1.0);
         assert!(!config.deadline.is_armed() || !config.deadline.expired());
     }
 }

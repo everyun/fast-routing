@@ -3,10 +3,20 @@
 //! Ported from `app.freerouting.geometry.planar.Simplex`.
 
 use crate::planar::{
-    area::Area, convex_shape::ConvexShape, direction::Direction, float_point::FloatPoint,
-    int_box::IntBox, int_octagon::IntOctagon, int_point::IntPoint, limits::{side_of_exact, Limits},
+    area::Area,
+    convex_shape::ConvexShape,
+    direction::Direction,
+    float_point::FloatPoint,
+    int_box::IntBox,
+    int_octagon::IntOctagon,
+    int_point::IntPoint,
+    limits::{side_of_exact, Limits},
     line::Line,
-    line_segment::LineSegment, point::Point, polyline::Polyline, shape::Shape, side::Side,
+    line_segment::LineSegment,
+    point::Point,
+    polyline::Polyline,
+    shape::Shape,
+    side::Side,
     vector::Vector,
 };
 
@@ -91,11 +101,7 @@ impl Simplex {
             return false;
         }
         let no = corner_index % self.arr.len();
-        let prev_no = if no == 0 {
-            self.arr.len() - 1
-        } else {
-            no - 1
-        };
+        let prev_no = if no == 0 { self.arr.len() - 1 } else { no - 1 };
         let prev_dir = self.arr[prev_no].direction().get_int_vector();
         let curr_dir = self.arr[no].direction().get_int_vector();
         prev_dir.determinant(&curr_dir) > 0
@@ -212,9 +218,7 @@ impl Simplex {
 
     /// Returns all corner approximations.
     pub fn corner_approx_arr(&self) -> Vec<FloatPoint> {
-        (0..self.arr.len())
-            .map(|i| self.corner_approx(i))
-            .collect()
+        (0..self.arr.len()).map(|i| self.corner_approx(i)).collect()
     }
 
     /// Dimension: 2 (2D), 1 (segment/line), 0 (point), -1 (empty).
@@ -553,7 +557,6 @@ impl Simplex {
             return Some(false);
         }
         self.has_2dim_overlap_sat(other)
-
     }
 
     /// The box-gate-free core of [`Simplex::has_2dim_overlap_fast`], for
@@ -1318,8 +1321,7 @@ impl Simplex {
 
         for line_no in 1..polyline.arr.len().saturating_sub(1) {
             if let Some(seg) = LineSegment::from_polyline(polyline, line_no) {
-                let curr_intersections =
-                    seg.border_intersections_lines(&self.arr, &corners, &bbox);
+                let curr_intersections = seg.border_intersections_lines(&self.arr, &corners, &bbox);
                 for edge_no in curr_intersections {
                     if prev_line_no != Some(line_no) || prev_edge_no != Some(edge_no) {
                         result.push((line_no, edge_no));
@@ -1941,9 +1943,7 @@ mod tests {
             IntPoint::new(100, 0),
             IntPoint::new(60, 90),
         ]);
-        let bounds = shape
-            .bounded_bounding_box()
-            .expect("a triangle is bounded");
+        let bounds = shape.bounded_bounding_box().expect("a triangle is bounded");
         assert_eq!(bounds, shape.bounding_box());
         let query = IntBox::new(
             bounds.left_x() - 1,

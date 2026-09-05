@@ -324,7 +324,9 @@ mod tests {
     #[test]
     fn write_frmetric_terminates_every_line() {
         let mut buffer = Vec::new();
-        sample().write_frmetric(&mut buffer).expect("write to a Vec");
+        sample()
+            .write_frmetric(&mut buffer)
+            .expect("write to a Vec");
         let text = String::from_utf8(buffer).expect("ascii json");
         assert!(text.ends_with('\n'));
         assert_eq!(text.lines().count(), 4);

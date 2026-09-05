@@ -192,7 +192,15 @@ mod tests {
         assert_eq!(report.stages[1].pass, 2);
         assert_eq!(report.stages[1].stage, Stage::Route);
         assert_eq!(report.stages[1].calls, 2);
-        assert_eq!(report.passes, vec![PassRecord { pass: 2, unrouted: 0, duration_ms: 17, ripup_cost: 200 }]);
+        assert_eq!(
+            report.passes,
+            vec![PassRecord {
+                pass: 2,
+                unrouted: 0,
+                duration_ms: 17,
+                ripup_cost: 200
+            }]
+        );
     }
 
     #[test]

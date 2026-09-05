@@ -59,8 +59,11 @@ const UP: [IntPoint; 2] = [FORK, IntPoint { x: -1500, y: 1400 }];
 /// equality is what `Trace.get_normal_contacts` requires (`Trace.java:172-176`)
 /// — and leaves at 45° back over the main run, which is the acid trap §6.4
 /// exists to chamfer.
-const BRANCH: [IntPoint; 3] =
-    [FORK, IntPoint { x: -1100, y: 1300 }, IntPoint { x: -300, y: 1300 }];
+const BRANCH: [IntPoint; 3] = [
+    FORK,
+    IntPoint { x: -1100, y: 1300 },
+    IntPoint { x: -300, y: 1300 },
+];
 
 fn insert(board: &mut Board, corners: &[IntPoint], net: i32) -> ItemId {
     board
@@ -168,7 +171,11 @@ fn smoothen(
 fn an_acute_fork_onto_a_same_net_trace_is_chamfered() {
     let (mut fixture, branch) = fork_fixture();
     let before = polylines_of(&fixture.board, TEST_NET);
-    assert_eq!(before.len(), 3, "the fork survived insertion as three traces");
+    assert_eq!(
+        before.len(),
+        3,
+        "the fork survived insertion as three traces"
+    );
 
     assert!(
         smoothen(&mut fixture, branch, &[], None),
@@ -236,7 +243,12 @@ fn a_shove_fixed_trace_is_refused() {
     let mut fixture = TestFixture::two_layer_with_pads();
     insert(&mut fixture.board, &MAIN, TEST_NET);
     insert(&mut fixture.board, &STUB, TEST_NET);
-    let branch = insert_fixed(&mut fixture.board, &BRANCH, TEST_NET, FixedState::ShoveFixed);
+    let branch = insert_fixed(
+        &mut fixture.board,
+        &BRANCH,
+        TEST_NET,
+        FixedState::ShoveFixed,
+    );
     assert!(
         !smoothen(&mut fixture, branch, &[], None),
         "`_1`'s first guard (`PullTightAlgo.java:362-364`) refuses a shove-fixed trace"

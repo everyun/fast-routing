@@ -149,7 +149,8 @@ impl<'a> OffsetParams<'a> {
 
     /// The pairwise clearance between the shove shape's class and `cl_class`.
     pub fn clearance_to(&self, cl_class: i32) -> i32 {
-        self.clearances.value(cl_class, self.own_cl_class, self.layer)
+        self.clearances
+            .value(cl_class, self.own_cl_class, self.layer)
     }
 
     /// The shove shape grown by an obstacle trace's reach, `c_offset_add`
@@ -439,10 +440,9 @@ impl ShapeTraceEntries {
                             };
                             let via_simplex = geom::tile_to_simplex(&via_shape);
                             let mut via_trace_diff = via_simplex.smallest_radius()
-                                - offsets.compensated_half_width(
-                                    trace.half_width,
-                                    item.clearance_class,
-                                ) as f64;
+                                - offsets
+                                    .compensated_half_width(trace.half_width, item.clearance_class)
+                                    as f64;
                             if !offsets.is_compensated() {
                                 let via_clearance = offsets.clearance_to(contact.clearance_class);
                                 let trace_clearance = offsets.clearance_to(item.clearance_class);
@@ -473,8 +473,11 @@ impl ShapeTraceEntries {
                             // "may not be correct because the trace may not
                             // contain a suitable line for the construction of
                             // the end line of the substitute trace" (`:349`).
-                            let trace_line_segment_no =
-                                if i == 0 { 0 } else { trace.polyline.arr.len() - 1 };
+                            let trace_line_segment_no = if i == 0 {
+                                0
+                            } else {
+                                trace.polyline.arr.len() - 1
+                            };
                             if let Some(&trace_line) = trace.polyline.arr.get(trace_line_segment_no)
                             {
                                 self.insert_entry_point(
@@ -759,8 +762,9 @@ impl ShapeTraceEntries {
                     // `max_stack_level` was *already* > 1 before the raise
                     // (`:530-540`).
                     if self.max_stack_level > 1 {
-                        self.found_obstacle =
-                            Some(self.traces[self.entries[curr_entry as usize].trace_ref as usize].id);
+                        self.found_obstacle = Some(
+                            self.traces[self.entries[curr_entry as usize].trace_ref as usize].id,
+                        );
                     }
                     self.max_stack_level = curr_level;
                 }
@@ -868,7 +872,9 @@ impl ShapeTraceEntries {
             self.max_stack_level = 0;
             let mut curr = self.list_anchor;
             while curr != NONE {
-                self.max_stack_level = self.max_stack_level.max(self.entries[curr as usize].stack_level);
+                self.max_stack_level = self
+                    .max_stack_level
+                    .max(self.entries[curr as usize].stack_level);
                 curr = self.entries[curr as usize].next;
             }
             self.trace_piece_count -= 1;
@@ -887,16 +893,14 @@ impl ShapeTraceEntries {
         loop {
             let (first, last) = self.pop_piece()?;
             let info = self.traces[self.entries[first as usize].trace_ref as usize].clone();
-            let offset_shape = offsets.offset_shape_for_trace(
-                &self.shape,
-                info.half_width,
-                info.cl_class,
-            );
+            let offset_shape =
+                offsets.offset_shape_for_trace(&self.shape, info.half_width, info.cl_class);
             let edge_count = self.shape.border_line_count();
             if edge_count == 0 || offset_shape.border_line_count() != edge_count {
                 continue;
             }
-            let edge_diff = self.entries[last as usize].edge_no - self.entries[first as usize].edge_no;
+            let edge_diff =
+                self.entries[last as usize].edge_no - self.entries[first as usize].edge_no;
             if edge_diff < 0 {
                 continue;
             }
@@ -962,14 +966,8 @@ pub fn cutout_trace(board: &mut Board, id: ItemId, shape: &Simplex, cl_class: i3
     };
     let (layer, half_width, polyline) = (trace.layer, trace.half_width, trace.polyline.clone());
     let (nets, item_cl_class) = (item.nets.clone(), item.clearance_class);
-    let offset_shape = offset_shape_for_trace(
-        board,
-        shape,
-        half_width,
-        item_cl_class,
-        layer,
-        cl_class,
-    );
+    let offset_shape =
+        offset_shape_for_trace(board, shape, half_width, item_cl_class, layer, cl_class);
     if offset_shape.is_empty() {
         return;
     }
@@ -1088,13 +1086,8 @@ mod tests {
             shape.border_line_count() > sequence.len(),
             "the fixture shape has an edge per entry plus the from-side"
         );
-        let mut entries = ShapeTraceEntries::new(
-            shape,
-            0,
-            NetNos::of(99),
-            1,
-            Some(FromSide::raw(0, None)),
-        );
+        let mut entries =
+            ShapeTraceEntries::new(shape, 0, NetNos::of(99), 1, Some(FromSide::raw(0, None)));
         for (index, net) in sequence.iter().enumerate() {
             entries.push_test_entry(&[*net], index + 1);
         }

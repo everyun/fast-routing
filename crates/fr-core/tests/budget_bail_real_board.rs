@@ -76,7 +76,10 @@ fn a_one_settle_ceiling_stops_every_connection_on_a_real_board() {
         .with_budget(BudgetPolicy::deterministic().with_effort_ceiling(Some(1)));
     let pass = router.autoroute_pass(&mut board, 1);
 
-    assert_eq!(pass.queued, free_pass.queued, "the same work list: {pass:?}");
+    assert_eq!(
+        pass.queued, free_pass.queued,
+        "the same work list: {pass:?}"
+    );
     assert_eq!(pass.routed, 0, "no connection can finish: {pass:?}");
     assert_eq!(
         pass.connections_hitting_budget, pass.queued,
