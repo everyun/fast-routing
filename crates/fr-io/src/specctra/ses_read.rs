@@ -412,12 +412,12 @@ impl SesFileReader<'_, '_> {
         // upstream's `SesReader` rounds it.
         let all_integral = corners
             .iter()
-            .all(|&(x, y)| x.fract() == 0.0 && y.fract() == 0.0);
+            .all(|&(x, y)| (x.round() - x).abs() < 1e-6 && (y.round() - y).abs() < 1e-6);
         let polyline = if all_integral {
             Polyline::from_int_points(
                 &corners
                     .iter()
-                    .map(|&(x, y)| IntPoint::new(x as i32, y as i32))
+                    .map(|&(x, y)| IntPoint::new(x.round() as i32, y.round() as i32))
                     .collect::<Vec<_>>(),
             )
         } else {

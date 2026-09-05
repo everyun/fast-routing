@@ -231,6 +231,53 @@ fn issue026_wiring_round_trips_and_is_judged_identically() {
     assert_judged_identically(&actual, &third);
 }
 
+#[test]
+fn issue066_session_round_trip_is_judged_identically() {
+    let dsn_path = fixture_dir().join("Issue066-Project_GP8B.dsn");
+    if !dsn_path.is_file() {
+        return;
+    }
+    let ses_path = std::path::Path::new(
+        "/Users/chiqingzhen/fr-work/logs/gate/g21/ses/Issue066-Project_GP8B.rust.ses",
+    );
+    if !ses_path.is_file() {
+        return;
+    }
+    let dsn_bytes = std::fs::read(&dsn_path).unwrap();
+    let ses_bytes = std::fs::read(ses_path).unwrap();
+    let stripped = fr_io::specctra::strip_session_copper(&dsn_bytes);
+    let mut design1 = import(&stripped).unwrap();
+    let library1 = SesLibrary::from_design(&design1);
+    read_session(
+        &ses_bytes,
+        SesTarget::for_design(&mut design1, &library1),
+    )
+    .unwrap();
+
+    let before = Referee::judge(&design1, &ScoreWeights::V2);
+
+    let re_emitted = write_session(&design1, "Issue066-Project_GP8B.dsn").text;
+    let mut design2 = import(&stripped).unwrap();
+    let library2 = SesLibrary::from_design(&design2);
+    read_session(
+        re_emitted.as_bytes(),
+        SesTarget::for_design(&mut design2, &library2),
+    )
+    .unwrap();
+
+    let after = Referee::judge(&design2, &ScoreWeights::V2);
+    assert_eq!(
+        before.stats.clearance_violation_count,
+        after.stats.clearance_violation_count,
+        "Issue066 violation count changed on re-export"
+    );
+    assert_eq!(
+        before.stats.incomplete_count,
+        after.stats.incomplete_count,
+        "Issue066 incomplete count changed on re-export"
+    );
+}
+
 /// Reads `session` into a fresh import of `dsn`.
 fn apply(dsn: &[u8], session: &str) -> (ImportedDesign, fr_io::specctra::SesImportSummary) {
     let mut design = import(dsn).expect("Issue026 imports");

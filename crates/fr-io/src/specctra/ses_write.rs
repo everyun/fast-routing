@@ -309,13 +309,12 @@ impl SesFileWriter<'_, '_> {
     /// legacy rounded integer.
     fn coordinate_text(&self, ses_value: f64) -> String {
         let rounded = jround(ses_value);
-        if ses_value == rounded as f64 {
+        if (ses_value - rounded as f64).abs() < 1e-6 {
             return rounded.to_string();
         }
-        if self.scale.factor() == 1.0 && (ses_value * 2.0).fract() == 0.0 {
-            return format!("{ses_value:.1}");
-        }
-        rounded.to_string()
+        let s = format!("{ses_value:.4}");
+        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+        trimmed.to_string()
     }
 
     fn identifier(&mut self, name: &str) {

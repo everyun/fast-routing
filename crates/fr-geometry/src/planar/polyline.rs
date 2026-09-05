@@ -99,25 +99,26 @@ impl Polyline {
         fn segment_direction(a: (f64, f64), b: (f64, f64)) -> Option<Direction> {
             let dx = b.0 - a.0;
             let dy = b.1 - a.1;
-            Some(if dx == 0.0 {
+            const EPS: f64 = 1e-6;
+            Some(if dx.abs() < EPS {
                 if dy > 0.0 {
                     Direction::UP
                 } else {
                     Direction::DOWN
                 }
-            } else if dy == 0.0 {
+            } else if dy.abs() < EPS {
                 if dx > 0.0 {
                     Direction::RIGHT
                 } else {
                     Direction::LEFT
                 }
-            } else if dx == dy {
+            } else if (dx - dy).abs() < EPS {
                 if dx > 0.0 {
                     Direction::RIGHT45
                 } else {
                     Direction::LEFT45
                 }
-            } else if dx == -dy {
+            } else if (dx + dy).abs() < EPS {
                 if dx > 0.0 {
                     Direction::DOWN45
                 } else {
@@ -132,25 +133,26 @@ impl Polyline {
         // coefficient is integral; the anchor is that integer point on it.
         fn anchored_line(dir: Direction, p: (f64, f64)) -> Option<Line> {
             let (x, y) = p;
+            const EPS: f64 = 1e-6;
             let anchor = match (dir.x, dir.y) {
                 (0, _) => {
-                    if x.fract() != 0.0 {
+                    if (x.round() - x).abs() > EPS {
                         return None;
                     }
-                    IntPoint::new(x as i32, 0)
+                    IntPoint::new(x.round() as i32, 0)
                 }
                 (_, 0) => {
-                    if y.fract() != 0.0 {
+                    if (y.round() - y).abs() > EPS {
                         return None;
                     }
-                    IntPoint::new(0, y as i32)
+                    IntPoint::new(0, y.round() as i32)
                 }
                 (dx, dy) => {
                     let c = if dx == dy { y - x } else { y + x };
-                    if c.fract() != 0.0 {
+                    if (c.round() - c).abs() > EPS {
                         return None;
                     }
-                    IntPoint::new(0, c as i32)
+                    IntPoint::new(0, c.round() as i32)
                 }
             };
             Some(Line::new_from_point_and_dir(anchor, &dir))

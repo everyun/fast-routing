@@ -93,3 +93,16 @@ fn unrepresentable_corners_are_refused() {
     assert!(Polyline::from_exact_corners(&[(1.0, 1.0), (1.0, 1.0)]).is_none());
     assert!(Polyline::from_exact_corners(&[]).is_none());
 }
+
+#[test]
+fn floating_point_epsilon_does_not_break_exact_corner_reconstruction() {
+    // Corners slightly perturbed by float rounding errors (e.g. 1e-12)
+    let polyline = Polyline::from_exact_corners(&[
+        (0.000000000001, 0.0),
+        (0.500000000001, 0.5),
+        (1.0, 0.000000000001),
+    ])
+    .expect("slight epsilon should be accepted and reconstructed");
+    let apex = polyline.corner(1).to_float();
+    assert_eq!((apex.x, apex.y), (0.5, 0.5));
+}
