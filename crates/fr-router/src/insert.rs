@@ -484,6 +484,7 @@ impl<'b> ConnectionInserter<'b> {
             // `:153-156` (v2 delta §10.2): the fanout micro-neckdown ladder.
             if !neckdown_inserted
                 && ok_point.as_ref() != Some(&last)
+                && (self.ctrl().is_fanout || self.ctrl().with_neckdown)
                 && window.len() == 2
             {
                 micro_neckdown_inserted = self.insert_fanout_micro_neckdown(
