@@ -178,6 +178,16 @@ pub trait ItemRerouter {
     /// The leftover backlog is retried only then; a via-only keep, a length-only
     /// keep or a rollback leaves the leftover obstacles in place.
     fn note_structural(&mut self, _closed_an_incomplete: bool) {}
+
+    /// The per-connection budget policy the reroute's maze passes run under.
+    ///
+    /// [`MazeRerouter`] arms it on the fresh `BatchRouter`s it builds; a
+    /// scripted rerouter has no clock and ignores it. Without this the
+    /// optimizer's reroutes always spend **wall** time, so a `--deterministic`
+    /// run's optimizer stage read the wall clock anyway — the stops landed at
+    /// machine-load-dependent expansion counts and the keep/discard verdicts
+    /// followed them.
+    fn set_budget(&mut self, _budget: crate::batch::budget::BudgetPolicy) {}
 }
 
 /// The production rerouter: `BatchAutorouter.autoroute_passes_for_optimizing_item`
@@ -283,6 +293,13 @@ pub struct MazeRerouter {
     /// Per-connection wall budget of the next backlog retry; doubles per
     /// retry, capped at [`BACKLOG_CONNECTION_BUDGET_CAP_MS`].
     backlog_budget_ms: u64,
+    /// The run's budget policy, armed on every inner router. The default is
+    /// upstream's wall constants; `--deterministic` swaps the mode to
+    /// effort-based virtual time, so a backlog budget of 100 becomes 100
+    /// *virtual* ms — 2000 expansions at the calibrated
+    /// `effort_per_virtual_ms`, exactly the equivalence the wall value
+    /// measures out at.
+    budget: crate::batch::budget::BudgetPolicy,
 }
 
 impl Default for MazeRerouter {
@@ -291,6 +308,7 @@ impl Default for MazeRerouter {
             retry_backlog: true,
             focus_nets: Vec::new(),
             backlog_budget_ms: BACKLOG_CONNECTION_BUDGET_MS,
+            budget: crate::batch::budget::BudgetPolicy::default(),
         }
     }
 }
@@ -310,6 +328,10 @@ impl ItemRerouter for MazeRerouter {
         self.retry_backlog = structural;
     }
 
+    fn set_budget(&mut self, budget: crate::batch::budget::BudgetPolicy) {
+        self.budget = budget;
+    }
+
     fn reroute(
         &mut self,
         board: &mut Board,
@@ -317,7 +339,7 @@ impl ItemRerouter for MazeRerouter {
         settings: &RouterSettings,
         request: &RerouteRequest,
     ) {
-        let mut router = BatchRouter::new(rules, settings);
+        let mut router = BatchRouter::new(rules, settings).with_budget(self.budget);
         router.start_ripup_costs = request.ripup_costs;
         router.remove_unconnected_vias = true;
         // Upstream re-derives the work list on the next of its ≤ 6 passes
@@ -365,12 +387,15 @@ impl ItemRerouter for MazeRerouter {
         // the 10 × 1.4 s the whole-board work list used to pay per item.
         let mut budget_ms = self.backlog_budget_ms;
         loop {
-            let mut backlog = BatchRouter::new(rules, settings);
+            let mut backlog =
+                BatchRouter::new(rules, settings).with_budget(crate::batch::budget::BudgetPolicy {
+                    base_connection_ms: budget_ms,
+                    ..self.budget
+                });
             backlog.start_ripup_costs = request.ripup_costs;
             backlog.remove_unconnected_vias = true;
             backlog.requeue_policy = crate::batch::schedule::RequeuePolicy::Never;
             backlog.set_requeue_active(false);
-            backlog.budget.base_connection_ms = budget_ms;
             let started = trace::is_enabled().then(std::time::Instant::now);
             let outcome = backlog.autoroute_pass(board, 1);
             if let Some(started) = started {
@@ -688,6 +713,13 @@ impl<'r> BatchOptimizer<'r> {
     /// value — when the optimizer was built with a scripted rerouter.
     pub fn with_threads(mut self, threads: Threads) -> BatchOptimizer<'r> {
         self.threads = threads;
+        self
+    }
+
+    /// The run's per-connection budget policy, handed to the rerouter — a
+    /// `--deterministic` run's optimizer must not spend wall time either.
+    pub fn with_budget(mut self, budget: crate::batch::budget::BudgetPolicy) -> BatchOptimizer<'r> {
+        self.rerouter.set_budget(budget);
         self
     }
 
@@ -1182,10 +1214,12 @@ pub fn run_optimization_stage(
         settings,
         board_units_per_mm,
         Threads::single(),
+        crate::batch::budget::BudgetPolicy::default(),
     )
 }
 
-/// [`run_optimization_stage`] with a worker budget for T1 candidate evaluation.
+/// [`run_optimization_stage`] with a worker budget for T1 candidate evaluation
+/// and the run's per-connection budget policy for the reroutes.
 ///
 /// `Threads::single()` is exactly [`run_optimization_stage`]; anything more
 /// takes [`parallel`]'s clone-eval-promote path, which is deterministic at a
@@ -1196,11 +1230,14 @@ pub fn run_optimization_stage_with_threads(
     settings: &RouterSettings,
     board_units_per_mm: f64,
     threads: Threads,
+    budget: crate::batch::budget::BudgetPolicy,
 ) -> Option<OptimizerOutcome> {
     if !settings.run_optimizer() {
         return None;
     }
-    let mut optimizer = BatchOptimizer::new(rules, settings).with_threads(threads);
+    let mut optimizer = BatchOptimizer::new(rules, settings)
+        .with_threads(threads)
+        .with_budget(budget);
     optimizer.board_units_per_mm = board_units_per_mm;
     Some(optimizer.run_batch_loop(board))
 }

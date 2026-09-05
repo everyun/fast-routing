@@ -523,6 +523,7 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
             &settings,
             scale,
             threads,
+            budget,
         )
         .map(|outcome| OptimizerReport {
             passes: outcome.passes.len(),
