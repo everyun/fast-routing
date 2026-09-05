@@ -63,6 +63,7 @@ use fr_board::search_tree::Tiling45Mode;
 use fr_geometry::planar::{IntOctagon, Limits};
 
 use crate::engine::{AutorouteEngine, Obstacle};
+use crate::rooms::complete45::Room45;
 use crate::rooms::{RoomId, RoomKind};
 
 /// Number of octagon sides — the array length of `edge_interior_touches_obstacle`.
@@ -590,7 +591,9 @@ impl Offsets {
 #[derive(Debug, Clone, Copy)]
 struct Neighbour45 {
     /// The deterministic tie-break identity, `search_tree_object.get_id_no()`.
-    obstacle_id: i64,
+    object_id: i64,
+    /// The shape index in the object.
+    shape_index: u16,
     /// `room ∩ neighbour`, normalized.
     intersection: IntOctagon,
     /// Where the neighbour first and last touches the room border.
@@ -642,12 +645,9 @@ fn compare_neighbours(a: &Neighbour45, b: &Neighbour45) -> std::cmp::Ordering {
     if cmp != 0 {
         return cmp.cmp(&0);
     }
-    // `:849-852`. Upstream's key is the bare object id, so two tile shapes of
-    // the *same* item with identical geometry compare equal and the `TreeSet`
-    // silently drops one; the key here carries the shape index as well, so both
-    // survive in a fixed order — a measured divergence, see
-    // `neighbours::AutorouteEngine::obstacle_id`.
-    a.obstacle_id.cmp(&b.obstacle_id)
+    a.object_id
+        .cmp(&b.object_id)
+        .then_with(|| a.shape_index.cmp(&b.shape_index))
 }
 
 /// The result of one `calculate_neighbours` pass.
@@ -771,8 +771,13 @@ impl AutorouteEngine<'_> {
             // intervals, not from the doors.
             if let Some(sides) = touching_sides(&room_shape, &intersection) {
                 mark_edge_interior_touches(&room_shape, &intersection, sides, &mut found.touched);
+                let (object_id, shape_index) = match obstacle {
+                    Obstacle::Item(item, idx, _) => (item.raw() as i64, idx),
+                    Obstacle::Room(room) => (self.rooms.room(room).id_no, 0),
+                };
                 found.neighbours.push(Neighbour45 {
-                    obstacle_id: self.obstacle_id(obstacle),
+                    object_id,
+                    shape_index,
                     intersection,
                     sides,
                 });
@@ -883,8 +888,27 @@ impl AutorouteEngine<'_> {
             let room = self.rooms.room(room_id);
             (room.contained_octagon(), room.layer)
         };
-        let new_rooms =
-            self.complete_shape_45_oct(Some(enlarged), contained, layer, ignore_room, ignore_shape);
+        let new_rooms = if self.is_fortyfive_completion() {
+            self.complete_shape_45_oct(Some(enlarged), contained, layer, ignore_room, ignore_shape)
+        } else {
+            let enlarged_simplex = enlarged.to_simplex();
+            let contained_simplex = self.rooms.room(room_id).contained_shape.clone();
+            let ignore_simplex = ignore_shape.map(|oct| oct.to_simplex());
+            self.complete_shape(
+                Some(&enlarged_simplex),
+                &contained_simplex,
+                layer,
+                ignore_room,
+                ignore_simplex.as_ref(),
+            )
+            .into_iter()
+            .filter_map(|piece| {
+                let shape = piece.oct.or_else(|| piece.shape.bounding_octagon())?;
+                let contained = piece.contained.bounding_octagon()?;
+                Some(Room45 { shape, contained })
+            })
+            .collect()
+        };
         if new_rooms.len() != 1 {
             return false;
         }

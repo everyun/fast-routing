@@ -594,8 +594,20 @@ impl<'b> AutorouteEngine<'b> {
             ItemKind::Pin(pin) => Some(pin.center.surrounding_box().to_simplex()),
             ItemKind::Via(via) => Some(via.center.surrounding_box().to_simplex()),
             ItemKind::Trace(trace) => {
-                fr_geometry::planar::LineSegment::from_polyline(&trace.polyline, index as usize + 1)
+                if board_item.fixed_state.is_user_fixed() {
+                    let corner = if index == 0 {
+                        trace.first_corner()
+                    } else {
+                        trace.last_corner()
+                    };
+                    Some(corner.surrounding_box().to_simplex())
+                } else {
+                    fr_geometry::planar::LineSegment::from_polyline(
+                        &trace.polyline,
+                        index as usize + 1,
+                    )
                     .map(|segment| segment.to_simplex())
+                }
             }
             _ => self.item_tile(item, index),
         }

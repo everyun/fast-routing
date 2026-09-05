@@ -615,8 +615,9 @@ impl AutorouteEngine<'_> {
             if !self.rooms.room(room_id).shape.intersects(&connection_shape) {
                 continue;
             }
+            let item_shape = self.item_tile(*item_id, *index).unwrap_or(connection_shape);
             self.rooms
-                .add_target_door(*item_id, *index, room_id, &connection_shape);
+                .add_target_door(*item_id, *index, room_id, &item_shape);
         }
     }
 

@@ -211,44 +211,50 @@ fn starts_of(design: &specctra::ImportedDesign, net_no: i32) -> Vec<fr_board::it
 }
 
 #[test]
-fn probe_issue107_incompletes() {
+fn probe_issue107_connectivity_after_pass1() {
     let bytes = std::fs::read(PathBuf::from(
         "/tmp/freerouting-upstream/fixtures/Issue107-freq_teiler_200kHz_kicad.dsn",
     ))
     .expect("fixture");
     let mut design = specctra::import(&bytes).expect("imports");
-    let ses_bytes = std::fs::read("/tmp/107_full.ses").expect("ses");
-    let library = specctra::SesLibrary::from_design(&design);
-    specctra::read_session(
-        &ses_bytes,
-        specctra::SesTarget::for_design(&mut design, &library),
-    )
-    .expect("read_session");
+    let mut settings = RouterSettings::default();
+    settings.set_layer_count(design.rules.layer_structure.len());
+    let mut router = fr_router::batch::BatchRouter::new(&design.rules, &settings);
 
-    let shapes = fr_check::shape_store(&design.board);
-    let view = fr_check::view::StoreView::new(
+    // Run pass 1
+    let pass1 = router.autoroute_pass(&mut design.board, 1);
+    eprintln!(
+        "Pass 1 complete: routed={} incomplete={}",
+        pass1.routed, pass1.incomplete_count
+    );
+
+    let item_1777 = fr_board::item::ItemId::from_raw(1777);
+    let mut scratch = fr_router::batch::ContactScratch::new();
+    let connected_1777 = fr_router::batch::connected_set(&design.board, 1, item_1777, &mut scratch);
+    eprintln!(
+        "After pass 1, item 1777 connected_set ({} items): {:?}",
+        connected_1777.len(),
+        connected_1777
+    );
+
+    let _conn = fr_check::connectivity::board_connectivity(&fr_check::view::StoreView::new(
         design.board.store(),
-        &shapes,
+        &fr_check::shape_store(&design.board),
         &design.rules.clearance_matrix,
         design.board.layers().len(),
-    );
-    let conn = fr_check::connectivity::board_connectivity(&view);
-    eprintln!("Issue107 full incomplete_count={}", conn.incomplete_count);
-    for net in &conn.nets {
-        if net.incompletes > 0 {
-            eprintln!(
-                "Net {} (name: {:?}) has {} incompletes out of {}",
-                net.net,
-                design.rules.nets.get(net.net).map(|n| &n.name),
-                net.incompletes,
-                net.max_connections
-            );
-            for a in &net.airlines {
-                eprintln!(
-                    "  airline from={:?} ({:?}) to={:?} ({:?})",
-                    a.from_item, a.from, a.to_item, a.to
-                );
-            }
+    ));
+    let all_items = design.board.store().net_items(1);
+    let mut visited = std::collections::BTreeSet::new();
+    let mut comp_idx = 0;
+    for item in all_items {
+        if visited.contains(item) {
+            continue;
         }
+        let c = fr_router::batch::connected_set(&design.board, 1, *item, &mut scratch);
+        for m in &c {
+            visited.insert(*m);
+        }
+        eprintln!("  Component {comp_idx} ({} items): {:?}", c.len(), c);
+        comp_idx += 1;
     }
 }

@@ -913,7 +913,11 @@ pub fn route_with_control(
             // The board is bit-for-bit what upstream's rule would leave, because
             // the branch that changes is the *label*: an insertion that left no
             // item behind has by construction routed nothing.
-            outcome.state = Some(AttemptState::Routed);
+            outcome.state = Some(if insert.board_changed {
+                AttemptState::Routed
+            } else {
+                AttemptState::NotRouted
+            });
         }
         Err(_) => outcome.state = Some(AttemptState::InsertError),
     }

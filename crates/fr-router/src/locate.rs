@@ -199,8 +199,17 @@ fn trace_connection_shape(
         ItemKind::Pin(pin) => Some(pin.center.surrounding_box().to_simplex()),
         ItemKind::Via(via) => Some(via.center.surrounding_box().to_simplex()),
         ItemKind::Trace(trace) => {
-            LineSegment::from_polyline(&trace.polyline, tree_entry_no as usize + 1)
-                .map(|segment| segment.to_simplex())
+            if board_item.fixed_state.is_user_fixed() {
+                let corner = if tree_entry_no == 0 {
+                    trace.first_corner()
+                } else {
+                    trace.last_corner()
+                };
+                Some(corner.surrounding_box().to_simplex())
+            } else {
+                LineSegment::from_polyline(&trace.polyline, tree_entry_no as usize + 1)
+                    .map(|segment| segment.to_simplex())
+            }
         }
         _ => engine.trace_connection_shape(item, tree_entry_no),
     }
