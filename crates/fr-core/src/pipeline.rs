@@ -141,6 +141,9 @@ pub struct MazeOptions {
     /// Early exit improvement threshold for the optimizer stage (fraction).
     /// `-oit` on the command line passes percent (e.g. 1.0 -> 0.01).
     pub improvement_threshold: Option<f32>,
+    /// Parallel connection workers requested for the autoroute pass (T3).
+    /// `None` / `Some(1)` = sequential. `Some(0)` = automatic from machine.
+    pub parallel_connections_requested: Option<usize>,
 }
 
 impl Default for MazeOptions {
@@ -153,6 +156,7 @@ impl Default for MazeOptions {
             threads_requested: None,
             portfolio: 1,
             improvement_threshold: None,
+            parallel_connections_requested: None,
         }
     }
 }
@@ -207,6 +211,12 @@ impl MazeOptions {
     ///
     /// # An absent `--threads` is one worker, not the machine's core count
     ///
+    /// Sets the parallel connection workers budget (`--parallel-connections`).
+    pub fn with_parallel_connections(mut self, requested: Option<usize>) -> MazeOptions {
+        self.parallel_connections_requested = requested;
+        self
+    }
+
     /// The T1 optimizer is *deterministic* but it is not the *same heuristic* as
     /// the sequential one — it trusts a worker verdict that a promotion inside
     /// the same window may have staled, which can hide an improvement
@@ -231,6 +241,15 @@ impl MazeOptions {
     /// byte-for-byte anywhere; `--deterministic --threads 0` falls back to one.
     pub fn threads(&self) -> Threads {
         match (self.deterministic, self.threads_requested) {
+            (_, None) => Threads::single(),
+            (true, Some(0)) => Threads::single(),
+            (_, requested) => Threads::resolve(requested),
+        }
+    }
+
+    /// The thread budget for parallel connection routing (T3).
+    pub fn parallel_connections(&self) -> Threads {
+        match (self.deterministic, self.parallel_connections_requested) {
             (_, None) => Threads::single(),
             (true, Some(0)) => Threads::single(),
             (_, requested) => Threads::resolve(requested),
@@ -410,7 +429,8 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     let mut router = BatchRouter::new(&design.rules, &settings)
         .with_fanout(options.fanout)
         .with_board_units_per_mm(scale)
-        .with_budget(budget);
+        .with_budget(budget)
+        .with_parallel_connections(options.parallel_connections());
     // T1b. A portfolio of one is the plain run and clones nothing, so the
     // default path through here is byte-identical to the pre-portfolio one; the
     // `total_items_routed` item-cap check below reads the router either way,

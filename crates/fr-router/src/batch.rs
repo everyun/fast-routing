@@ -80,6 +80,7 @@ use crate::pull_tight::{PullTightAlgo, StallGuard, TIME_LIMIT_TO_PREVENT_ENDLESS
 
 pub mod budget;
 pub mod history;
+pub mod parallel_conn;
 pub mod portfolio;
 pub mod schedule;
 pub mod scoring;
@@ -1064,6 +1065,9 @@ pub struct BatchRouter<'r> {
     /// portfolio arm is allowed to vary, so a router with the default order
     /// routes exactly what it routed before this field existed.
     pub work_order: portfolio::WorkOrder,
+    /// How many workers may route connections concurrently in an autoroute pass.
+    /// Default [`Threads::single`] (sequential).
+    pub parallel_connections: threads::Threads,
     /// Whether the current run requeues; resolved from
     /// [`BatchRouter::requeue_policy`] by [`BatchRouter::run`].
     requeue_active: bool,
@@ -1097,6 +1101,7 @@ impl<'r> BatchRouter<'r> {
             budget: BudgetPolicy::default(),
             max_items: settings.max_items,
             board_units_per_mm: 1.0,
+            parallel_connections: threads::Threads::single(),
             work_order: portfolio::WorkOrder::default(),
             // A direct `autoroute_pass` caller drives a single pass, which is
             // the case the requeue exists for; `run` overwrites this.
@@ -1107,6 +1112,12 @@ impl<'r> BatchRouter<'r> {
             routed_copper_spans: Vec::new(),
             net_filter: None,
         }
+    }
+
+    /// Sets the parallel connection workers budget.
+    pub fn with_parallel_connections(mut self, threads: threads::Threads) -> BatchRouter<'r> {
+        self.parallel_connections = threads;
+        self
     }
 
     /// Sets the trace-length unit conversion of the score
@@ -1239,114 +1250,40 @@ impl<'r> BatchRouter<'r> {
         }
 
         let mut queue = work;
-        let mut index = 0;
         // Requeue budget: every entry may be retried once per ripup that
         // touched it, and the pass can never grow past twice its work list.
         let requeue_budget = queue.len();
-        while index < queue.len() {
-            let entry = queue[index];
-            index += 1;
-            // `:496-505` — the item cap. Upstream calls `requestStop()` (ALL
-            // stages) rather than `request_stop_auto_router()`, so hitting it
-            // also skips the optimizer; the flag is what carries that to the
-            // batch loop and to `optimizer::route_then_optimize`.
-            if self.max_items > 0 && self.total_items_routed >= self.max_items {
-                outcome.hit_item_cap = true;
-                break;
-            }
-            // The job's wall budget, polled **between connections** — the only
-            // place inside a pass where the board is in a consistent state and
-            // nothing is half-inserted. `schedule::BatchLoop` reads the same
-            // deadline after the pass returns and ends the run there.
-            if ctx.deadline.expired() {
-                break;
-            }
-            self.total_items_routed += 1;
-            let first_new_id = board.store().next_id();
-            let expansions_before = crate::maze::trace::is_enabled()
-                .then(|| fr_metrics::counters::value(fr_metrics::counters::Counter::Expansions));
-            // `:1315-1318` — the connection's allowance is armed here and
-            // travels down to the engine, which the maze loop polls; see
-            // `batch::budget`. `connection_budget` is upstream's allowance
-            // clamped to what the job has left, so one connection cannot
-            // overrun the deadline by its own 100 s.
-            let incomplete_before =
-                crate::optimizer::trace::is_enabled().then(|| incomplete_count(board));
-            let mut clock = ctx.connection_budget().start();
-            let attempt = autoroute_item(
-                board,
-                self.rules,
-                self.settings,
-                entry.item,
-                entry.net_no,
-                ctx.ripup_costs,
-                ctx.remove_unconnected_vias,
-                Some(&mut clock),
-                &mut self.scratch,
-            );
-            let usage = clock.finish();
-            if let Some(expansions_before) = expansions_before {
-                emit_conn_landing(
+
+        if self.parallel_connections.is_parallel() {
+            self.autoroute_pass_parallel(board, ctx, &mut outcome, &mut queue, requeue_budget);
+        } else {
+            let mut index = 0;
+            while index < queue.len() {
+                let entry = queue[index];
+                index += 1;
+                // `:496-505` — the item cap. Upstream calls `requestStop()` (ALL
+                // stages) rather than `request_stop_auto_router()`, so hitting it
+                // also skips the optimizer; the flag is what carries that to the
+                // batch loop and to `optimizer::route_then_optimize`.
+                if self.max_items > 0 && self.total_items_routed >= self.max_items {
+                    outcome.hit_item_cap = true;
+                    break;
+                }
+                // The job's wall budget, polled **between connections** — the only
+                // place inside a pass where the board is in a consistent state and
+                // nothing is half-inserted. `schedule::BatchLoop` reads the same
+                // deadline after the pass returns and ends the run there.
+                if ctx.deadline.expired() {
+                    break;
+                }
+                self.route_single_serial(
                     board,
-                    ctx.pass_no,
+                    ctx,
+                    &mut outcome,
+                    &mut queue,
+                    requeue_budget,
                     entry,
-                    first_new_id,
-                    expansions_before,
-                    &attempt,
                 );
-            }
-            if let Some(incomplete_before) = incomplete_before {
-                crate::optimizer::trace::Conn {
-                    pass_no: ctx.pass_no,
-                    net_no: entry.net_no,
-                    state: attempt.state(),
-                    ripped: attempt.ripped.len(),
-                    budget_ms: ctx.connection_budget().limit_ms(),
-                    used_ms: usage.time_used_ms,
-                    hit_budget: usage.hit_budget,
-                    incomplete: (incomplete_before, incomplete_count(board)),
-                }
-                .emit();
-            }
-            outcome.time_used_ms += usage.time_used_ms;
-            outcome.effort_used += usage.effort_used;
-            if usage.hit_budget {
-                outcome.connections_hitting_budget += 1;
-            }
-            match attempt.state() {
-                AttemptState::Routed => {
-                    outcome.routed += 1;
-                    // The copper this connection left behind, so the end of
-                    // the pass can be asked whether any of it survived; see
-                    // `discount_routes_that_left_no_copper`.
-                    let start = self.routed_copper.len();
-                    self.routed_copper.extend(
-                        board
-                            .store()
-                            .iter()
-                            .map(|(id, _)| id)
-                            .take_while(|id| *id >= first_new_id),
-                    );
-                    self.routed_copper_spans
-                        .push((start, self.routed_copper.len()));
-                }
-                state if state.is_skip() => outcome.skipped += 1,
-                _ => outcome.not_routed += 1,
-            }
-            outcome.ripped_item_count += attempt.ripped.len();
-            if self.requeue_active && outcome.requeued < requeue_budget {
-                for net_no in attempt.changed_nets.iter().copied() {
-                    if net_no == entry.net_no {
-                        continue;
-                    }
-                    // The ripped net lost wiring; give it another attempt in
-                    // this pass rather than waiting for a pass that may not
-                    // come.
-                    if let Some(seed) = requeue_seed(board, net_no) {
-                        queue.push(WorkItem { item: seed, net_no });
-                        outcome.requeued += 1;
-                    }
-                }
             }
         }
 
@@ -1362,6 +1299,401 @@ impl<'r> BatchRouter<'r> {
         outcome.incomplete_count = incomplete_count(board);
         outcome.progressed = outcome.routed > 0 || outcome.not_routed > 0;
         outcome
+    }
+
+    fn route_single_serial(
+        &mut self,
+        board: &mut Board,
+        ctx: &PassContext,
+        outcome: &mut PassOutcome,
+        queue: &mut Vec<WorkItem>,
+        requeue_budget: usize,
+        entry: WorkItem,
+    ) {
+        self.total_items_routed += 1;
+        let first_new_id = board.store().next_id();
+        let expansions_before = crate::maze::trace::is_enabled()
+            .then(|| fr_metrics::counters::value(fr_metrics::counters::Counter::Expansions));
+        let incomplete_before =
+            crate::optimizer::trace::is_enabled().then(|| incomplete_count(board));
+        let mut clock = ctx.connection_budget().start();
+        let attempt = autoroute_item(
+            board,
+            self.rules,
+            self.settings,
+            entry.item,
+            entry.net_no,
+            ctx.ripup_costs,
+            ctx.remove_unconnected_vias,
+            Some(&mut clock),
+            &mut self.scratch,
+        );
+        let usage = clock.finish();
+        if let Some(expansions_before) = expansions_before {
+            emit_conn_landing(
+                board,
+                ctx.pass_no,
+                entry,
+                first_new_id,
+                expansions_before,
+                &attempt,
+            );
+        }
+        if let Some(incomplete_before) = incomplete_before {
+            crate::optimizer::trace::Conn {
+                pass_no: ctx.pass_no,
+                net_no: entry.net_no,
+                state: attempt.state(),
+                ripped: attempt.ripped.len(),
+                budget_ms: ctx.connection_budget().limit_ms(),
+                used_ms: usage.time_used_ms,
+                hit_budget: usage.hit_budget,
+                incomplete: (incomplete_before, incomplete_count(board)),
+            }
+            .emit();
+        }
+        outcome.time_used_ms += usage.time_used_ms;
+        outcome.effort_used += usage.effort_used;
+        if usage.hit_budget {
+            outcome.connections_hitting_budget += 1;
+        }
+        match attempt.state() {
+            AttemptState::Routed => {
+                outcome.routed += 1;
+                let start = self.routed_copper.len();
+                self.routed_copper.extend(
+                    board
+                        .store()
+                        .iter()
+                        .map(|(id, _)| id)
+                        .take_while(|id| *id >= first_new_id),
+                );
+                self.routed_copper_spans
+                    .push((start, self.routed_copper.len()));
+            }
+            state if state.is_skip() => outcome.skipped += 1,
+            _ => outcome.not_routed += 1,
+        }
+        outcome.ripped_item_count += attempt.ripped.len();
+        if self.requeue_active && outcome.requeued < requeue_budget {
+            for net_no in attempt.changed_nets.iter().copied() {
+                if net_no == entry.net_no {
+                    continue;
+                }
+                if let Some(seed) = requeue_seed(board, net_no) {
+                    queue.push(WorkItem { item: seed, net_no });
+                    outcome.requeued += 1;
+                }
+            }
+        }
+    }
+
+    fn autoroute_pass_parallel(
+        &mut self,
+        board: &mut Board,
+        ctx: &PassContext,
+        outcome: &mut PassOutcome,
+        queue: &mut Vec<WorkItem>,
+        requeue_budget: usize,
+    ) {
+        let thread_count = self.parallel_connections.get();
+        let max_batch_size = (thread_count * 2).max(2);
+        let mut current_batch_size = max_batch_size;
+        let budget_mode = ctx.connection_budget().mode();
+
+        let mut index = 0;
+        let mut consecutive_serial = 0;
+        while index < queue.len() {
+            if self.max_items > 0 && self.total_items_routed >= self.max_items {
+                outcome.hit_item_cap = true;
+                break;
+            }
+            if ctx.deadline.expired() {
+                break;
+            }
+
+            let chunk_len = (queue.len() - index).min(current_batch_size);
+            if chunk_len <= 1 {
+                let entry = queue[index];
+                index += 1;
+                self.route_single_serial(board, ctx, outcome, queue, requeue_budget, entry);
+                consecutive_serial += 1;
+                if consecutive_serial >= 8 && current_batch_size < max_batch_size {
+                    current_batch_size = (current_batch_size * 2).min(max_batch_size);
+                    consecutive_serial = 0;
+                }
+                continue;
+            }
+            consecutive_serial = 0;
+
+            let chunk_items = &queue[index..index + chunk_len];
+            let actual_workers = self.parallel_connections.capped_to(chunk_len).get();
+
+            let cursor = std::sync::atomic::AtomicUsize::new(0);
+            let candidates: Vec<parallel_conn::CandidateAttempt> = std::thread::scope(|s| {
+                let mut handles = Vec::with_capacity(actual_workers);
+                for _ in 0..actual_workers {
+                    let mut worker_board = board.clone();
+                    let rules = self.rules;
+                    let settings = self.settings;
+                    let budget_policy = ctx.connection_budget();
+                    let ripup_costs = ctx.ripup_costs;
+                    let remove_vias = ctx.remove_unconnected_vias;
+                    let cursor_ref = &cursor;
+
+                    handles.push(s.spawn(move || {
+                        let mut scratch = ContactScratch::new();
+                        let mut results = Vec::new();
+                        while let Ok(i) = cursor_ref.fetch_update(
+                            std::sync::atomic::Ordering::Relaxed,
+                            std::sync::atomic::Ordering::Relaxed,
+                            |curr| {
+                                if curr < chunk_len {
+                                    Some(curr + 1)
+                                } else {
+                                    None
+                                }
+                            },
+                        ) {
+                            let item = chunk_items[i];
+                            let attempt = parallel_conn::evaluate_candidate(
+                                &mut worker_board,
+                                rules,
+                                settings,
+                                item,
+                                ripup_costs,
+                                remove_vias,
+                                budget_policy,
+                                &mut scratch,
+                            );
+                            results.push((i, attempt));
+                        }
+                        results
+                    }));
+                }
+
+                let mut collected = Vec::with_capacity(chunk_len);
+                for handle in handles {
+                    if let Ok(results) = handle.join() {
+                        collected.extend(results);
+                    }
+                }
+                collected.sort_by_key(|(i, _)| *i);
+                collected.into_iter().map(|(_, attempt)| attempt).collect()
+            });
+
+            index += chunk_len;
+
+            let mut committed_write_boxes: Vec<fr_geometry::planar::IntBox> = Vec::new();
+            let mut committed_items: BTreeSet<ItemId> = BTreeSet::new();
+            let mut batch_conflicts = 0;
+
+            for c in candidates {
+                if self.max_items > 0 && self.total_items_routed >= self.max_items {
+                    outcome.hit_item_cap = true;
+                    break;
+                }
+                if ctx.deadline.expired() {
+                    break;
+                }
+
+                let entry = c.work_item;
+                let mut conflict = false;
+
+                for wbox in &committed_write_boxes {
+                    if c.read_boxes.iter().any(|b| b.intersects(wbox))
+                        || c.write_boxes.iter().any(|b| b.intersects(wbox))
+                    {
+                        conflict = true;
+                        break;
+                    }
+                }
+
+                if !conflict {
+                    for id in &c.touched_items {
+                        if committed_items.contains(id) {
+                            conflict = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !conflict {
+                    for id in &c.outcome.ripped {
+                        if committed_items.contains(id) {
+                            conflict = true;
+                            break;
+                        }
+                    }
+                }
+
+                if !conflict {
+                    match c.state {
+                        AttemptState::Routed => {
+                            let first_new_id = board.store().next_id();
+                            let mark = board.begin();
+                            let mut committed = false;
+
+                            if let (Some(located), Some(ctrl)) = (&c.located, &c.ctrl) {
+                                if let Ok(insert) = crate::insert::insert_connection(
+                                    board, self.rules, ctrl, located, c.bounds,
+                                ) {
+                                    let mut changed_area = insert.changed_area;
+                                    let mut algo = PullTightAlgo::new(
+                                        board,
+                                        self.rules,
+                                        &[],
+                                        None,
+                                        ctrl.pull_tight_accuracy,
+                                        None,
+                                        None,
+                                        0,
+                                    )
+                                    .with_stall_guard(StallGuard::for_mode(
+                                        budget_mode,
+                                        TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
+                                    ));
+                                    algo.opt_changed_area(&mut changed_area);
+
+                                    if insert.board_changed {
+                                        board.commit(mark);
+                                        committed = true;
+                                        committed_write_boxes.extend(c.write_boxes);
+                                        for id in &c.touched_items {
+                                            committed_items.insert(*id);
+                                        }
+                                        for id in &c.outcome.ripped {
+                                            committed_items.insert(*id);
+                                        }
+
+                                        self.total_items_routed += 1;
+                                        outcome.time_used_ms += c.usage.time_used_ms;
+                                        outcome.effort_used += c.usage.effort_used;
+                                        if c.usage.hit_budget {
+                                            outcome.connections_hitting_budget += 1;
+                                        }
+                                        outcome.routed += 1;
+                                        let start = self.routed_copper.len();
+                                        self.routed_copper.extend(
+                                            board
+                                                .store()
+                                                .iter()
+                                                .map(|(id, _)| id)
+                                                .take_while(|id| *id >= first_new_id),
+                                        );
+                                        self.routed_copper_spans
+                                            .push((start, self.routed_copper.len()));
+                                        outcome.ripped_item_count += c.outcome.ripped.len();
+
+                                        if self.requeue_active && outcome.requeued < requeue_budget
+                                        {
+                                            for net_no in c.outcome.changed_nets.iter().copied() {
+                                                if net_no != entry.net_no {
+                                                    if let Some(seed) = requeue_seed(board, net_no)
+                                                    {
+                                                        queue.push(WorkItem { item: seed, net_no });
+                                                        outcome.requeued += 1;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        board.rollback_to(mark);
+                                    }
+                                } else {
+                                    board.rollback_to(mark);
+                                }
+                            }
+
+                            if !committed {
+                                batch_conflicts += 1;
+                                self.route_single_serial(
+                                    board,
+                                    ctx,
+                                    outcome,
+                                    queue,
+                                    requeue_budget,
+                                    entry,
+                                );
+                            }
+                        }
+                        state if state.is_skip() => {
+                            self.total_items_routed += 1;
+                            outcome.skipped += 1;
+                        }
+                        _ => {
+                            self.total_items_routed += 1;
+                            outcome.not_routed += 1;
+                            outcome.time_used_ms += c.usage.time_used_ms;
+                            outcome.effort_used += c.usage.effort_used;
+                            if c.usage.hit_budget {
+                                outcome.connections_hitting_budget += 1;
+                            }
+                        }
+                    }
+                } else {
+                    batch_conflicts += 1;
+                    if c.state == AttemptState::Routed {
+                        let first_new_id = board.store().next_id();
+                        self.route_single_serial(board, ctx, outcome, queue, requeue_budget, entry);
+                        let cl = (0..self.rules.layer_structure.len())
+                            .map(|l| self.rules.clearance_matrix.max_value_on_layer(l))
+                            .max()
+                            .unwrap_or(0) as f64;
+                        for (id, item) in board.store().iter() {
+                            if id < first_new_id {
+                                break;
+                            }
+                            match &item.kind {
+                                ItemKind::Trace(tr) => {
+                                    let hw = tr.half_width as f64;
+                                    for w in tr.polyline.corner_arr().windows(2) {
+                                        let p1 = match &w[0] {
+                                            Point::Int(ip) => *ip,
+                                            other => other.to_float().round(),
+                                        };
+                                        let p2 = match &w[1] {
+                                            Point::Int(ip) => *ip,
+                                            other => other.to_float().round(),
+                                        };
+                                        committed_write_boxes.push(
+                                            fr_geometry::planar::IntBox::new_from_points(p1, p2)
+                                                .offset(cl + hw),
+                                        );
+                                    }
+                                }
+                                ItemKind::Via(via) => {
+                                    committed_write_boxes.push(
+                                        fr_geometry::planar::IntBox::new(
+                                            via.center.x - 500,
+                                            via.center.y - 500,
+                                            via.center.x + 500,
+                                            via.center.y + 500,
+                                        )
+                                        .offset(cl),
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+                    } else {
+                        self.total_items_routed += 1;
+                        outcome.not_routed += 1;
+                        outcome.time_used_ms += c.usage.time_used_ms;
+                        outcome.effort_used += c.usage.effort_used;
+                        if c.usage.hit_budget {
+                            outcome.connections_hitting_budget += 1;
+                        }
+                    }
+                }
+            }
+
+            if batch_conflicts * 2 >= chunk_len {
+                current_batch_size = (current_batch_size / 2).max(1);
+            } else if batch_conflicts == 0 {
+                current_batch_size = (current_batch_size * 2).min(max_batch_size);
+            }
+        }
     }
 
     /// The full batch loop — `BatchAutorouter.runBatchLoop` (`:757-1188`), i.e.

@@ -222,9 +222,13 @@ hashers — determinism landmine flagged by review).
 - **T2 read-only fan-out** (referee DRC, ratsnest, room completion, region pull-tight): real but
   modest — Amdahl-capped at ~1.4× while the route pass (73 % of stage time) stays sequential,
   and incremental connectivity deletes much of what T2 would parallelize.
-- **T3 concurrent connection routing** (spatially-disjoint claims, conflict serialization): the
-  only lever that can produce real multi-core scaling of the route pass. New work, flagged
-  experimental until it passes the same quality gates. **The scaling gate is conditional on T3.**
+- **T3 concurrent connection routing** (`--parallel-connections N`, default 1): optimistic
+  concurrent maze search on worker board snapshots with deterministic in-order commit and
+  transactional DRC clearance oracle verification (`docs/upstream-study/parallel-connections.md`).
+  Spreads independent connections across worker cores, achieving multi-core scaling (≥3× on
+  spatially disjoint multi-net boards like Issue269 and Issue230) while preserving 0 added
+  violations and deterministic outputs. Ripup and spatial conflicts gracefully fall back to
+  serial routing.
 
 ## Benchmark discipline
 

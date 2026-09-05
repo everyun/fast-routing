@@ -201,6 +201,22 @@ COMPATIBILITY & HEADLESS OPTIONS
 DIAGNOSTICS
     --settle-trace <FILE>       Write one `FRMETRIC settle` line per settled maze element
 
+PARALLELISM (see also `docs/ARCHITECTURE.md`, "Parallelism")
+    -us, --threads <N>          Workers for the optimizer's candidate evaluation and the
+                                referee's violation scan. NOT the route pass, which is
+                                sequential upstream and here. `0` = pick from the machine.
+                                (Default: 1 — the parallel optimizer is reproducible at a
+                                fixed N but is not the same heuristic as the sequential one,
+                                so it is opt-in rather than a silent default.)
+    --parallel-connections <N>  Workers for parallel connection routing in the autoroute pass
+                                (T3 optimistic concurrency). `0` = pick from the machine.
+                                (Default: 1)
+    --portfolio <N>             Race N route passes with different item orders on board
+                                clones and keep the best referee score. Arm 0 is always the
+                                default order, so the result is never worse than N=1 on the
+                                same budget. Costs N cores for the same wall clock.
+                                (Default: 1)
+
     -v,  --version              Print version information
     -h,  -help, --help          Print help
 
@@ -230,6 +246,7 @@ struct Args {
     emit_boxes: bool,
     max_passes: Option<usize>,
     threads: Option<usize>,
+    parallel_connections: Option<usize>,
     portfolio: Option<usize>,
     fanout: bool,
     no_optimizer: bool,
@@ -455,6 +472,12 @@ fn main() {
                 }
             }
             "--threads" => args.threads = Some(parse_count("--threads", &next!("--threads"))),
+            "--parallel-connections" => {
+                args.parallel_connections = Some(parse_count(
+                    "--parallel-connections",
+                    &next!("--parallel-connections"),
+                ))
+            }
             "-is" => {
                 let val = next!("-is");
                 args.item_selection_strategy = Some(val);
@@ -577,6 +600,7 @@ fn main() {
                 .with_optimizer(!args.no_optimizer)
                 .with_deterministic(args.deterministic)
                 .with_threads(args.threads)
+                .with_parallel_connections(args.parallel_connections)
                 .with_portfolio(args.portfolio.unwrap_or(1))
                 .with_improvement_threshold(args.improvement_threshold),
         ))

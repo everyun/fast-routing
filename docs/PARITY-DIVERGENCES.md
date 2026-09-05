@@ -469,6 +469,16 @@ ARCHITECTURE "Budgets".
   `bench/README.md`, "Judging a session"; the module docs of `fr_io::specctra::overlay` carry
   the fixture evidence.
 
+- **Parallel connection routing (`--parallel-connections N`, default 1)**
+  (`docs/upstream-study/parallel-connections.md`). *Upstream behaviour*: Upstream's autoroute
+  pass (`BatchAutorouter.autoroute_pass`) routes all connections in the work-list strictly
+  sequentially on a single thread. *Our behaviour*: Under `--parallel-connections N` (N > 1),
+  connections are evaluated concurrently on board snapshots across worker threads and committed
+  in strict original work-list order on the master board with segment-level footprint conflict
+  detection and transactional DRC clearance oracle verification. Conflicting attempts or
+  ripped nets gracefully fall back to serial routing. For any fixed thread count N, output is
+  bit-for-bit deterministic. Zero added violations are preserved across all configurations.
+
 ## Candidates (recorded ahead of any code change; **no behaviour change yet**)
 
 - **Free-space room decomposition around an SMD pin can seal the pin's start
