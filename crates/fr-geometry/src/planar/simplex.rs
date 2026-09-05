@@ -4,7 +4,8 @@
 
 use crate::planar::{
     area::Area, convex_shape::ConvexShape, direction::Direction, float_point::FloatPoint,
-    int_box::IntBox, int_octagon::IntOctagon, int_point::IntPoint, limits::Limits, line::Line,
+    int_box::IntBox, int_octagon::IntOctagon, int_point::IntPoint, limits::{side_of_exact, Limits},
+    line::Line,
     line_segment::LineSegment, point::Point, polyline::Polyline, shape::Shape, side::Side,
     vector::Vector,
 };
@@ -495,6 +496,116 @@ impl Simplex {
     /// Checks if this simplex intersects `other`.
     pub fn intersects(&self, other: &Simplex) -> bool {
         !self.intersection(other).is_empty()
+    }
+
+    /// Whether `self ∩ other` is 2-dimensional — the exact answer of
+    /// `self.intersection(other).dimension() == 2` without materializing the
+    /// intersection.
+    ///
+    /// The fast path is the separating-axis theorem on the border lines: two
+    /// bounded convex polygons with non-empty interiors fail to overlap with
+    /// positive area **iff** some border line of either has the other polygon
+    /// entirely in its closed opposite half-plane. Vertices are handled as
+    /// homogeneous `i128` triples (the same arithmetic as
+    /// [`Line::side_of_intersection`]) — no heap, no float, no `BigInt`.
+    ///
+    /// The order of the stages is what makes it fast on the carve loop's
+    /// workload, where most pairs are rejected:
+    ///
+    /// 1. strict bounding-box *interior* test (the boxes are outward-rounded
+    ///    hulls, so disjoint box interiors imply disjoint shape interiors);
+    /// 2. the separation scan over **unverified** adjacent-pair corners —
+    ///    sound because the convex hull of those corners always contains the
+    ///    region (a true vertex hidden by a redundant line sits *behind* the
+    ///    phantom corners that line creates), so "every corner in the closed
+    ///    opposite half-plane" really does separate the regions;
+    /// 3. only when nothing separates: per-corner feasibility verification
+    ///    (any infeasible corner → the simplex is non-normalized or empty and
+    ///    the exact construction decides) and a distinct-corner count, which
+    ///    decides the degenerate (point / segment) case exactly.
+    ///
+    /// Unbounded or degenerate-boundary simplexes (fewer than three border
+    /// lines, a non-strict turn) and `i128` overflow fall back to the exact
+    /// construction. In the carve loop both operands are normalized bounded
+    /// tiles, so the fallback is cold there.
+    pub fn has_2dim_overlap(&self, other: &Simplex) -> bool {
+        self.has_2dim_overlap_fast(other)
+            .unwrap_or_else(|| self.intersection(other).dimension() == 2)
+    }
+
+    /// The SAT fast path of [`Simplex::has_2dim_overlap`] on its own; `None`
+    /// means "cannot prove it cheaply — fall back to the exact construction".
+    /// Public so hot callers can count how often the fallback fires.
+    pub fn has_2dim_overlap_fast(&self, other: &Simplex) -> Option<bool> {
+        // `bounded_bounding_box` is also the boundedness and strict-turn gate:
+        // it answers `None` for unbounded or degenerate simplexes, which take
+        // the fallback.
+        let box_a = self.bounded_bounding_box()?;
+        let box_b = other.bounded_bounding_box()?;
+        if box_a.is_empty() || box_b.is_empty() {
+            return Some(false);
+        }
+        if box_a.ur.x <= box_b.ll.x
+            || box_b.ur.x <= box_a.ll.x
+            || box_a.ur.y <= box_b.ll.y
+            || box_b.ur.y <= box_a.ll.y
+        {
+            return Some(false);
+        }
+        self.has_2dim_overlap_sat(other)
+
+    }
+
+    /// The box-gate-free core of [`Simplex::has_2dim_overlap_fast`], for
+    /// callers that already hold both bounding boxes and have applied the
+    /// strict interior test themselves. `None` under the same conditions.
+    pub fn has_2dim_overlap_sat(&self, other: &Simplex) -> Option<bool> {
+        let raw_a = self.sat_corners()?;
+        let raw_b = other.sat_corners()?;
+        if self.sat_separates(&raw_b)? || other.sat_separates(&raw_a)? {
+            return Some(false);
+        }
+        // Nothing separates the (unverified) corner hulls. Now verify: every
+        // corner feasible ⟹ the corner hull IS the region, and the distinct
+        // count decides the degenerate case exactly.
+        if !self.sat_verify(&raw_a)? {
+            return Some(false);
+        }
+        if !other.sat_verify(&raw_b)? {
+            return Some(false);
+        }
+        Some(true)
+    }
+
+    /// The adjacent-pair corners of a bounded convex simplex, without a
+    /// feasibility check. See [`Simplex::has_2dim_overlap`] for the soundness
+    /// argument: the corner hull always contains the region, so a separation
+    /// verdict over these corners is exact for the *reject* direction.
+    ///
+    /// `None` for unbounded or degenerate boundaries (a non-strict turn),
+    /// fewer than three or more than 32 border lines, and `i128` overflow.
+    /// Hot callers can memoize the result per shape.
+    pub fn sat_corners(&self) -> Option<SatCorners> {
+        sat_raw_corners(self)
+    }
+
+    /// Whether some border line of `self` puts every corner of `other` in its
+    /// closed left half-plane — i.e. the regions meet in at most a line
+    /// (empty, point or segment intersection, never 2-dimensional).
+    pub fn sat_separates(&self, other: &SatCorners) -> Option<bool> {
+        sat_separates(&self.arr, other)
+    }
+
+    /// The verification half of the SAT fast path, pair-independent: every
+    /// corner feasible (on the right of, or on, every border line) and at
+    /// least three of them distinct. `Some(true)` = the corner hull is a
+    /// genuine polygon with non-empty interior; `Some(false)` = it is
+    /// degenerate (point or segment — a 2-dim overlap is then exactly
+    /// impossible); `None` = a corner is infeasible (non-normalized or empty
+    /// region) or `i128` overflow — the exact construction decides.
+    pub fn sat_verify(&self, corners: &SatCorners) -> Option<bool> {
+        let distinct = sat_verify_corners(self, corners)?;
+        Some(distinct >= 3)
     }
 
     /// Checks if this simplex intersects an `IntBox`.
@@ -1450,6 +1561,171 @@ impl ConvexShape for Simplex {
         }
         min_dist + min_dist2
     }
+}
+
+/// A polygon vertex as a homogeneous `i128` triple: the affine point
+/// `(x / z, y / z)` with `z > 0`. This is [`Line::side_of_intersection`]'s
+/// arithmetic, reused so the SAT fast path never allocates and never leaves
+/// `i128`.
+#[derive(Debug, Clone, Copy)]
+struct SatCorner {
+    x: i128,
+    y: i128,
+    z: i128,
+}
+
+/// The exact homogeneous intersection of two lines; `None` when they are
+/// parallel or an intermediate leaves `i128` (the envelope
+/// [`Line::side_of_intersection`] already declares).
+fn sat_line_corner(l1: &Line, l2: &Line) -> Option<SatCorner> {
+    let d1x = i128::from(l1.b.x) - i128::from(l1.a.x);
+    let d1y = i128::from(l1.b.y) - i128::from(l1.a.y);
+    let d2x = i128::from(l2.b.x) - i128::from(l2.a.x);
+    let d2y = i128::from(l2.b.y) - i128::from(l2.a.y);
+    let mut z = d2x * d1y - d2y * d1x;
+    if z == 0 {
+        return None;
+    }
+    let det1 = i128::from(l1.a.determinant(&l1.b));
+    let det2 = i128::from(l2.a.determinant(&l2.b));
+    let mut x = det1.checked_mul(d2x)?.checked_sub(det2.checked_mul(d1x)?)?;
+    let mut y = det1.checked_mul(d2y)?.checked_sub(det2.checked_mul(d1y)?)?;
+    if z < 0 {
+        z = -z;
+        x = -x;
+        y = -y;
+    }
+    Some(SatCorner { x, y, z })
+}
+
+/// [`Line::side_of_point`] of a homogeneous corner, exactly; `None` on
+/// overflow.
+fn sat_side_of_corner(line: &Line, corner: &SatCorner) -> Option<Side> {
+    let vx = i128::from(line.b.x) - i128::from(line.a.x);
+    let vy = i128::from(line.b.y) - i128::from(line.a.y);
+    let rel_x = corner
+        .x
+        .checked_sub(i128::from(line.a.x).checked_mul(corner.z)?)?;
+    let rel_y = corner
+        .y
+        .checked_sub(i128::from(line.a.y).checked_mul(corner.z)?)?;
+    let det = vx.checked_mul(rel_y)?.checked_sub(vy.checked_mul(rel_x)?)?;
+    Some(side_of_exact(det).negate())
+}
+
+/// Exact projective equality of two corners; `None` on overflow.
+fn sat_corner_eq(a: &SatCorner, b: &SatCorner) -> Option<bool> {
+    Some(
+        a.x.checked_mul(b.z)? == b.x.checked_mul(a.z)?
+            && a.y.checked_mul(b.z)? == b.y.checked_mul(a.z)?,
+    )
+}
+
+/// The vertex list the SAT fast path works on; see [`Simplex::sat_corners`].
+/// Opaque — the only operations are the `sat_*` methods on [`Simplex`].
+#[derive(Debug, Clone, Copy)]
+pub struct SatCorners {
+    /// The distinct feasible corners; `len` entries are valid.
+    buf: [SatCorner; SAT_MAX_LINES],
+    /// How many of `buf` are valid.
+    len: usize,
+}
+
+/// The largest border-line count the SAT fast path handles; bigger simplexes
+/// take the exact fallback. Room tiles are ≤ 8 lines in practice.
+const SAT_MAX_LINES: usize = 32;
+
+/// The adjacent-pair corners of `shape`, without any feasibility check.
+///
+/// `None` when the fast path cannot vouch for the answer: fewer than three or
+/// more than [`SAT_MAX_LINES`] border lines, a non-strict turn between
+/// adjacent lines (an unbounded or degenerate boundary — the same gate
+/// [`Simplex::bounded_bounding_box`] applies), or `i128` overflow.
+///
+/// The corners of a *non-normalized* simplex may include phantoms (a
+/// redundant line shifts the adjacent-pair intersections outward) and may
+/// omit a true vertex — but the omitted vertex always lies behind the
+/// phantom chain its redundant line creates, so the corners' convex hull
+/// still contains the region. That containment is all the separation scan
+/// needs; exactness on the no-separation side is restored by
+/// [`sat_verify_corners`].
+fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
+    let lines = &shape.arr;
+    let n = lines.len();
+    if !(3..=SAT_MAX_LINES).contains(&n) {
+        return None;
+    }
+    let zero = SatCorner { x: 0, y: 0, z: 1 };
+    let mut out = SatCorners {
+        buf: [zero; SAT_MAX_LINES],
+        len: n,
+    };
+    for i in 0..n {
+        let prev = lines[if i == 0 { n - 1 } else { i - 1 }];
+        let curr = lines[i];
+        // A bounded convex boundary turns strictly left at every corner. Raw
+        // deltas, like `bounded_bounding_box`: dividing by a *positive* gcd
+        // cannot change the determinant's sign. The gate also makes the pair
+        // non-parallel, so `sat_line_corner`'s `None` here means overflow.
+        let prev_delta = prev.b.difference_by_int(&prev.a);
+        let curr_delta = curr.b.difference_by_int(&curr.a);
+        if prev_delta.determinant(&curr_delta) <= 0 {
+            return None;
+        }
+        out.buf[i] = sat_line_corner(&prev, &curr)?;
+    }
+    Some(out)
+}
+
+/// Verifies that every corner is feasible (on the right of, or on, every
+/// border line) and returns the number of *distinct* corners.
+///
+/// All-feasible implies the corner hull is exactly the region: a strictly
+/// redundant line would push its adjacent-pair corners out of the region,
+/// and a line through an existing vertex leaves that vertex in the list.
+/// Then `distinct` is the region's vertex count: `>= 3` is a genuine polygon,
+/// `1` a point, `2` a segment. (An empty region is unreachable here — a
+/// feasible corner is a region point.)
+///
+/// `None` on any infeasible corner or `i128` overflow: the exact
+/// construction decides.
+fn sat_verify_corners(shape: &Simplex, corners: &SatCorners) -> Option<usize> {
+    let mut distinct = 0usize;
+    for i in 0..corners.len {
+        let corner = &corners.buf[i];
+        for line in &shape.arr {
+            if sat_side_of_corner(line, corner)? == Side::OnTheLeft {
+                return None;
+            }
+        }
+        let mut duplicate = false;
+        for existing in &corners.buf[..i] {
+            if sat_corner_eq(existing, corner)? {
+                duplicate = true;
+                break;
+            }
+        }
+        if !duplicate {
+            distinct += 1;
+        }
+    }
+    Some(distinct)
+}
+
+/// Whether some border `line` has every corner in its closed left half-plane —
+/// the polygon those corners bound then does not reach the line's right side,
+/// so a shape that lives on the right side meets it in at most the line
+/// itself (an empty, point or segment intersection, never 2-dimensional).
+fn sat_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
+    'lines: for line in lines {
+        for corner in &corners.buf[..corners.len] {
+            if sat_side_of_corner(line, corner)? == Side::OnTheRight {
+                continue 'lines;
+            }
+        }
+        return Some(true);
+    }
+    Some(false)
 }
 
 #[cfg(test)]

@@ -48,6 +48,6 @@ pub use rational_point::RationalPoint;
 pub use rational_vector::RationalVector;
 pub use shape::Shape;
 pub use side::Side;
-pub use simplex::Simplex;
+pub use simplex::{SatCorners, Simplex};
 pub use split_convex::split_to_convex;
 pub use vector::Vector;

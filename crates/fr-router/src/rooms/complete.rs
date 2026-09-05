@@ -37,6 +37,23 @@ pub struct CompletedShape {
     /// Memo of [`CompletedShape::cached_bbox`]: outer `Some` = computed,
     /// inner `None` = the shape is unbounded.
     pub bbox: std::cell::Cell<Option<Option<IntBox>>>,
+    /// Memo of [`CompletedShape::cached_sat`]: the candidate's SAT vertex list
+    /// plus its (pair-independent) verification verdict, shared by reference
+    /// so the carve loop's per-obstacle moves of the candidate stay cheap.
+    /// Outer `Some` = computed.
+    pub sat: std::cell::RefCell<Option<Option<std::rc::Rc<SatMemo>>>>,
+}
+
+/// A candidate's verified SAT data; see [`Simplex::sat_corners`] and
+/// [`Simplex::sat_verify`].
+#[derive(Debug)]
+pub struct SatMemo {
+    /// The adjacent-pair corners.
+    pub corners: fr_geometry::planar::SatCorners,
+    /// `sat_verify`'s verdict: `Some(true)` = genuine polygon, `Some(false)` =
+    /// degenerate hull (2-dim overlap exactly impossible), `None` = the fast
+    /// path cannot decide (fall back to the exact construction).
+    pub verified: Option<bool>,
 }
 
 impl CompletedShape {
@@ -49,6 +66,22 @@ impl CompletedShape {
         }
         let computed = self.shape.is_bounded().then(|| self.shape.bounding_box());
         self.bbox.set(Some(computed));
+        computed
+    }
+
+    /// The candidate's SAT vertex list and verification verdict, computed once
+    /// per candidate — the carve loop tests the same candidate against
+    /// hundreds of obstacles. `None` = the fast path does not apply to this
+    /// shape (unbounded/degenerate boundary).
+    pub fn cached_sat(&self) -> Option<std::rc::Rc<SatMemo>> {
+        if let Some(memo) = self.sat.borrow().as_ref() {
+            return memo.clone();
+        }
+        let computed = self.shape.sat_corners().map(|corners| {
+            let verified = self.shape.sat_verify(&corners);
+            std::rc::Rc::new(SatMemo { corners, verified })
+        });
+        *self.sat.borrow_mut() = Some(computed.clone());
         computed
     }
 }
@@ -103,6 +136,7 @@ impl AutorouteEngine<'_> {
                 contained: contained.clone(),
                 oct: None,
                 bbox: std::cell::Cell::new(None),
+                sat: std::cell::RefCell::new(None),
             });
         }
         if result.is_empty() {
@@ -186,6 +220,13 @@ impl AutorouteEngine<'_> {
             let Some(obstacle_shape) = self.obstacle_shape_rc(obstacle) else {
                 continue;
             };
+            // The obstacle's SAT data is pair-independent: compute it once for
+            // the whole candidate loop. `None` = the exact-construction
+            // fallback for every candidate below.
+            let obstacle_sat = obstacle_shape.sat_corners().map(|corners| {
+                let verified = obstacle_shape.sat_verify(&corners);
+                (corners, verified)
+            });
 
             new_result.clear();
             let mut new_bounding: Option<IntBox> = None;
@@ -198,24 +239,57 @@ impl AutorouteEngine<'_> {
                     .map(|bbox| bbox.intersects(&obstacle_bounds))
                     .unwrap_or(true)
                 {
-                    let intersection = candidate.shape.intersection(&obstacle_shape);
+                    // SAT gate: the same answer as
+                    // `intersection().dimension() == 2` (property-pinned in
+                    // `fr_geometry::tests::sat_overlap_test`) without
+                    // materializing the intersection. The intersection itself
+                    // is only needed for the from-door containment check below,
+                    // which only fires for room obstacles with an ignore
+                    // shape — everything else skips the allocation entirely.
+                    let sat_started = crate::rooms::attr::start();
+                    let fast = sat_overlap(
+                        &candidate,
+                        candidate_bbox,
+                        &obstacle_bounds,
+                        &obstacle_shape,
+                        obstacle_sat.as_ref(),
+                    );
+                    let overlaps = match fast {
+                        Some(overlaps) => {
+                            crate::rooms::attr::add_sat_ns(sat_started);
+                            crate::rooms::attr::add_sat_gate(false);
+                            overlaps
+                        }
+                        None => {
+                            crate::rooms::attr::add_sat_ns(sat_started);
+                            crate::rooms::attr::add_sat_gate(true);
+                            candidate.shape.intersection(&obstacle_shape).dimension() == 2
+                        }
+                    };
+                    if !overlaps {
+                        union_bbox(&mut new_bounding, candidate_bbox);
+                        new_result.push(candidate);
+                        continue;
+                    }
                     let mut something_changed = false;
-                    if intersection.dimension() == 2 {
-                        // `:625-628`: a completed room whose overlap is contained in
-                        // the from-door shape is the room we came through — leaving
-                        // it alone is what stops the tiling re-carving itself.
-                        let ignore_expansion_room = matches!(obstacle, Obstacle::Room(_))
-                            && ignore_shape
-                                .map(|ignore| geom::contains_shape(ignore, &intersection))
-                                .unwrap_or(false);
-                        if !ignore_expansion_room {
-                            something_changed = true;
-                            carve_hits += 1;
-                            let restrained = self.restrain_shape(&candidate, &obstacle_shape);
-                            for room in restrained {
-                                union_bbox(&mut new_bounding, room.cached_bbox());
-                                new_result.push(room);
-                            }
+                    // `:625-628`: a completed room whose overlap is contained in
+                    // the from-door shape is the room we came through — leaving
+                    // it alone is what stops the tiling re-carving itself.
+                    let ignore_expansion_room = matches!(obstacle, Obstacle::Room(_))
+                        && ignore_shape
+                            .map(|ignore| {
+                                let intersection =
+                                    candidate.shape.intersection(&obstacle_shape);
+                                geom::contains_shape(ignore, &intersection)
+                            })
+                            .unwrap_or(false);
+                    if !ignore_expansion_room {
+                        something_changed = true;
+                        carve_hits += 1;
+                        let restrained = self.restrain_shape(&candidate, &obstacle_shape);
+                        for room in restrained {
+                            union_bbox(&mut new_bounding, room.cached_bbox());
+                            new_result.push(room);
                         }
                     }
                     if !something_changed {
@@ -299,6 +373,7 @@ impl AutorouteEngine<'_> {
                     contained: shape_to_be_contained.clone(),
                     oct: None,
                 bbox: std::cell::Cell::new(None),
+                sat: std::cell::RefCell::new(None),
                 });
             }
             crate::rooms::attr::add_restrain(restrain_started);
@@ -343,6 +418,7 @@ impl AutorouteEngine<'_> {
                 contained: new_contained,
                 oct: None,
                 bbox: std::cell::Cell::new(None),
+                sat: std::cell::RefCell::new(None),
             });
         }
         let opposite_half_plane = geom::half_plane(&split_line.opposite());
@@ -354,6 +430,7 @@ impl AutorouteEngine<'_> {
                 contained: rest_contained,
                 oct: None,
                 bbox: std::cell::Cell::new(None),
+                sat: std::cell::RefCell::new(None),
             };
             result.extend(self.restrain_shape(&rest, obstacle_shape));
         }
@@ -416,6 +493,7 @@ impl AutorouteEngine<'_> {
                     contained,
                     oct: None,
                 bbox: std::cell::Cell::new(None),
+                sat: std::cell::RefCell::new(None),
                 }
             })
             .collect();
@@ -658,6 +736,46 @@ impl AutorouteEngine<'_> {
             }
         }
     }
+}
+
+/// The carve loop's SAT gate with the loop's own boxes and the candidate's
+/// memoized corners. `None` = the fast path does not apply; the caller falls
+/// back to the exact intersection construction.
+fn sat_overlap(
+    candidate: &CompletedShape,
+    candidate_bbox: Option<IntBox>,
+    obstacle_bounds: &IntBox,
+    obstacle_shape: &Simplex,
+    obstacle_sat: Option<&(fr_geometry::planar::SatCorners, Option<bool>)>,
+) -> Option<bool> {
+    // Strict interior test on the boxes already at hand: both are outward
+    // hulls, so interiors that do not overlap (including merely touching
+    // boxes) mean the regions share at most a boundary.
+    if let Some(bbox) = candidate_bbox {
+        if bbox.ur.x <= obstacle_bounds.ll.x
+            || obstacle_bounds.ur.x <= bbox.ll.x
+            || bbox.ur.y <= obstacle_bounds.ll.y
+            || obstacle_bounds.ur.y <= bbox.ll.y
+        {
+            return Some(false);
+        }
+    }
+    let memo_a = candidate.cached_sat()?;
+    if memo_a.verified == Some(false) {
+        // Degenerate candidate hull: a 2-dim overlap is exactly impossible.
+        return Some(false);
+    }
+    let (corners_b, verified_b) = obstacle_sat?;
+    if candidate.shape.sat_separates(corners_b)? || obstacle_shape.sat_separates(&memo_a.corners)?
+    {
+        return Some(false);
+    }
+    // No separating line: exact iff both hulls are verified genuine polygons.
+    memo_a.verified?;
+    if !(*verified_b)? {
+        return Some(false);
+    }
+    Some(true)
 }
 
 /// The carve loop's running-bound union, fed from

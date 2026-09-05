@@ -40,6 +40,9 @@ thread_local! {
     static RESTRAINS: Cell<u64> = const { Cell::new(0) };
     static DOOR_CALCS: Cell<u64> = const { Cell::new(0) };
     static NEIGHBOUR_CALLS: Cell<u64> = const { Cell::new(0) };
+    static SAT_CALLS: Cell<u64> = const { Cell::new(0) };
+    static SAT_FALLBACKS: Cell<u64> = const { Cell::new(0) };
+    static SAT_NS: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Whether attribution is on. Resolved once, from the environment.
@@ -147,6 +150,26 @@ pub(crate) fn add_carve_survivor() {
     add_count(&CARVE_SURVIVORS, 1);
 }
 
+/// One call to the SAT overlap gate, and whether it fell back to the exact
+/// construction.
+pub(crate) fn add_sat_gate(fallback: bool) {
+    if !is_enabled() {
+        return;
+    }
+    add_count(&SAT_CALLS, 1);
+    if fallback {
+        add_count(&SAT_FALLBACKS, 1);
+    }
+}
+
+/// Time the SAT gate itself.
+pub(crate) fn add_sat_ns(started: Option<Instant>) {
+    if started.is_none() {
+        return;
+    }
+    add(&SAT_NS, elapsed_ns(started));
+}
+
 pub(crate) fn add_restrain(started: Option<Instant>) {
     if started.is_none() {
         return;
@@ -182,7 +205,8 @@ pub fn flush() {
          room_walk_ns={}, room_leaves={}, room_survivors={}, \
          carve_ns={}, restrain_ns={}, doors_ns={}, neighbours_ns={}, \
          complete_rooms={}, complete_shapes={}, collect_obstacles={}, \
-         carve_survivors={}, carve_hits={}, restrains={}, door_calcs={}, neighbour_calls={}",
+         carve_survivors={}, carve_hits={}, restrains={}, door_calcs={}, neighbour_calls={}, \
+         sat_calls={}, sat_fallbacks={}, sat_ns={}",
         COMPLETE_ROOM_NS.with(Cell::get),
         COMPLETE_SHAPE_NS.with(Cell::get),
         COLLECT_NS.with(Cell::get),
@@ -204,6 +228,9 @@ pub fn flush() {
         RESTRAINS.with(Cell::get),
         DOOR_CALCS.with(Cell::get),
         NEIGHBOUR_CALLS.with(Cell::get),
+        SAT_CALLS.with(Cell::get),
+        SAT_FALLBACKS.with(Cell::get),
+        SAT_NS.with(Cell::get),
     );
     write_line(&line);
 }
