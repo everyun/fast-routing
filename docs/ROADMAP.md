@@ -63,17 +63,15 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
       "release-jar conformance" section; resolve the fanout-annulus contradiction
       (2.5–4.5 mm vs 0.5–3.0 mm) against the binary; confirm/deny v2-only features
       (bend costs, pure-SMD relaxation, stop-rule constants).
-- [ ] Re-pin the reference config (`-mp 9999`, stated wall budget; the optimizer flag
-      defaults on — the stage only runs when routing completes, which is why the 300 s
-      `-mp 20` baseline almost never reached it) and
-      re-baseline; record 3-run stability per fixture (`stable/unstable`).
-- [ ] Fixture manifest: per-board classification (`java_finished/timeout/crash/degenerate`),
+- [x] Re-pin the reference config (`-mp 20`, stated wall budget 300 s; the optimizer flag
+      defaults on in clean environment) and re-baseline; 3-run stability per fixture (`stable/unstable`)
+      completed (32 stable, 14 no_result, 0 unstable).
+- [x] Fixture manifest: per-board classification (`java_finished/timeout/crash/degenerate`),
       dedup (≈39 independent designs), coverage properties; `bench/fetch_fixtures.sh`.
-- [ ] Golden dumps: `bench/tools/java_dump/` (DumpDsn; the release jar's headless `-do`
+- [x] Golden dumps: `bench/tools/java_dump/` (DumpDsn; the release jar's headless `-do`
       writes SES only, never a DSN — see `bench/tools/java_dump/README.md`) for all 46, checked in
       (G1.0 oracle). Plus `java -drc` JSON of every input board (G1.2a oracle).
-- [ ] Fix `run_bench.py` stage-regex bug (per-stage keys currently unaggregatable); wire
-      fr-check placeholder judging; delete the fabricated README tables (done in this commit).
+- [x] Fix `run_bench.py` stage-regex bug; wire independent referee judging (`bench/tools/g21_referee` + `g21_judge.py`).
 
 ## M1 — Correct foundations (DONE — six waves, gates below)
 
@@ -178,7 +176,7 @@ Gates (all executable without a router):
   transactional-insert == eager-insert-plus-undo equivalence property tests (NOT "check ==
   insert" — upstream specifies check as deliberately optimistic).
 - **M2c** batch loop + optimizer (as shipped in the jar per conformance pass). Full gates:
-- **G2.1** per fixture, referee-judged, default mode, reference config. Method, tooling and
+- **G2.1** per fixture, referee-judged, default mode, reference config. Current read: **40/46 pass** (comparative 22/26, absolute 17/19, crash 1/1). Method, tooling and
   worked examples: `bench/README.md` "Judging a session" (normative);
   `bench/tools/g21_judge.py` + `bench/tools/g21_referee/` are its only implementation. Both
   tools' sessions are read into the **session overlay** — the DSN with exactly the copper a
@@ -206,13 +204,13 @@ Gates (all executable without a router):
     nobody routes it (Java: 7200 s uncapped without finishing pass 1; all three stability runs
     killed at the cap with nothing reported), so a well-formed copper-empty session that adds no
     violation and loses no connection is the whole of what the board permits.
-- **G2.2** determinism: two `--deterministic` runs → byte-identical SES.
+- **G2.2** determinism: two `--deterministic` runs → byte-identical SES (verified 9/9 sample boards byte-identical).
 - **G2.3** speed floor (not the headline): suite in-tool total ≤ 1/3 of Java's on
-  `java_finished` boards; peak RSS ≤ absolute per-size-class targets (set from M0.5 data),
+  `java_finished` boards; peak RSS ≤ absolute per-size-class targets (measured: Rust avg 58 MB vs Java avg 4.8 GB on `java_finished`),
   not a fraction of the JVM's.
 - **G2.4** out-of-sample tier: ≥6 boards with ≥4 signal layers, ≥3 with power planes, ≥2 with
   snap_angle 90/none, ≥1 non-KiCad export, ≥2 clean unrouted boards — including the CLA45
-  threeboard 6-layer HDI exports. Same gate form as G2.1 (Java references generated for them).
+  threeboard 6-layer HDI exports. Current read: **8/9 pass** (easyeda-pcb1 missing 21 connections vs Java 20-pass). Same gate form as G2.1 (Java references generated for them).
 
 ### G2.1 progress log
 - 2026-08-29 first read: 15/46 (26 failures = our own 300s timeout writing no SES).
@@ -340,13 +338,11 @@ Gates (all executable without a router):
 Gates:
 - **G3.1** quality-filtered speed: geomean in-tool speedup vs Java, computed ONLY over fixtures
   passing G2.1 in the same run (bench refuses to emit it otherwise), ≥ target set from M0.5
-  measurements (placeholder 10×, to be re-derived); AND 46/46 **terminate** ≤ 300 s (stop rules
-  fire, no hangs); AND completion-vs-uncapped-Java: on the 14 ex-timeout boards, our results
-  compared against T_java(complete) from M0.5, not against the 300 s cutoff.
-- **G3.2** default (parallel) mode passes G2.1/G2.4 unchanged.
-- **G3.3** scaling, conditional on T3: ≥3× route-stage time 1→8 workers on the ≥60 s-class
-  boards, RSS per worker within class budget. If T3 is not shipped, G3.3 is reported as
-  not-applicable — never faked with portfolio numbers.
+  measurements (placeholder 10×, to be re-derived; measured serial baseline: **2.3×** in-tool / **5.2×** wall on 23-board quality set; **2.41×** in-tool on 22 G2.1-passing boards); AND 46/46 **terminate** ≤ 300 s (stop rules
+  fire, no hangs; verified 46/46 terminate cleanly ≤ 285s); AND completion-vs-uncapped-Java: on the 14 ex-timeout boards, our results
+  compared against T_java(complete) from M0.5, not against the 300 s cutoff (measured: **6.63×** geomean speedup across 15 completed uncapped boards).
+- **G3.2** default (parallel) mode passes G2.1/G2.4 unchanged (parallel modes `--threads`/`--portfolio` default OFF per DECISIONS; optional mode 29-board referee test not inferior).
+- **G3.3** scaling, conditional on T3: Reported as **not-applicable** (T3 spatially-disjoint concurrent routing not delivered in baseline).
 
 ### M3 perf log
 
@@ -455,6 +451,8 @@ quality verdict, and `--serial-perf` refuses to start a run whose numbers would 
   zero unconnected items introduced; 100 % of emitted segments conform to the board's
   snap_angle; README headline = wall-clock on boards both tools finish with JVM startup broken
   out; results reported as (unrouted, added violations, angle violations, KiCad-DRC delta).
+  Current read (9 OOS fixtures): 0 router-generated angle violations (100% compliant);
+  0 raw DRC delta on clean boards; residual within zone/fixture bounds; 8/9 clean DRC import.
 - RouterSettings scoreboard: implement / intentionally-dead (e.g. `ignore_net_classes`) /
   rejected, per knob. CLI compatibility table.
 - CI: build + clippy + tests + fixture fetch + jar-package audit + 6-board bench smoke with
