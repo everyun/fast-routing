@@ -1,0 +1,8 @@
+Imported /Users/strayer/tmp/tairakb.dsn in 0.01s: 2 layers, 6791 items (319 pins, 4 traces, 1 vias)
+Board: 7388 items (319 pins, 468 traces, 134 vias); router delta +464 traces, +133 vias
+Router: 18 passes, 142 routed, 5 failed, 31 ripped, 261 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 14 of 50 items improved, score 984.84 -> 984.84, stopped on below improvement threshold
+Referee: 5 clearance violations, 3 of 264 connections incomplete, score 984.84/1000
+Total 12.33s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue054-tairakb.rust.ses

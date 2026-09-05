@@ -1,0 +1,8 @@
+Imported /Applications/KiCad/demos/pic_programmer/pic_programmer.dsn in 0.01s: 2 layers, 1581 items (241 pins, 297 traces, 6 vias)
+Board: 1597 items (241 pins, 313 traces, 6 vias); router delta +16 traces, +0 vias
+Router: 18 passes, 16 routed, 13 failed, 0 ripped, 0 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 0 of 16 items improved, score 934.92 -> 934.92, stopped on below improvement threshold
+Referee: 6 clearance violations, 7 of 126 connections incomplete, score 934.92/1000
+Total 0.76s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue163-pic_programmer.rust.ses

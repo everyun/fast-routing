@@ -1,0 +1,8 @@
+Imported /media/bond12/DATA/Проекты (н.с.)/Проэкты/_Выполненые/Электроника/Звукоусилитель-микшерный пульт/Вьюга 1/Проект Вьюга 1/testPCBSpecctraFile.dsn in 0.00s: 2 layers, 1565 items (98 pins, 175 traces, 14 vias)
+Board: 1570 items (98 pins, 180 traces, 14 vias); router delta +5 traces, +0 vias
+Router: 18 passes, 5 routed, 31 failed, 0 ripped, 2 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 2 passes, 1 of 10 items improved, score 599.99 -> 599.99, stopped on below improvement threshold
+Referee: 41 clearance violations, 21 of 73 connections incomplete, score 599.99/1000
+Total 14.20s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue110-testPCBSpecctraFile.rust.ses

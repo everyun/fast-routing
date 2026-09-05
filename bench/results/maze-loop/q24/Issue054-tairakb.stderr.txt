@@ -1,0 +1,2 @@
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+3 of 264 connections still incomplete

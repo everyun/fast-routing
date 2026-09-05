@@ -112,15 +112,22 @@ pub struct MazeSearch<'e, 'b> {
     record_settles: bool,
     /// Scratch buffer for door section segments.
     section_scratch: Vec<FloatLine>,
+    /// Scratch buffer for room door ids.
+    door_scratch: Vec<DoorId>,
+    /// Scratch buffer for target door ids.
+    target_door_scratch: Vec<DoorId>,
+    /// Scratch buffer for drill ids.
+    drill_scratch: Vec<DrillId>,
+    /// Scratch buffer for drill room ids.
+    drill_room_scratch: Vec<RoomId>,
+    /// Precomputed via candidates per layer.
+    via_candidates_by_layer: Vec<Vec<ViaCandidate>>,
     /// Reusable buffer for the door sections one maze-time shove reaches. The
     /// cascade must not allocate per level (`shove.md` §15, "Arena the shove
     /// transaction").
     shove_section_scratch: Vec<crate::maze::shove::DoorSection>,
     /// Scratch buffer for overlapping drill pages.
     page_scratch: Vec<PageId>,
-    /// Reusable buffer for the via-rule candidates of one drill layer check;
-    /// the drill scan runs it per layer per drill.
-    via_candidate_scratch: Vec<ViaCandidate>,
     /// Cap on settled elements; `None` = unbounded. A debugging knob, and the
     /// one the differential harness pins a search with; the *shipped* budget is
     /// the engine's [`ConnectionClock`](crate::batch::budget::ConnectionClock),
@@ -148,6 +155,37 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             engine.ctrl.min_normal_via_cost,
             engine.ctrl.min_cheap_via_cost,
         );
+        let mut via_candidates_by_layer = Vec::with_capacity(engine.ctrl.layer_count);
+        for layer in 0..engine.ctrl.layer_count as i32 {
+            let trace_half_width = engine
+                .ctrl
+                .trace_half_width
+                .get(layer as usize)
+                .copied()
+                .unwrap_or(0);
+            let mut list = Vec::new();
+            for index in 0..engine.ctrl.via_rule.via_count() {
+                let Some(via) = engine.ctrl.via_rule.get_via(index) else {
+                    continue;
+                };
+                let padstack = via.padstack();
+                if (layer as usize) < padstack.from_layer()
+                    || (layer as usize) > padstack.to_layer()
+                {
+                    continue;
+                }
+                let via_radius = padstack
+                    .get_shape(layer as usize)
+                    .map(|shape| 0.5 * shape.max_width())
+                    .unwrap_or(0.0);
+                list.push(ViaCandidate {
+                    required_radius: via_radius.max(trace_half_width as f64),
+                    clearance_class: via.clearance_class() as i32,
+                    attach_smd_allowed: via.attach_smd_allowed(),
+                });
+            }
+            via_candidates_by_layer.push(list);
+        }
         let mut search = MazeSearch {
             engine,
             frontier: Frontier::new(),
@@ -158,9 +196,13 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             settles: Vec::new(),
             record_settles: false,
             section_scratch: Vec::new(),
+            door_scratch: Vec::new(),
+            target_door_scratch: Vec::new(),
+            drill_scratch: Vec::new(),
+            drill_room_scratch: Vec::new(),
+            via_candidates_by_layer,
             shove_section_scratch: Vec::new(),
             page_scratch: Vec::new(),
-            via_candidate_scratch: Vec::new(),
             expansion_limit: None,
             expansions: 0,
             conn_record: None,
@@ -238,6 +280,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             (None, Some(_)) => Ok(()),
             (None, None) => Err(SearchFailure::Exhausted),
         };
+        crate::maze::attr::flush();
         if let (Some(record), Some(started)) = (self.conn_record, started) {
             crate::maze::trace::connection(
                 &record,
@@ -450,33 +493,41 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         &mut self,
         detours: &dyn DetourSource,
     ) -> Result<bool, SearchFailure> {
+        let occupy_started = crate::maze::attr::start();
         if self.destination_door.is_some() {
+            crate::maze::attr::add_occupy_next(occupy_started);
             return Ok(false);
         }
         let element = loop {
             // `:258` — the stop poll is the first thing inside the pop loop,
             // before the queue is even read.
             if self.engine.is_stop_requested() {
+                crate::maze::attr::add_occupy_next(occupy_started);
                 return Err(SearchFailure::Stopped);
             }
             if let Some(limit) = self.expansion_limit {
                 if self.expansions >= limit {
+                    crate::maze::attr::add_occupy_next(occupy_started);
                     return Err(SearchFailure::Stopped);
                 }
             }
-            let Some(element) = self.frontier.pop() else {
+            let pop_started = crate::maze::attr::start();
+            let Some((key, payload_slot)) = self.frontier.pop_raw() else {
+                crate::maze::attr::add_occupy_next(occupy_started);
                 return Ok(false);
             };
-            let Some(node) =
-                self.section_node(element.payload.door, element.payload.section_no_of_door)
-            else {
+            let payload = *self.frontier.payload(payload_slot);
+            let Some(node) = self.section_node(payload.door, payload.section_no_of_door) else {
                 self.frontier.note_stale_pop();
+                crate::maze::attr::add_queue_pop(pop_started, true);
                 continue;
             };
             if !self.engine.nodes.is_occupied(node) {
-                break (element, node);
+                crate::maze::attr::add_queue_pop(pop_started, false);
+                break (FrontierElement { key, payload }, node);
             }
             self.frontier.note_stale_pop();
+            crate::maze::attr::add_queue_pop(pop_started, true);
         };
         let (element, node) = element;
 
@@ -498,7 +549,10 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
 
         // `:283-286`: a drill page expands and returns *without* occupying.
         if let ExpandableRef::Page(_) = element.payload.door {
+            let started = crate::maze::attr::start();
             self.expand_to_drills_of_page(&element);
+            crate::maze::attr::add_drills_of_page(started);
+            crate::maze::attr::add_occupy_next(occupy_started);
             return Ok(true);
         }
 
@@ -508,6 +562,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 if self.is_destination_item(item) {
                     self.destination_door =
                         Some((element.payload.door, element.payload.section_no_of_door));
+                    crate::maze::attr::add_occupy_next(occupy_started);
                     return Ok(false);
                 }
             }
@@ -522,19 +577,24 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         if self.engine.ctrl.is_fanout && door_is_drill && backtrack_is_drill {
             self.destination_door =
                 Some((element.payload.door, element.payload.section_no_of_door));
+            crate::maze::attr::add_occupy_next(occupy_started);
             return Ok(false);
         }
 
         // `:303-306`.
         if self.engine.ctrl.vias_allowed && door_is_drill && !backtrack_is_drill {
+            let started = crate::maze::attr::start();
             self.expand_to_other_layers(&element);
+            crate::maze::attr::add_other_layers(started);
         }
 
         // `:308-314`: the delayed-occupation return path.
         if element.payload.next_room.is_some() && !self.expand_to_room_doors(&element, detours) {
+            crate::maze::attr::add_occupy_next(occupy_started);
             return Ok(true);
         }
         self.engine.nodes.occupy(node);
+        crate::maze::attr::add_occupy_next(occupy_started);
         Ok(true)
     }
 
@@ -598,7 +658,9 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         }
 
         // Freeze this room's door list (`:352`).
+        let rc_started = crate::maze::attr::start();
         self.engine.complete_neighbour_rooms(next_room);
+        crate::maze::attr::add_room_complete(rc_started);
         if !self.engine.rooms.room(next_room).alive {
             return true;
         }
@@ -624,6 +686,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         }
 
         // `:377-398`: thin/thick.
+        let tc_started = crate::maze::attr::start();
         let next_room_is_thick = if self.engine.rooms.room(next_room).kind == RoomKind::Obstacle {
             self.engine.obstacle_room_is_thick(next_room)
         } else {
@@ -644,6 +707,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 true
             }
         };
+        crate::maze::attr::add_thick_check(tc_started);
 
         // `:399-409`: the split-plane rule.
         if !layer_active {
@@ -655,6 +719,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             }
         }
 
+        let td_started = crate::maze::attr::start();
         let mut something_expanded = self.expand_to_target_doors(
             element,
             next_room,
@@ -662,6 +727,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             curr_door_is_small,
             &shape_entry_middle,
         );
+        crate::maze::attr::add_target_doors(td_started);
 
         // `:413-415`: a plane layer carries targets only.
         if !layer_active {
@@ -719,14 +785,18 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                         && !curr_door_is_small
                         && self.engine.ctrl.max_shove_trace_recursion_depth > 0
                         && is_trace
-                        && !self.shove_trace_room(element, next_room)
                     {
-                        if ripup_costs > 0 {
-                            // Delay the occupation by ripup so another door
-                            // section may still shove the room (`:448-465`).
-                            self.requeue_delayed(element, ripup_costs);
+                        let shove_started = crate::maze::attr::start();
+                        let shoved = self.shove_trace_room(element, next_room);
+                        crate::maze::attr::add_shove_trace(shove_started);
+                        if !shoved {
+                            if ripup_costs > 0 {
+                                // Delay the occupation by ripup so another door
+                                // section may still shove the room (`:448-465`).
+                                self.requeue_delayed(element, ripup_costs);
+                            }
+                            return something_expanded;
                         }
-                        return something_expanded;
                     }
                     if !room_rippable {
                         return true;
@@ -735,9 +805,12 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             }
         }
 
-        // `:476-500`: a snapshot, because completion may mutate the list.
-        let doors_snapshot = self.engine.rooms.room(next_room).doors.clone();
-        for to_door in doors_snapshot {
+        // `:476-500`: copy doors into scratch buffer to avoid per-expansion allocation.
+        let rd_started = crate::maze::attr::start();
+        let mut doors = std::mem::take(&mut self.door_scratch);
+        doors.clear();
+        doors.extend_from_slice(&self.engine.rooms.room(next_room).doors);
+        for &to_door in &doors {
             if ExpandableRef::Door(to_door) == element.payload.door {
                 continue;
             }
@@ -745,22 +818,27 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 something_expanded = true;
             }
         }
+        doors.clear();
+        self.door_scratch = doors;
+        crate::maze::attr::add_room_doors(rd_started);
 
         // `:502-525`: the via expansion.
         if self.engine.ctrl.vias_allowed && !matches!(element.payload.door, ExpandableRef::Drill(_))
         {
             let room_kind = self.engine.rooms.room(next_room).kind;
             if (something_expanded || next_room_is_thick) && room_kind == RoomKind::CompleteFree {
+                let dp_started = crate::maze::attr::start();
                 let room_shape = &self.engine.rooms.room(next_room).shape;
                 self.engine
                     .pages
                     .overlapping_pages(room_shape, &mut self.page_scratch);
                 let pages = std::mem::take(&mut self.page_scratch);
-                for page in &pages {
-                    self.expand_to_drill_page(*page, element, next_room);
+                for &page in &pages {
+                    self.expand_to_drill_page(page, element, next_room);
                     something_expanded = true;
                 }
                 self.page_scratch = pages;
+                crate::maze::attr::add_drill_pages(dp_started);
             } else if room_kind == RoomKind::Obstacle {
                 if let Some(item) = self.engine.rooms.room(next_room).obstacle_item() {
                     if self.engine.item_is_via(item) {
@@ -804,7 +882,10 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             }
         }
         let mut result = false;
-        for to_door in self.engine.rooms.room(next_room).target_doors.clone() {
+        let mut target_doors = std::mem::take(&mut self.target_door_scratch);
+        target_doors.clear();
+        target_doors.extend_from_slice(&self.engine.rooms.room(next_room).target_doors);
+        for &to_door in &target_doors {
             if ExpandableRef::Door(to_door) == element.payload.door {
                 continue;
             }
@@ -846,6 +927,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 result = true;
             }
         }
+        target_doors.clear();
+        self.target_door_scratch = target_doors;
         result
     }
 
@@ -861,12 +944,14 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let layer = self.engine.rooms.room(next_room).layer;
         let half_width = self.engine.ctrl.compensated_half_width(layer);
         let mut sections = std::mem::take(&mut self.section_scratch);
+        let ss_started = crate::maze::attr::start();
         let count = self.engine.rooms.section_segments(
             to_door,
             half_width,
             &mut self.engine.nodes,
             &mut sections,
         );
+        crate::maze::attr::add_section_segments(ss_started);
         let mut something_expanded = false;
         let mut rejected = false;
         for i in 0..count as usize {
@@ -981,10 +1066,13 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         add_costs: i32,
         adjustment: Adjustment,
     ) -> bool {
+        let started = crate::maze::attr::start();
         let Some(node) = self.section_node(door, section_no) else {
+            crate::maze::attr::add_expand_door_section(started);
             return false;
         };
         if self.engine.nodes.is_occupied(node) {
+            crate::maze::attr::add_expand_door_section(started);
             return false;
         }
         let next_room = match door {
@@ -1040,6 +1128,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         };
 
         if !self.fanout_gate_allows(door, next_room, &shape_entry) {
+            crate::maze::attr::add_expand_door_section(started);
             return false;
         }
 
@@ -1063,6 +1152,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 ripup_cost,
             },
         );
+        crate::maze::attr::add_expand_door_section(started);
         true
     }
 
@@ -1372,25 +1462,19 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         };
         let from_room_layer = element.payload.section_no_of_door as i32;
         let attach_smd = self.engine.ctrl.attach_smd_allowed;
-        let drills = self.engine.page_drills(page_id, attach_smd);
-        for drill_id in drills {
-            let section_no = from_room_layer - self.engine.drills.get(drill_id).first_layer;
-            if section_no < 0
-                || section_no >= self.engine.drills.get(drill_id).room_arr.len() as i32
-            {
+        let mut drills = std::mem::take(&mut self.drill_scratch);
+        self.engine
+            .page_drills_into(page_id, attach_smd, &mut drills);
+        for &drill_id in &drills {
+            let drill = self.engine.drills.get(drill_id);
+            let section_no = from_room_layer - drill.first_layer;
+            if section_no < 0 || section_no >= drill.room_arr.len() as i32 {
                 continue;
             }
-            if Some(self.engine.drills.get(drill_id).room_arr[section_no as usize])
-                != element.payload.next_room
-            {
+            if Some(drill.room_arr[section_no as usize]) != element.payload.next_room {
                 continue;
             }
-            let Some(node) = self
-                .engine
-                .drills
-                .get(drill_id)
-                .section_node(section_no as u16)
-            else {
+            let Some(node) = drill.section_node(section_no as u16) else {
                 continue;
             };
             if self.engine.nodes.is_occupied(node) {
@@ -1398,30 +1482,37 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             }
             self.expand_to_drill(drill_id, element, 0);
         }
+        drills.clear();
+        self.drill_scratch = drills;
     }
 
     /// Hop 3: page → drill (`MazeSearchAlgo.expand_to_drill`, `:872-948`).
     fn expand_to_drill(&mut self, drill_id: DrillId, element: &FrontierElement, add_costs: i32) {
+        let started = crate::maze::attr::start();
         let Some(from_room) = element.payload.next_room else {
+            crate::maze::attr::add_expand_drill(started);
             return;
         };
         let layer = self.engine.rooms.room(from_room).layer;
         let trace_half_width = self.engine.ctrl.compensated_half_width(layer);
         let room_shape = &self.engine.rooms.room(from_room).shape;
         let room_shape_is_thin = geom::min_width(room_shape) < 2.0 * trace_half_width;
-        let drill_shape = self.engine.drills.get(drill_id).shape.clone();
+        let drill_shape = &self.engine.drills.get(drill_id).shape;
 
         if room_shape_is_thin {
             // Straight-through constraint: only drills meeting the backtrack
             // door are allowed (`:879-891`).
             let Some(backtrack) = element.payload.backtrack_door else {
+                crate::maze::attr::add_expand_drill(started);
                 return;
             };
             let backtrack_shape = self.object_shape(backtrack);
             if drill_shape.intersection(&backtrack_shape).dimension() < 0 {
+                crate::maze::attr::add_expand_drill(started);
                 return;
             }
             if !drill_shape.intersects(&backtrack_shape) {
+                crate::maze::attr::add_expand_drill(started);
                 return;
             }
         }
@@ -1433,20 +1524,21 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             .get(layer.max(0) as usize)
             .copied()
             .unwrap_or(0.0);
-        let shrinked = drill_shape.shrink(via_radius);
-        // `:897-911`: coming from a pin's target door via a page, the compare
-        // corner is the pin's nearest trace exit corner. That geometry lives
-        // with the locate/insert wave; M2a uses the entry midpoint, which is
-        // upstream's answer for every non-pin source.
         let compare_corner = geom::midpoint(&element.payload.shape_entry);
-        let nearest_point = if shrinked.is_empty() {
+        let nearest_point = if via_radius <= 0.0 {
             drill_shape.nearest_point_approx(&compare_corner)
         } else {
-            shrinked.nearest_point_approx(&compare_corner)
+            let shrinked = drill_shape.shrink(via_radius);
+            if shrinked.is_empty() {
+                drill_shape.nearest_point_approx(&compare_corner)
+            } else {
+                shrinked.nearest_point_approx(&compare_corner)
+            }
         };
         let shape_entry = FloatLine::new(nearest_point, nearest_point);
         let section_no = layer - self.engine.drills.get(drill_id).first_layer;
         if section_no < 0 {
+            crate::maze::attr::add_expand_drill(started);
             return;
         }
         let cost = self.engine.ctrl.trace_cost(layer);
@@ -1475,6 +1567,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let oid = self.engine.drills.get(drill_id).oid;
         let door = ExpandableRef::Drill(drill_id);
         if !self.fanout_gate_allows(door, None, &shape_entry) {
+            crate::maze::attr::add_expand_drill(started);
             return;
         }
         self.frontier.push(
@@ -1498,6 +1591,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 ripup_cost: 0,
             },
         );
+        crate::maze::attr::add_expand_drill(started);
     }
 
     /// Hop 4: the popped drill fans out to the other layers
@@ -1506,15 +1600,13 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let ExpandableRef::Drill(drill_id) = element.payload.door else {
             return;
         };
-        let (first_layer, last_layer, room_arr, location) = {
+        let (first_layer, last_layer, location) = {
             let drill = self.engine.drills.get(drill_id);
-            (
-                drill.first_layer,
-                drill.last_layer,
-                drill.room_arr.clone(),
-                drill.location,
-            )
+            (drill.first_layer, drill.last_layer, drill.location)
         };
+        let mut room_arr = std::mem::take(&mut self.drill_room_scratch);
+        room_arr.clear();
+        room_arr.extend_from_slice(&self.engine.drills.get(drill_id).room_arr);
         let from_section = element.payload.section_no_of_door as i32;
         let from_layer = first_layer + from_section;
         let via_lower_bound;
@@ -1531,17 +1623,25 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         if from_room_is_obstacle {
             // Via ripup (`:1052-1068`).
             if !self.engine.ctrl.ripup_allowed {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             }
             let Some(item_id) =
                 from_room.and_then(|room| self.engine.rooms.room(room).obstacle_item())
             else {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             };
             let Some(item) = self.engine.board.store().get(item_id) else {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             };
             let ItemKind::Via(via) = &item.kind else {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             };
             // `ctrl.via_rule.contains_padstack(padstack)` compares padstack
@@ -1557,6 +1657,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 .iter()
                 .any(|mask| mask.from_layer == via_first && mask.to_layer == via_last);
             if !padstack_in_rule || item.clearance_class != self.engine.ctrl.via_clearance_class {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             }
             via_lower_bound = via.layers.first;
@@ -1596,6 +1698,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             // The drill only fires where the whole free-space column is
             // drillable (`:1098-1100`).
             if via_lower_bound > first_layer {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             }
 
@@ -1625,10 +1729,13 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 curr_layer += 1;
             }
             if via_upper_bound < last_layer {
+                room_arr.clear();
+                self.drill_room_scratch = room_arr;
                 return;
             }
         }
 
+        let shape_entry_middle = geom::midpoint(&element.payload.shape_entry);
         for to_layer in via_lower_bound..=via_upper_bound {
             if to_layer == from_layer {
                 continue;
@@ -1675,7 +1782,6 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 .copied()
                 .unwrap_or(0);
             let expansion_value = element.key.g + add_via_cost as f64;
-            let shape_entry_middle = geom::midpoint(&element.payload.shape_entry);
             let sorting_value = expansion_value
                 + self
                     .destination_distance
@@ -1705,6 +1811,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 },
             );
         }
+        room_arr.clear();
+        self.drill_room_scratch = room_arr;
     }
 
     /// `MazeSearchAlgo.check_layer_with_any_matching_via` (`:1182-1207`;
@@ -1725,8 +1833,14 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         layer: i32,
         room: RoomId,
     ) -> CheckDrillResult {
-        // The candidate list is snapshotted first: the check borrows the board
-        // while the via rule lives inside `self.engine.ctrl`.
+        let started = crate::maze::attr::start();
+        let candidates = match self.via_candidates_by_layer.get(layer.max(0) as usize) {
+            Some(c) if !c.is_empty() => c,
+            _ => {
+                crate::maze::attr::add_check_layer_via(started);
+                return CheckDrillResult::NotDrillable;
+            }
+        };
         let trace_half_width = self
             .engine
             .ctrl
@@ -1734,30 +1848,6 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
             .get(layer.max(0) as usize)
             .copied()
             .unwrap_or(0);
-        let mut candidates = std::mem::take(&mut self.via_candidate_scratch);
-        candidates.clear();
-        for index in 0..self.engine.ctrl.via_rule.via_count() {
-            let Some(via) = self.engine.ctrl.via_rule.get_via(index) else {
-                continue;
-            };
-            let padstack = via.padstack();
-            if (layer as usize) < padstack.from_layer() || (layer as usize) > padstack.to_layer() {
-                continue;
-            }
-            let via_radius = padstack
-                .get_shape(layer as usize)
-                .map(|shape| 0.5 * shape.max_width())
-                .unwrap_or(0.0);
-            // Delta B4 (`:1193`): the radius is lifted to the trace half
-            // width, so a drill never promises less room than the trace it
-            // continues.
-            candidates.push(ViaCandidate {
-                required_radius: via_radius.max(trace_half_width as f64),
-                clearance_class: via.clearance_class() as i32,
-                attach_smd_allowed: via.attach_smd_allowed(),
-            });
-        }
-
         let net_no_arr = fr_board::net_nos::NetNos::of(self.engine.ctrl.net_no);
         let max_recursion_depth = self.engine.ctrl.max_shove_trace_recursion_depth;
         let trace_clearance_class = self.engine.ctrl.trace_clearance_class_no;
@@ -1791,20 +1881,20 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                 CheckDrillResult::NotDrillable => {}
             }
         }
-        candidates.clear();
-        self.via_candidate_scratch = candidates;
-        if result == CheckDrillResult::Drillable {
-            return result;
-        }
-        if drillable_with_attach_smd {
+        let res = if result == CheckDrillResult::Drillable {
+            result
+        } else if drillable_with_attach_smd {
             CheckDrillResult::DrillableWithAttachSmd
         } else {
             CheckDrillResult::NotDrillable
-        }
+        };
+        crate::maze::attr::add_check_layer_via(started);
+        res
     }
 
     // ---- expandable-object accessors -------------------------------------
 
+    #[inline]
     fn object_oid(&self, object: ExpandableRef) -> u32 {
         match object {
             ExpandableRef::Door(door) => self.engine.rooms.door(door).oid,
@@ -1813,6 +1903,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         }
     }
 
+    #[inline]
     fn object_dimension(&self, object: ExpandableRef) -> i32 {
         match object {
             ExpandableRef::Door(door) => self.engine.rooms.door(door).dimension,
@@ -1830,10 +1921,22 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         }
     }
 
+    #[inline]
     fn object_shape_cog(&self, object: ExpandableRef) -> FloatPoint {
-        self.object_shape(object).centre_of_gravity()
+        match object {
+            ExpandableRef::Door(door) => self.engine.rooms.door(door).shape.centre_of_gravity(),
+            ExpandableRef::Drill(drill) => self.engine.drills.get(drill).shape.centre_of_gravity(),
+            ExpandableRef::Page(page) => {
+                let box_shape = self.engine.pages.page(page).shape;
+                FloatPoint::new(
+                    0.5 * (box_shape.left_x() as f64 + box_shape.right_x() as f64),
+                    0.5 * (box_shape.bottom_y() as f64 + box_shape.top_y() as f64),
+                )
+            }
+        }
     }
 
+    #[inline]
     fn section_node(&mut self, object: ExpandableRef, section: u16) -> Option<NodeIndex> {
         match object {
             ExpandableRef::Door(door) => {

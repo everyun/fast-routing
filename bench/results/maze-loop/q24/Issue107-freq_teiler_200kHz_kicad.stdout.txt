@@ -1,0 +1,8 @@
+Imported Z:\Desktop\SelcoGit\af_freq_teiler_200kHz\freq_teiler_200kHz_kicad\freq_teiler_200kHz_kicad.dsn in 0.00s: 2 layers, 1777 items (247 pins, 9 traces, 0 vias)
+Board: 1961 items (247 pins, 193 traces, 0 vias); router delta +184 traces, +0 vias
+Router: 17 passes, 157 routed, 2 failed, 9 ripped, 0 pins fanned out
+Router stopped on stagnation (pass-local) (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.99 -> 999.99, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 169 connections incomplete, score 999.99/1000
+Total 1.94s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue107-freq_teiler_200kHz_kicad.rust.ses

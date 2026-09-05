@@ -313,6 +313,24 @@ impl DrillPageArray {
 }
 
 impl AutorouteEngine<'_> {
+    /// Copies `DrillPage.get_drills(engine, attach_smd)` into `out`, avoiding allocation on cache hits.
+    pub fn page_drills_into(&mut self, page_id: PageId, attach_smd: bool, out: &mut Vec<DrillId>) {
+        let net_no = self.ctrl.net_no;
+        {
+            let page = self.pages.page(page_id);
+            if let Some(drills) = page.cached_drills() {
+                if page.net_no == net_no {
+                    out.clear();
+                    out.extend_from_slice(drills);
+                    return;
+                }
+            }
+        }
+        let drills = self.page_drills(page_id, attach_smd);
+        out.clear();
+        out.extend_from_slice(&drills);
+    }
+
     /// `DrillPage.get_drills(engine, attach_smd)` (`:62-135`), cached per
     /// `(page, net)`.
     pub fn page_drills(&mut self, page_id: PageId, attach_smd: bool) -> Vec<DrillId> {
@@ -387,9 +405,12 @@ impl AutorouteEngine<'_> {
         // 22,351 `Oct`, 24,841 `Simplex`. See `docs/PARITY-DIVERGENCES.md`.
         let mut pieces = vec![page_shape.clone()];
         for hole in &cutouts {
+            let hole_bbox = hole.bounding_box();
             let mut next = Vec::with_capacity(pieces.len());
             for piece in &pieces {
-                if piece.intersection(hole).dimension() < 2 {
+                if !piece.bounding_box().intersects(&hole_bbox)
+                    || piece.intersection(hole).dimension() < 2
+                {
                     next.push(piece.clone());
                     continue;
                 }

@@ -427,7 +427,7 @@ impl AutorouteEngine<'_> {
         if door.dimension != 1 {
             return false;
         }
-        let door_shape = door.shape.clone();
+        let door_shape = &door.shape;
         if door_shape.is_empty() {
             return false;
         }

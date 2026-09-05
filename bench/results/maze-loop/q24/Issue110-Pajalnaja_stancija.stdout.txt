@@ -1,0 +1,7 @@
+Imported /home/sergey/Dropbox/Сергей С. Смирнов/Паяльная станция/Проект печатной платы/Паяльная станция.dsn in 0.00s: 2 layers, 627 items (175 pins, 0 traces, 0 vias)
+Board: 774 items (175 pins, 134 traces, 13 vias); router delta +134 traces, +13 vias
+Router: 10 passes, 85 routed, 4 failed, 11 ripped, 0 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 18 clearance violations, 6 of 109 connections incomplete, score 911.91/1000
+Total 59.46s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue110-Pajalnaja_stancija.rust.ses

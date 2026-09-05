@@ -149,12 +149,36 @@ impl DestinationDistance {
     /// `calculate(FloatPoint, layer)` (`:108-110`).
     #[inline]
     pub fn calculate(&self, point: &FloatPoint, layer: i32) -> f64 {
-        self.calculate_box(&point.bounding_box(), layer)
+        if self.box_is_empty {
+            return NO_DESTINATION;
+        }
+        let q_ll_x = point.x.floor() as i32;
+        let q_ur_x = point.x.ceil() as i32;
+        let q_ll_y = point.y.floor() as i32;
+        let q_ur_y = point.y.ceil() as i32;
+        self.calculate_from_bounds(
+            q_ll_x,
+            q_ur_x,
+            q_ll_y,
+            q_ur_y,
+            layer,
+            self.min_normal_via_cost,
+        )
     }
 
     /// `calculate(IntBox, layer)` (`:112-344`).
     pub fn calculate_box(&self, query: &IntBox, layer: i32) -> f64 {
-        self.calculate_inner(query, layer, self.min_normal_via_cost)
+        if self.box_is_empty {
+            return NO_DESTINATION;
+        }
+        self.calculate_from_bounds(
+            query.left_x(),
+            query.right_x(),
+            query.bottom_y(),
+            query.top_y(),
+            layer,
+            self.min_normal_via_cost,
+        )
     }
 
     /// `calculate_cheap_distance` (`:346-353`) without the field swap: the
@@ -162,7 +186,17 @@ impl DestinationDistance {
     /// [`min_cheap_via_cost`](Self::min_cheap_via_cost).
     #[inline]
     pub fn calculate_with_via_cost(&self, query: &IntBox, layer: i32, via_cost: f64) -> f64 {
-        self.calculate_inner(query, layer, via_cost)
+        if self.box_is_empty {
+            return NO_DESTINATION;
+        }
+        self.calculate_from_bounds(
+            query.left_x(),
+            query.right_x(),
+            query.bottom_y(),
+            query.top_y(),
+            layer,
+            via_cost,
+        )
     }
 
     /// `0.8 × min_normal_via_cost`, as the control computed it.
@@ -171,29 +205,52 @@ impl DestinationDistance {
         self.min_cheap_via_cost
     }
 
-    fn calculate_inner(&self, query: &IntBox, layer: i32, min_normal_via_cost: f64) -> f64 {
-        if self.box_is_empty {
-            return NO_DESTINATION;
-        }
+    #[inline]
+    fn calculate_from_bounds(
+        &self,
+        q_ll_x: i32,
+        q_ur_x: i32,
+        q_ll_y: i32,
+        q_ur_y: i32,
+        layer: i32,
+        min_normal_via_cost: f64,
+    ) -> f64 {
+        let started = crate::maze::attr::start();
+        let result = self.calculate_from_bounds_inner(
+            q_ll_x,
+            q_ur_x,
+            q_ll_y,
+            q_ur_y,
+            layer,
+            min_normal_via_cost,
+        );
+        crate::maze::attr::add_heuristic(started);
+        result
+    }
 
-        let (component_dx, component_dy) = axis_deltas(query, &self.component_side_box);
-        let (solder_dx, solder_dy) = axis_deltas(query, &self.solder_side_box);
-        let (inner_dx, inner_dy) = axis_deltas(query, &self.inner_side_box);
+    fn calculate_from_bounds_inner(
+        &self,
+        q_ll_x: i32,
+        q_ur_x: i32,
+        q_ll_y: i32,
+        q_ur_y: i32,
+        layer: i32,
+        min_normal_via_cost: f64,
+    ) -> f64 {
+        let (component_dx, component_dy) =
+            axis_deltas_raw(q_ll_x, q_ur_x, q_ll_y, q_ur_y, &self.component_side_box);
+        let (solder_dx, solder_dy) =
+            axis_deltas_raw(q_ll_x, q_ur_x, q_ll_y, q_ur_y, &self.solder_side_box);
 
         let (component_max, component_min) = max_min(component_dx, component_dy);
         let (solder_max, solder_min) = max_min(solder_dx, solder_dy);
-        let (inner_max, inner_min) = max_min(inner_dx, inner_dy);
 
         let mut result = NO_DESTINATION;
 
         if layer == 0 {
             if !self.component_side_box_is_empty {
-                result = weighted_box_distance(
-                    query,
-                    &self.component_side_box,
-                    self.trace_costs[0].horizontal,
-                    self.trace_costs[0].vertical,
-                );
+                result = self.trace_costs[0].horizontal * component_dx
+                    + self.trace_costs[0].vertical * component_dy;
             }
             if self.active_layer_count <= 1 {
                 return result;
@@ -217,6 +274,10 @@ impl DestinationDistance {
             if self.active_layer_count == 2 {
                 return result;
             }
+
+            let (inner_dx, inner_dy) =
+                axis_deltas_raw(q_ll_x, q_ur_x, q_ll_y, q_ur_y, &self.inner_side_box);
+            let (inner_max, inner_min) = max_min(inner_dx, inner_dy);
 
             let tmp =
                 inner_max + inner_min * self.min_component_inner_trace_cost + min_normal_via_cost;
@@ -243,12 +304,8 @@ impl DestinationDistance {
 
         if self.layer_count > 0 && layer as usize == self.layer_count - 1 {
             if !self.solder_side_box_is_empty {
-                result = weighted_box_distance(
-                    query,
-                    &self.solder_side_box,
-                    self.trace_costs[layer as usize].horizontal,
-                    self.trace_costs[layer as usize].vertical,
-                );
+                result = self.trace_costs[layer as usize].horizontal * solder_dx
+                    + self.trace_costs[layer as usize].vertical * solder_dy;
             }
             let tmp = if self.min_component_side_trace_cost < self.min_solder_side_trace_cost {
                 self.min_component_side_trace_cost * component_max
@@ -269,6 +326,10 @@ impl DestinationDistance {
             if self.active_layer_count <= 2 {
                 return result;
             }
+
+            let (inner_dx, inner_dy) =
+                axis_deltas_raw(q_ll_x, q_ur_x, q_ll_y, q_ur_y, &self.inner_side_box);
+            let (inner_max, inner_min) = max_min(inner_dx, inner_dy);
 
             let tmp =
                 inner_min * self.min_solder_inner_trace_cost + inner_max + min_normal_via_cost;
@@ -294,10 +355,13 @@ impl DestinationDistance {
         }
 
         // Inner layer.
+        let (inner_dx, inner_dy) =
+            axis_deltas_raw(q_ll_x, q_ur_x, q_ll_y, q_ur_y, &self.inner_side_box);
+        let (inner_max, inner_min) = max_min(inner_dx, inner_dy);
+
         if !self.inner_side_box_is_empty {
             let cost = self.trace_costs[layer as usize];
-            result =
-                weighted_box_distance(query, &self.inner_side_box, cost.horizontal, cost.vertical);
+            result = cost.horizontal * inner_dx + cost.vertical * inner_dy;
         }
         let tmp = inner_max + inner_min + min_normal_via_cost;
         result = result.min(tmp);
@@ -314,20 +378,26 @@ impl DestinationDistance {
     }
 }
 
-/// The per-axis gap between two boxes, `0` when they overlap on that axis
-/// (`DestinationDistance.java:117-172`, repeated three times there).
-fn axis_deltas(query: &IntBox, target: &IntBox) -> (f64, f64) {
-    let dx = if query.left_x() > target.right_x() {
-        (query.left_x() - target.right_x()) as f64
-    } else if query.right_x() < target.left_x() {
-        (target.left_x() - query.right_x()) as f64
+/// The per-axis gap between a query rectangle and a target box.
+#[inline(always)]
+fn axis_deltas_raw(
+    q_ll_x: i32,
+    q_ur_x: i32,
+    q_ll_y: i32,
+    q_ur_y: i32,
+    target: &IntBox,
+) -> (f64, f64) {
+    let dx = if q_ll_x > target.right_x() {
+        (q_ll_x - target.right_x()) as f64
+    } else if q_ur_x < target.left_x() {
+        (target.left_x() - q_ur_x) as f64
     } else {
         0.0
     };
-    let dy = if query.bottom_y() > target.top_y() {
-        (query.bottom_y() - target.top_y()) as f64
-    } else if query.top_y() < target.bottom_y() {
-        (target.bottom_y() - query.top_y()) as f64
+    let dy = if q_ll_y > target.top_y() {
+        (q_ll_y - target.top_y()) as f64
+    } else if q_ur_y < target.bottom_y() {
+        (target.bottom_y() - q_ur_y) as f64
     } else {
         0.0
     };
@@ -341,13 +411,6 @@ fn max_min(dx: f64, dy: f64) -> (f64, f64) {
     } else {
         (dy, dx)
     }
-}
-
-/// `IntBox.weighted_distance(IntBox, h, v)`: the axis gaps priced with the
-/// per-layer cost factors.
-fn weighted_box_distance(query: &IntBox, target: &IntBox, horizontal: f64, vertical: f64) -> f64 {
-    let (dx, dy) = axis_deltas(query, target);
-    horizontal * dx + vertical * dy
 }
 
 #[cfg(test)]

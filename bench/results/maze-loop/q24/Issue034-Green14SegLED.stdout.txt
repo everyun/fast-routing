@@ -1,0 +1,8 @@
+Imported C:\Data\DEV\KiCad\Green14segLED\Green14SegLED\Green14SegLED.dsn in 0.00s: 2 layers, 895 items (278 pins, 0 traces, 0 vias)
+Board: 1190 items (278 pins, 234 traces, 61 vias); router delta +234 traces, +61 vias
+Router: 18 passes, 158 routed, 0 failed, 85 ripped, 151 pins fanned out
+Router stopped on stagnation (global) (3 board restores, finished on the best board seen)
+Optimizer: 0 passes, 0 of 0 items improved, score 993.17 -> 993.17, stopped on near-maximum score
+Referee: 0 clearance violations, 1 of 147 connections incomplete, score 993.17/1000
+Total 22.02s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue034-Green14SegLED.rust.ses

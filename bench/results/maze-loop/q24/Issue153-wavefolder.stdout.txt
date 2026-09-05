@@ -1,0 +1,8 @@
+Imported /Users/tim/Projekte/wavefolder.dsn in 0.00s: 2 layers, 1059 items (115 pins, 81 traces, 11 vias)
+Board: 1094 items (115 pins, 113 traces, 14 vias); router delta +32 traces, +3 vias
+Router: 18 passes, 24 routed, 4 failed, 13 ripped, 0 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 7 of 30 items improved, score 953.08 -> 953.08, stopped on below improvement threshold
+Referee: 9 clearance violations, 2 of 81 connections incomplete, score 953.08/1000
+Total 2.38s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue153-wavefolder.rust.ses

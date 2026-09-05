@@ -48,17 +48,21 @@ impl Eq for FrontierKey {}
 
 impl Ord for FrontierKey {
     /// `MazeListElement.compareTo` (`:81-113`), all four keys, ascending.
-    ///
-    /// `f` and `g` are compared with [`f64::total_cmp`]: upstream's `<`/`>`
-    /// chain leaves NaN incomparable and would corrupt a `TreeSet`; here a NaN
-    /// would corrupt the heap invariant, so it is given a defined (last) place
-    /// rather than being allowed to break the ordering.
+    #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        self.f
-            .total_cmp(&other.f)
-            .then_with(|| self.g.total_cmp(&other.g))
-            .then_with(|| self.object_id.cmp(&other.object_id))
-            .then_with(|| self.section.cmp(&other.section))
+        if self.f < other.f {
+            Ordering::Less
+        } else if self.f > other.f {
+            Ordering::Greater
+        } else if self.g < other.g {
+            Ordering::Less
+        } else if self.g > other.g {
+            Ordering::Greater
+        } else {
+            self.object_id
+                .cmp(&other.object_id)
+                .then_with(|| self.section.cmp(&other.section))
+        }
     }
 }
 
@@ -197,11 +201,28 @@ impl Frontier {
 
     /// Inserts one element.
     pub fn push(&mut self, key: FrontierKey, payload: FrontierPayload) {
+        let started = crate::maze::attr::start();
         let slot = self.payloads.len() as u32;
         self.payloads.push(payload);
         self.heap.push(HeapEntry { key, payload: slot });
         self.stats.pushes += 1;
         fr_metrics::counters::bump::queue_pushes(1);
+        crate::maze::attr::add_queue_push(started);
+    }
+
+    /// Pops the cheapest entry (key, payload index), or `None` when exhausted.
+    #[inline]
+    pub fn pop_raw(&mut self) -> Option<(FrontierKey, u32)> {
+        let entry = self.heap.pop()?;
+        self.stats.pops += 1;
+        fr_metrics::counters::bump::queue_pops(1);
+        Some((entry.key, entry.payload))
+    }
+
+    /// Returns a reference to the payload at `slot`.
+    #[inline]
+    pub fn payload(&self, slot: u32) -> &FrontierPayload {
+        &self.payloads[slot as usize]
     }
 
     /// Pops the cheapest element, or `None` when the frontier is exhausted.
@@ -210,12 +231,10 @@ impl Frontier {
     /// until it finds an element whose section is unoccupied, calling
     /// [`note_stale_pop`](Self::note_stale_pop) for the ones it discards.
     pub fn pop(&mut self) -> Option<FrontierElement> {
-        let entry = self.heap.pop()?;
-        self.stats.pops += 1;
-        fr_metrics::counters::bump::queue_pops(1);
+        let (key, slot) = self.pop_raw()?;
         Some(FrontierElement {
-            key: entry.key,
-            payload: self.payloads[entry.payload as usize],
+            key,
+            payload: self.payloads[slot as usize],
         })
     }
 

@@ -1,0 +1,8 @@
+Imported Z:\KiCad\CH376_MCP795_Module\CH376_MCP795_Module.dsn in 0.00s: 2 layers, 301 items (87 pins, 0 traces, 0 vias)
+Board: 417 items (87 pins, 98 traces, 18 vias); router delta +98 traces, +18 vias
+Router: 7 passes, 50 routed, 0 failed, 18 ripped, 37 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.98 -> 999.98, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 53 connections incomplete, score 999.98/1000
+Total 1.94s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue155-CH376_MCP795_Module.rust.ses

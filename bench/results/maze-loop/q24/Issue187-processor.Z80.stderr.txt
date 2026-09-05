@@ -1,0 +1,3 @@
+warning: Network.insert_net_class: clearance class not found at 'kicad_default'
+warning: Network.insert_net_class: clearance class not found at 'G_PLCC'
+warning: Network.insert_net_class: clearance class not found at 'Power'

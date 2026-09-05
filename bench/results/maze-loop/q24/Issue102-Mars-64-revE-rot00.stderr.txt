@@ -1,0 +1,2 @@
+22 of 106 connections still incomplete
+job budget spent — the session above is the best board the run held (22 of 106 connections incomplete; 0.76s of the budget was reserved for the shutdown)

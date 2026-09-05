@@ -1,0 +1,8 @@
+Imported /home/bond12/2/RelayModule.dsn in 0.00s: 2 layers, 905 items (152 pins, 0 traces, 22 vias)
+Board: 1071 items (152 pins, 148 traces, 40 vias); router delta +148 traces, +18 vias
+Router: 18 passes, 123 routed, 2 failed, 64 ripped, 76 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 8 of 50 items improved, score 979.52 -> 979.53, stopped on below improvement threshold
+Referee: 4 clearance violations, 1 of 88 connections incomplete, score 979.53/1000
+Total 36.85s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue110-RelayModule.rust.ses

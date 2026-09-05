@@ -1,0 +1,7 @@
+Imported /home/sliedes/projects/xyz/pcm1681.dsn in 0.00s: 2 layers, 1076 items (281 pins, 0 traces, 0 vias)
+Board: 1442 items (281 pins, 284 traces, 82 vias); router delta +284 traces, +82 vias
+Router: 3 passes, 149 routed, 2 failed, 236 ripped, 417 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 25 clearance violations, 66 of 204 connections incomplete, score 651.95/1000
+Total 59.26s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue039-bug-design.rust.ses

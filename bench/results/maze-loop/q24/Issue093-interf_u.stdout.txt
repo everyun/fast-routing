@@ -1,0 +1,8 @@
+Imported C:\Users\YI\Downloads\中文测试目录\interf_u.dsn in 0.01s: 2 layers, 1567 items (379 pins, 653 traces, 84 vias)
+Board: 1592 items (379 pins, 678 traces, 84 vias); router delta +25 traces, +0 vias
+Router: 18 passes, 25 routed, 37 failed, 0 ripped, 0 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 0 of 25 items improved, score 714.42 -> 714.42, stopped on below improvement threshold
+Referee: 192 clearance violations, 19 of 201 connections incomplete, score 714.42/1000
+Total 4.85s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue093-interf_u.rust.ses

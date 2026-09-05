@@ -1,0 +1,1 @@
+warning: Network.insert_net_class: clearance class not found at 'kicad_default'

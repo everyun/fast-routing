@@ -1,0 +1,8 @@
+Imported C:\Work\freerouting\tests\Issue230-CNH_Functional_Tester\CNH_Functional_Tester_1.dsn in 0.02s: 4 layers, 2098 items (966 pins, 8 traces, 0 vias)
+Board: 2257 items (966 pins, 163 traces, 4 vias); router delta +155 traces, +4 vias
+Router: 20 passes, 149 routed, 9 failed, 63 ripped, 3 pins fanned out
+Router stopped on pass limit (1 board restore)
+Optimizer: 1 passes, 2 of 50 items improved, score 959.59 -> 959.59, stopped on below improvement threshold
+Referee: 16 clearance violations, 5 of 203 connections incomplete, score 959.59/1000
+Total 23.66s
+Exported Specctra SES session file: bench/results/maze-loop/q24/Issue230-CNH_Functional_Tester_1.rust.ses
