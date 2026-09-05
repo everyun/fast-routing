@@ -162,7 +162,8 @@ pub fn insert_connection(
                 .store()
                 .iter()
                 .next()
-                .is_some_and(|(id, _)| id >= first_free_id);
+                .is_some_and(|(id, _)| id >= first_free_id)
+                || board.touched_since(&mark);
             board.commit(mark);
             Ok(outcome)
         }

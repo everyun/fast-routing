@@ -345,15 +345,15 @@ fn the_bottom_gap_room_is_the_board_below_the_obstacle() {
 
 // ------------------------------------------------------------- the A/B switch
 
-/// The switch is off by default, so nothing changes unless the gate asks for it.
+/// The 45° chain defaults to Doors on 45° boards, matching upstream.
 #[test]
-fn the_chain_is_off_unless_the_switch_says_otherwise() {
+fn the_chain_defaults_to_doors_on_fortyfive_boards() {
     // The test process does not set `FR_ROUTER_TILING_45`.
-    assert_eq!(fr_board::search_tree::tiling_45_mode(), Tiling45Mode::Off);
+    assert_eq!(fr_board::search_tree::tiling_45_mode(), Tiling45Mode::Doors);
     let fixture = TestFixture::two_layer_with_pads();
     let engine = fixture.engine();
-    assert_eq!(engine.tiling_45(), Tiling45Mode::Off);
-    assert_eq!(engine.angle_family(), TreeAngleFamily::AnyAngle);
+    assert_eq!(engine.tiling_45(), Tiling45Mode::Doors);
+    assert_eq!(engine.angle_family(), TreeAngleFamily::FortyFive);
 }
 
 /// `Doors` runs the octagon door calculation but leaves the room completion

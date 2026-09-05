@@ -274,10 +274,11 @@ pub const TILING_45_ENV: &str = "FR_ROUTER_TILING_45";
 ///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Tiling45Mode {
-    /// Everything any-angle. The shipped default.
-    #[default]
+    /// Everything any-angle.
     Off,
     /// `Sorted45DegreeRoomNeighbours` only; room completion stays any-angle.
+    /// The default for 45°-restricted boards (aligned with upstream).
+    #[default]
     Doors,
     /// The whole chain: the octagon tree flavor, `complete_shape` and the doors.
     Full,
@@ -293,16 +294,17 @@ impl Tiling45Mode {
 
 /// What [`TILING_45_ENV`] asks for. Read once per process.
 ///
-/// `1` / `true` / `on` / `yes` / `full` select [`Tiling45Mode::Full`], `doors`
-/// selects [`Tiling45Mode::Doors`], anything else — including unset — is
-/// [`Tiling45Mode::Off`].
+/// `full` / `1` / `true` / `on` / `yes` selects [`Tiling45Mode::Full`],
+/// `doors` selects [`Tiling45Mode::Doors`], `off` / `0` / `false` selects
+/// [`Tiling45Mode::Off`]. Defaults to [`Tiling45Mode::Doors`].
 pub fn tiling_45_mode() -> Tiling45Mode {
     use std::sync::OnceLock;
     static MODE: OnceLock<Tiling45Mode> = OnceLock::new();
     *MODE.get_or_init(|| match std::env::var(TILING_45_ENV).ok().as_deref() {
-        Some("1") | Some("true") | Some("on") | Some("yes") | Some("full") => Tiling45Mode::Full,
+        Some("full") | Some("1") | Some("true") | Some("on") | Some("yes") => Tiling45Mode::Full,
         Some("doors") => Tiling45Mode::Doors,
-        _ => Tiling45Mode::Off,
+        Some("off") | Some("0") | Some("false") => Tiling45Mode::Off,
+        _ => Tiling45Mode::Doors,
     })
 }
 

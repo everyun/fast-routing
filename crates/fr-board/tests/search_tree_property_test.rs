@@ -500,7 +500,12 @@ fn a_compensated_tree_stays_in_step_with_the_default_one() {
             mutate(&mut board, &mut rng);
         }
         board.ensure_compensated_tree(2);
-        assert_eq!(board.trees().tree_count(), 2);
+        let expected_trees = 1 + if fr_board::search_tree::tiling_45_mode().is_on() {
+            2
+        } else {
+            1
+        };
+        assert_eq!(board.trees().tree_count(), expected_trees);
 
         for step in 0..40 {
             let label = mutate(&mut board, &mut rng);

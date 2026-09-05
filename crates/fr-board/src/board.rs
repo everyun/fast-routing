@@ -817,6 +817,12 @@ impl Board {
         }
     }
 
+    /// True when any item on the board was modified, created, or deleted since `mark`.
+    #[inline]
+    pub fn touched_since(&self, mark: &BoardMark) -> bool {
+        self.touched.len() > mark.touched
+    }
+
     /// Accepts everything done since `mark`. O(1).
     pub fn commit(&mut self, mark: BoardMark) {
         self.store.commit(mark.store);

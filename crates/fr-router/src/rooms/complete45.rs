@@ -176,7 +176,7 @@ impl AutorouteEngine<'_> {
         // more reason the 45° chain ships behind `TILING_45_ENV`.
         let mut obstacles = Vec::new();
         let mut own_net = Vec::new();
-        self.overlapping_obstacles_tile(
+        self.overlapping_obstacles_tile_for_completion(
             &TileShape::Box(start.bounding_box()),
             Some(layer),
             self.ctrl.net_no,

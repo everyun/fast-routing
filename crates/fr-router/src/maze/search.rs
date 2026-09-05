@@ -626,8 +626,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let next_room_is_thick = if self.engine.rooms.room(next_room).kind == RoomKind::Obstacle {
             self.engine.obstacle_room_is_thick(next_room)
         } else {
-            let room_shape = self.engine.rooms.room(next_room).shape.clone();
-            if geom::min_width(&room_shape) < 2.0 * half_width {
+            let room_shape = &self.engine.rooms.room(next_room).shape;
+            if geom::min_width(room_shape) < 2.0 * half_width {
                 false
             } else if !element.payload.already_checked
                 && self.object_dimension(element.payload.door) == 1
@@ -750,10 +750,10 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         {
             let room_kind = self.engine.rooms.room(next_room).kind;
             if (something_expanded || next_room_is_thick) && room_kind == RoomKind::CompleteFree {
-                let room_shape = self.engine.rooms.room(next_room).shape.clone();
+                let room_shape = &self.engine.rooms.room(next_room).shape;
                 self.engine
                     .pages
-                    .overlapping_pages(&room_shape, &mut self.page_scratch);
+                    .overlapping_pages(room_shape, &mut self.page_scratch);
                 let pages = std::mem::take(&mut self.page_scratch);
                 for page in &pages {
                     self.expand_to_drill_page(*page, element, next_room);
@@ -888,8 +888,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     // The acute-corner squeeze check (`:615-629`) rejects the
                     // *whole* door, not just this section.
                     let entry_middle = geom::midpoint(&section);
-                    let room_shape = self.engine.rooms.room(next_room).shape.clone();
-                    if geom::min_width(&room_shape) < 2.0 * half_width {
+                    let room_shape = &self.engine.rooms.room(next_room).shape;
+                    if geom::min_width(room_shape) < 2.0 * half_width {
                         rejected = true;
                         break;
                     }
@@ -1398,8 +1398,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         };
         let layer = self.engine.rooms.room(from_room).layer;
         let trace_half_width = self.engine.ctrl.compensated_half_width(layer);
-        let room_shape = self.engine.rooms.room(from_room).shape.clone();
-        let room_shape_is_thin = geom::min_width(&room_shape) < 2.0 * trace_half_width;
+        let room_shape = &self.engine.rooms.room(from_room).shape;
+        let room_shape_is_thin = geom::min_width(room_shape) < 2.0 * trace_half_width;
         let drill_shape = self.engine.drills.get(drill_id).shape.clone();
 
         if room_shape_is_thin {
@@ -1564,8 +1564,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     via_lower_bound = curr_layer + 1;
                     break;
                 };
-                let room_shape = self.engine.rooms.room(*room).shape.clone();
-                match self.check_layer_with_any_matching_via(&location, curr_layer, &room_shape) {
+                match self.check_layer_with_any_matching_via(&location, curr_layer, *room) {
                     CheckDrillResult::NotDrillable => {
                         via_lower_bound = curr_layer + 1;
                         break;
@@ -1602,8 +1601,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     via_upper_bound = curr_layer - 1;
                     break;
                 };
-                let room_shape = self.engine.rooms.room(*room).shape.clone();
-                match self.check_layer_with_any_matching_via(&location, curr_layer, &room_shape) {
+                match self.check_layer_with_any_matching_via(&location, curr_layer, *room) {
                     CheckDrillResult::NotDrillable => {
                         via_upper_bound = curr_layer - 1;
                         break;
@@ -1716,7 +1714,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         &mut self,
         location: &fr_geometry::planar::IntPoint,
         layer: i32,
-        room_shape: &Simplex,
+        room: RoomId,
     ) -> CheckDrillResult {
         // The candidate list is snapshotted first: the check borrows the board
         // while the via rule lives inside `self.engine.ctrl`.
@@ -1755,6 +1753,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let max_recursion_depth = self.engine.ctrl.max_shove_trace_recursion_depth;
         let trace_clearance_class = self.engine.ctrl.trace_clearance_class_no;
         let bounds = self.engine.bounds();
+        let room_shape = &self.engine.rooms.room(room).shape;
         let mut checker = fr_board::ShoveCheck::new(self.engine.board, bounds);
         let mut drillable_with_attach_smd = false;
         let mut result = CheckDrillResult::NotDrillable;

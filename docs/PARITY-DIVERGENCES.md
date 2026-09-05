@@ -20,23 +20,17 @@ An empty section means "no divergences yet", not "nobody checked".
 Budget policy is intentionally NOT divergent: upstream wall-clock constants are the default, see
 ARCHITECTURE "Budgets".
 
-- **Any-angle room completion on 45° boards by default**
-  (`fr_board::search_tree::Tiling45Mode`, default `Off`). *Upstream* always
-  runs the `ShapeSearchTree45Degree` chain (octagon completion + 45° doors)
-  on a 45°-restricted board (`SearchTreeManager.java:166`). *We* ship the
-  any-angle completion with `SortedRoomNeighbours` doors; the 45° halves are
-  env-gated (`FR_ROUTER_TILING_45=doors|full`). *Why (2026-09-05 re-measure,
-  retiring the older 7/10 gate)*: under `Doors` easy-10 is u same-or-better
-  on all 9 fixtures and the 24-board regression gains zero-added-violations
-  on all 24 (Issue034's fanout +1v gone) — but Issue107 goes 0u→1u (Java 0u)
-  and Issue163 7u→10u (Java 9u, Off 7u *beats* Java there), violating the
-  per-board non-regression gate. `Full` additionally loses RelayModule (3u vs
-  1u) and is slower per completion than the any-angle carve even after the
-  octagon memo (`84bd710`, `7103828`). *Effect*: on 45° boards our tiling is
-  more exact than upstream's (smaller rooms, more of them); on easyeda-pcb1
-  the any-angle machinery costs ~90× per expansion and `Doors` is 127×
-  faster than `Off` at fanout (4.07 s, at jar parity) — a per-board opt-in
-  would recover that without the two regressions.
+- **45° door calculation on 45° boards by default**
+  (`fr_board::search_tree::Tiling45Mode`, default `Doors`). *Upstream* runs
+  the 45° chain on 45°-restricted boards (`SearchTreeManager.java:166`).
+  *We* default to `Doors` (the 45° `Sorted45DegreeRoomNeighbours` door calculation)
+  on 45°-restricted boards, aligning with upstream. Any-angle and 90° boards
+  continue to run their respective native chains. `FR_ROUTER_TILING_45=doors|full|off`
+  allows explicit selection.
+  *Why*: under `Doors` easy-10 is u same-or-better on all 9 fixtures, 24-board
+  regression achieves zero added violations across all 24 boards, and RelayModule
+  fanout /CAN_RX escape avoids dead pockets and routes cleanly in pass 1.
+  On easyeda-pcb1 fanout runs 127× faster (4.07 s vs 515.9 s, matching jar parity).
 
 - **Fanout is on by default on the CLI** (`fr-cli`, `--no-fanout` to skip).
   *Upstream* `DefaultSettings.fanout.enabled = true` (`DefaultSettings.java:113`); the
