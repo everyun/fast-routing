@@ -591,6 +591,24 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
 
         let shape_entry_middle = geom::midpoint(&element.payload.shape_entry);
 
+        // `:361-369`: neckdown at a *start* pin. When the element entered
+        // through a target door to a pin, the pin's own neckdown half width
+        // caps `half_width` before the thick/thin test — without it a pad
+        // escape that only fits necked down is judged thin and forced through
+        // the full-width shove check, which fails and strands the connection.
+        if self.engine.ctrl.with_neckdown {
+            if let ExpandableRef::Door(door_id) = element.payload.door {
+                if let DoorKind::Target { item, .. } = self.engine.rooms.door(door_id).kind {
+                    if let Some(neckdown) = self.engine.pin_trace_neckdown_halfwidth(item, layer_no)
+                    {
+                        if neckdown > 0 {
+                            half_width = half_width.min(f64::from(neckdown));
+                        }
+                    }
+                }
+            }
+        }
+
         // `:377-398`: thin/thick.
         let next_room_is_thick = if self.engine.rooms.room(next_room).kind == RoomKind::Obstacle {
             self.engine.obstacle_room_is_thick(next_room)

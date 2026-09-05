@@ -1315,6 +1315,28 @@ impl<'b> AutorouteEngine<'b> {
         }
     }
 
+    /// `Pin.get_trace_neckdown_halfwidth(layer)` (`board/Pin.java:534-537`):
+    /// `max(0.5 * min_width - 1, 1)` of the pad's bounding box on that layer.
+    /// `None` when the item is not a pin or has no pad shape on `layer` —
+    /// callers then leave the half width alone (the pin is not on the layer,
+    /// so no neckdown applies).
+    pub fn pin_trace_neckdown_halfwidth(&self, pin: ItemId, layer: i32) -> Option<i32> {
+        let item = self.board.store().get(pin)?;
+        let ItemKind::Pin(pin_payload) = &item.kind else {
+            return None;
+        };
+        if !item.is_on_layer(layer) {
+            return None;
+        }
+        let pad = self
+            .board
+            .padstacks()
+            .get(pin_payload.padstack_no)?
+            .shape_on_layer(layer)?;
+        let min_width = pad.bounding_box().min_width();
+        Some((0.5 * min_width - 1.0).max(1.0) as i32)
+    }
+
     /// Inserts a completed room into the engine-local tree of its layer.
     pub(crate) fn insert_room_in_tree(&mut self, room_id: RoomId) {
         let bounds =
