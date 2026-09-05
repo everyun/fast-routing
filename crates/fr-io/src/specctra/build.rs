@@ -50,6 +50,10 @@ pub struct ImportOptions {
     pub copper_to_edge_clearance_um: Option<f64>,
     /// `router.hole_clearance_um`, default 0 µm.
     pub hole_clearance_um: Option<f64>,
+    /// Override clearance for inner board cutouts (Edge.Cuts holes) in µm.
+    /// When `None` (default), inner cutouts map to the `board_edge` clearance
+    /// class (inheriting the same clearance rule as the outer board boundary).
+    pub cutout_clearance_um: Option<f64>,
 }
 
 impl Default for ImportOptions {
@@ -57,6 +61,7 @@ impl Default for ImportOptions {
         ImportOptions {
             copper_to_edge_clearance_um: Some(500.0),
             hole_clearance_um: Some(0.0),
+            cutout_clearance_um: None,
         }
     }
 }
@@ -504,6 +509,7 @@ struct Builder<'a> {
     outline_shapes: Vec<BoardShape>,
     outline_holes: Vec<BoardShape>,
     outline_clearance_class: i32,
+    cutout_clearance_class: i32,
     items: Vec<Pending>,
     board_padstacks: fr_board::PadstackTable,
     /// Interned board padstacks, keyed by the placement that produced them.
@@ -634,6 +640,7 @@ impl<'a> Builder<'a> {
             outline_shapes: Vec::new(),
             outline_holes: Vec::new(),
             outline_clearance_class: 0,
+            cutout_clearance_class: 0,
             items: Vec::new(),
             board_padstacks: fr_board::PadstackTable::new(),
             padstack_cache: HashMap::new(),
@@ -653,6 +660,7 @@ impl<'a> Builder<'a> {
         builder.resolve_outline_clearance_class();
         builder.insert_outline_item();
         builder.apply_copper_to_edge_clearance_override();
+        builder.apply_cutout_clearance_override();
         builder.apply_hole_clearance_override();
         builder.insert_outline_holes();
         Ok(builder)
@@ -880,7 +888,7 @@ impl<'a> Builder<'a> {
     }
 
     /// §6.2 step 15: every hole in the outline becomes an `ObstacleArea` on **every** layer, with
-    /// clearance class 0 and `SYSTEM_FIXED`.
+    /// `cutout_clearance_class` and `SYSTEM_FIXED`.
     fn insert_outline_holes(&mut self) {
         let holes = self.outline_holes.clone();
         for hole in &holes {
@@ -889,7 +897,7 @@ impl<'a> Builder<'a> {
                     hole,
                     layer,
                     ObstacleKind::Keepout,
-                    0,
+                    self.cutout_clearance_class,
                     FixedState::SystemFixed,
                     0,
                 );
@@ -972,6 +980,66 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// Clearance class for inner cutouts (Edge.Cuts cutouts/holes).
+    ///
+    /// When `cutout_clearance_um` is None (the default), cutouts inherit the
+    /// `board_edge` clearance class (the same rule as the outer board boundary).
+    ///
+    /// When `cutout_clearance_um` is Some(um), a dedicated `cutout_edge` clearance
+    /// class is appended and written symmetrically against every class on every layer.
+    fn apply_cutout_clearance_override(&mut self) {
+        let Some(configured_um) = self.options.cutout_clearance_um else {
+            self.cutout_clearance_class = self.outline_clearance_class;
+            return;
+        };
+        if configured_um < 0.0 {
+            self.warn(format!(
+                "Ignoring router.cutout_clearance_um because it is negative: {configured_um}"
+            ));
+            self.cutout_clearance_class = self.outline_clearance_class;
+            return;
+        }
+        let board_resolution = self.ast.resolution.max(1);
+        let configured_units = Unit::scale(
+            configured_um * f64::from(board_resolution),
+            Unit::Um,
+            self.ast.unit,
+        )
+        .jround() as i32;
+        let cutout_edge_class = match self.rules.clearance_matrix.get_no("cutout_edge") {
+            Some(index) => index,
+            None => {
+                self.rules.clearance_matrix.append_class("cutout_edge");
+                match self.rules.clearance_matrix.get_no("cutout_edge") {
+                    Some(index) => index,
+                    None => {
+                        self.warn("Unable to create the cutout_edge clearance class");
+                        self.cutout_clearance_class = self.outline_clearance_class;
+                        return;
+                    }
+                }
+            }
+        };
+        let class_count = self.rules.clearance_matrix.class_count();
+        for layer in 0..self.layer_count {
+            for class_no in 1..class_count {
+                self.rules.clearance_matrix.set_value_on_layer(
+                    cutout_edge_class,
+                    class_no,
+                    layer,
+                    configured_units,
+                );
+                self.rules.clearance_matrix.set_value_on_layer(
+                    class_no,
+                    cutout_edge_class,
+                    layer,
+                    configured_units,
+                );
+            }
+        }
+        self.cutout_clearance_class = cutout_edge_class as i32;
+    }
+
     /// `HeadlessBoardManager.applyHoleClearanceOverride` (`:346-412`).
     ///
     /// With the shipped default of 0 µm this only records the value; the `hole_edge` clearance
@@ -1017,6 +1085,27 @@ impl<'a> Builder<'a> {
         self.insert_missing_power_planes();
     }
 
+    /// Determines whether a structure keepout is an inner board cutout
+    /// (e.g. KiCad Edge.Cuts hole exported via `SPECCTRA_DB::fillBOUNDARY`
+    /// as `(keepout "" (polygon signal 0 ...))`).
+    fn is_inner_cutout(&self, area: &DsnArea, kind: ObstacleKind) -> bool {
+        if kind != ObstacleKind::Keepout {
+            return false;
+        }
+        if area.clearance_class_name.is_some() {
+            return false;
+        }
+        if area.shapes.is_empty() || !area.shapes.iter().all(|s| s.layer().is_signal_pseudo()) {
+            return false;
+        }
+        if let Some(name) = &area.name {
+            if !name.is_empty() {
+                return false;
+            }
+        }
+        true
+    }
+
     /// §11.2 `Structure.insertKeepout`.
     ///
     /// A degenerate keepout is skipped with a warning rather than aborting the read — a v2
@@ -1032,7 +1121,11 @@ impl<'a> Builder<'a> {
             ));
             return;
         }
-        let clearance_class = self.keepout_clearance_class(area.clearance_class_name.as_deref());
+        let clearance_class = if self.is_inner_cutout(area, kind) {
+            self.cutout_clearance_class
+        } else {
+            self.keepout_clearance_class(area.clearance_class_name.as_deref())
+        };
         let layer = area.shapes[0].layer().clone();
         if layer.is_signal_pseudo() {
             for index in 0..self.layer_count {

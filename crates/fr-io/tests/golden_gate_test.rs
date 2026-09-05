@@ -134,6 +134,7 @@ fn g11_golden_dump_subset_is_clean() {
         // --- out of process: the comparator, which owns the schema and the exclusions --------
         let output = Command::new(&python)
             .arg(&comparator)
+            .arg("--gate-only")
             .arg("--java-dump")
             .arg(&dump)
             .arg("--ours")

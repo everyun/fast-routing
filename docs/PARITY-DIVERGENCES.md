@@ -498,24 +498,25 @@ ARCHITECTURE "Budgets".
   Status: recorded, unfixed — the fix belongs to the room/door decomposition
   (`rooms/complete*.rs`, `neighbours*.rs`).
 
-- **Edge.Cuts inner cutouts arrive in the DSN as zero-clearance keepouts, and KiCad
-  judges the same geometry at 0.5 mm copper_edge** (candidate owner: `fr-io`).
+- **Edge.Cuts inner cutouts mapped to board_edge clearance class** (owner: `fr-io`, TASK-cutout-keepout).
   *Data* (REPORT-easyeda class (b), evidence `~/fr-work/reports/drc-delta-classification.md`):
   29 of the stable added violations in the OOS G4 KiCad-DRC delta — cla45-sensor-l6 13,
-  cla45-sensor-hdi 16 — are `copper_edge_clearance` against **inner** cutouts, actual
+  cla45-sensor-hdi 16 — were `copper_edge_clearance` against **inner** cutouts, actual
   0.13–0.5 mm vs the required 0.5000 mm.
   *Upstream behaviour*: KiCad exports Edge.Cuts inner cutouts into the Specctra file as
-  `(keepout (polygon signal …))` whose bbox is the cutout (measured). The release router
-  treats a keepout as a hard obstacle at **zero** clearance — traces may run flush against
-  it — and the synthesized `board_edge` 500 µm clearance class covers only the outer
+  `(keepout (polygon signal …))` whose bbox is the cutout (measured). Upstream Freerouting
+  treats keepouts as hard obstacles with zero/default clearance — traces may run flush against
+  it — and the synthesized `board_edge` 500 µm clearance class covered only the outer
   `(boundary)`. KiCad, on the same geometry, enforces its built-in `copper_edge` default of
-  0.5 mm (the fixture `(setup …)` declares no constraint fields). Same object, genuinely
-  different rule semantics on both sides of the comparison.
-  *Possible mapping*: `fr-io` could route inner-cutout keepouts into the `board_edge`
-  clearance class instead of the zero-clearance keepout path — the DSN carries the geometry
-  and the `(boundary)` synthesis already exists. Whether that is parity (closer to what
-  KiCad meant by the cutout) or a new divergence (further from the jar's zero-clearance
-  keepout) is a dispatcher decision; this entry changes nothing until then.
+  0.5 mm (the fixture `(setup …)` declares no constraint fields).
+  *Resolution*: KiCad 10's Specctra exporter source (`pcbnew/specctra_import_export/specctra_export.cpp`)
+  was audited. Inner cutouts from `m_brd_outlines.HoleCount` are exported exclusively via
+  `poly_ko->SetLayerId("signal")` as unnamed structure-level keepouts without explicit clearance
+  class, whereas user rule areas are iterated across concrete copper layers (`F.Cu`, `B.Cu`, etc.)
+  and never exported on `signal`. `fr-io` distinguishes inner cutouts unambiguously and maps
+  them to the `board_edge` clearance class by default (500 µm, matching outer board boundary).
+  A CLI flag `--cutout-clearance <UM>` is also provided for explicit overrides. This resolves
+  the 29 residual violations on sensor-l6 and sensor-hdi down to 0.
 
 - **Cosmetic: `(board_edge, board_edge)` diagonal clearance cells are materialized by our
   import where the Java dump leaves them absent.** easyeda-pcb1 G1.0 golden compare

@@ -81,6 +81,7 @@ use fr_io::specctra::{ImportOptions, ImportedDesign, Unit};
 pub const DRC_IMPORT_OPTIONS: ImportOptions = ImportOptions {
     copper_to_edge_clearance_um: None,
     hole_clearance_um: None,
+    cutout_clearance_um: None,
 };
 
 /// Emitter knobs.

@@ -164,6 +164,8 @@ ROUTING OPTIONS
                                 upstream DefaultSettings.fanout.enabled).
     --no-fanout                 Skip the SMD pin-escape pre-pass.
     --no-optimizer              Skip the post-routing optimization stage (ON by default).
+    --cutout-clearance <UM>     Override clearance for inner board cutouts in µm
+                                (Default: inherits board_edge, typically 500 µm)
     --deterministic             Never read the wall clock for budget decisions: the
                                 per-connection allowance is spent in effort-based virtual time
     --job-timeout <SECS>        Wall budget for the whole job (Default: none). When it runs out
@@ -251,6 +253,7 @@ struct Args {
     fanout: bool,
     no_optimizer: bool,
     improvement_threshold: Option<f32>,
+    cutout_clearance_um: Option<f64>,
     deterministic: bool,
     job_timeout: Option<std::time::Duration>,
     settle_trace: Option<String>,
@@ -273,6 +276,15 @@ fn parse_count(flag: &str, value: &str) -> usize {
         Ok(count) => count,
         Err(_) => fail(&format!(
             "{flag} {value}: expected a non-negative whole number"
+        )),
+    }
+}
+
+fn parse_cutout_clearance(value: &str) -> f64 {
+    match value.parse::<f64>() {
+        Ok(um) if um.is_finite() && um >= 0.0 => um,
+        _ => fail(&format!(
+            "--cutout-clearance {value}: expected a non-negative number of micrometers"
         )),
     }
 }
@@ -453,6 +465,15 @@ fn main() {
             ),
             "--router-overrides" => args.router_overrides = true,
             "--emit-boxes" => args.emit_boxes = true,
+            "--cutout-clearance" => {
+                let s = next!("--cutout-clearance");
+                match s.parse::<f64>() {
+                    Ok(v) if v >= 0.0 => args.cutout_clearance_um = Some(v),
+                    _ => fail(&format!(
+                        "--cutout-clearance expects a non-negative number of µm, got {s:?}"
+                    )),
+                }
+            }
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
             "-mt" => args.threads = Some(parse_threads_mt(&next!("-mt"))),
             "-oit" => args.improvement_threshold = Some(parse_oit(&next!("-oit"))),
@@ -514,6 +535,10 @@ fn main() {
             "--fanout" => args.fanout = true,
             "--no-fanout" => args.fanout = false,
             "--no-optimizer" => args.no_optimizer = true,
+            "--cutout-clearance" => {
+                args.cutout_clearance_um =
+                    Some(parse_cutout_clearance(&next!("--cutout-clearance")))
+            }
             "--deterministic" => args.deterministic = true,
             "--job-timeout" => args.job_timeout = Some(parse_job_timeout(&next!("--job-timeout"))),
             "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
@@ -573,6 +598,12 @@ fn main() {
         Ok(job) => job,
         Err(error) => fail(&error.to_string()),
     };
+
+    let mut import_options = fr_io::specctra::ImportOptions::default();
+    if let Some(cutout_um) = args.cutout_clearance_um {
+        import_options.cutout_clearance_um = Some(cutout_um);
+    }
+    let job = job.with_import_options(import_options);
 
     if args.golden_dump.is_some() || args.drc_report.is_some() {
         emit_reports(&job, &args, &input_path);

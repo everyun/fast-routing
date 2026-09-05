@@ -878,6 +878,7 @@ fn the_copper_to_edge_override_is_optional() {
         ImportOptions {
             copper_to_edge_clearance_um: None,
             hole_clearance_um: None,
+            cutout_clearance_um: None,
         },
     )
     .unwrap();
@@ -1487,5 +1488,166 @@ fn snap_angle_keywords_map_to_the_enum_ordinal() {
     assert_eq!(
         undeclared.rules.get_trace_angle_restriction(),
         RulesRestriction::FortyFiveDegree
+    );
+}
+
+#[test]
+fn inner_cutout_keepout_inherits_board_edge_clearance_class() {
+    let dsn = r#"(pcb cutout_test
+  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "KiCad's Pcbnew") (host_version "10.0.5"))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path pcb 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (keepout "" (polygon signal 0 2000 2000 4000 2000 4000 4000 2000 4000 2000 2000))
+    (via "Via[0-1]_800:400_um")
+    (rule (width 200) (clearance 200))
+  )
+  (placement)
+  (library (padstack "Via[0-1]_800:400_um" (shape (circle F.Cu 800)) (shape (circle B.Cu 800))))
+  (network (class default (rule (width 200))))
+  (wiring)
+)"#;
+    let design = import(dsn).expect("board imports");
+    let board_edge_no = design.rules.clearance_matrix.get_no("board_edge").expect("board_edge class exists");
+
+    // The keepout on signal must be instantiated on both signal layers with board_edge clearance class.
+    let keepouts: Vec<_> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| matches!(item.kind, fr_board::item::ItemKind::ObstacleArea(_)))
+        .collect();
+    assert_eq!(keepouts.len(), 2, "one keepout on each of the 2 signal layers");
+    for (_, item) in &keepouts {
+        assert_eq!(item.clearance_class, board_edge_no as i32, "cutout keepout inherits board_edge clearance class");
+    }
+
+    // Clearance against wire (class 1) must be 5000 (500 µm in 10-unit resolution).
+    assert_eq!(
+        design.rules.clearance_matrix.get_value(board_edge_no, 1, 0),
+        5000
+    );
+}
+
+#[test]
+fn user_keepout_on_concrete_layer_does_not_inherit_board_edge() {
+    let dsn = r#"(pcb user_keepout_test
+  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "KiCad's Pcbnew") (host_version "10.0.5"))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path pcb 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (keepout "" (polygon F.Cu 0 2000 2000 4000 2000 4000 4000 2000 4000 2000 2000))
+    (via "Via[0-1]_800:400_um")
+    (rule (width 200) (clearance 200))
+  )
+  (placement)
+  (library (padstack "Via[0-1]_800:400_um" (shape (circle F.Cu 800)) (shape (circle B.Cu 800))))
+  (network (class default (rule (width 200))))
+  (wiring)
+)"#;
+    let design = import(dsn).expect("board imports");
+    let board_edge_no = design.rules.clearance_matrix.get_no("board_edge").expect("board_edge class exists");
+
+    let keepouts: Vec<_> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| matches!(item.kind, fr_board::item::ItemKind::ObstacleArea(_)))
+        .collect();
+    assert_eq!(keepouts.len(), 1, "only on F.Cu");
+    for (_, item) in &keepouts {
+        assert_ne!(
+            item.clearance_class, board_edge_no as i32,
+            "user keepout on F.Cu must NOT inherit board_edge"
+        );
+    }
+}
+
+#[test]
+fn named_keepout_does_not_inherit_board_edge() {
+    let dsn = r#"(pcb named_keepout_test
+  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "KiCad's Pcbnew") (host_version "10.0.5"))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path pcb 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (keepout "ANTENNA" (polygon signal 0 2000 2000 4000 2000 4000 4000 2000 4000 2000 2000))
+    (via "Via[0-1]_800:400_um")
+    (rule (width 200) (clearance 200))
+  )
+  (placement)
+  (library (padstack "Via[0-1]_800:400_um" (shape (circle F.Cu 800)) (shape (circle B.Cu 800))))
+  (network (class default (rule (width 200))))
+  (wiring)
+)"#;
+    let design = import(dsn).expect("board imports");
+    let board_edge_no = design.rules.clearance_matrix.get_no("board_edge").expect("board_edge class exists");
+
+    let keepouts: Vec<_> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| matches!(item.kind, fr_board::item::ItemKind::ObstacleArea(_)))
+        .collect();
+    assert_eq!(keepouts.len(), 2);
+    for (_, item) in &keepouts {
+        assert_ne!(
+            item.clearance_class, board_edge_no as i32,
+            "named keepout must NOT inherit board_edge"
+        );
+    }
+}
+
+#[test]
+fn cutout_clearance_override_option() {
+    let dsn = r#"(pcb cutout_override_test
+  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "KiCad's Pcbnew") (host_version "10.0.5"))
+  (resolution um 10)
+  (unit um)
+  (structure
+    (layer F.Cu (type signal))
+    (layer B.Cu (type signal))
+    (boundary (path pcb 0 0 0 10000 0 10000 10000 0 10000 0 0))
+    (keepout "" (polygon signal 0 2000 2000 4000 2000 4000 4000 2000 4000 2000 2000))
+    (via "Via[0-1]_800:400_um")
+    (rule (width 200) (clearance 200))
+  )
+  (placement)
+  (library (padstack "Via[0-1]_800:400_um" (shape (circle F.Cu 800)) (shape (circle B.Cu 800))))
+  (network (class default (rule (width 200))))
+  (wiring)
+)"#;
+    let options = ImportOptions {
+        cutout_clearance_um: Some(350.0),
+        ..Default::default()
+    };
+    let design = import_with_options(dsn.as_bytes(), options).expect("board imports");
+    let cutout_edge_no = design.rules.clearance_matrix.get_no("cutout_edge").expect("cutout_edge class created");
+
+    let keepouts: Vec<_> = design
+        .board
+        .store()
+        .iter()
+        .filter(|(_, item)| matches!(item.kind, fr_board::item::ItemKind::ObstacleArea(_)))
+        .collect();
+    assert_eq!(keepouts.len(), 2);
+    for (_, item) in &keepouts {
+        assert_eq!(
+            item.clearance_class, cutout_edge_no as i32,
+            "cutout keepout receives cutout_edge class"
+        );
+    }
+    // 350 µm at 10 resolution = 3500
+    assert_eq!(
+        design.rules.clearance_matrix.get_value(cutout_edge_no, 1, 0),
+        3500
     );
 }
