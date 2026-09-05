@@ -1,0 +1,9 @@
+Imported  in 0.04s: 2 layers, 1178 items (564 pins, 613 traces, 0 vias)
+Board: 1429 items (564 pins, 864 traces, 0 vias); router delta +251 traces, +0 vias
+Router: 2 passes, 81 routed, 34 failed, 0 ripped, 163 pins fanned out
+Router stopped on job deadline (0 board restores, 2 connections hit their budget)
+Referee: 275 clearance violations, 27 of 410 connections incomplete, score 800.00/1000
+Total 287.75s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue070-Autorouter_FQ101_PCB_2022-05-13.rust.ses
+27 of 410 connections still incomplete
+job budget spent — the session above is the best board the run held (27 of 410 connections incomplete; 0.84s of the budget was reserved for the shutdown)

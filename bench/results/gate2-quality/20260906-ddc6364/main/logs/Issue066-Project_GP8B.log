@@ -1,0 +1,9 @@
+Imported C:\Users\guill\Desktop\Creation\Github\GP8B\Project_GP8B.dsn in 0.02s: 4 layers, 2469 items (1032 pins, 107 traces, 0 vias)
+Board: 3669 items (1032 pins, 874 traces, 433 vias); router delta +767 traces, +433 vias
+Router: 1 passes, 140 routed, 175 failed, 148 ripped, 937 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 23 clearance violations, 448 of 759 connections incomplete, score 403.68/1000
+Total 283.81s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue066-Project_GP8B.rust.ses
+448 of 759 connections still incomplete
+job budget spent — the session above is the best board the run held (448 of 759 connections incomplete; 1.48s of the budget was reserved for the shutdown)

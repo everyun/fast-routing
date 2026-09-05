@@ -1,0 +1,9 @@
+Imported E:\drv_e\KiCad\_Projects\display-8-digit-595__freeroute-problem\display-8-digit-hc595.dsn in 0.01s: 2 layers, 500 items (103 pins, 218 traces, 24 vias)
+Board: 558 items (103 pins, 268 traces, 32 vias); router delta +50 traces, +8 vias
+Router: 2 passes, 27 routed, 0 failed, 0 ripped, 2 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.98 -> 999.98, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 64 connections incomplete, score 999.98/1000
+Total 52.43s
+warning: Keepout zone '' was skipped because its geometry is degenerate
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue229-display-8-digit-hc595.rust.ses

@@ -1,0 +1,8 @@
+Imported ERISC 4 in 0.19s: 2 layers, 4618 items (984 pins, 2326 traces, 443 vias)
+Board: 4617 items (984 pins, 2325 traces, 443 vias); router delta -1 traces, +0 vias
+Router: 1 passes, 0 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on board complete (0 board restores)
+Referee: 63 clearance violations, 0 of 702 connections incomplete, score 982.02/1000
+Total 2.10s
+warning: Network.insert_net_class: clearance class not found at 'kicad_default'
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue103-Board-Routed.rust.ses

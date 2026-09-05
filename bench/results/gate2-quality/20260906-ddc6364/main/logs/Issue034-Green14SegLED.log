@@ -1,0 +1,8 @@
+Imported C:\Data\DEV\KiCad\Green14segLED\Green14SegLED\Green14SegLED.dsn in 0.01s: 2 layers, 895 items (278 pins, 0 traces, 0 vias)
+Board: 1210 items (278 pins, 264 traces, 51 vias); router delta +264 traces, +51 vias
+Router: 7 passes, 144 routed, 0 failed, 105 ripped, 151 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.98 -> 999.98, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 147 connections incomplete, score 999.98/1000
+Total 41.84s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue034-Green14SegLED.rust.ses

@@ -1,0 +1,9 @@
+Imported /home/sliedes/projects/xyz/pcm1681.dsn in 0.01s: 2 layers, 1076 items (281 pins, 0 traces, 0 vias)
+Board: 1586 items (281 pins, 406 traces, 104 vias); router delta +406 traces, +104 vias
+Router: 5 passes, 249 routed, 7 failed, 485 ripped, 443 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 25 clearance violations, 35 of 204 connections incomplete, score 803.90/1000
+Total 284.47s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue039-bug-design.rust.ses
+35 of 204 connections still incomplete
+job budget spent — the session above is the best board the run held (35 of 204 connections incomplete; 0.79s of the budget was reserved for the shutdown)

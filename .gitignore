@@ -9,6 +9,7 @@ target/
 *.tmp
 *.log
 !bench/golden/**/*.log
+!bench/results/gate2-quality/**/*.log
 # per-run temp out-dirs of the stability sweep (canonical output: sweep.json)
 bench/results/java-stability/*/
 # per-run JVM profile dirs of the uncapped re-run (canonical output: <stem>.log + results.json)

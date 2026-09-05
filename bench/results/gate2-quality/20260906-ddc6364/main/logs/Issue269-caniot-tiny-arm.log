@@ -1,0 +1,9 @@
+Imported E:\Home\ProjetsRecherche\Embedded\CAN\caniot-tiny-arm\caniot-tiny-arm\freerouting.dsn in 0.02s: 2 layers, 1557 items (288 pins, 335 traces, 0 vias)
+Board: 1612 items (288 pins, 390 traces, 0 vias); router delta +55 traces, +0 vias
+Router: 10 passes, 68 routed, 94 failed, 592 ripped, 20 pins fanned out
+Router stopped on job deadline (0 board restores, finished on the best board seen, 1 connections hit their budget)
+Referee: 4 clearance violations, 83 of 192 connections incomplete, score 563.54/1000
+Total 284.04s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue269-caniot-tiny-arm.rust.ses
+83 of 192 connections still incomplete
+job budget spent — the session above is the best board the run held (83 of 192 connections incomplete; 1.03s of the budget was reserved for the shutdown)

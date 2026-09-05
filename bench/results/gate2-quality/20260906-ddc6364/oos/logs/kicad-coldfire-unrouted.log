@@ -1,0 +1,9 @@
+Imported /Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/kicad-coldfire-unrouted.dsn in 0.03s: 4 layers, 2624 items (825 pins, 0 traces, 0 vias)
+Board: 3670 items (825 pins, 787 traces, 259 vias); router delta +787 traces, +259 vias
+Router: 3 passes, 260 routed, 8 failed, 207 ripped, 692 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 12 clearance violations, 38 of 541 connections incomplete, score 925.31/1000
+Total 283.66s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260906-000821/ses/kicad-coldfire-unrouted.rust.ses
+38 of 541 connections still incomplete
+job budget spent — the session above is the best board the run held (38 of 541 connections incomplete; 1.56s of the budget was reserved for the shutdown)

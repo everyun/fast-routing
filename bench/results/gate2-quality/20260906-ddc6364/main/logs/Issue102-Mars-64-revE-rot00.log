@@ -1,0 +1,9 @@
+Imported C:\Work\BioBalanceDetector\Hardware\Schematics\BBDProto07\Mars-64\Autorouter-revE\Mars-64-revE-rot00.dsn in 0.00s: 2 layers, 1022 items (200 pins, 0 traces, 65 vias)
+Board: 1345 items (200 pins, 246 traces, 142 vias); router delta +246 traces, +77 vias
+Router: 11 passes, 204 routed, 1 failed, 340 ripped, 198 pins fanned out
+Router stopped on job deadline (1 board restore, 1 connections hit their budget)
+Referee: 64 clearance violations, 6 of 106 connections incomplete, score 822.59/1000
+Total 284.64s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue102-Mars-64-revE-rot00.rust.ses
+6 of 106 connections still incomplete
+job budget spent — the session above is the best board the run held (6 of 106 connections incomplete; 0.76s of the budget was reserved for the shutdown)

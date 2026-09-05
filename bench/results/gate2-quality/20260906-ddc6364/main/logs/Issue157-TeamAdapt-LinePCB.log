@@ -1,0 +1,9 @@
+Imported /home/aniket/Documents/PSR Team Adapt/TeamAdapt-LinePCB/TeamAdapt-LinePCB.dsn in 0.03s: 2 layers, 2173 items (291 pins, 47 traces, 0 vias)
+Board: 2557 items (291 pins, 392 traces, 39 vias); router delta +345 traces, +39 vias
+Router: 18 passes, 122 routed, 4 failed, 48 ripped, 194 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 4 of 50 items improved, score 975.21 -> 975.21, stopped on below improvement threshold
+Referee: 18 clearance violations, 2 of 226 connections incomplete, score 975.21/1000
+Total 203.79s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue157-TeamAdapt-LinePCB.rust.ses
+2 of 226 connections still incomplete

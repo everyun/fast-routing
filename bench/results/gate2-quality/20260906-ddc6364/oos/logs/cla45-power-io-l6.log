@@ -1,0 +1,10 @@
+Imported /Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/cla45-power-io-l6.dsn in 0.06s: 6 layers, 2744 items (665 pins, 1100 traces, 262 vias)
+Board: 2984 items (665 pins, 1308 traces, 294 vias); router delta +208 traces, +32 vias
+Router: 1 passes, 54 routed, 86 failed, 27 ripped, 80 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 531 clearance violations, 75 of 495 connections incomplete, score 633.93/1000
+Total 284.04s
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260906-000821/ses/cla45-power-io-l6.rust.ses
+75 of 495 connections still incomplete
+job budget spent — the session above is the best board the run held (75 of 495 connections incomplete; 1.62s of the budget was reserved for the shutdown)

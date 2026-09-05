@@ -1,0 +1,9 @@
+Imported /Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/cla45-sensor-l6.dsn in 0.01s: 6 layers, 1082 items (581 pins, 0 traces, 0 vias)
+Board: 1687 items (581 pins, 514 traces, 91 vias); router delta +514 traces, +91 vias
+Router: 1 passes, 82 routed, 93 failed, 171 ripped, 528 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 10 clearance violations, 113 of 369 connections incomplete, score 688.34/1000
+Total 284.42s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260906-000821/ses/cla45-sensor-l6.rust.ses
+113 of 369 connections still incomplete
+job budget spent — the session above is the best board the run held (113 of 369 connections incomplete; 0.79s of the budget was reserved for the shutdown)

@@ -1,0 +1,9 @@
+Imported /home/sergey/Dropbox/Сергей С. Смирнов/Паяльная станция/Проект печатной платы/Паяльная станция.dsn in 0.00s: 2 layers, 627 items (175 pins, 0 traces, 0 vias)
+Board: 761 items (175 pins, 121 traces, 13 vias); router delta +121 traces, +13 vias
+Router: 18 passes, 90 routed, 10 failed, 11 ripped, 0 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 13 of 50 items improved, score 911.91 -> 911.91, stopped on below improvement threshold
+Referee: 18 clearance violations, 6 of 109 connections incomplete, score 911.91/1000
+Total 272.57s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue110-Паяльная станция.rust.ses
+6 of 109 connections still incomplete

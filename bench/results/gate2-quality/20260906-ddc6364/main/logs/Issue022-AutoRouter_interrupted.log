@@ -1,0 +1,25 @@
+Imported C:\Users\Owner\Desktop\hw_72_nb_git_PLEASEdoNOTforget20\hw72nb.dsn in 0.06s: 2 layers, 3673 items (1133 pins, 721 traces, 39 vias)
+Board: 3960 items (1133 pins, 1001 traces, 46 vias); router delta +280 traces, +7 vias
+Router: 11 passes, 223 routed, 2 failed, 242 ripped, 109 pins fanned out
+Router stopped on job deadline (1 board restore, finished on the best board seen, 1 connections hit their budget)
+Referee: 531 clearance violations, 14 of 552 connections incomplete, score 782.24/1000
+Total 283.38s
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue022-AutoRouter_interrupted.rust.ses
+14 of 552 connections still incomplete
+job budget spent — the session above is the best board the run held (14 of 552 connections incomplete; 2.09s of the budget was reserved for the shutdown)

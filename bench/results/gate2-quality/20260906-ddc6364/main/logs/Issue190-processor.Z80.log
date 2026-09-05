@@ -1,0 +1,17 @@
+Imported C:\Users\Andrew\Desktop\System CD Updates\data\duodyne\GitHub\03 processor.Z80, V1.0\processor.Z80.dsn in 0.19s: 2 layers, 10885 items (1365 pins, 5981 traces, 223 vias)
+Board: 10903 items (1365 pins, 5999 traces, 223 vias); router delta +18 traces, +0 vias
+Router: 2 passes, 18 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 1 passes, 0 of 18 items improved, score 670.97 -> 670.97, stopped on below improvement threshold
+Referee: 1372 clearance violations, 0 of 834 connections incomplete, score 670.97/1000
+Total 8.45s
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue190-processor.Z80.rust.ses

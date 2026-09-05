@@ -1,0 +1,9 @@
+Imported C:\Projects\CNC\PCBDesign\GenericBoard\v1.0\freerouting.dsn in 3.11s: 2 layers, 1070 items (837 pins, 0 traces, 0 vias)
+Board: 1070 items (837 pins, 0 traces, 0 vias); router delta +0 traces, +0 vias
+Router: 3 passes, 0 routed, 355 failed, 0 ripped, 0 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 17 clearance violations, 378 of 424 connections incomplete, score 100.47/1000
+Total 299.62s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue208-freerouting.rust.ses
+378 of 424 connections still incomplete
+job budget spent — the session above is the best board the run held (378 of 424 connections incomplete; 0.79s of the budget was reserved for the shutdown)

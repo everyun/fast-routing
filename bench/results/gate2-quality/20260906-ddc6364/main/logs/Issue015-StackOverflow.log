@@ -1,0 +1,19 @@
+Imported C:\Users\Owner\Desktop\hw_72_nb_git_JaredDoesNotWantGitHub\hw72nb.dsn in 0.06s: 2 layers, 2871 items (762 pins, 657 traces, 12 vias)
+Board: 3027 items (762 pins, 809 traces, 16 vias); router delta +152 traces, +4 vias
+Router: 19 passes, 163 routed, 1 failed, 315 ripped, 57 pins fanned out
+Router stopped on job deadline (1 board restore, 1 connections hit their budget)
+Referee: 511 clearance violations, 6 of 520 connections incomplete, score 791.92/1000
+Total 283.58s
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue015-StackOverflow.rust.ses
+6 of 520 connections still incomplete
+job budget spent — the session above is the best board the run held (6 of 520 connections incomplete; 1.69s of the budget was reserved for the shutdown)

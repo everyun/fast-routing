@@ -1,0 +1,9 @@
+Imported C:\prg\_git\_hw\protein\board\Protein.dsn in 0.02s: 2 layers, 1674 items (648 pins, 167 traces, 0 vias)
+Board: 2615 items (648 pins, 898 traces, 210 vias); router delta +731 traces, +210 vias
+Router: 3 passes, 294 routed, 4 failed, 374 ripped, 334 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 44 clearance violations, 85 of 444 connections incomplete, score 788.73/1000
+Total 284.22s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue113-Protein.rust.ses
+85 of 444 connections still incomplete
+job budget spent — the session above is the best board the run held (85 of 444 connections incomplete; 1.09s of the budget was reserved for the shutdown)

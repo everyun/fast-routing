@@ -1,0 +1,9 @@
+Imported C:\Users\kylec\OneDrive\Documents\KeebMaker\Keyboard Files\KeebMaker Sofle\Choc\KeebMaker Sofle Choc\KeebMaker Sofle Choc.dsn in 0.02s: 2 layers, 5765 items (620 pins, 0 traces, 0 vias)
+Board: 7323 items (620 pins, 1129 traces, 429 vias); router delta +1129 traces, +429 vias
+Router: 4 passes, 357 routed, 4 failed, 120 ripped, 488 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 20 clearance violations, 7 of 426 connections incomplete, score 974.15/1000
+Total 282.23s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue178-KeebMaker_Sofle_Choc.rust.ses
+7 of 426 connections still incomplete
+job budget spent — the session above is the best board the run held (7 of 426 connections incomplete; 3.13s of the budget was reserved for the shutdown)

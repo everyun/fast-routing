@@ -1,0 +1,10 @@
+Imported /Users/strayer/tmp/tairakb.dsn in 0.02s: 2 layers, 6791 items (319 pins, 4 traces, 1 vias)
+Board: 7415 items (319 pins, 488 traces, 141 vias); router delta +484 traces, +140 vias
+Router: 18 passes, 141 routed, 2 failed, 23 ripped, 263 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 992.41 -> 992.41, stopped on near-maximum score
+Referee: 5 clearance violations, 1 of 264 connections incomplete, score 992.41/1000
+Total 234.89s
+warning: Wiring: degenerate wire trace skipped (all corners identical)
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue054-tairakb.rust.ses
+1 of 264 connections still incomplete

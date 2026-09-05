@@ -1,0 +1,9 @@
+Imported /home/andrew/CPU/Current/ERISC 4.0/ERISC 4.0.dsn in 0.01s: 2 layers, 1849 items (984 pins, 0 traces, 0 vias)
+Board: 2474 items (984 pins, 589 traces, 36 vias); router delta +589 traces, +36 vias
+Router: 2 passes, 398 routed, 3 failed, 443 ripped, 97 pins fanned out
+Router stopped on job deadline (0 board restores, 1 connections hit their budget)
+Referee: 60 clearance violations, 227 of 702 connections incomplete, score 659.53/1000
+Total 284.34s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue103-Board-Unrouted.rust.ses
+227 of 702 connections still incomplete
+job budget spent — the session above is the best board the run held (227 of 702 connections incomplete; 1.17s of the budget was reserved for the shutdown)

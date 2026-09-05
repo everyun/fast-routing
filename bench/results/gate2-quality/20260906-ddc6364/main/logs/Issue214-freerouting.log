@@ -1,0 +1,9 @@
+Imported /home/ned/PCS/Pyrenees/Pyrenees-Base-Prototype/freerouting.dsn in 0.06s: 4 layers, 3640 items (546 pins, 963 traces, 167 vias)
+Board: 3894 items (546 pins, 1195 traces, 189 vias); router delta +232 traces, +22 vias
+Router: 3 passes, 42 routed, 0 failed, 2 ripped, 165 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 1 passes, 5 of 50 items improved, score 904.59 -> 904.59, stopped on below improvement threshold
+Referee: 192 clearance violations, 1 of 413 connections incomplete, score 904.59/1000
+Total 57.35s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue214-freerouting.rust.ses
+1 of 413 connections still incomplete

@@ -1,0 +1,9 @@
+Imported C:\Users\Owner\Desktop\hw_micro_rusEFI_GH_PLEASEdoNOTforget20\zMRETestFixture.dsn in 0.02s: 2 layers, 2904 items (1266 pins, 42 traces, 0 vias)
+Board: 3871 items (1266 pins, 1008 traces, 1 vias); router delta +966 traces, +1 vias
+Router: 20 passes, 314 routed, 0 failed, 143 ripped, 688 pins fanned out
+Router stopped on pass limit (3 board restores)
+Optimizer: 1 passes, 0 of 50 items improved, score 787.94 -> 787.94, stopped on below improvement threshold
+Referee: 1138 clearance violations, 1 of 1078 connections incomplete, score 787.94/1000
+Total 115.94s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260905-235107/ses/Issue027-zMRETestFixture.rust.ses
+1 of 1078 connections still incomplete

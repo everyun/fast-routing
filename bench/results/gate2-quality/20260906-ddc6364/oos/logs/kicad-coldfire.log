@@ -1,0 +1,8 @@
+Imported /Users/chiqingzhen/fr-work/kicad-gate/bench/fixtures-oos/kicad-coldfire.dsn in 0.13s: 4 layers, 5551 items (825 pins, 2674 traces, 253 vias)
+Board: 6055 items (825 pins, 3177 traces, 254 vias); router delta +503 traces, +1 vias
+Router: 2 passes, 6 routed, 0 failed, 0 ripped, 471 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 1 passes, 0 of 50 items improved, score 919.40 -> 919.40, stopped on below improvement threshold
+Referee: 218 clearance violations, 0 of 541 connections incomplete, score 919.40/1000
+Total 57.87s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260906-000821/ses/kicad-coldfire.rust.ses

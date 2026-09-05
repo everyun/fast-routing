@@ -1,0 +1,9 @@
+Imported PCB1 in 0.00s: 4 layers, 165 items (164 pins, 0 traces, 0 vias)
+Board: 292 items (164 pins, 125 traces, 2 vias); router delta +125 traces, +2 vias
+Router: 18 passes, 21 routed, 15 failed, 4 ripped, 54 pins fanned out
+Router stopped on stagnation (global) (0 board restores)
+Optimizer: 1 passes, 4 of 50 items improved, score 790.12 -> 790.12, stopped on below improvement threshold
+Referee: 45 clearance violations, 8 of 81 connections incomplete, score 790.12/1000
+Total 114.36s
+Exported Specctra SES session file: /home/chiqingzhen/fr/runs/rev-ddc6364-ddc6364-20260906-000821/ses/easyeda-pcb1.rust.ses
+8 of 81 connections still incomplete
