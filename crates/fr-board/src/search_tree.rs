@@ -258,6 +258,20 @@ pub const TILING_45_ENV: &str = "FR_ROUTER_TILING_45";
 /// stays the default and the switch stays three-valued for the boards where a
 /// 45 mode is measurably better.
 ///
+/// **Re-measured 2026-09-05 (wave A, `84bd710`), retiring the 7/10 verdict.**
+/// After the maze-const collect work, the neckdown branch and the SAT/fork
+/// gates, easy-10 under `Doors` is u same-or-**better** on all 9 routable
+/// fixtures (026 3→2, both Issue110-testProjects 1→0, 143 1→0, 159 3→0), v=0
+/// everywhere; the 24-board `-mp 20 --fanout` regression under `Doors` drops
+/// Issue034's fanout +1v (zero added violations on all 24) and improves
+/// unrouted on 102/054/153/157/269 — but Issue107 goes 0→1 (Java: 0) and
+/// Issue163 7→10 (Java: 9), so the default still stays `Off`: the gate is
+/// per-board non-regression. easyeda-pcb1's fanout stage runs **127×**
+/// faster under `Doors` (4.07 s vs 515.9 s wall, at parity with the jar's
+/// 4.01 s; 13u vs 31u, zero added violations) — the any-angle room machinery
+/// costs ~90× per expansion on that board's tiny neckdown rooms. Details:
+/// `~/fr-work/reports/REPORT-tiling45.md`.
+///
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Tiling45Mode {
     /// Everything any-angle. The shipped default.
