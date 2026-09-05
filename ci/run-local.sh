@@ -70,24 +70,11 @@ step "python tools unittests" python3 -m unittest discover -s bench/tools/tests 
 step "jar audit" python3 bench/tools/jar_audit.py
 step "spec lint" python3 bench/tools/spec_lint.py
 
-# The tree is not rustfmt-clean (~100 files, mostly crates/). Applying rustfmt
-# would rewrite router code, which this task is forbidden to touch. Record the
-# drift; do not fail the pipeline. A dedicated format PR is a dispatcher item.
-step "fmt (report-only)" bash -c '
-  if cargo fmt --all -- --check; then
-    echo "fmt clean"
-  else
-    echo "fmt: pre-existing rustfmt drift (crates/); not failing. See REPORT-ci.md."
-  fi
-'
+# The workspace is rustfmt-clean and clippy-clean since the format task; both
+# steps fail the pipeline on any drift.
+step "fmt" cargo fmt --all -- --check
 
-# Legacy crates (fr-autoroute, fr-drc) are M2-deletion leftovers; G1.3 already
-# carved them out of the clippy-clean bar. `-D warnings` is currently red on
-# pre-existing crates/ (too_many_arguments, implicit_saturating_sub, …) and
-# fixing them is a crates/ rewrite this task is forbidden to do. Run clippy
-# for errors; do not deny warnings until a dedicated cleanup PR.
-step "clippy" cargo clippy --workspace --all-targets \
-  --exclude fr-autoroute --exclude fr-drc
+step "clippy" cargo clippy --workspace --all-targets -- -D warnings
 
 # Companion Issue026.ses / Java golden .ses files are not in the 46-file DSN
 # corpus `fetch_fixtures.sh` produces, and `*.ses` is gitignored, so the five
