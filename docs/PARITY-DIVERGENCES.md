@@ -510,11 +510,13 @@ ARCHITECTURE "Budgets".
   `(boundary)`. KiCad, on the same geometry, enforces its built-in `copper_edge` default of
   0.5 mm (the fixture `(setup …)` declares no constraint fields).
   *Resolution*: KiCad 10's Specctra exporter source (`pcbnew/specctra_import_export/specctra_export.cpp`)
-  was audited. Inner cutouts from `m_brd_outlines.HoleCount` are exported exclusively via
-  `poly_ko->SetLayerId("signal")` as unnamed structure-level keepouts without explicit clearance
-  class, whereas user rule areas are iterated across concrete copper layers (`F.Cu`, `B.Cu`, etc.)
-  and never exported on `signal`. `fr-io` distinguishes inner cutouts unambiguously and maps
-  them to the `board_edge` clearance class by default (500 µm, matching outer board boundary).
+  was audited. Inner cutouts from `m_brd_outlines.HoleCount` in `fillBOUNDARY` are exported
+  exclusively via `poly_ko->SetLayerId("signal")` as unnamed structure-level keepouts without explicit
+  clearance class (i.e. `(keepout "" (polygon signal 0 ...))`). User rule areas in `FromBOARD` are
+  iterated across concrete copper layers (`F.Cu`, `B.Cu`, etc.) via `AllCuMask` and never exported on
+  the pseudo-layer `signal`, and named rule areas carry non-empty names. `fr-io` distinguishes inner cutouts
+  unambiguously (`area.shapes.iter().all(|s| s.layer().is_signal_pseudo()) && area.name.is_empty() && area.clearance_class.is_none()`)
+  and maps them to the `board_edge` clearance class by default (500 µm, matching outer board boundary).
   A CLI flag `--cutout-clearance <UM>` is also provided for explicit overrides. This resolves
   the 29 residual violations on sensor-l6 and sensor-hdi down to 0.
 

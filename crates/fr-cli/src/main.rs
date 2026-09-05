@@ -465,15 +465,6 @@ fn main() {
             ),
             "--router-overrides" => args.router_overrides = true,
             "--emit-boxes" => args.emit_boxes = true,
-            "--cutout-clearance" => {
-                let s = next!("--cutout-clearance");
-                match s.parse::<f64>() {
-                    Ok(v) if v >= 0.0 => args.cutout_clearance_um = Some(v),
-                    _ => fail(&format!(
-                        "--cutout-clearance expects a non-negative number of µm, got {s:?}"
-                    )),
-                }
-            }
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
             "-mt" => args.threads = Some(parse_threads_mt(&next!("-mt"))),
             "-oit" => args.improvement_threshold = Some(parse_oit(&next!("-oit"))),
