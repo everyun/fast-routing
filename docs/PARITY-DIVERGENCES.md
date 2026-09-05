@@ -82,24 +82,11 @@ ARCHITECTURE "Budgets".
   Fix is a three-liner on top of `pin_trace_neckdown_halfwidth` when a board
   demonstrates it.
 
-- **Fanout no-progress stop** (`fr_router::fanout`, `NO_PROGRESS_PASS_LIMIT = 2`).
-  *Upstream* (`autoroute/BatchFanout.java:82-144`) stops a fanout run on three conditions only:
-  `routed_count == 0` (`:111-113`), three consecutive **bit-identical** `(routed_count << 32) ^
-  via_count` pass signatures (`:114-130`, `STAGNATION_PASS_LIMIT = 3`), and an unchanged board
-  hash (`:134-138`). The source comment at `:115-119` records the failure that motivated the
-  oscillation detector: **14 identical passes** on a dense SMD carrier (Issue219-LogicBoard_smt)
-  where pins kept ripping each other's escapes while the ripup budget escalated uselessly — the
-  detector only caught it because the signatures happened to repeat exactly.
-  *We* additionally stop after 2 consecutive passes whose via count did not grow, i.e. passes
-  that escaped no *new* pin. Upstream's three stops are all kept and evaluated first.
-  *Why*: the release's rule needs the per-pass outcome to repeat **exactly**; a cycle that
-  alternates between two states with different via counts runs to `fanout.maxPasses` (20). Ours
-  keys on progress rather than on repetition.
-  *Effect*: on an oscillating board the stage stops strictly earlier and never later, so the
-  fanout via count is a subset of upstream's and the route stage starts from a board with
-  fewer, not more, escapes. On a converging board the two rules agree — every pass that escapes
-  a new pin grows the via count, so the counter never advances. Bounded and one-sided; measure
-  on Issue219 when the fanout gate runs.
+- **Fanout no-progress stop (RETIRED)** — previously `NO_PROGRESS_PASS_LIMIT = 2`.
+  Retired in `fanout-diff`: the premature stop cut off passes 3+ where ripup costs escalate
+  and fanout protection turns off (`ripup_costs > 2 * start_ripup_costs`), preventing blocked
+  pins from ripping earlier stubs and escaping. Aligned strictly to upstream's three stops
+  (`routed_count == 0`, `STAGNATION_PASS_LIMIT = 3`, and board hash unchanged).
 
 - **Ripped connections are requeued inside the pass, at `-mp 1` only**
   (`fr_router::batch::schedule::RequeuePolicy`, default `SinglePassOnly`).

@@ -32,16 +32,13 @@
 //!    `remove_tails(FANOUT_VIA)` (row 32) and later passes pay
 //!    [`crate::ctrl::FANOUT_COST_CONST`] to rip it (row 33).
 //!
-//! # Divergence: the no-progress detector
+//! # Stop rules
 //!
 //! The release stops a fanout run on `routed == 0`, on three consecutive
-//! *identical* `(routed_count, via_count)` pairs, and on an unchanged board hash
-//! (rows 21-23). Its own comment records the motivating failure — Issue219,
-//! **14 identical passes** where pins kept ripping each other's escapes — which
-//! the three-pass oscillation rule only caught because the pairs were bit-equal.
-//! We additionally stop after [`NO_PROGRESS_PASS_LIMIT`] consecutive passes that
-//! routed nothing new, which is strictly earlier and never later. Recorded in
-//! `docs/PARITY-DIVERGENCES.md`.
+//! *identical* `(routed_count, via_count)` pairs (`STAGNATION_PASS_LIMIT = 3`),
+//! and on reaching `maxPasses` (rows 20-23). Its own comment records the
+//! motivating failure — Issue219, **14 identical passes** where pins kept
+//! ripping each other's escapes — which the three-pass oscillation rule catches.
 //!
 //! # Job deadline
 //!
@@ -72,10 +69,6 @@ pub const DEFAULT_MAX_PASSES: i32 = 20;
 /// `BatchFanout.STAGNATION_PASS_LIMIT` (`:95`), row 22: three consecutive
 /// identical `(routed_count << 32) ^ via_count` values stop the run.
 pub const STAGNATION_PASS_LIMIT: u32 = 3;
-
-/// Our earlier stop: this many consecutive passes that routed nothing new.
-/// See the module docs' divergence note.
-pub const NO_PROGRESS_PASS_LIMIT: u32 = 2;
 
 /// `router.fanout.maxEscapeLengthMm` default (`DefaultSettings.java:118`),
 /// row 10 — confirmed against the shipped settings, not the null fallback.
@@ -160,8 +153,6 @@ pub struct FanoutConfig {
     pub density_radius: f64,
     /// `router.fanout.fallbackToBoardVias` (row 27).
     pub fallback_to_board_vias: bool,
-    /// Consecutive zero-progress passes that stop the stage (our divergence).
-    pub no_progress_pass_limit: u32,
     /// The job's wall budget, polled before every pass and every pin.
     /// Defaults to [`JobDeadline::ambient`]; [`JobDeadline::NONE`] opts out.
     pub deadline: JobDeadline,
@@ -189,7 +180,6 @@ impl FanoutConfig {
             max_escape_length: settings.fanout.max_escape_length_mm * scale,
             density_radius: SURROUNDINGS_DENSITY_RADIUS_MM * scale,
             fallback_to_board_vias: settings.fanout.fallback_to_board_vias,
-            no_progress_pass_limit: NO_PROGRESS_PASS_LIMIT,
             deadline: JobDeadline::ambient(),
         }
     }
@@ -397,9 +387,6 @@ pub enum FanoutStop {
     NothingRouted,
     /// Three consecutive identical `(routed, vias)` pairs (row 22).
     Oscillation,
-    /// [`FanoutConfig::no_progress_pass_limit`] zero-progress passes — our
-    /// earlier stop.
-    NoProgress,
     /// `maxPasses` reached (row 20).
     MaxPasses,
     /// `maxItems` reached (row 24).
@@ -542,6 +529,18 @@ pub fn fanout_pass(
                 continue;
             }
             let attempt = fanout_pin(board, rules, settings, config, pin, ripup_costs, scratch);
+            if crate::maze::trace::is_enabled() {
+                crate::maze::trace::conn_landing(&format!(
+                    "FRCONN fanout pass={} cmp={} pin={} net={} ok={:?} center={},{}",
+                    pass_no + 1,
+                    component.component_no,
+                    pin.pin_no,
+                    pin.net_no,
+                    attempt.state(),
+                    pin.center.x,
+                    pin.center.y,
+                ));
+            }
             match attempt.state() {
                 AttemptState::Routed => {
                     counters.routed += 1;
@@ -707,28 +706,6 @@ fn target_distance_square(board: &Board, id: ItemId, pin_center: &IntPoint) -> f
                 (b.ll.y as f64 + b.ur.y as f64) / 2.0,
             )
         }
-        ItemKind::ConductionArea(area) => {
-            let b = match &area.area.relative_area {
-                AreaShape::Box(b) => *b,
-                AreaShape::Octagon(o) => o.bounding_box(),
-                AreaShape::Simplex(s) => s.bounding_box(),
-                AreaShape::Polygon(p) => {
-                    let mut b = IntBox::EMPTY;
-                    for pt in p.corner_array() {
-                        let fp = pt.to_float();
-                        let ip = fp.round();
-                        b = b.union(&IntBox::new(ip.x, ip.y, ip.x, ip.y));
-                    }
-                    b
-                }
-                AreaShape::Convex(v) => v
-                    .iter()
-                    .fold(IntBox::EMPTY, |acc, s| acc.union(&s.bounding_box())),
-            };
-            FloatPoint::new(
-                (b.ll.x as f64 + b.ur.x as f64) / 2.0 + area.area.translation.x as f64,
-                (b.ll.y as f64 + b.ur.y as f64) / 2.0 + area.area.translation.y as f64,
-            )
         }
         _ => return f64::MAX,
     };
@@ -1084,5 +1061,30 @@ mod tests {
     fn an_unarmed_deadline_never_stops_the_stage() {
         let config = FanoutConfig::from_settings(&TestFixture::two_layer_with_pads().settings, 1.0);
         assert!(!config.deadline.is_armed() || !config.deadline.expired());
+    }
+
+    #[test]
+    fn target_distance_square_uses_bounding_box_center_of_bent_trace() {
+        let mut fixture = TestFixture::empty_two_layer();
+        // Insert an L-shaped trace: (0, 0) -> (1000, 0) -> (1000, 2000)
+        // Bounding box is [0, 0]..[1000, 2000], center is (500, 1000)
+        let inserted = fixture.board.insert_trace_points(
+            &[
+                IntPoint::new(0, 0),
+                IntPoint::new(1000, 0),
+                IntPoint::new(1000, 2000),
+            ],
+            0,
+            crate::test_support::TEST_HALF_WIDTH,
+            fr_board::net_nos::NetNos::of(crate::test_support::TEST_NET),
+            1,
+            fr_board::item::FixedState::Unfixed,
+            None,
+        );
+        assert!(inserted.is_ok());
+        let trace_id = inserted.unwrap()[0];
+        let pin_center = IntPoint::new(500, 1000);
+        let dist_sq = target_distance_square(&fixture.board, trace_id, &pin_center);
+        assert_eq!(dist_sq, 0.0);
     }
 }
