@@ -55,8 +55,8 @@
 //! interrupting mid-attempt would make what gets inserted depend on load.
 
 use fr_board::board::Board;
-use fr_board::item::{AreaShape, ItemId, ItemKind};
-use fr_geometry::planar::{FloatPoint, IntBox, IntPoint};
+use fr_board::item::{ItemId, ItemKind};
+use fr_geometry::planar::{FloatPoint, IntPoint};
 use fr_rules::board_rules::BoardRules;
 use fr_rules::router_settings::RouterSettings;
 use fr_rules::via_rule::ViaRule;
@@ -732,7 +732,27 @@ fn target_distance_square(board: &Board, id: ItemId, pin_center: &IntPoint) -> f
                 (b.ll.y as f64 + b.ur.y as f64) / 2.0,
             )
         }
-        }
+        ItemKind::ConductionArea(area) => match &area.area.relative_area {
+            fr_board::item::AreaShape::Box(b) => FloatPoint {
+                x: f64::from(b.ll.x + b.ur.x) / 2.0 + f64::from(area.area.translation.x),
+                y: f64::from(b.ll.y + b.ur.y) / 2.0 + f64::from(area.area.translation.y),
+            },
+            fr_board::item::AreaShape::Octagon(o) => {
+                let b = o.bounding_box();
+                FloatPoint {
+                    x: f64::from(b.ll.x + b.ur.x) / 2.0 + f64::from(area.area.translation.x),
+                    y: f64::from(b.ll.y + b.ur.y) / 2.0 + f64::from(area.area.translation.y),
+                }
+            }
+            fr_board::item::AreaShape::Simplex(s) => {
+                let b = s.bounding_box();
+                FloatPoint {
+                    x: f64::from(b.ll.x + b.ur.x) / 2.0 + f64::from(area.area.translation.x),
+                    y: f64::from(b.ll.y + b.ur.y) / 2.0 + f64::from(area.area.translation.y),
+                }
+            }
+            _ => return f64::MAX,
+        },
         _ => return f64::MAX,
     };
     center.distance_square(&pin_center.to_float())
@@ -1107,8 +1127,8 @@ mod tests {
             fr_board::item::FixedState::Unfixed,
             None,
         );
-        assert!(inserted.is_ok());
-        let trace_id = inserted.unwrap()[0];
+        assert!(inserted.is_some());
+        let trace_id = inserted.unwrap();
         let pin_center = IntPoint::new(500, 1000);
         let dist_sq = target_distance_square(&fixture.board, trace_id, &pin_center);
         assert_eq!(dist_sq, 0.0);
