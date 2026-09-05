@@ -492,3 +492,43 @@ ARCHITECTURE "Budgets".
   optimizer" reading is the `$TMPDIR/freerouting/freerouting.json` contaminant above, not
   an entry-condition difference. `fr_core::pipeline::the_optimizer_stage_entry_does_not_read_the_routing_result`
   is the tripwire.
+
+- **Shove/insert acceptance stays on the compensated tree, without the +16 safety
+  margin.** Upstream's headless acceptance reads every pairwise clearance through
+  `BasicBoard.clearance_value` = `ClearanceMatrix.get_value(..., true)`
+  (`BasicBoard.java:1596`, `ClearanceMatrix.java:137-151` — the margin is added
+  unconditionally for in-bounds indices) and finds candidates with the symmetric
+  half-clearance enlargement on the default tree
+  (`ShapeSearchTree.overlapping_tree_entries_with_clearance`, `:430-481`). Seven
+  call sites audited, all margin'd upstream: `RoutingBoard.check_trace_segment`
+  (`:250-306`), `ShoveTraceAlgo.check`'s via/substitute subtractions and
+  spring-over wrap (`:104`, `:146`, `:545`), `ShapeTraceEntries`
+  (`:61`, `:191`, `:273`, `:325-326`), `MoveDrillItemAlgo.try_shove_via_points`
+  (`:251-285`), `ForcedViaAlgo.check_layer`'s check radius (`:41`), and the
+  candidate query itself. We keep the pre-margin model: candidates off the
+  compensated tree / raw `ClearanceMatrix.getValue` reads, no `+16` anywhere in
+  the shove/insert acceptance chain.
+  Rejected the alignment after implementing and measuring it in full (archived
+  on branch `wip/shove-margin-model`, tip `4958010`, on top of the
+  optimizer-convergence fix): 24-board gate kept zero added violations either
+  way (per-board charged violations identical across models, and Java `-drc`
+  agrees with our referee on the knife-edge pair from Issue034), but the
+  margin'd model is strictly harder to satisfy — 14 of 24 boards lost
+  unrouted connections (+1 to +11 each; comparative gate 18/22 → 12/22), e.g.
+  Issue034 1u → 8u, Issue102 1u → 12u, Issue039 32u → 42u, while the wall-time
+  ratio stayed 0.87-1.43x once the unrelated optimizer slow-convergence was
+  fixed by `ab1fd9e`/`1e66ca5`. Our retained model already beats the jar on the
+  same boards (Issue034: ours 1u/0v, jar with fanout 9u/0v; the jar also ships
+  violations we never produce, e.g. Issue110-RelayModule reference 0u/4v vs
+  ours 4u/2v). The margin
+  model's acceptance is *also* the DRC's symmetric enlargement, which is what
+  makes it attractive, but the router-side acceptance being stricter than the
+  referee only ever costs routability here: the maze already searches against
+  the compensated tree and the acceptance oracle that gates pull-tight already is the
+  symmetric one (fanout034: `PullTightAlgo::check_trace_shape`). Full evidence:
+  `~/fr-work/reports/REPORT-shove-oracle.md` and `REPORT-shove-remeasure.md`
+  (six-board interleaved A/B, 24-board two-arm judge tables, the seven-site
+  upstream citation audit, and the regression test set
+  `crates/fr-board/tests/shove_clearance_model.rs` on the archive branch).
+  Status: intentionally retained; revisit only if a board shows the margin-less
+  acceptance admitting a DRC violation the referee then charges.
