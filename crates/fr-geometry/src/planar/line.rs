@@ -376,6 +376,11 @@ impl Line {
         self == other
     }
 
+    /// Returns true if this and `other` define the same directed line (Java `Line.equals`).
+    pub fn is_same_line(&self, other: &Line) -> bool {
+        self.direction() == other.direction() && self.side_of(&other.a) == Side::Collinear
+    }
+
     /// Checks if this line and `other` define the same geometric line (same or opposite direction).
     ///
     /// `Line.java:441-444` answers this by collinearity, *not* by anchor

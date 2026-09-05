@@ -9,6 +9,7 @@
 //! the board's clearance matrix, which the geometry crate does not know about.
 
 use fr_geometry::planar::{FloatPoint, IntBox, IntOctagon, IntPoint, Line, Point, Side, Simplex};
+use fr_geometry::Area;
 
 use crate::board::Board;
 use crate::clearance::ClearanceSource;
@@ -222,7 +223,7 @@ pub fn octagon_nearest_border_projections(
     point: &IntPoint,
     max_result_points: usize,
 ) -> Vec<IntPoint> {
-    if max_result_points == 0 || !shape.to_simplex().contains(&Point::Int(*point)) {
+    if max_result_points == 0 || !shape.contains_point(&Point::Int(*point)) {
         return Vec::new();
     }
     let count = max_result_points.min(8);
@@ -318,12 +319,12 @@ pub fn overlapping_items_with_clearance(
     }
 
     // The broad phase: everything within the largest clearance this class asks
-    // of anybody. Upstream offsets the *bounding* shape by `max_clearance`;
-    // the exact per-item test below is what decides, so a tighter broad phase
-    // is admissible as long as it is a superset of the exact answer, which
-    // `shape ⊕ max_cl ∩ tile ⊇ shape ⊕ h ∩ tile ⊕ h` for `2h ≤ max_cl` gives.
+    // of anybody. Upstream offsets the *bounding* shape by `1.2 * max_clearance`
+    // (`ShapeSearchTree.java:439-446`); the exact per-item test below is what
+    // decides.
     let max_clearance = max_clearance_of(board, cl_class, layer);
-    let broad = TileShape::Simplex(shape.offset(max_clearance as f64));
+    let reach = 1.2 * max_clearance as f64;
+    let broad = TileShape::Simplex(shape.offset(reach));
     board.overlapping_items(&broad, Some(layer), ignore_nets, out);
     if max_clearance == 0 {
         return;
@@ -372,7 +373,7 @@ pub fn overlapping_items_with_clearance(
 
 /// The largest clearance `cl_class` requires of any class on `layer`, upstream's
 /// `ClearanceMatrix.max_value(cl_class, layer)`.
-fn max_clearance_of(board: &Board, cl_class: i32, layer: i32) -> i32 {
+pub fn max_clearance_of(board: &Board, cl_class: i32, layer: i32) -> i32 {
     let clearances = board.clearances();
     let mut max = 0;
     for other in 0..clearances.class_count() as i32 {

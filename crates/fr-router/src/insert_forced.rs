@@ -45,11 +45,9 @@ use fr_board::board::Board;
 use fr_board::clearance::ClearanceSource;
 use fr_board::item::{FixedState, ItemId, ItemKind, LayerRange, Via};
 use fr_board::net_nos::NetNos;
-use fr_board::search_tree::TreeEntry;
 use fr_board::shape::{AngleRestriction, Padstack as BoardPadstack, TileShape};
 use fr_board::shove::via::ViaLayerPad;
 use fr_board::shove::{ChangedAreaSink, CheckDrillResult, FromSide, ShoveCheck, ShoveInsert};
-use fr_datastructures::arena_shape_tree::QueryStack;
 use fr_geometry::planar::{
     Circle, FloatPoint, IntBox, IntOctagon, IntPoint, Point, Polyline, Simplex,
 };
@@ -270,8 +268,6 @@ pub struct ForcedInserter<'b> {
     /// A/B'd on a fixture; that constant carries the measurements.
     pub insert_pull_tight: bool,
     bounds: IntBox,
-    scratch_entries: Vec<TreeEntry>,
-    scratch_stack: QueryStack,
     scratch_ids: Vec<ItemId>,
 }
 
@@ -291,8 +287,6 @@ impl<'b> ForcedInserter<'b> {
             changed_area: ChangedArea::new(layer_count),
             insert_pull_tight: INSERT_PULL_TIGHT_DEFAULT,
             bounds,
-            scratch_entries: Vec::new(),
-            scratch_stack: QueryStack::new(),
             scratch_ids: Vec::new(),
         }
     }
@@ -487,64 +481,54 @@ impl<'b> ForcedInserter<'b> {
         let mut ok_length = f64::INFINITY;
 
         let net_no = self.ctrl.net_no;
-        let tree_class = self.ctrl.trace_clearance_class_no;
-        let ForcedInserter {
+        let cl_class = self.ctrl.trace_clearance_class_no;
+        let ForcedInserter { board, .. } = self;
+        let mut obstacles = Vec::new();
+        fr_board::shove::geom::overlapping_items_with_clearance(
             board,
-            scratch_entries,
-            scratch_stack,
-            ..
-        } = self;
-        let query = TileShape::Simplex(shape_to_check.clone());
-        let tree = board
-            .trees()
-            .compensated_tree(tree_class)
-            .unwrap_or_else(|| board.default_tree());
-        tree.overlapping_tree_entries(
-            board.store(),
-            &query,
-            Some(layer),
+            &shape_to_check,
+            layer,
             &[net_no],
-            scratch_stack,
-            scratch_entries,
+            cl_class,
+            &mut obstacles,
         );
+        let tree = board.default_tree();
 
-        for entry in scratch_entries.iter() {
-            let Some(item) = board.store().get(entry.item) else {
+        for id in obstacles {
+            let Some(item) = board.store().get(id) else {
                 continue;
             };
             if only_not_shovable && item.is_routable() && !item.is_shove_fixed() {
                 continue;
             }
-            let Some(slot) = board.store().slot_of(entry.item) else {
+            let Some(slot) = board.store().slot_of(id) else {
                 continue;
             };
-            let shapes = tree.item_shapes(slot, entry.item);
-            let Some(obstacle_shape) = shapes
-                .get(entry.shape_index as usize)
-                .and_then(|tile| tile.shape.as_ref())
-                .map(crate::geom::tile_to_simplex)
-            else {
-                continue;
-            };
-            // The compensated branch of `:278-282`: the obstacle shape already
-            // carries its inflation, so the check shape is used as is and the
-            // shorten value is the half width plus the obstacle class's
-            // compensation.
-            let shorten_value = half_width as f64
-                + board
-                    .clearances()
-                    .compensation_value(item.clearance_class, layer) as f64;
-            let intersection = obstacle_shape.intersection(&shape_to_check);
-            if intersection.is_empty() {
-                continue;
-            }
-            let nearest = intersection.nearest_point_approx(&from_point);
-            let projection = from_point.scalar_product(&to_point, &nearest) / line_length;
-            let projection = (projection - shorten_value - 1.0).max(0.0);
-            if projection < ok_length {
-                ok_length = projection;
-                if ok_length <= 0.0 {
-                    return 0.0;
+            let clearance_value = board
+                .clearances()
+                .value(item.clearance_class, cl_class, layer);
+            let curr_offset_shape = shape_to_check.offset(clearance_value as f64);
+            let shorten_value = half_width as f64 + clearance_value as f64;
+            for tile in tree.item_shapes(slot, id) {
+                if tile.layer != layer {
+                    continue;
+                }
+                let Some(obstacle_shape) = tile.shape.as_ref().map(crate::geom::tile_to_simplex)
+                else {
+                    continue;
+                };
+                let intersection = obstacle_shape.intersection(&curr_offset_shape);
+                if intersection.is_empty() {
+                    continue;
+                }
+                let nearest = intersection.nearest_point_approx(&from_point);
+                let projection = from_point.scalar_product(&to_point, &nearest) / line_length;
+                let projection = (projection - shorten_value - 1.0).max(0.0);
+                if projection < ok_length {
+                    ok_length = projection;
+                    if ok_length <= 0.0 {
+                        return 0.0;
+                    }
                 }
             }
         }
@@ -616,7 +600,15 @@ impl<'b> ForcedInserter<'b> {
                 cl_class,
             ) {
                 Some(sprung) => sprung,
-                None => return Some(Point::Int(from_corner)),
+                None => {
+                    if crate::maze::trace::is_enabled() {
+                        crate::maze::trace::conn_landing(&format!(
+                            "FRCONN insert_polyline_fail net={} step=spring_over_none from={:?} to={:?}",
+                            self.ctrl.net_no, from_corner, to_corner
+                        ));
+                    }
+                    return Some(Point::Int(from_corner));
+                }
             }
         };
 
@@ -701,6 +693,12 @@ impl<'b> ForcedInserter<'b> {
             let from_side =
                 FromSide::from_polyline(&combined_polyline, shape_index, &last_trace_shape);
             if !self.check_trace_shape_from(&last_trace_shape, Some(from_side), layer) {
+                if crate::maze::trace::is_enabled() {
+                    crate::maze::trace::conn_landing(&format!(
+                        "FRCONN insert_polyline_fail net={} step=step5_check_failed from={:?} to={:?} last_shape_no={}/{}",
+                        self.ctrl.net_no, from_corner, to_corner, last_shape_no, trace_shapes.len()
+                    ));
+                }
                 return Some(Point::Int(from_corner));
             }
             if !self.insert_trace_shape(&last_trace_shape, Some(from_side), layer) {
@@ -938,6 +936,15 @@ impl<'b> ForcedInserter<'b> {
             self.board.rollback_to(mark);
             return false;
         }
+
+        // DRC symmetric acceptance check on each layer: ensure the placed via has
+        // no clearance violations against the live board state.
+        for pad in &pads {
+            if !self.check_drc_clear(&pad.shape, pad.layer, &nets, pad.clearance_class) {
+                self.board.rollback_to(mark);
+                return false;
+            }
+        }
         self.board.commit(mark);
 
         for layer in from_layer..=to_layer {
@@ -970,7 +977,7 @@ impl<'b> ForcedInserter<'b> {
         let attach = via_info.attach_smd_allowed();
         let cl_class = self.ctrl.trace_clearance_class_no;
         let mut checker = self.shove_check();
-        checker
+        if checker
             .check_forced_via(
                 &pads,
                 location,
@@ -981,7 +988,161 @@ impl<'b> ForcedInserter<'b> {
                 max_rec,
                 max_via_rec,
             )
-            .is_ok()
+            .is_err()
+        {
+            return false;
+        }
+        if max_rec <= 0 {
+            for pad in &pads {
+                if !self.check_drc_clear(&pad.shape, pad.layer, &nets, pad.clearance_class) {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// DRC symmetric clearance acceptance check: verifies that `shape` has zero
+    /// clearance violations against the board's uncompensated default tree, using
+    /// exact DRC arithmetic (both shapes enlarged by `clearance / 2`, no safety margin).
+    pub fn check_drc_clear(
+        &self,
+        shape: &Simplex,
+        layer: i32,
+        net_nos: &NetNos,
+        cl_class: i32,
+    ) -> bool {
+        let max_cl = fr_board::shove::geom::max_clearance_of(self.board, cl_class, layer);
+        let reach = 1.5 * max_cl as f64;
+        let broad = TileShape::Simplex(shape.offset(reach));
+        let mut candidates = Vec::new();
+        self.board
+            .overlapping_items(&broad, Some(layer), net_nos.as_slice(), &mut candidates);
+        if candidates.is_empty() {
+            return true;
+        }
+
+        let tree = self.board.default_tree();
+        let mut curr_half_cl = -1i32;
+        let mut curr_offset_simplex = shape.clone();
+
+        for id in candidates {
+            let Some(item) = self.board.store().get(id) else {
+                continue;
+            };
+            if item.nets.shares_any(net_nos) {
+                continue;
+            }
+            if let ItemKind::ConductionArea(a) = &item.kind {
+                if !a.is_obstacle {
+                    continue;
+                }
+            }
+            if let ItemKind::ObstacleArea(a) = &item.kind {
+                if a.kind == fr_board::item::ObstacleKind::ComponentKeepout
+                    || a.kind == fr_board::item::ObstacleKind::ViaKeepout
+                {
+                    continue;
+                }
+            }
+            let cl = self
+                .board
+                .clearances()
+                .value(cl_class, item.clearance_class, layer);
+            let half = cl / 2;
+            if half != curr_half_cl {
+                curr_half_cl = half;
+                curr_offset_simplex = shape.enlarge(half as f64);
+            }
+            let Some(slot) = self.board.store().slot_of(id) else {
+                continue;
+            };
+            for tile in tree.item_shapes(slot, id) {
+                if tile.layer != layer {
+                    continue;
+                }
+                let Some(tile_shape) = tile.shape.as_ref() else {
+                    continue;
+                };
+                let tile_simplex =
+                    fr_board::shove::geom::tile_to_simplex(&tile_shape.enlarge(half));
+                if curr_offset_simplex.intersection(&tile_simplex).dimension() == 2 {
+                    return false;
+                }
+            }
+        }
+        true
+    }
+
+    /// Verifies that all shapes of item `id` have zero clearance violations
+    /// against the board's uncompensated default tree, using exact DRC arithmetic.
+    pub fn check_drc_clear_for_item(&self, id: ItemId) -> bool {
+        let Some(item) = self.board.store().get(id) else {
+            return true;
+        };
+        let Some(slot) = self.board.store().slot_of(id) else {
+            return true;
+        };
+        let tree = self.board.default_tree();
+        let shapes = tree.item_shapes(slot, id).to_vec();
+        for tile in shapes {
+            let Some(tile_shape) = tile.shape.as_ref() else {
+                continue;
+            };
+            let simplex = fr_board::shove::geom::tile_to_simplex(tile_shape);
+            let max_cl = fr_board::shove::geom::max_clearance_of(
+                self.board,
+                item.clearance_class,
+                tile.layer,
+            );
+            let reach = 1.5 * max_cl as f64;
+            let broad = TileShape::Simplex(simplex.offset(reach));
+            let mut candidates = Vec::new();
+            self.board
+                .overlapping_items(&broad, Some(tile.layer), &[], &mut candidates);
+
+            let mut curr_half_cl = -1i32;
+            let mut curr_offset_simplex = simplex.clone();
+
+            for other_id in candidates {
+                if other_id == id {
+                    continue;
+                }
+                let Some(other_item) = self.board.store().get(other_id) else {
+                    continue;
+                };
+                if !other_item.is_obstacle(item) {
+                    continue;
+                }
+                let cl = self.board.clearances().value(
+                    item.clearance_class,
+                    other_item.clearance_class,
+                    tile.layer,
+                );
+                let half = cl / 2;
+                if half != curr_half_cl {
+                    curr_half_cl = half;
+                    curr_offset_simplex = simplex.enlarge(half as f64);
+                }
+                let Some(other_slot) = self.board.store().slot_of(other_id) else {
+                    continue;
+                };
+                for other_tile in tree.item_shapes(other_slot, other_id) {
+                    if other_tile.layer != tile.layer {
+                        continue;
+                    }
+                    let Some(other_shape) = other_tile.shape.as_ref() else {
+                        continue;
+                    };
+                    let other_simplex =
+                        fr_board::shove::geom::tile_to_simplex(&other_shape.enlarge(half));
+                    if curr_offset_simplex.intersection(&other_simplex).dimension() == 2 {
+                        return false;
+                    }
+                }
+            }
+        }
+        true
     }
 
     /// The per-layer pad shapes of `via_info` translated to `location`, plus

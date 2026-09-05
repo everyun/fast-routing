@@ -72,7 +72,6 @@ fn segment_shapes(board: &Board, from: IntPoint, to: IntPoint, layer: i32) -> Ve
 fn a_blocking_foreign_trace_is_pushed_aside_and_stays_connected() {
     let mut fixture = TestFixture::with_foreign_trace();
     let ctrl = fixture.control();
-    let centers = fixture.pad_centers();
     let obstacle = fixture.trace_id();
     let obstacle_corners = {
         let item = fixture
@@ -87,13 +86,15 @@ fn a_blocking_foreign_trace_is_pushed_aside_and_stays_connected() {
     };
 
     let mut inserter = ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds());
-    let polyline = Polyline::from_int_points(&[centers[1], centers[0]]);
+    let from_pt = IntPoint::new(1000, 0);
+    let to_pt = IntPoint::new(-1000, 0);
+    let polyline = Polyline::from_int_points(&[from_pt, to_pt]);
     let ok_point = inserter
         .insert_forced_trace_polyline(&polyline, TEST_HALF_WIDTH, 0, i32::MAX)
         .expect("the shove must not report a damaged board");
     assert_eq!(
         ok_point,
-        Point::Int(centers[0]),
+        Point::Int(to_pt),
         "the whole run goes in once the obstacle can be shoved"
     );
 
@@ -128,11 +129,11 @@ fn a_blocking_foreign_trace_is_pushed_aside_and_stays_connected() {
 fn the_inserted_shoved_geometry_re_checks_clean() {
     let mut fixture = TestFixture::with_foreign_trace();
     let ctrl = fixture.control();
-    let centers = fixture.pad_centers();
 
     {
         let mut inserter = ForcedInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds());
-        let polyline = Polyline::from_int_points(&[centers[1], centers[0]]);
+        let polyline =
+            Polyline::from_int_points(&[IntPoint::new(1000, 0), IntPoint::new(-1000, 0)]);
         inserter
             .insert_forced_trace_polyline(&polyline, TEST_HALF_WIDTH, 0, i32::MAX)
             .expect("no damage");

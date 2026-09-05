@@ -197,7 +197,12 @@ fn build(
     let padstack_no = board.padstacks_mut().push(BoardPadstack::uniform(
         0,
         0,
-        TileShape::Box(IntBox::new(-200, -200, 200, 200)),
+        TileShape::Box(IntBox::new(
+            -TEST_HALF_WIDTH,
+            -TEST_HALF_WIDTH,
+            TEST_HALF_WIDTH,
+            TEST_HALF_WIDTH,
+        )),
     ));
 
     let mut pad_ids = Vec::new();

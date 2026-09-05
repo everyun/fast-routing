@@ -722,7 +722,7 @@ impl Simplex {
 
     /// Edge number if `line` is a border line.
     pub fn border_line_index(&self, line: &Line) -> Option<usize> {
-        self.arr.iter().position(|l| l == line)
+        self.arr.iter().position(|l| l.is_same_line(line))
     }
 
     /// Removes border line `no`.

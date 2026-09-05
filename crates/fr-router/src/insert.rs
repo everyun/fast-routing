@@ -53,6 +53,7 @@ use fr_geometry::planar::{FloatPoint, IntBox, IntPoint, Point, Polyline};
 use fr_rules::board_rules::BoardRules;
 use fr_rules::via_info::ViaInfo;
 
+use crate::batch::{remove_tails, ContactScratch, StopConnection};
 use crate::ctrl::AutorouteControl;
 use crate::insert_forced::{ChangedArea, ForcedInserter};
 use crate::locate::{calculate_additional_corner, LocatedConnection, ResultItem};
@@ -158,16 +159,36 @@ pub fn insert_connection(
     let mut inserter = ConnectionInserter::new(board, rules, ctrl, bounds);
     match inserter.run(connection) {
         Ok(mut outcome) => {
-            outcome.board_changed = board
+            let new_items: Vec<ItemId> = inserter
+                .forced
+                .board
                 .store()
                 .iter()
-                .next()
-                .is_some_and(|(id, _)| id >= first_free_id)
-                || board.touched_since(&mark);
+                .map(|(id, _)| id)
+                .take_while(|id| *id >= first_free_id)
+                .collect();
+            outcome.board_changed =
+                !new_items.is_empty() || inserter.forced.board.touched_since(&mark);
+
+            // DRC symmetric acceptance verification: guarantee zero added violations
+            // by construction. If any newly created item has a clearance violation
+            // against the board, roll back the transaction clean.
+            for id in &new_items {
+                if !inserter.forced.check_drc_clear_for_item(*id) {
+                    drop(inserter);
+                    board.rollback_to(mark);
+                    return Err(InsertError::TraceBlocked {
+                        layer: connection.target_layer,
+                        corner_index: 0,
+                    });
+                }
+            }
+            drop(inserter);
             board.commit(mark);
             Ok(outcome)
         }
         Err(error) => {
+            drop(inserter);
             board.rollback_to(mark);
             Err(error)
         }
@@ -294,58 +315,20 @@ impl<'b> ConnectionInserter<'b> {
             self.forced.board.remove_item(*id);
         }
 
+        let stop = if stop_at_fanout_via {
+            StopConnection::FanoutVia
+        } else {
+            StopConnection::None
+        };
+        let mut scratch = ContactScratch::new();
         for net in &changed_nets {
-            self.remove_trace_tails(*net);
+            remove_tails(self.forced.board, *net, stop, &mut scratch);
         }
 
         (
             ripped_connections.into_iter().collect(),
             changed_nets.into_iter().collect(),
         )
-    }
-
-    /// `BasicBoard.remove_trace_tails(net, stop_option)`: repeatedly delete
-    /// traces of `net` that dangle at one end, until none is left.
-    ///
-    /// Removing a tail can expose the next one, so this is a fixed point; the
-    /// item count bounds it.
-    fn remove_trace_tails(&mut self, net_no: i32) {
-        let mut guard = self.forced.board.store().len() + 1;
-        loop {
-            if guard == 0 {
-                break;
-            }
-            guard -= 1;
-            let Some(tail) = self.find_trace_tail_of_net(net_no) else {
-                break;
-            };
-            if !self.forced.board.remove_item(tail) {
-                break;
-            }
-        }
-    }
-
-    fn find_trace_tail_of_net(&mut self, net_no: i32) -> Option<ItemId> {
-        let candidates: Vec<ItemId> = self.forced.board.store().net_items(net_no).to_vec();
-        let mut contacts = Vec::new();
-        for id in candidates {
-            let Some(item) = self.forced.board.store().get(id) else {
-                continue;
-            };
-            if !matches!(item.kind, ItemKind::Trace(_)) || item.is_user_fixed() {
-                continue;
-            }
-            let points: Vec<Point> = connection_points(item).iter().cloned().collect();
-            for point in points {
-                self.forced
-                    .board
-                    .normal_contacts_at(id, &point, &mut contacts);
-                if contacts.is_empty() {
-                    return Some(id);
-                }
-            }
-        }
-        None
     }
 
     fn is_polyline_trace(&self, id: ItemId) -> bool {
@@ -512,6 +495,12 @@ impl<'b> ConnectionInserter<'b> {
                 }
             } else {
                 // FAIL (`:213-253`).
+                if crate::maze::trace::is_enabled() {
+                    crate::maze::trace::conn_landing(&format!(
+                        "FRCONN trace_fail net={} layer={} idx={}/{} from_idx={} ok_point={:?} target={:?} first={:?} window_len={}",
+                        self.ctrl().net_no, layer, index, trace.corners.len() - 1, from_corner_no, ok_point, last, first, window.len()
+                    ));
+                }
                 result = Err(InsertError::TraceBlocked {
                     layer,
                     corner_index: index,

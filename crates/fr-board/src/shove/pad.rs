@@ -169,6 +169,7 @@ impl ShoveCheck<'_> {
         if !shape_entries.store_items(board, &obstacles, true, copper_sharing_allowed) {
             let blame = shape_entries.found_obstacle();
             self.blame(blame);
+            self.scratch.give(obstacles);
             return CheckDrillResult::NotDrillable;
         }
 
@@ -176,12 +177,14 @@ impl ShoveCheck<'_> {
         for via_id in shove_vias {
             if max_via_recursion_depth <= 0 {
                 self.failing_obstacle = Some(via_id);
+                self.scratch.give(obstacles);
                 return CheckDrillResult::NotDrillable;
             }
             let new_via_center =
                 super::drill::try_shove_via_points(board, pad_shape, layer, via_id, cl_type, false);
             let Some(&first) = new_via_center.first() else {
                 self.failing_obstacle = Some(via_id);
+                self.scratch.give(obstacles);
                 return CheckDrillResult::NotDrillable;
             };
             let Some(via_item) = board.store().get(via_id) else {
@@ -199,6 +202,7 @@ impl ShoveCheck<'_> {
                 max_via_recursion_depth - 1,
                 &mut cascade_ignore,
             ) {
+                self.scratch.give(obstacles);
                 return CheckDrillResult::NotDrillable;
             }
         }
@@ -214,6 +218,7 @@ impl ShoveCheck<'_> {
         {
             result = CheckDrillResult::DrillableWithAttachSmd;
         }
+        self.scratch.give(obstacles);
 
         let trace_piece_count = shape_entries.substitute_trace_count();
         if trace_piece_count == 0 {

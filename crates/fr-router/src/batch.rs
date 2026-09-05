@@ -872,25 +872,28 @@ pub fn route_with_control(
             // board it never wrote. Both halves are back: upstream's constant
             // by default, the round budget under `--deterministic`, and the job
             // deadline polled underneath both.
-            let mut changed_area = insert.changed_area;
-            let mut algo = PullTightAlgo::new(
-                board,
-                rules,
-                &[],
-                None,
-                ctrl.pull_tight_accuracy,
-                None,
-                None,
-                0,
-            )
-            .with_stall_guard(StallGuard::for_mode(
-                budget_mode,
-                TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
-            ));
-            // Unconditional, including for an insertion that placed nothing: the
-            // changed area also carries the region a *ripup* freed, and skipping
-            // the relaxation of that region would move copper, not just a label.
-            algo.opt_changed_area(&mut changed_area);
+            // When the board changed or items were ripped, optimize the touched
+            // region: the changed area carries the region the insertion/ripup touched.
+            // When nothing was inserted and nothing was ripped, the board is untouched
+            // and skipping pull-tight avoids redundant work.
+            if insert.board_changed || !insert.ripped_connections.is_empty() {
+                let mut changed_area = insert.changed_area;
+                let mut algo = PullTightAlgo::new(
+                    board,
+                    rules,
+                    &[],
+                    None,
+                    ctrl.pull_tight_accuracy,
+                    None,
+                    None,
+                    0,
+                )
+                .with_stall_guard(StallGuard::for_mode(
+                    budget_mode,
+                    TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
+                ));
+                algo.opt_changed_area(&mut changed_area);
+            }
 
             // The ripup bookkeeping is done either way: a connection that tore
             // copper out and put none back still owes those nets a retry.
