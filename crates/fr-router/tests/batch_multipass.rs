@@ -265,7 +265,10 @@ fn the_requeue_divergence_is_confined_to_single_pass_runs() {
     let mut router = BatchRouter::new(&loaded.design.rules, &loaded.settings);
     router.requeue_policy = RequeuePolicy::SinglePassOnly;
     let single = router.run(&mut loaded.design.board, 1);
-    assert!(router.requeue_active(), "-mp 1 with SinglePassOnly requeues");
+    assert!(
+        router.requeue_active(),
+        "-mp 1 with SinglePassOnly requeues"
+    );
     let requeued_at_one: usize = single.passes.iter().map(|pass| pass.requeued).sum();
 
     let Some(mut loaded) = load("Issue026-J2_reference.dsn") else {

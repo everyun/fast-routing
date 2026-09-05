@@ -1325,10 +1325,7 @@ mod tests {
         plain.requeue_policy = crate::batch::schedule::RequeuePolicy::SinglePassOnly;
         plain.set_requeue_active(true);
         plain.autoroute_pass(&mut fixture.board.clone(), 1);
-        assert!(
-            plain.requeue_active(),
-            "SinglePassOnly requeues on pass 1"
-        );
+        assert!(plain.requeue_active(), "SinglePassOnly requeues on pass 1");
 
         // ... and what `MazeRerouter` builds does not.
         let mut router = BatchRouter::new(&rules, &settings);

@@ -272,6 +272,85 @@ fn issue066_session_round_trip_is_judged_identically() {
     );
 }
 
+#[test]
+#[ignore = "long test: routes Issue039 in a debug build (743s); run with `cargo test -- --include-ignored` or ci/run-local.sh --long (FR_LONG_TESTS=1)"]
+fn issue039_session_round_trip_is_judged_identically() {
+    let dsn_path = fixture_dir().join("Issue039-bug-design.dsn");
+    if !dsn_path.is_file() {
+        return;
+    }
+    let dsn_bytes = std::fs::read(&dsn_path).unwrap();
+    let stripped = fr_io::specctra::strip_session_copper(&dsn_bytes);
+
+    let report = RoutingJob::from_path(&dsn_path)
+        .expect("Issue039 reads")
+        .with_stage(fr_core::RouterStage::Maze(
+            fr_core::MazeOptions::with_passes(1),
+        ))
+        .run()
+        .expect("Issue039 routes");
+
+    let in_memory_violations = report.stats.clearance_violation_count;
+    let in_memory_incomplete = report.stats.incomplete_count;
+
+    let mut design1 = import(&stripped).unwrap();
+    let library1 = SesLibrary::from_design(&design1);
+    read_session(
+        report.ses.as_bytes(),
+        SesTarget::for_design(&mut design1, &library1),
+    )
+    .unwrap();
+
+    let reimported_verdict = Referee::judge(&design1, &ScoreWeights::V2);
+    assert_eq!(
+        in_memory_violations, reimported_verdict.stats.clearance_violation_count,
+        "Issue039 violation count mismatch between in-memory report and re-imported SES"
+    );
+    assert_eq!(
+        in_memory_incomplete, reimported_verdict.stats.incomplete_count,
+        "Issue039 incomplete count mismatch between in-memory report and re-imported SES"
+    );
+}
+
+#[test]
+fn issue026_routed_session_fidelity_in_memory_vs_reimported() {
+    let dsn_path = fixture_dir().join("Issue026-J2_reference.dsn");
+    if !dsn_path.is_file() {
+        return;
+    }
+    let dsn_bytes = std::fs::read(&dsn_path).unwrap();
+    let stripped = fr_io::specctra::strip_session_copper(&dsn_bytes);
+
+    let report = RoutingJob::from_path(&dsn_path)
+        .expect("Issue026 reads")
+        .with_stage(fr_core::RouterStage::Maze(
+            fr_core::MazeOptions::with_passes(1),
+        ))
+        .run()
+        .expect("Issue026 routes");
+
+    let in_memory_violations = report.stats.clearance_violation_count;
+    let in_memory_incomplete = report.stats.incomplete_count;
+
+    let mut design1 = import(&stripped).unwrap();
+    let library1 = SesLibrary::from_design(&design1);
+    read_session(
+        report.ses.as_bytes(),
+        SesTarget::for_design(&mut design1, &library1),
+    )
+    .unwrap();
+
+    let reimported_verdict = Referee::judge(&design1, &ScoreWeights::V2);
+    assert_eq!(
+        in_memory_violations, reimported_verdict.stats.clearance_violation_count,
+        "Issue026 violation count mismatch between in-memory report and re-imported SES"
+    );
+    assert_eq!(
+        in_memory_incomplete, reimported_verdict.stats.incomplete_count,
+        "Issue026 incomplete count mismatch between in-memory report and re-imported SES"
+    );
+}
+
 /// Reads `session` into a fresh import of `dsn`.
 fn apply(dsn: &[u8], session: &str) -> (ImportedDesign, fr_io::specctra::SesImportSummary) {
     let mut design = import(dsn).expect("Issue026 imports");
