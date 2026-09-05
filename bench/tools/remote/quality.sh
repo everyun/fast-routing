@@ -25,7 +25,7 @@ shift
 SUITE="46"
 MP="20"
 JOB_TIMEOUT="285"
-DOORS="off"
+DOORS="default"
 WORKERS="8"
 
 while [ $# -gt 0 ]; do

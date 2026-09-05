@@ -82,6 +82,9 @@ def run_one(
         env["FR_ROUTER_TILING_45"] = "doors"
     elif doors == "off":
         env["FR_ROUTER_TILING_45"] = "off"
+    elif doors == "default":
+        # Do not override FR_ROUTER_TILING_45, use binary default
+        env.pop("FR_ROUTER_TILING_45", None)
 
     cmd = [
         "nice", "-n", "10",
@@ -173,7 +176,7 @@ def main() -> int:
     ap.add_argument("--mp", type=int, default=20)
     ap.add_argument("--job-timeout", type=int, default=285)
     ap.add_argument("--hard-timeout", type=int, default=None)
-    ap.add_argument("--doors", choices=["on", "off"], default="off")
+    ap.add_argument("--doors", choices=["default", "on", "off"], default="default")
     ap.add_argument("-w", "--concurrency", type=int, default=8)
     ap.add_argument("--out", required=True, help="Output directory")
     ap.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
