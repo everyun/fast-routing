@@ -1510,7 +1510,7 @@ fn inner_cutout_keepout_inherits_board_edge_clearance_class() {
   (network (class default (rule (width 200))))
   (wiring)
 )"#;
-    let design = import(dsn).expect("board imports");
+    let design = import(dsn.as_bytes()).expect("board imports");
     let board_edge_no = design.rules.clearance_matrix.get_no("board_edge").expect("board_edge class exists");
 
     // The keepout on signal must be instantiated on both signal layers with board_edge clearance class.
@@ -1527,7 +1527,7 @@ fn inner_cutout_keepout_inherits_board_edge_clearance_class() {
 
     // Clearance against wire (class 1) must be 5000 (500 µm in 10-unit resolution).
     assert_eq!(
-        design.rules.clearance_matrix.get_value(board_edge_no, 1, 0),
+        design.rules.clearance_matrix.get_value(board_edge_no, 1, 0, false),
         5000
     );
 }
@@ -1551,7 +1551,7 @@ fn user_keepout_on_concrete_layer_does_not_inherit_board_edge() {
   (network (class default (rule (width 200))))
   (wiring)
 )"#;
-    let design = import(dsn).expect("board imports");
+    let design = import(dsn.as_bytes()).expect("board imports");
     let board_edge_no = design.rules.clearance_matrix.get_no("board_edge").expect("board_edge class exists");
 
     let keepouts: Vec<_> = design
@@ -1588,7 +1588,7 @@ fn named_keepout_does_not_inherit_board_edge() {
   (network (class default (rule (width 200))))
   (wiring)
 )"#;
-    let design = import(dsn).expect("board imports");
+    let design = import(dsn.as_bytes()).expect("board imports");
     let board_edge_no = design.rules.clearance_matrix.get_no("board_edge").expect("board_edge class exists");
 
     let keepouts: Vec<_> = design
@@ -1647,7 +1647,7 @@ fn cutout_clearance_override_option() {
     }
     // 350 µm at 10 resolution = 3500
     assert_eq!(
-        design.rules.clearance_matrix.get_value(cutout_edge_no, 1, 0),
+        design.rules.clearance_matrix.get_value(cutout_edge_no, 1, 0, false),
         3500
     );
 }
