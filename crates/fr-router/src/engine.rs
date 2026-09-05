@@ -869,10 +869,12 @@ impl<'b> AutorouteEngine<'b> {
         if self.item_cache.is_some() {
             return;
         }
+        let family = self.angle_family();
         let tree = self
             .board
             .trees()
-            .compensated_tree(self.tree_class)
+            .compensated_tree_with_family(self.tree_class, family)
+            .or_else(|| self.board.trees().compensated_tree(self.tree_class))
             .unwrap_or_else(|| self.board.default_tree());
         let mut layers: Vec<Vec<CachedItem>> = vec![Vec::new(); self.ctrl.layer_count.max(1)];
         let net_no = self.ctrl.net_no;
@@ -1000,10 +1002,12 @@ impl<'b> AutorouteEngine<'b> {
             return true;
         }
 
+        let family = self.angle_family();
         let tree = self
             .board
             .trees()
-            .compensated_tree(self.tree_class)
+            .compensated_tree_with_family(self.tree_class, family)
+            .or_else(|| self.board.trees().compensated_tree(self.tree_class))
             .unwrap_or_else(|| self.board.default_tree());
         // Both ordered entry points re-sort the result
         // (`sort_obstacles_for_completion` / `sort_obstacles_for_neighbours`),

@@ -5,6 +5,8 @@
 
 use std::path::PathBuf;
 
+use fr_board::item::ItemId;
+use fr_board::search_tree::Tiling45Mode;
 use fr_io::specctra;
 use fr_router::ctrl::AutorouteControl;
 use fr_router::engine::AutorouteEngine;
@@ -155,6 +157,7 @@ fn replicate_fanout_attempt_and_dump() {
 
     let ctrl = fanout_control(&board, &design.rules, &settings, &config, &pin, 100);
     let mut engine = AutorouteEngine::new(&board, &design.rules, ctrl);
+    engine.set_tiling_45(Tiling45Mode::Full);
     {
         let mut search =
             MazeSearch::get_instance(&mut engine, &connected, &targets[..1]).expect("start/dest");
