@@ -42,7 +42,7 @@ use crate::geom;
 use crate::maze::heuristic::DestinationDistance;
 use crate::maze::nodes::{Adjustment, NodeIndex};
 use crate::maze::queue::{Frontier, FrontierElement, FrontierKey, FrontierPayload, FrontierStats};
-use crate::maze::ripup::{DetourSource, NoDetours, RipupDecision};
+use crate::maze::ripup::{DetourSource, RipupDecision};
 use crate::result::{BacktrackElement, BacktrackKind, FoundConnection, RippedItem};
 use crate::rooms::{DoorId, DoorKind, DrillId, ExpandableRef, PageId, RoomId, RoomKind};
 
@@ -210,7 +210,8 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
     /// `MazeSearchAlgo.find_connection` (`:235-243`), with the backtrack chain
     /// materialized (see [`crate::result`]).
     pub fn find_connection(&mut self) -> Result<FoundConnection, SearchFailure> {
-        self.find_connection_with(&NoDetours)
+        let detours = crate::maze::ripup::BoardDetours::new(self.engine.board);
+        self.find_connection_with(&detours)
     }
 
     /// [`find_connection`](Self::find_connection) with an explicit detour

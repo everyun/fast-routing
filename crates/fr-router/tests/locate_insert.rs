@@ -435,7 +435,7 @@ fn a_connection_with_no_traces_is_refused_before_anything_is_touched() {
     let pads = fixture.pad_ids();
     let ctrl = fixture.control();
     let before = snapshot(&fixture.board);
-    let error = insert_connection(
+    let outcome = insert_connection(
         &mut fixture.board,
         &fixture.rules,
         &ctrl,
@@ -449,9 +449,9 @@ fn a_connection_with_no_traces_is_refused_before_anything_is_touched() {
         },
         IntBox::new(-4000, -2500, 4000, 2500),
     )
-    .expect_err("nothing to insert");
-    assert_eq!(error, InsertError::NothingToInsert);
+    .expect("empty connection normalizes and succeeds");
     assert_eq!(snapshot(&fixture.board), before);
+    assert!(outcome.ripped_connections.is_empty());
 }
 
 // ---------------------------------------------------------------------------

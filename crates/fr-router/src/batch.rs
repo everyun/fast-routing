@@ -237,10 +237,10 @@ pub fn normal_contacts(
                         continue;
                     }
                     let points = connectivity::connection_points(other);
-                    if points.iter().any(|p| connectivity::touches_at(item, p)) {
-                        if !out.contains(&other_id) {
-                            out.push(other_id);
-                        }
+                    if points.iter().any(|p| connectivity::touches_at(item, p))
+                        && !out.contains(&other_id)
+                    {
+                        out.push(other_id);
                     }
                 }
             }
@@ -809,8 +809,7 @@ pub fn route_with_control(
             let Ok(mut search) = MazeSearch::get_instance(&mut engine, start, destination) else {
                 return AttemptOutcome::of(AttemptState::NotRouted);
             };
-            let detours = crate::maze::ripup::BoardDetours::new(engine.board);
-            match search.find_connection_with(&detours) {
+            match search.find_connection() {
                 Ok(connection) => connection,
                 Err(_) => return AttemptOutcome::of(AttemptState::NotRouted),
             }
@@ -946,15 +945,23 @@ fn pin_ends_to_connection_points(board: &Board, located: &mut crate::locate::Loc
     let start_item = Some(located.start_item);
     if let (Some(item), Some(first)) = (target_item, located.connection_items.first_mut()) {
         if let Some(center) = drill_center(board, item) {
-            if first.corners.first() != Some(&center) {
-                first.corners.insert(0, center);
+            if let Some(first_corner) = first.corners.first() {
+                let dx = (first_corner.x - center.x).abs();
+                let dy = (first_corner.y - center.y).abs();
+                if dx <= 10_000 && dy <= 10_000 && *first_corner != center {
+                    first.corners.insert(0, center);
+                }
             }
         }
     }
     if let (Some(item), Some(last)) = (start_item, located.connection_items.last_mut()) {
         if let Some(center) = drill_center(board, item) {
-            if last.corners.last() != Some(&center) {
-                last.corners.push(center);
+            if let Some(last_corner) = last.corners.last() {
+                let dx = (last_corner.x - center.x).abs();
+                let dy = (last_corner.y - center.y).abs();
+                if dx <= 10_000 && dy <= 10_000 && *last_corner != center {
+                    last.corners.push(center);
+                }
             }
         }
     }
@@ -1613,7 +1620,7 @@ mod tests {
 
     #[test]
     fn conduction_area_normal_contacts_and_connected_set_traversal() {
-        use fr_board::item::{AreaShape, ConductionArea, LayerRange, Pin, PlacedArea, Via};
+        use fr_board::item::{AreaShape, ConductionArea, LayerRange, PlacedArea, Via};
         use fr_geometry::planar::IntBox;
 
         let mut fixture = TestFixture::two_layer_with_pads();
@@ -1670,6 +1677,9 @@ mod tests {
         let connected = connected_set(&fixture.board, TEST_NET, via1, &mut scratch);
         assert!(connected.contains(&via1));
         assert!(connected.contains(&pour_id));
-        assert!(connected.contains(&via2), "connected_set must traverse through conduction area");
+        assert!(
+            connected.contains(&via2),
+            "connected_set must traverse through conduction area"
+        );
     }
 }

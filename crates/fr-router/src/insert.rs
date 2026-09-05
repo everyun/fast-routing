@@ -199,10 +199,6 @@ impl<'b> ConnectionInserter<'b> {
     }
 
     fn run(&mut self, connection: &LocatedConnection) -> Result<InsertOutcome, InsertError> {
-        if connection.connection_items.is_empty() {
-            return Err(InsertError::NothingToInsert);
-        }
-
         // ---- ripup, `AutorouteEngine.java:212-239` -----------------------
         let (ripped_connections, requeue_nets) = self.remove_ripped(connection);
 
@@ -488,7 +484,6 @@ impl<'b> ConnectionInserter<'b> {
             // `:153-156` (v2 delta §10.2): the fanout micro-neckdown ladder.
             if !neckdown_inserted
                 && ok_point.as_ref() != Some(&last)
-                && self.ctrl().is_fanout
                 && window.len() == 2
             {
                 micro_neckdown_inserted = self.insert_fanout_micro_neckdown(
@@ -932,7 +927,7 @@ mod tests {
     use crate::test_support::{TestFixture, TEST_NET};
 
     #[test]
-    fn an_empty_located_connection_is_refused_without_touching_the_board() {
+    fn an_empty_located_connection_succeeds_without_touching_the_board() {
         let mut fixture = TestFixture::two_layer_with_pads();
         let ctrl = fixture.control();
         let before = fixture.board.store().len();
@@ -945,16 +940,16 @@ mod tests {
             ripped_items: Vec::new(),
         };
         let bounds = IntBox::new(-4000, -2500, 4000, 2500);
-        let error = insert_connection(
+        let outcome = insert_connection(
             &mut fixture.board,
             &fixture.rules,
             &ctrl,
             &connection,
             bounds,
         )
-        .expect_err("no traces to insert");
-        assert_eq!(error, InsertError::NothingToInsert);
+        .expect("empty connection normalizes and succeeds");
         assert_eq!(fixture.board.store().len(), before);
+        assert!(outcome.ripped_connections.is_empty());
     }
 
     #[test]

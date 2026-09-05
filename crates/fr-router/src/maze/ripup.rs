@@ -26,6 +26,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use fr_board::board::Board;
 use fr_board::clearance::ClearanceSource;
+use fr_board::connectivity;
 use fr_board::item::{ItemClass, ItemId, ItemKind};
 use fr_geometry::planar::{Line, Point, Polyline, Simplex};
 
@@ -175,12 +176,10 @@ impl<'a> BoardDetours<'a> {
             (Some(sp), Some(ep)) => {
                 let p1 = match sp {
                     Point::Int(p) => p.to_float(),
-                    Point::Float(p) => *p,
                     Point::Rational(p) => p.to_float(),
                 };
                 let p2 = match ep {
                     Point::Int(p) => p.to_float(),
-                    Point::Float(p) => *p,
                     Point::Rational(p) => p.to_float(),
                 };
                 let min_distance = p1.distance(&p2);
@@ -549,32 +548,29 @@ impl AutorouteEngine<'_> {
         let Some(item) = self.board.store().get(item_id) else {
             return Vec::new();
         };
-        match &item.kind {
-            ItemKind::ConductionArea(_) => {
-                let mut result = Vec::new();
-                for &net_no in &item.nets {
-                    for &other_id in self.board.store().net_items(net_no) {
-                        if other_id == item_id {
-                            continue;
-                        }
-                        let Some(other) = self.board.store().get(other_id) else {
-                            continue;
-                        };
-                        if !connectivity::shares_layer(item, other) {
-                            continue;
-                        }
-                        let points = connectivity::connection_points(other);
-                        if points.iter().any(|p| connectivity::touches_at(item, p)) {
-                            if !result.contains(&other_id) {
-                                result.push(other_id);
-                            }
-                        }
+        if let ItemKind::ConductionArea(_) = &item.kind {
+            let mut result = Vec::new();
+            for &net_no in &item.nets {
+                for &other_id in self.board.store().net_items(net_no) {
+                    if other_id == item_id {
+                        continue;
+                    }
+                    let Some(other) = self.board.store().get(other_id) else {
+                        continue;
+                    };
+                    if !connectivity::shares_layer(item, other) {
+                        continue;
+                    }
+                    let points = connectivity::connection_points(other);
+                    if points.iter().any(|p| connectivity::touches_at(item, p))
+                        && !result.contains(&other_id)
+                    {
+                        result.push(other_id);
                     }
                 }
-                result.sort_unstable();
-                return result;
             }
-            _ => {}
+            result.sort_unstable();
+            return result;
         }
         let mut points: Vec<Point> = Vec::new();
         match &item.kind {
