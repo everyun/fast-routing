@@ -1680,3 +1680,28 @@ fn cutout_clearance_override_option() {
         3500
     );
 }
+
+#[test]
+fn issue230_u2_pin16_exit_restrictions() {
+    use fr_geometry::Direction;
+    let design = fixture("Issue230-CNH_Functional_Tester_1.dsn");
+    let target_center = IntPoint::new(1720850, -1149350);
+    let mut found_pin = None;
+    for (_id, item) in design.board.store().iter() {
+        if let fr_board::item::ItemKind::Pin(pin) = &item.kind {
+            if pin.center == target_center {
+                found_pin = Some(pin.clone());
+                break;
+            }
+        }
+    }
+    let pin = found_pin.expect("U2 Pin 16 must exist at (1720850, -1149350)");
+    let restrictions = pin.exit_restrictions(&design.board, 0);
+    assert_eq!(restrictions.len(), 2, "Oval pad has 2 exit directions");
+    let dirs: Vec<Direction> = restrictions.iter().map(|r| r.direction).collect();
+    assert!(dirs.contains(&Direction::RIGHT));
+    assert!(dirs.contains(&Direction::LEFT));
+    for r in restrictions {
+        assert_eq!(r.min_length, 12000.0);
+    }
+}

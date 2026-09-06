@@ -22,7 +22,20 @@
 //! and only the *exact* shape flavor is still per-tree.
 
 use fr_datastructures::arena_shape_tree::OctBounds;
-use fr_geometry::planar::{IntBox, IntOctagon, IntPoint, IntVector, Point, Simplex, Vector};
+use fr_geometry::planar::{
+    Direction, IntBox, IntOctagon, IntPoint, IntVector, Line, LineSegment, Point, Polyline, Side,
+    Simplex, Vector,
+};
+
+/// Allowed trace exit direction from a pin pad and minimum straight distance along it.
+/// Upstream `app.freerouting.board.Pin.TraceExitRestriction`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TraceExitRestriction {
+    /// Allowed exit direction pointing away from pad centre.
+    pub direction: Direction,
+    /// Minimum length of straight trace segment from pad centre along this direction.
+    pub min_length: f64,
+}
 
 /// One convex tile shape as stored at a search-tree leaf.
 ///
@@ -191,6 +204,141 @@ impl TileShape {
         }
     }
 
+    /// Smallest enclosing octagon.
+    pub fn bounding_octagon(&self) -> IntOctagon {
+        match self {
+            TileShape::Box(b) => b.to_int_octagon(),
+            TileShape::Oct(o) => *o,
+            TileShape::Simplex(s) => s.bounding_octagon().unwrap_or(IntOctagon::EMPTY),
+        }
+    }
+
+    /// True if the shape is an [`IntBox`].
+    pub fn is_int_box(&self) -> bool {
+        matches!(self, TileShape::Box(_))
+    }
+
+    /// Number of bounding lines.
+    pub fn border_line_count(&self) -> usize {
+        match self {
+            TileShape::Box(b) => b.border_line_count(),
+            TileShape::Oct(_) => 8,
+            TileShape::Simplex(s) => s.border_line_count(),
+        }
+    }
+
+    /// Returns the `no`-th border line.
+    pub fn border_line(&self, no: usize) -> Line {
+        match self {
+            TileShape::Box(b) => b.border_line(no),
+            TileShape::Oct(o) => o.border_line(no),
+            TileShape::Simplex(s) => s.border_line(no),
+        }
+    }
+
+    /// Offsets the shape by `dist` (positive = expand outward).
+    pub fn offset(&self, dist: f64) -> TileShape {
+        if dist == 0.0 {
+            return self.clone();
+        }
+        match self {
+            TileShape::Box(b) => TileShape::Box(b.offset(dist)),
+            TileShape::Oct(o) => TileShape::Oct(o.offset(dist)),
+            TileShape::Simplex(s) => TileShape::Simplex(s.enlarge(dist)),
+        }
+    }
+
+    /// Calculates the border line of this shape intersecting the ray from `from_point` into `direction`.
+    /// `from_point` is assumed to be inside this shape, otherwise `None` is returned.
+    /// Upstream `TileShape.intersecting_border_line_no` (`:725-758`).
+    pub fn intersecting_border_line_no(
+        &self,
+        from_point: &IntPoint,
+        direction: &Direction,
+    ) -> Option<usize> {
+        let from_p = Point::Int(*from_point);
+        if !self.contains(&from_p) {
+            return None;
+        }
+        let from_fp = from_point.to_float();
+        let intersection_line = Line::new_from_point_and_dir(*from_point, direction);
+        let second_line_point = intersection_line.b.to_float();
+        let mut result = None;
+        let mut min_distance = f64::MAX;
+        for i in 0..self.border_line_count() {
+            let curr_border_line = self.border_line(i);
+            let curr_intersection = curr_border_line.intersection_approx(&intersection_line);
+            if curr_intersection.x >= f64::from(i32::MAX) {
+                continue; // lines are parallel
+            }
+            let curr_distance = curr_intersection.distance_square(&from_fp);
+            if curr_distance < min_distance {
+                let direction_ok = curr_border_line.side_of_float(&second_line_point) == Side::OnTheLeft
+                    || second_line_point.distance_square(&curr_intersection) < curr_distance;
+                if direction_ok {
+                    result = Some(i);
+                    min_distance = curr_distance;
+                }
+            }
+        }
+        result
+    }
+
+    /// Entrance points where `polyline` crosses the boundary of this shape.
+    /// Upstream `TileShape.entrance_points` (`:764-785`).
+    pub fn entrance_points(&self, polyline: &Polyline) -> Vec<(usize, usize)> {
+        match self {
+            TileShape::Simplex(s) => s.entrance_points(polyline),
+            TileShape::Box(b) => {
+                let border_lines: Vec<Line> = (0..4).map(|i| b.border_line(i)).collect();
+                let corners = [
+                    Point::Int(b.ll),
+                    Point::Int(IntPoint::new(b.ur.x, b.ll.y)),
+                    Point::Int(b.ur),
+                    Point::Int(IntPoint::new(b.ll.x, b.ur.y)),
+                ];
+                let bbox = *b;
+                let mut result = Vec::new();
+                let mut prev_line_no: Option<usize> = None;
+                let mut prev_edge_no: Option<usize> = None;
+                for line_no in 1..polyline.arr.len().saturating_sub(1) {
+                    if let Some(seg) = LineSegment::from_polyline(polyline, line_no) {
+                        let curr_intersections = seg.border_intersections_lines(&border_lines, &corners, &bbox);
+                        for edge_no in curr_intersections {
+                            if prev_line_no != Some(line_no) || prev_edge_no != Some(edge_no) {
+                                result.push((line_no, edge_no));
+                                prev_line_no = Some(line_no);
+                                prev_edge_no = Some(edge_no);
+                            }
+                        }
+                    }
+                }
+                result
+            }
+            TileShape::Oct(o) => {
+                let border_lines: Vec<Line> = (0..8).map(|i| o.border_line(i)).collect();
+                let corners: Vec<Point> = (0..8).map(|i| Point::Int(o.corner(i))).collect();
+                let bbox = o.bounding_box();
+                let mut result = Vec::new();
+                let mut prev_line_no: Option<usize> = None;
+                let mut prev_edge_no: Option<usize> = None;
+                for line_no in 1..polyline.arr.len().saturating_sub(1) {
+                    if let Some(seg) = LineSegment::from_polyline(polyline, line_no) {
+                        let curr_intersections = seg.border_intersections_lines(&border_lines, &corners, &bbox);
+                        for edge_no in curr_intersections {
+                            if prev_line_no != Some(line_no) || prev_edge_no != Some(edge_no) {
+                                result.push((line_no, edge_no));
+                                prev_line_no = Some(line_no);
+                                prev_edge_no = Some(edge_no);
+                            }
+                        }
+                    }
+                }
+                result
+            }
+        }
+    }
+
     /// Converts to the coarser flavor the board's angle restriction calls for
     /// (`search-tree-obstacles.md` §3.4).
     ///
@@ -316,6 +464,9 @@ pub struct Padstack {
     /// null pad shape on an unused inner layer, which v2 replaces with a
     /// synthetic hole obstacle (`search-tree-obstacles.md` §9.1).
     pub shapes: Vec<Option<TileShape>>,
+    /// One entry per layer in `from_layer ..= to_layer`: allowed exit directions
+    /// and minimal straight distance along them.
+    pub exit_restrictions: Vec<Vec<TraceExitRestriction>>,
     /// Radius of the drilled hole, `0` for an SMD padstack. Feeds the synthetic
     /// hole obstacle.
     pub drill_radius: i32,
@@ -329,6 +480,7 @@ impl Padstack {
             from_layer,
             to_layer,
             shapes: vec![Some(shape); count],
+            exit_restrictions: vec![Vec::new(); count],
             drill_radius: 0,
         }
     }
@@ -351,6 +503,17 @@ impl Padstack {
         self.shapes
             .get((layer - self.from_layer) as usize)
             .and_then(|s| s.as_ref())
+    }
+
+    /// The trace exit restrictions on `layer`, or empty if none or layer out of span.
+    pub fn exit_restrictions_on_layer(&self, layer: i32) -> &[TraceExitRestriction] {
+        if layer < self.from_layer || layer > self.to_layer {
+            return &[];
+        }
+        self.exit_restrictions
+            .get((layer - self.from_layer) as usize)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 }
 

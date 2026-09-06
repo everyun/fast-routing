@@ -429,6 +429,16 @@ impl Board {
         }
     }
 
+    /// Sets the fixed state of item `id`. Returns false if `id` not found.
+    pub fn set_item_fixed_state(&mut self, id: ItemId, fixed_state: FixedState) -> bool {
+        if let Some(item) = self.store.get_mut(id) {
+            item.fixed_state = fixed_state;
+            true
+        } else {
+            false
+        }
+    }
+
     /// Inserts an item, upstream `BoardItemRepository.insertItem` (`:135-167`).
     ///
     /// A clearance class outside the matrix is forced to 0, exactly as upstream

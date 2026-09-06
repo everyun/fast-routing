@@ -104,7 +104,7 @@ pub use item::{
 pub use journal::{Journal, Mark};
 pub use net_nos::NetNos;
 pub use search_tree::{SearchTree, SearchTreeManager, TreeEntry};
-pub use shape::{AngleRestriction, Padstack, PadstackTable, TileShape};
+pub use shape::{AngleRestriction, Padstack, PadstackTable, TileShape, TraceExitRestriction};
 pub use shove::{
     ChangedAreaSink, CheckDrillResult, FromSide, NoChangedArea, ShoveBudget, ShoveCheck,
     ShoveInsert, FULL_SHOVE,

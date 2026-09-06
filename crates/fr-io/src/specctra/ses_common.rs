@@ -281,10 +281,12 @@ fn identity_board_padstack(padstack: &ImportedPadstack) -> BoardPadstack {
                 .map(PadGeometry::to_tile_shape),
         );
     }
+    let shape_count = shapes.len();
     BoardPadstack {
         from_layer: from_layer as i32,
         to_layer: to_layer as i32,
         shapes,
+        exit_restrictions: vec![Vec::new(); shape_count],
         drill_radius: drill_radius(padstack),
     }
 }

@@ -1422,13 +1422,15 @@ fn board_padstack_of(padstack: &RulesPadstack) -> Option<BoardPadstack> {
     if to_layer < from_layer {
         return None;
     }
-    let shapes = (from_layer..=to_layer)
+    let shapes: Vec<Option<TileShape>> = (from_layer..=to_layer)
         .map(|layer| padstack.get_shape(layer).map(pad_shape_to_tile))
         .collect();
+    let count = shapes.len();
     Some(BoardPadstack {
         from_layer: from_layer as i32,
         to_layer: to_layer as i32,
         shapes,
+        exit_restrictions: vec![Vec::new(); count],
         drill_radius: padstack.get_drill_radius().round() as i32,
     })
 }

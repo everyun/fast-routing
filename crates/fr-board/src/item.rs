@@ -35,10 +35,13 @@
 //! likewise a checker-side concern and is not stored here.
 
 use fr_geometry::planar::{
-    IntBox, IntOctagon, IntPoint, IntVector, Point, Polygon, Polyline, Simplex,
+    Direction, FloatPoint, IntBox, IntOctagon, IntPoint, IntVector, Line, Point, Polygon,
+    Polyline, Simplex, Vector,
 };
 
+use crate::board::Board;
 use crate::net_nos::NetNos;
+use crate::shape::TraceExitRestriction;
 
 /// Stable, monotonically increasing semantic identity of a board item.
 ///
@@ -323,6 +326,120 @@ pub struct Pin {
     /// Resolved padstack layer span. `first == last` means an SMD pad, which is
     /// exactly upstream's `drillAllowed()`.
     pub layers: LayerRange,
+}
+
+impl Pin {
+    /// Returns the trace exit restrictions for this pin on `layer`.
+    pub fn exit_restrictions<'a>(&self, board: &'a Board, layer: i32) -> &'a [TraceExitRestriction] {
+        board
+            .padstacks()
+            .get(self.padstack_no)
+            .map(|p| p.exit_restrictions_on_layer(layer))
+            .unwrap_or(&[])
+    }
+
+    /// Calculates the nearest legal exit restriction direction for changing `trace_polyline`.
+    /// Upstream `Pin.calc_nearest_exit_restriction_direction` (`:575-640`).
+    pub fn calc_nearest_exit_restriction_direction(
+        &self,
+        board: &Board,
+        trace_polyline: &Polyline,
+        trace_half_width: i32,
+        layer: i32,
+        edge_to_turn_dist: f64,
+    ) -> Option<Direction> {
+        let restrictions = self.exit_restrictions(board, layer);
+        if restrictions.is_empty() || edge_to_turn_dist < 0.0 {
+            return None;
+        }
+        let padstack = board.padstacks().get(self.padstack_no)?;
+        let pin_shape = padstack.shape_on_layer(layer)?;
+        let offset = Vector::Int(self.center.difference_by_int(&IntPoint::ZERO));
+        let absolute_pin_shape = pin_shape.translate_by(&offset);
+        let offset_pin_shape = absolute_pin_shape.offset(edge_to_turn_dist + f64::from(trace_half_width));
+
+        let entries = offset_pin_shape.entrance_points(trace_polyline);
+        if entries.is_empty() {
+            return None;
+        }
+        let latest_entry = entries.last().unwrap();
+        let border_line = offset_pin_shape.border_line(latest_entry.1);
+        let trace_entry_location = trace_polyline.arr[latest_entry.0].intersection_approx(&border_line);
+
+        let mut min_dist = f64::MAX;
+        let mut nearest_exit_dir = None;
+        let mut nearest_exit_corner = None;
+        const TOLERANCE: f64 = 1.0;
+
+        for r in restrictions {
+            let Some(border_no) = offset_pin_shape.intersecting_border_line_no(&self.center, &r.direction) else {
+                continue;
+            };
+            let exit_ray = Line::new_from_point_and_dir(self.center, &r.direction);
+            let exit_corner = exit_ray.intersection_approx(&offset_pin_shape.border_line(border_no));
+            let corner_dist = exit_corner.distance_square(&trace_entry_location);
+            let mut new_nearest = false;
+            if corner_dist + TOLERANCE < min_dist {
+                new_nearest = true;
+            } else if corner_dist < min_dist + TOLERANCE {
+                let old_corner = nearest_exit_corner.unwrap_or(exit_corner);
+                for i in 1..trace_polyline.corner_count() {
+                    let trace_corner = trace_polyline.corner_approx(i);
+                    let d_new = trace_corner.distance_square(&exit_corner);
+                    let d_old = trace_corner.distance_square(&old_corner);
+                    if d_new + TOLERANCE < d_old {
+                        new_nearest = true;
+                        break;
+                    } else if d_new > d_old + TOLERANCE {
+                        break;
+                    }
+                }
+            }
+            if new_nearest {
+                min_dist = corner_dist;
+                nearest_exit_dir = Some(r.direction);
+                nearest_exit_corner = Some(exit_corner);
+            }
+        }
+        nearest_exit_dir
+    }
+
+    /// Calculates the nearest legal exit corner of the pin on `layer`.
+    /// Upstream `Pin.nearest_trace_exit_corner` (`:645-680`).
+    pub fn nearest_trace_exit_corner(
+        &self,
+        board: &Board,
+        from_point: &FloatPoint,
+        trace_half_width: i32,
+        layer: i32,
+        edge_to_turn_dist: f64,
+    ) -> Option<FloatPoint> {
+        let restrictions = self.exit_restrictions(board, layer);
+        if restrictions.is_empty() || edge_to_turn_dist < 0.0 {
+            return None;
+        }
+        let padstack = board.padstacks().get(self.padstack_no)?;
+        let pin_shape = padstack.shape_on_layer(layer)?;
+        let offset = Vector::Int(self.center.difference_by_int(&IntPoint::ZERO));
+        let absolute_pin_shape = pin_shape.translate_by(&offset);
+        let offset_pin_shape = absolute_pin_shape.offset(edge_to_turn_dist + f64::from(trace_half_width));
+
+        let mut min_dist = f64::MAX;
+        let mut nearest_exit_corner = None;
+        for r in restrictions {
+            let Some(border_no) = offset_pin_shape.intersecting_border_line_no(&self.center, &r.direction) else {
+                continue;
+            };
+            let exit_ray = Line::new_from_point_and_dir(self.center, &r.direction);
+            let exit_corner = exit_ray.intersection_approx(&offset_pin_shape.border_line(border_no));
+            let d = exit_corner.distance_square(from_point);
+            if d < min_dist {
+                min_dist = d;
+                nearest_exit_corner = Some(exit_corner);
+            }
+        }
+        nearest_exit_corner
+    }
 }
 
 /// A via (`board.model.items.Via`).

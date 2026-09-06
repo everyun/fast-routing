@@ -26,8 +26,8 @@ use fr_board::item::{
 };
 use fr_board::{AreaShape, Board, NetNos};
 use fr_geometry::planar::{
-    split_to_convex, Circle, FloatPoint, IntBox, IntOctagon, IntPoint, IntVector, Line, Point,
-    Polyline, Simplex, Vector,
+    split_to_convex, Circle, Direction, FloatPoint, IntBox, IntOctagon, IntPoint, IntVector, Line,
+    Point, Polyline, Simplex, Vector,
 };
 use fr_rules::clearance_class_names::{
     contains_wire_clearance_pair, net_class_item_clearance_class_name, network_class_pair,
@@ -529,6 +529,7 @@ struct PadstackKey {
     mirror_on_y_axis: bool,
     flip_after_rotate: bool,
     on_front: bool,
+    pin_count_le_3: bool,
     /// The pin's package-relative location, and `None` whenever the placed pad provably does not
     /// depend on it — see `placed_pad_shapes`. Keeping it out of the key in the right-angle case
     /// is what lets one entry serve a whole footprint; keeping it *in* at an oblique rotation is
@@ -2303,6 +2304,7 @@ impl<'a> Builder<'a> {
             let mut center = board_location.translate_by_int(&rel_location);
 
             // §9.2.2 the pad shapes, all layers at once, and §9.2.3 the layer flip.
+            let pin_count_le_3 = pin_count <= 3;
             let placed = self.placed_pad_shapes(
                 padstack_index,
                 pin.rotation,
@@ -2312,6 +2314,7 @@ impl<'a> Builder<'a> {
                 on_front,
                 pin.relative_location,
                 rel_location,
+                pin_count_le_3,
             );
             // `Pin.get_center` (`Pin.java:86-118`): a pad that does not cover the nominal centre
             // moves the centre onto its own centre of gravity. The shapes are pin-relative now, so
@@ -2555,6 +2558,7 @@ impl<'a> Builder<'a> {
         on_front: bool,
         relative_location: IntVector,
         placed_relative_location: IntVector,
+        pin_count_le_3: bool,
     ) -> PlacedPadstack {
         let padstack = &self.padstacks[padstack_index];
         let from_layer = padstack.from_layer();
@@ -2641,6 +2645,67 @@ impl<'a> Builder<'a> {
             }
             shapes.push(Some(shape));
         }
+
+        let mut exit_restrictions = Vec::with_capacity(to_layer - from_layer + 1);
+        for shape_index in 0..=(to_layer - from_layer) {
+            let padstack_layer = if on_front || placed_absolute {
+                shape_index + from_layer
+            } else {
+                to_layer.saturating_sub(shape_index)
+            };
+            let Some(raw_geom) = padstack.shapes.get(padstack_layer).and_then(Option::as_ref) else {
+                exit_restrictions.push(Vec::new());
+                continue;
+            };
+            if matches!(raw_geom, PadGeometry::Circle(_)) {
+                exit_restrictions.push(Vec::new());
+                continue;
+            }
+            let raw_bbox = raw_geom.bounding_box();
+            let raw_w = f64::from(raw_bbox.width());
+            let raw_h = f64::from(raw_bbox.height());
+            let pad_xy_factor = if pin_count_le_3 { 3.0 } else { 1.5 };
+            let all_dirs = raw_w.max(raw_h) < pad_xy_factor * raw_w.min(raw_h);
+
+            let mut padstack_exit_dirs = Vec::new();
+            if all_dirs || raw_w >= raw_h {
+                padstack_exit_dirs.push(Direction::RIGHT);
+                padstack_exit_dirs.push(Direction::LEFT);
+            }
+            if all_dirs || raw_w <= raw_h {
+                padstack_exit_dirs.push(Direction::UP);
+                padstack_exit_dirs.push(Direction::DOWN);
+            }
+
+            let Some(placed_shape) = shapes.get(shape_index).and_then(Option::as_ref) else {
+                exit_restrictions.push(Vec::new());
+                continue;
+            };
+            let placed_tile = placed_shape.to_tile_shape();
+            let curr_rotation = component_rotation + pin_rotation;
+            let mut layer_restrictions = Vec::new();
+            for exit_dir in padstack_exit_dirs {
+                let curr_exit_dir = if curr_rotation % 45.0 == 0.0 {
+                    let factor = (curr_rotation as i32) / 45;
+                    exit_dir.turn_45_degree(factor)
+                } else {
+                    let angle = curr_rotation.to_radians() + exit_dir.angle_approx();
+                    Direction::from_angle_approx(angle)
+                };
+                if let Some(border_no) = placed_tile.intersecting_border_line_no(&IntPoint::ZERO, &curr_exit_dir) {
+                    let exit_ray = Line::new_from_point_and_dir(IntPoint::ZERO, &curr_exit_dir);
+                    let border_line = placed_tile.border_line(border_no);
+                    let border_pt = exit_ray.intersection_approx(&border_line);
+                    let min_length = FloatPoint::new(0.0, 0.0).distance(&border_pt);
+                    layer_restrictions.push(fr_board::TraceExitRestriction {
+                        direction: curr_exit_dir,
+                        min_length,
+                    });
+                }
+            }
+            exit_restrictions.push(layer_restrictions);
+        }
+
         PlacedPadstack {
             key: PadstackKey {
                 padstack_index,
@@ -2649,11 +2714,13 @@ impl<'a> Builder<'a> {
                 mirror_on_y_axis,
                 flip_after_rotate,
                 on_front,
+                pin_count_le_3,
                 pin_offset: (component_rotation % 90.0 != 0.0).then_some(relative_location),
             },
             first_layer: first_layer as i32,
             last_layer: last_layer as i32,
             shapes,
+            exit_restrictions,
             drill_radius: self.padstacks[padstack_index]
                 .to_rules_padstack(padstack_index)
                 .get_drill_radius()
@@ -2679,6 +2746,7 @@ impl<'a> Builder<'a> {
                 .iter()
                 .map(|slot| slot.as_ref().map(PadGeometry::to_tile_shape))
                 .collect(),
+            exit_restrictions: placed.exit_restrictions,
             drill_radius: placed.drill_radius,
         };
         let index = self.board_padstacks.push(board_padstack);
@@ -2943,6 +3011,7 @@ impl<'a> Builder<'a> {
             true,
             IntVector::new(0, 0),
             IntVector::new(0, 0),
+            false,
         );
         let board_padstack_no = self.intern_padstack(placed);
         self.items.push(Pending::Via {
@@ -3151,6 +3220,7 @@ struct PlacedPadstack {
     first_layer: i32,
     last_layer: i32,
     shapes: Vec<Option<PadGeometry>>,
+    exit_restrictions: Vec<Vec<fr_board::TraceExitRestriction>>,
     drill_radius: i32,
 }
 
