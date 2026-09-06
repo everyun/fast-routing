@@ -396,19 +396,12 @@ impl ShoveCheck<'_> {
         self.scratch.give(obstacles);
         if !stored {
             let blame = shape_entries.found_obstacle();
-            println!("ShoveCheck::check failed: not stored, blame={:?}", blame);
             self.blame(blame);
             return false;
         }
         let trace_piece_count = shape_entries.substitute_trace_count();
         if shape_entries.stack_depth() > 1 || (max_recursion_depth <= 0 && trace_piece_count > 0) {
             let blame = shape_entries.found_obstacle();
-            println!(
-                "ShoveCheck::check failed: stack_depth={} trace_piece_count={} max_rec={}",
-                shape_entries.stack_depth(),
-                trace_piece_count,
-                max_recursion_depth
-            );
             self.blame(blame);
             return false;
         }
