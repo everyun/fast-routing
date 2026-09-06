@@ -21,6 +21,14 @@
 //! [`Board::begin`]/[`Board::rollback_to`] pair, so a failure leaves the board
 //! bit-identical to what it was.
 //!
+//! `FR_INSERT_FAIL_KEEP_RIPS=1` restores upstream's failure semantics: the
+//! ripup stays (victims return to the unrouted queue) and the abandoned
+//! attempt's own copper is cleaned as tails. That is the board-evolution
+//! channel upstream's late-pass oscillation escapes through — see
+//! REPORT-convergence §5.3 — shipped behind the switch pending the sweep
+//! verdict. The DRC acceptance guard below is ours alone and rolls back in
+//! both modes.
+//!
 //! The consequence is *fewer* board mutations than the release on a failed
 //! connection, never more, and it removes the only source of orphan copper in
 //! the pipeline. Batch-level parity is unaffected: the return value is the same
@@ -45,6 +53,7 @@
 //!   second is the batch driver's, over the changed area this returns.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 
 use fr_board::board::Board;
 use fr_board::connectivity::connection_points;
@@ -150,6 +159,27 @@ pub fn insert_connection(
     connection: &LocatedConnection,
     bounds: IntBox,
 ) -> Result<InsertOutcome, InsertError> {
+    insert_connection_with_fail_mode(
+        board,
+        rules,
+        ctrl,
+        connection,
+        bounds,
+        keep_insert_fail_rips(),
+    )
+}
+
+/// [`insert_connection`] with the failure mode explicit — the env-gated entry
+/// point dispatches here, and the tests inject the mode directly so they do
+/// not depend on process-global state.
+pub fn insert_connection_with_fail_mode(
+    board: &mut Board,
+    rules: &BoardRules,
+    ctrl: &AutorouteControl,
+    connection: &LocatedConnection,
+    bounds: IntBox,
+    keep_fail_rips: bool,
+) -> Result<InsertOutcome, InsertError> {
     let mark = board.begin();
     // Item ids are monotone and never reused (`fr_board::store`, `next_id`), so every item this
     // insertion creates has an id at or above this one — and `ItemStore::iter` runs descending,
@@ -189,10 +219,50 @@ pub fn insert_connection(
         }
         Err(error) => {
             drop(inserter);
-            board.rollback_to(mark);
-            Err(error)
+            if keep_fail_rips {
+                // Upstream failure semantics (`InsertFoundConnectionAlgo.java:250-268`
+                // + the absence of any undo in the autoroute package): the ripup
+                // stays (its victims return to the unrouted queue), and the
+                // abandoned attempt's own copper is cleaned up as tails —
+                // upstream removes the stubs at the path corners in-insert and
+                // the batch driver's end-of-pass `remove_tails`
+                // (`BatchAutorouter.java:651-661`) catches the rest. Scoped to
+                // the routed net so other nets' copper is untouched.
+                board.commit(mark);
+                let mut scratch = crate::batch::ContactScratch::default();
+                crate::batch::remove_tails(
+                    board,
+                    ctrl.net_no,
+                    crate::batch::StopConnection::None,
+                    &mut scratch,
+                );
+                Err(error)
+            } else {
+                board.rollback_to(mark);
+                Err(error)
+            }
         }
     }
+}
+
+/// The `FR_INSERT_FAIL_KEEP_RIPS` switch: upstream's non-transactional insert
+/// failure. Off (default) keeps this port's transactional rollback; on, a
+/// failed insertion keeps the ripup (victims stay torn, returning to the
+/// unrouted queue) and cleans the abandoned attempt's own tails, which is the
+/// board-evolution channel upstream's late-pass oscillation escapes through
+/// (REPORT-convergence §5.3).
+fn keep_insert_fail_rips() -> bool {
+    static KEEP_RIPS: OnceLock<bool> = OnceLock::new();
+    *KEEP_RIPS.get_or_init(|| {
+        std::env::var("FR_INSERT_FAIL_KEEP_RIPS")
+            .map(|v| {
+                matches!(
+                    v.trim().to_ascii_lowercase().as_str(),
+                    "1" | "true" | "on" | "yes"
+                )
+            })
+            .unwrap_or(false)
+    })
 }
 
 struct ConnectionInserter<'b> {

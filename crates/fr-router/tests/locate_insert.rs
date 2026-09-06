@@ -21,7 +21,7 @@ use fr_board::shape::{Padstack as BoardPadstack, TileShape};
 use fr_geometry::planar::{IntBox, IntPoint, Polyline};
 use fr_router::ctrl::AutorouteControl;
 use fr_router::engine::AutorouteEngine;
-use fr_router::insert::{insert_connection, InsertError};
+use fr_router::insert::{insert_connection, insert_connection_with_fail_mode, InsertError};
 use fr_router::insert_forced::ForcedInserter;
 use fr_router::locate::{locate, LocatedConnection, ResultItem};
 use fr_router::maze::search::MazeSearch;
@@ -426,6 +426,56 @@ fn a_refused_insertion_rolls_the_board_back_exactly() {
         hits.is_empty(),
         "the rolled-back trace is still indexed: {hits:?}"
     );
+    assert!(traces_of(&fixture.board, TEST_NET).is_empty());
+}
+
+/// The env-gated upstream failure mode: with `keep_fail_rips` on, a failed
+/// insertion still returns `Err` and — because this hand-built failure rips
+/// nothing — leaves the board byte-identical, but the cleanup must stay scoped
+/// to the routed net and must not delete the foreign trace. With the default
+/// (transactional) mode this is the same assertion the rollback test makes.
+#[test]
+fn keep_fail_rips_mode_cleans_only_the_routed_net_and_keeps_other_copper() {
+    let mut fixture = TestFixture::with_foreign_trace();
+    make_the_foreign_trace_unshovable(&mut fixture);
+    let pads = fixture.pad_ids();
+    let centers = fixture.pad_centers();
+    let ctrl = fixture.control();
+    let bounds = IntBox::new(-4000, -2500, 4000, 2500);
+
+    let before = snapshot(&fixture.board);
+    let items_before = fixture.board.store().len();
+
+    let connection = LocatedConnection {
+        connection_items: vec![ResultItem {
+            corners: vec![centers[1], IntPoint::new(0, 0), centers[0]],
+            layer: 0,
+        }],
+        start_item: pads[0],
+        start_layer: 0,
+        target_item: Some(pads[1]),
+        target_layer: 0,
+        ripped_items: Vec::new(),
+    };
+
+    let error = insert_connection_with_fail_mode(
+        &mut fixture.board,
+        &fixture.rules,
+        &ctrl,
+        &connection,
+        bounds,
+        true,
+    )
+    .expect_err("the user-fixed foreign trace blocks the run in either mode");
+    assert!(matches!(error, InsertError::TraceBlocked { .. }));
+
+    // No rip happened on this hand-built failure, so even the upstream mode
+    // lands on the same board: same item count, same contents.
+    assert_eq!(fixture.board.store().len(), items_before);
+    assert_eq!(snapshot(&fixture.board), before);
+    // The cleanup is scoped to the routed net: the foreign (net-2) trace that
+    // blocked the run is still on the board.
+    assert_eq!(traces_of(&fixture.board, 2).len(), 1);
     assert!(traces_of(&fixture.board, TEST_NET).is_empty());
 }
 
