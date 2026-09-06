@@ -526,7 +526,7 @@ pub fn fanout_board(
                         .is_some_and(|item| item.layer_range().is_single() && item.nets.len() == 1)
                 })
                 .filter(|pin| {
-                    connected_set(board, pin.net_no, pin.item, scratch).len() <= 1
+                    connected_set(board, pin.net_no, pin.item, &mut scratch).len() <= 1
                 })
                 .count();
             if counters.via_count == previous_vias {
