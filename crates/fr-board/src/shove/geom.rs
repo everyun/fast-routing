@@ -349,7 +349,11 @@ pub fn overlapping_items_with_clearance_tile(
             .any(|tile| {
                 tile.shape
                     .as_ref()
-                    .map(|item_shape| curr_offset_tile.intersects(item_shape))
+                    .map(|item_shape| {
+                        item_shape
+                            .enlarge(half_clearance)
+                            .intersects(&curr_offset_tile)
+                    })
                     .unwrap_or(false)
             })
     });

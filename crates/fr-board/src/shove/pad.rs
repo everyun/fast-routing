@@ -182,8 +182,14 @@ impl ShoveCheck<'_> {
                 self.scratch.give(obstacles);
                 return CheckDrillResult::NotDrillable;
             }
-            let new_via_center =
-                super::drill::try_shove_via_points(board, &pad_simplex, layer, via_id, cl_type, false);
+            let new_via_center = super::drill::try_shove_via_points(
+                board,
+                &pad_simplex,
+                layer,
+                via_id,
+                cl_type,
+                false,
+            );
             let Some(&first) = new_via_center.first() else {
                 self.failing_obstacle = Some(via_id);
                 self.scratch.give(obstacles);
@@ -239,7 +245,13 @@ impl ShoveCheck<'_> {
                 let curr_line = piece.polyline.arr[i + 1];
                 let curr_dir = curr_line.direction();
                 let is_in_front = if check_only_front {
-                    in_front_of_pad(&curr_line, &pad_simplex, from_side_no, piece.half_width, true)
+                    in_front_of_pad(
+                        &curr_line,
+                        &pad_simplex,
+                        from_side_no,
+                        piece.half_width,
+                        true,
+                    )
                 } else {
                     true
                 };

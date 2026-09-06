@@ -150,7 +150,8 @@ impl ShoveCheck<'_> {
             };
             let new_shape = curr_shape.translate_by(&fr_geometry::planar::Vector::Int(*vector));
             let curr_tile_shape = drill_tile_shape(&new_shape, orthogonal);
-            let from_side = FromSide::from_point(&Point::Int(center), &curr_tile_shape.to_simplex());
+            let from_side =
+                FromSide::from_point(&Point::Int(center), &curr_tile_shape.to_simplex());
             if self.check_forced_pad(
                 &curr_tile_shape,
                 Some(from_side),
