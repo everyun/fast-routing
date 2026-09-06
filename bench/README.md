@@ -444,33 +444,38 @@ multi-pin "nets" need no wires (pins already touching / connected by plane).
   the kind of free win the `java_degenerate` class exists to keep out of the
   numbers.
 
-## Remote quality sweeps & acceptance tooling
+## 远程质量扫描与统一验收流程 (Remote Sweeps & Acceptance)
 
-To relieve local machine contention while iterating on router quality, full suite runs (24, 46, and OOS) can be offloaded to dedicated remote Debian hosts in the subnet (`orca`: `172.20.0.6`, `salmon`: `172.20.0.2`, `whale`: `172.20.0.4`).
+为避免 Mac 本地 CPU 争用影响评测精度，所有质量扫描（24 板 unique、46 板全套、9 板样本外 OOS）一律分流至专用局域网测试机：
+- **orca** (`172.20.0.6`，80 核，125 GiB RAM)
+- **salmon** (`172.20.0.2`，64 核 AMD EPYC，125 GiB RAM)
+- **whale** (`172.20.0.4`，8 核 Xeon，251 GiB RAM，NAS/ZFS 存储节点，仅作备用)
 
-### Scripts (`bench/tools/remote/` & `bench/tools/`)
+### 一键验收脚本与统一口径 (`accept.sh` + `accept_compare.py`)
 
-- `accept.sh <worktree|commit> [--host auto|orca|salmon|whale] [--doors full|doors|default] [--suite 24+oos|24|oos|46] [--allow-deadline-noise <N>]`:
-  One-touch acceptance testing script. Auto-probes remote runner loads (preferring `orca` and `salmon`), executes the quality sweep, and calls `accept_compare.py` against the latest mainline baseline under `bench/results/main-sweeps/`. Exits with non-zero code on any regression (+u or added violations).
-- `accept_compare.py <ours gate.json> [baseline gate.json] [--allow-deadline-noise <N>]`:
-  Board-by-board comparator for acceptance. Compares $u$ and $v$, detects added violations, verifies doors mode consistency, and prints a clear `WORSE / same / better` summary table.
-- `push.sh <worktree_or_commit> [--host <host>]`: pushes the branch/commit to the remote bare repo (`~/fr/fast-routing.git`).
-- `quality.sh <worktree_or_commit> [--host <host>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors full|doors|on|off|default] [-w <workers>]`:
-  Executes the remote sweep, judges results, and rsyncs logs, sessions, and `gate.json` back to `~/fr-work/logs/remote/<tag>/`.
-- `java_ref.sh [--host <host>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [-w <workers>]`:
-  Runs the pinned Freerouting 2.3.0 jar on the remote host with clean isolated `--user_data_path` per board.
+所有分支合入与报告生成统一采用一键验收工具链，杜绝口径漂移与基线选择错误：
 
-### Usage
+1. **自动选机与扫描 (`bench/tools/remote/accept.sh`)**：
+   - 支持 `--host auto|orca|salmon|whale`。`auto` 模式通过 SSH 探测各机 1 分钟负载，自动选择负载最低者（优先分流至 orca 与 salmon，负载 > 4.0 时才使用 whale）；
+   - 支持 `--suite 24+oos|24|oos|46` 与 `--doors full|doors|default`；
+   - 自动在 `sweep.json` 与 `gate.json` 中完整记录生效模式（如 `doors_mode`、`fr-cli --version`、命令行参数），杜绝静默回退或参数欺骗。
+2. **基线逐板对照判定 (`bench/tools/accept_compare.py`)**：
+   - 自动索引 `bench/results/main-sweeps/` 下最新主线提交的 `main/gate.json`；
+   - 逐板对比分支 vs 主线的 $u$（未连通数）与 $v$（违例数），计算 $\Delta u$ 与新增违例（added violations）；
+   - 严格检查两侧 `doors_mode` 一致性，若存在模式漂移（如 full vs default）输出显式警告；
+   - 汇总统计：若存在任何退步板或新增违例，脚本返回非 0 退出码（阻止合并）。
+
+### 工具链使用范式
 
 ```sh
-# One-touch acceptance verification for current worktree against latest mainline baseline
+# 对当前工作区进行一键验收（自动选机、跑 24 板、对照最新主线基线）
 bench/tools/remote/accept.sh . --suite 24
 
-# Explicitly test a feature branch with full doors
-bench/tools/remote/accept.sh wip/full-039 --doors full --suite 24
+# 显式指定测试机与模式
+bench/tools/remote/accept.sh my-branch --host salmon --doors full --suite 24
 
-# Standalone comparison of two gate.json files
+# 独立运行两份 gate.json 结果对比
 python3 bench/tools/accept_compare.py path/to/ours/gate.json [path/to/baseline/gate.json]
 ```
 
-**Note**: orca/salmon/whale have no KiCad installation, so G4 (KiCad DRC and angle checks) remains on the Mac host. Serial ledger timings (README benchmarks) also remain on the quiet Mac host.
+**说明**: 远程测试机未安装 KiCad，因此 G4 门禁（KiCad DRC 与角度检查）及最终发布版串行账本计时（README benchmarks）在静默 Mac 本地上串行运行。

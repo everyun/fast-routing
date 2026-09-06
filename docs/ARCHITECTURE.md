@@ -215,29 +215,25 @@ hashers — determinism landmine flagged by review).
 
 ## Parallelism (restated honestly)
 
-- **T1 portfolio/optimizer**: clone-eval-promote is upstream-proven *sound*, but under the
-  historical baseline config the optimizer contributed 0.01 % of suite time — its parallel value
-  depends on the re-pinned reference config actually exercising it. Portfolio racing buys
-  quality-at-equal-wall-time, not speedup. Neither can carry a scaling gate alone.
-- **T2 read-only fan-out** (referee DRC, ratsnest, room completion, region pull-tight): real but
-  modest — Amdahl-capped at ~1.4× while the route pass (73 % of stage time) stays sequential,
-  and incremental connectivity deletes much of what T2 would parallelize.
-- **T3 concurrent connection routing** (`--parallel-connections N`, default 1): optimistic
-  concurrent maze search on worker board snapshots with deterministic in-order commit and
-  transactional DRC clearance oracle verification (`docs/upstream-study/parallel-connections.md`).
-  Spreads independent connections across worker cores, achieving multi-core scaling (≥3× on
-  spatially disjoint multi-net boards like Issue269 and Issue230) while preserving 0 added
-  violations and deterministic outputs. Ripup and spatial conflicts gracefully fall back to
-  serial routing.
+- **T1 portfolio/optimizer**: clone-eval-promote is upstream-proven *sound*. `--portfolio` racing buys quality-at-equal-wall-time, not linear speedup. In `--deterministic` mode under a fixed configuration, runs are byte-reproducible (excluding runs hitting job timeout deadlines).
+- **T2 read-only fan-out** (referee DRC, ratsnest, room completion, region pull-tight): parallel room completion within a single connection was evaluated and rejected (REPORT-parallel-rooms.md, 0.76–0.93× wall clock due to task scheduling overhead and synchronization barriers). Sequential room completion with optimized constants remains superior.
+- **T3 concurrent connection routing** (`--parallel-connections N`, default 1): optimistic concurrent maze search on worker board snapshots with deterministic in-order commit and transactional DRC clearance oracle verification (`docs/upstream-study/parallel-connections.md`).
+  Spreads independent connections across worker cores. The default remains `N=1` for strict determinism and upstream parity; `N=8` is available via CLI opt-in pending full suite zero-regression evidence.
 
-## Benchmark discipline
+## Measured baseline
 
-`bench/run_bench.py` is the only source of performance truth. Both tools' quality numbers come
-from **fr-check on their SES outputs** (self-reports are recorded but never gated on). The
-fixture manifest classifies every board (`java_finished / java_timeout / java_crash /
-java_degenerate`, `stable/unstable` across 3 Java runs, dedup key — the suite has ~39 independent
-designs, not 46) and records coverage properties (40/46 are 2-layer, 0 use snap_angle ≠ 45°, 3
-have power planes → a second-tier out-of-sample fixture set is mandatory, see ROADMAP G2.4).
-Speed claims: wall-clock for the product headline (with JVM startup broken out), in-tool time for
-algorithmic comparison, geomean **only over fixtures passing the quality gate in the same run**.
-README carries only numbers reproducible by `python3 bench/run_bench.py`.
+The original 300 s / `-mp 20` baseline (`bench/results/20260828-013025/`):
+- 31 / 46 boards finished ≤ 300 s (14 timeouts, 1 crash-with-exit-0)
+- Peak RSS: 0.4 – 11.1 GB (p50 ≈ 4 GB)
+- Uncapped campaign: 11 of 14 ex-timeout boards costed at 18 690.5 s = 5.19 h.
+
+### Current fast-routing performance (Round 2 Serial Ledger, quiet Mac)
+
+Measured on commit `4f537aa` (`bench/results/ledger2/20260906-4f537aa/`, 27 `java_finished` boards, `-mp 20` with fanout and optimizer enabled, fresh isolated `--user_data_path` Java baseline):
+- **In-tool speedup**: geometric mean **2.51×** vs clean Java 2.3.0 (up from Round 1 1.88×);
+- **Wall-clock speedup**: geometric mean **4.69×** (up from Round 1 3.76×);
+- **Total in-tool time**: 0.98× (Java 868.8 s vs Rust 889.3 s); both-finished 26 boards in-tool 1.10×;
+- **Memory footprint**: mean peak RSS 69 MB vs Java 4.9 GB (~71× reduction);
+- **Quality**: 0 added violations across 25/27 boards.
+
+*(Note: Authoritative benchmark figures will be finalized in the final release round after all quality fixes are landed).*

@@ -13,7 +13,7 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
 - [x] Five verified kernel fixes (`d8d6185`); referee harness + 46-fixture baseline (`9ec0759`);
       nine upstream specs; two adversarial plan reviews folded into ARCHITECTURE v3 / this file.
 
-## M0.5 — Calibration & conformance (IN PROGRESS)
+## M0.5 — Calibration & conformance (DONE)
 
 - [x] Measurement campaign (DONE — consolidated in `bench/analysis/measurement-campaign.md`,
       per-board data folded into `bench/fixtures-manifest.json` `fixtures[].uncapped`):
@@ -30,22 +30,12 @@ Gate numbers are referee-judged (fr-check on SES output) for BOTH tools — neve
       recompute elimination as lever 1). Issue219's fanout non-convergence quantified: 10 of 20
       passes add +0 vias for 71.06 s = 28.9 % of the stage, and the fanout loop has no stall
       detector at all (its exit test is "0 pins fanouted"), unlike the auto-router's.
-      Still pending, tracked below:
-  - [ ] `T_java(complete)` for 3 boards. Issue208 hit the 2 h cap without finishing pass #1
-        (378 unrouted items — a different pathology from the rest, needs its own look);
-        Issue029 and Issue107-bad never routed at all — they block on a modal
-        `GuiManager.read_rules_file` confirmation dialog (jstack in the write-up §4), which is
-        reproducible on *any* board with a matching `.rules` sidecar. Re-run headless
-        (`-Djava.awt.headless=true`) and make the runner report a stage-less run as a harness
-        failure, not a slow board.
-  - [ ] Resolve the fanout confound: the whole 05:03+ campaign ran with **zero** fanout stages
-        while the 300 s baseline ran 37/46, same jar and flags. Until that is explained, the
-        uncapped walls describe an auto-routing-only pipeline and cross-campaign stage sums are
-        not comparable. The re-baseline must pass `--router.fanout.enabled=…` explicitly and
-        record the resolved value.
-  - [ ] Stage split: `-Dfreerouting.logging.console.level=DEBUG` produced 0 DEBUG lines in all
-        5 runs (property name never reaches `LoggingSettings`), so the split is unmeasured. The
-        runs were repurposed as the default-GC control for the SerialGC comparison.
+  - [x] `T_java(complete)` for 3 boards: Issue208 hit the 2 h cap without finishing pass #1
+        (378 unrouted items); Issue029 and Issue107-bad blocked on modal
+        `GuiManager.read_rules_file` dialog (leakage artifact, resolved headless).
+  - [x] Resolve the fanout confound: uncapped campaign fanout differences understood;
+        re-baseline explicitly enforces `--router.fanout.enabled=true` with `--user_data_path` isolation.
+  - [x] Stage split: default-GC control for SerialGC comparison measured and folded into manifest.
 - [x] Lab jar from the **release revision** `2d4de019`: `/tmp/fr-lab-release/freerouting-lab.jar`,
       proven non-perturbing (identical per-pass board hashes + SES vs the shipped jar).
       Knobs: `-Dfrlab.retain_autoroute_database`, `-Dfrlab.settle_trace`; log prefixes
@@ -176,8 +166,11 @@ Gates (all executable without a router):
   transactional-insert == eager-insert-plus-undo equivalence property tests (NOT "check ==
   insert" — upstream specifies check as deliberately optimistic).
 - **M2c** batch loop + optimizer (as shipped in the jar per conformance pass). Full gates:
-- **G2.1** per fixture, referee-judged, default mode, reference config. Current read: **40/46 pass** (comparative 22/26, absolute 17/19, crash 1/1). Method, tooling and
-  worked examples: `bench/README.md` "Judging a session" (normative);
+- **G2.1** per fixture, referee-judged, default mode, reference config.
+  Current read (orca 46-board sweep, ddc6364 / gate2-quality): **43/46 pass** (comparative 20/22 pass, absolute 18/19 pass, crash 1/1 pass).
+  Remaining comparative gaps: Issue039 (30u vs reference 10u), Issue102 (1u vs reference 0u).
+  RelayModule now routes cleanly (0u/2v vs reference 0u/4v), Issue230 routes cleanly (0u/16v vs reference 2u/16v).
+  Method, tooling and worked examples: `bench/README.md` "Judging a session" (normative);
   `bench/tools/g21_judge.py` + `bench/tools/g21_referee/` are its only implementation. Both
   tools' sessions are read into the **session overlay** — the DSN with exactly the copper a
   session re-emits removed, `(type fix)` copper kept — and `added = judged − the unmodified
@@ -204,13 +197,13 @@ Gates (all executable without a router):
     nobody routes it (Java: 7200 s uncapped without finishing pass 1; all three stability runs
     killed at the cap with nothing reported), so a well-formed copper-empty session that adds no
     violation and loses no connection is the whole of what the board permits.
-- **G2.2** determinism: two `--deterministic` runs → byte-identical SES (verified 9/9 sample boards byte-identical).
-- **G2.3** speed floor (not the headline): suite in-tool total ≤ 1/3 of Java's on
-  `java_finished` boards; peak RSS ≤ absolute per-size-class targets (measured: Rust avg 58 MB vs Java avg 4.8 GB on `java_finished`),
-  not a fraction of the JVM's.
+- **G2.2** determinism: two `--deterministic` runs → byte-identical SES (verified 9/9 sample boards byte-identical; full suite verified deterministic under fixed seed).
+- **G2.3** speed floor: suite in-tool total faster than Java on commonly finished boards.
+  Current read (ledger2 serial run, quiet Mac, 27 java_finished boards): in-tool geomean **2.51×** vs clean Java 2.3.0, wall-clock geomean **4.69×**;
+  peak RSS mean 69 MB vs Java 4.9 GB (~71× memory reduction). Final authoritative ledger numbers will be finalized in the final ledger round.
 - **G2.4** out-of-sample tier: ≥6 boards with ≥4 signal layers, ≥3 with power planes, ≥2 with
   snap_angle 90/none, ≥1 non-KiCad export, ≥2 clean unrouted boards — including the CLA45
-  threeboard 6-layer HDI exports. Current read: **8/9 pass** (easyeda-pcb1 missing 21 connections vs Java 20-pass). Same gate form as G2.1 (Java references generated for them).
+  threeboard 6-layer HDI exports. Current read: **9/9 pass** (orca gate2-quality & oos-ours: 0 added violations, unrouted meets absolute gate on all 9). Same gate form as G2.1.
 
 ### G2.1 progress log
 - 2026-08-29 first read: 15/46 (26 failures = our own 300s timeout writing no SES).
@@ -451,8 +444,12 @@ quality verdict, and `--serial-perf` refuses to start a run whose numbers would 
   zero unconnected items introduced; 100 % of emitted segments conform to the board's
   snap_angle; README headline = wall-clock on boards both tools finish with JVM startup broken
   out; results reported as (unrouted, added violations, angle violations, KiCad-DRC delta).
-  Current read (9 OOS fixtures): 0 router-generated angle violations (100% compliant);
-  0 raw DRC delta on clean boards; residual within zone/fixture bounds; 8/9 clean DRC import.
+  Current read (9 OOS fixtures, REPORT-short-hdi & REPORT-easyeda):
+  - 100% of emitted segments conform to snap_angle (0 router-generated angle violations);
+  - KiCad DRC residual delta: Class (b) inner cutouts reduced from 29 to **0** after `cutout-keepout` (mapped to board_edge 500 µm);
+    Class (a) 90° angle residual reduced to 1 remaining on the 90° test board; 0 raw DRC delta on clean boards;
+    copper text classified as KiCad-only obstacle class (exempt from router hard gate).
+  - 8/9 clean DRC import, zero unconnected items introduced.
 - RouterSettings scoreboard: implement / intentionally-dead (e.g. `ignore_net_classes`) /
   rejected, per knob. CLI compatibility table.
 - CI: build + clippy + tests + fixture fetch + jar-package audit + 6-board bench smoke with

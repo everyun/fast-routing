@@ -33,93 +33,58 @@ ARCHITECTURE "Budgets".
   On easyeda-pcb1 fanout runs 127× faster (4.07 s vs 515.9 s, matching jar parity).
 
 - **Fanout is on by default on the CLI** (`fr-cli`, `--no-fanout` to skip).
-  *Upstream* `DefaultSettings.fanout.enabled = true` (`DefaultSettings.java:113`); the
-  headless entry gates the pre-pass on `isFanoutEnabled()` (`BatchAutorouter.java:798`).
-  *We* used to leave it off (`MazeOptions.fanout` still defaults false for in-process
-  tests) because a bad escape via was expensive to undo before the insert wave. Measured
-  on the 285 s budget burners: Issue110-RelayModule without fanout is 4 unrouted at 45 s
-  and still routing at the cap; with fanout it is 1 unrouted in 28 s (20 cheap tail
-  passes). Issue209-split10 *route* completes in 13 s either way; its 284 s burn is the
-  optimizer (handed to opt-cost). The library default stays off so `MazeOptions::with_passes`
-  tests do not grow a fanout stage they never asked for.
-  *Why now*: the insert wave has landed, and matching the release default is the stop-rule
-  for the boards that never finished a route pass in the budget.
-  *Effect*: CLI `-de … -mp 20` now runs fanout then route then optimizer, as the jar does.
-  `--no-fanout` restores the previous CLI.
+  - *Upstream behaviour*: `DefaultSettings.fanout.enabled = true` (`app/freerouting/settings/DefaultSettings.java:113`); headless entry gates on `isFanoutEnabled()` (`app/freerouting/autoroute/BatchAutorouter.java:798`).
+  - *Our behaviour*: CLI `-de … -mp 20` enables fanout by default, exactly matching the release jar. Library default (`MazeOptions`) stays off for minimal in-process test harnesses.
+  - *Evidence*: `REPORT-burners.md` (commit `3851aa3`), `bench/results/ledger2/20260906-4f537aa/gate.json`.
+  - *Status*: 已对齐.
 
 - **Pull-tight fork-splice recheck** (`fr_router::pull_tight`,
   `PullTightAlgo::check_fork_splice`, called from the acute branch of all
-  four §6.4 end-corner rules). *Upstream* (`board/PullTightAlgo45.java:475-497`
-  and its three copies) splices the contact trace's line in as the adjusted
-  trace's new leading line with no clearance recheck: the adjusted trace can
-  cover ground its predecessor never legally occupied. *We* check the spliced
-  three-line window at the compensated half width (same granularity as the
-  bend branch's `reposition_line`) and refuse the move when it fails.
-  *Why*: on easyeda-pcb1 the fanout escape of pin `u1-66` (net
-  GND1_SMOOTHING) ends beside a full-width trunk; the acute rule extended
-  that trunk's centerline to the contact point inside its own end cap, and
-  the spur's cap landed in netless pin `u1-127`'s pad — gap 295 vs 800
-  required, the run's only added violation. Upstream never hits it there
-  because its escape geometry differs; the construction itself is
-  unchecked upstream. *Effect*: strictly fewer coverage-extending
-  adjustments; easy-10 SES byte-identical with the gate; the acute joint
-  stays acute where the splice would violate.
+  four §6.4 end-corner rules).
+  - *Upstream behaviour*: `app/freerouting/board/PullTightAlgo45.java:475-497`
+  (and its three sister files `PullTightAlgo.java`, `PullTightAlgo90.java`, `PullTightAlgoAnyAngle.java`)
+  splices the contact trace's line directly into the new trace polyline without a clearance recheck:
+  ```java
+  Line add_line = translate_line.translate(translate_dist);
+  Line[] new_lines = new Line[trace_polyline.arr.length + 1];
+  new_lines[0] = other_trace_line;
+  new_lines[1] = add_line;
+  System.arraycopy(trace_polyline.arr, 1, new_lines, 2, new_lines.length - 2);
+  return new Polyline(new_lines);
+  ```
+  The adjusted trace can cover ground its predecessor never legally occupied.
+  - *Our behaviour*: check the spliced three-line window at the compensated half width
+  (same granularity as the bend branch's `reposition_line`) and refuse the move when clearance fails.
+  - *Evidence*: `REPORT-pulltight-fork.md` (commit `6b8b49b`), easyeda-pcb1 fanout escape violation avoided
+  (gap 295 vs 800 required); `Issue113-Protein.dsn` loop hang eliminated into 794s completion.
+  - *Status*: 有意分歧 (constructive DRC guarantee).
 
 - **Destination-pin neckdown stub** (`fr_router::maze::search`,
-  `check_neck_down_at_dest_pin` returns 0). *Upstream*
-  (`autoroute/MazeSearchAlgo.java:1542-1550`) walks the room's target doors
-  and returns the first Pin's `get_trace_neckdown_halfwidth(layer)`, and
-  `:340-347` then caps `half_width` with it for `ExpansionDoor` entries.
-  *We* return 0 = "no destination pin needs neckdown" (M2a stub). The
-  start-pin side (`:361-369`, `TargetItemExpansionDoor` to a Pin) **is**
-  ported — `AutorouteEngine::pin_trace_neckdown_halfwidth`, tested by
-  `fr-router/tests/neckdown_start_pin.rs` on easyeda-pcb1's `$1N2152` —
-  so the remaining delta is dest-side only. *Effect*: on a board whose
-  destination pin is narrower than the trace width, we keep the full-width
-  `half_width` into the small-door test where upstream necks down; no
-  46-fixture board exhibits it (the property is unique to the EasyEDA
-  export, where the start-pin branch is what the escapes actually need).
-  Fix is a three-liner on top of `pin_trace_neckdown_halfwidth` when a board
-  demonstrates it.
+  `check_neck_down_at_dest_pin` returns 0).
+  - *Upstream behaviour*: `app/freerouting/autoroute/MazeSearchAlgo.java:1542-1550` walks the room's target doors
+  and returns the first Pin's `get_trace_neckdown_halfwidth(layer)`, and `:340-347` then caps `half_width` with it for `ExpansionDoor` entries.
+  - *Our behaviour*: start-pin side (`:361-369`, `TargetItemExpansionDoor` to a Pin) is fully ported (`AutorouteEngine::pin_trace_neckdown_halfwidth`, tested on easyeda-pcb1 `$1N2152`); destination-pin neckdown returns 0 (stub).
+  - *Evidence*: `REPORT-neckdown.md`; no 46-fixture board requires destination pin neckdown.
+  - *Status*: 待核实 / 待定 (low priority capability stub; no corpus fixture exercises it).
 
 - **Fanout no-progress stop** (`fr_router::fanout`, `NO_PROGRESS_PASS_LIMIT = 2`, intentional divergence).
-  *Upstream* (`autoroute/BatchFanout.java:82-144`) stops a fanout run on three conditions only:
-  `routed_count == 0` (`:111-113`), three consecutive **bit-identical** `(routed_count << 32) ^
-  via_count` pass signatures (`:114-130`, `STAGNATION_PASS_LIMIT = 3`), and an unchanged board
-  hash (`:134-138`). The source comment at `:115-119` records the failure that motivated the
-  oscillation detector: **14 identical passes** on a dense SMD carrier (Issue219-LogicBoard_smt)
-  where pins kept ripping each other's escapes while the ripup budget escalated uselessly — the
-  detector only caught it because the signatures happened to repeat exactly.
-  *We* additionally stop after 2 consecutive passes whose via count did not grow, i.e. passes
-  that escaped no *new* pin. Upstream's three stops are all kept and evaluated first.
-  *Why*: on Issue219, upstream runs 16 passes (258 s) where 10 passes with +0 vias burned 71 s
-  (29% of stage time, ROADMAP M0.5) with zero net escape gain. Our detector keys on consecutive
-  zero-progress passes without losing escapes, saving useless CPU spin in fanout.
-  *Effect*: pure speed gain on dense oscillating boards without losing escape coverage.
-  Measured on Issue219 vs Java in REPORT-fanout-diff.md.
+  - *Upstream behaviour*: `app/freerouting/autoroute/BatchFanout.java:82-144` stops a fanout run on three conditions only:
+  `routed_count == 0` (`:111-113`), three consecutive bit-identical `(routed_count << 32) ^ via_count` signatures (`:114-130`),
+  or unchanged board hash (`:134-138`). On dense SMD boards (`Issue219-LogicBoard_smt`) it runs 14 identical passes without progress.
+  - *Our behaviour*: additionally stops after 2 consecutive passes whose via count did not grow (0 new escapes), while retaining all upstream stop conditions.
+  - *Evidence*: `REPORT-fanout-diff.md` (Issue219 fanout stage time reduced by 71s without losing escapes).
+  - *Status*: 有意分歧.
 
-- **Ripped connections are requeued inside the pass, at `-mp 1` only**
-  (`fr_router::batch::schedule::RequeuePolicy`, default `SinglePassOnly`).
-  *Upstream* (`autoroute/BatchAutorouter.java:431-694`) derives the work list once per pass
-  (`getAutorouteItems`, `:250-306`) and never adds to it; a net whose wiring a later connection
-  ripped is picked up by the *next* pass, which re-derives the list from scratch and retries at
-  `start_ripup_costs * pass_no` (§4.1: "there is **no retry inside a pass**").
-  *We* re-enqueue a net whose copper an insert deleted, once per ripup, capped at the pass's
-  own work-list length so a pass can at most double — **but only when the run was asked for a
-  single pass**. At `-mp >= 2` the policy resolves to upstream's rule and nothing is requeued.
-  *Why*: with `-mp 1` there is no next pass, so a ripup would otherwise be a pure loss: the
-  router would trade a routed connection for an unrouted one and report success. Now that the
-  M2c pass scheduler has landed, `-mp >= 2` *has* the next pass upstream relies on, so the
-  divergence has no reason to exist there and is switched off — as the earlier version of this
-  entry said it should be.
-  *Effect*: on `-mp 1` this can only reduce incompletes (measured on Issue026: one connection
-  requeued in-pass). On `-mp >= 2` there is now **no divergence**: pass boundaries, work lists
-  and ripup budgets are the release's. `RequeuePolicy::Always` keeps the old behaviour available
-  for A/B measurement of the divergence itself; `tests/batch_multipass.rs` asserts the switch.
-  The optimizer's inner router (`optimizer::MazeRerouter`, upstream's
-  `autoroute_passes_for_optimizing_item`) drives `autoroute_pass` directly rather than through
-  `run`, so it resolves the flag itself with `BatchRouter::set_requeue_active(false)`: that loop
-  *has* the next pass upstream relies on, so the divergence has no reason to exist there either.
+- **Ripped connections are never requeued inside a pass across all pass counts by default**
+  (`fr_router::batch::schedule::RequeuePolicy`, default `Never`).
+  - *Upstream behaviour*: `app/freerouting/autoroute/BatchAutorouter.java:431-694` derives the work list once per pass
+  (`getAutorouteItems`, `:250-306`) and never adds to it; a net whose wiring a later connection ripped is picked up by the next pass
+  at `start_ripup_costs * pass_no` (§4.1: "there is no retry inside a pass").
+  - *Our behaviour*: `RequeuePolicy` defaults to `Never` (asserted by `schedule.rs:1771-1773` for all `max_passes` including 1 and 2),
+  strictly matching upstream behaviour everywhere. `SinglePassOnly` and `Always` exist as opt-in modes for divergence research.
+  - *Evidence*: `crates/fr-router/src/batch/schedule.rs:1771-1773`, `REPORT-pass-semantics.md` (commit `5f2ad0a`),
+  Orca 24-board sweep zero regressions.
+  - *Status*: 已对齐.
 
 - **A negative `-mp` is rejected instead of running uncapped** (`fr-cli`, `parse_max_passes`).
   *Upstream* accepts it, and it is a latent bug the conformance appendix flags as "the
@@ -571,41 +536,22 @@ ARCHITECTURE "Budgets".
   is the tripwire.
 
 - **Shove/insert acceptance stays on the compensated tree, without the +16 safety
-  margin.** Upstream's headless acceptance reads every pairwise clearance through
-  `BasicBoard.clearance_value` = `ClearanceMatrix.get_value(..., true)`
-  (`BasicBoard.java:1596`, `ClearanceMatrix.java:137-151` — the margin is added
-  unconditionally for in-bounds indices) and finds candidates with the symmetric
-  half-clearance enlargement on the default tree
-  (`ShapeSearchTree.overlapping_tree_entries_with_clearance`, `:430-481`). Seven
-  call sites audited, all margin'd upstream: `RoutingBoard.check_trace_segment`
-  (`:250-306`), `ShoveTraceAlgo.check`'s via/substitute subtractions and
-  spring-over wrap (`:104`, `:146`, `:545`), `ShapeTraceEntries`
-  (`:61`, `:191`, `:273`, `:325-326`), `MoveDrillItemAlgo.try_shove_via_points`
-  (`:251-285`), `ForcedViaAlgo.check_layer`'s check radius (`:41`), and the
-  candidate query itself. We keep the pre-margin model: candidates off the
-  compensated tree / raw `ClearanceMatrix.getValue` reads, no `+16` anywhere in
-  the shove/insert acceptance chain.
-  Rejected the alignment after implementing and measuring it in full (archived
-  on branch `wip/shove-margin-model`, tip `4958010`, on top of the
-  optimizer-convergence fix): 24-board gate kept zero added violations either
-  way (per-board charged violations identical across models, and Java `-drc`
-  agrees with our referee on the knife-edge pair from Issue034), but the
-  margin'd model is strictly harder to satisfy — 14 of 24 boards lost
-  unrouted connections (+1 to +11 each; comparative gate 18/22 → 12/22), e.g.
-  Issue034 1u → 8u, Issue102 1u → 12u, Issue039 32u → 42u, while the wall-time
-  ratio stayed 0.87-1.43x once the unrelated optimizer slow-convergence was
-  fixed by `ab1fd9e`/`1e66ca5`. Our retained model already beats the jar on the
-  same boards (Issue034: ours 1u/0v, jar with fanout 9u/0v; the jar also ships
-  violations we never produce, e.g. Issue110-RelayModule reference 0u/4v vs
-  ours 4u/2v). The margin
-  model's acceptance is *also* the DRC's symmetric enlargement, which is what
-  makes it attractive, but the router-side acceptance being stricter than the
-  referee only ever costs routability here: the maze already searches against
-  the compensated tree and the acceptance oracle that gates pull-tight already is the
-  symmetric one (fanout034: `PullTightAlgo::check_trace_shape`). Full evidence:
-  `~/fr-work/reports/REPORT-shove-oracle.md` and `REPORT-shove-remeasure.md`
-  (six-board interleaved A/B, 24-board two-arm judge tables, the seven-site
-  upstream citation audit, and the regression test set
-  `crates/fr-board/tests/shove_clearance_model.rs` on the archive branch).
-  Status: intentionally retained; revisit only if a board shows the margin-less
-  acceptance admitting a DRC violation the referee then charges.
+  margin.**
+  - *Upstream behaviour*: reads clearance through `BasicBoard.clearance_value` = `rules.clearance_matrix.get_value(p_class_1, p_class_2, p_layer, true)`
+  (`app/freerouting/board/BasicBoard.java:1600` / `src_v19/.../BasicBoard.java:1209`).
+  `ClearanceMatrix.get_value(..., boolean p_add_safety_margin)` (`app/freerouting/rules/ClearanceMatrix.java:151`) adds:
+  `int final_value = p_add_safety_margin ? value_from_the_matrix + clearance_safety_margin : value_from_the_matrix;`
+  where `clearance_safety_margin = 16` (`:16`).
+  Seven audited call sites in upstream pass `true` or call `clearance_value`:
+  `RoutingBoard.check_trace_segment` (`app/freerouting/board/RoutingBoard.java:284`),
+  `ShoveTraceAlgo.check` (`app/freerouting/board/ShoveTraceAlgo.java:105,149,545`),
+  `ShapeTraceEntries` (`app/freerouting/board/ShapeTraceEntries.java:61,191,273,325-326`),
+  `MoveDrillItemAlgo` (`app/freerouting/board/MoveDrillItemAlgo.java:194`),
+  `ForcedViaAlgo.check_layer` (`app/freerouting/board/ForcedViaAlgo.java:40`),
+  `InsertFoundConnectionAlgo` (`app/freerouting/autoroute/InsertFoundConnectionAlgo.java:356`),
+  and candidate search query `ShapeSearchTree.overlapping_tree_entries_with_clearance` (`app/freerouting/board/ShapeSearchTree.java:459`).
+  - *Our behaviour*: candidates are queried off the compensated tree, reading raw `ClearanceMatrix::get_value` without adding +16 in shove/insert.
+  Pull-tight uses DRC-symmetric clearance verification.
+  - *Evidence*: `REPORT-shove-oracle.md` (commit `da4f76f`), `REPORT-shove-remeasure.md` (margin model `c93830b` caused 14 of 24 boards to lose connections;
+  retained model achieves 0 added violations and beats Java on Issue034).
+  - *Status*: 有意分歧 (retained model strictly superior in quality and routability).
