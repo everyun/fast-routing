@@ -74,7 +74,9 @@ def classify_board(
       fixture, base_u, base_v, ours_u, ours_v, du, dv, added, verdict, note
     """
     if ours is None:
+        fixture = base.get("fixture", "") if base else ""
         return {
+            "fixture": fixture,
             "verdict": "MISSING",
             "base_u": None if base is None else base.get("ours_unrouted"),
             "base_v": None if base is None else base.get("ours_violations"),

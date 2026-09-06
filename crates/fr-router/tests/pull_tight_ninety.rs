@@ -234,3 +234,31 @@ fn fork_smoothing_is_a_noop_on_a_ninety_degree_board() {
         "a no-op must not move any geometry"
     );
 }
+
+#[test]
+fn ninety_degree_board_routed_lines_all_axis_aligned() {
+    // End-to-end routing check: on a 90° board, maze route + pull-tight + locate
+    // must yield 100% axis-aligned segments (dx == 0 or dy == 0), preventing
+    // the 145.2° off-angle defect reported in coldfire-unrouted.
+    let mut fixture = TestFixture::two_layer_with_pads();
+    fixture
+        .board
+        .set_angle_restriction(AngleRestriction::Ninety);
+    fixture
+        .rules
+        .set_trace_angle_restriction(fr_rules::AngleRestriction::NinetyDegree);
+
+    let mut router = fr_router::batch::BatchRouter::new(&fixture.rules, &fixture.settings);
+
+    // Route pass 1
+    let _ = router.autoroute_pass(&mut fixture.board, 1);
+
+    let segments = segments_of(&fixture.board, 1);
+    assert!(!segments.is_empty(), "router must generate copper");
+    for (dx, dy) in segments {
+        assert!(
+            dx == 0.0 || dy == 0.0,
+            "every routed segment on a 90° board must be axis-aligned, got dx={dx}, dy={dy}"
+        );
+    }
+}
