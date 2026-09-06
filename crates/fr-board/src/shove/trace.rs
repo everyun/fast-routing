@@ -59,14 +59,24 @@ pub fn check_shove_segment(
     max_recursion_depth: i32,
     max_via_recursion_depth: i32,
 ) -> f64 {
-    // One obstacle arena per top-level call, reused by every recursion level
-    // inside it (shove.md §15, "Arena the shove transaction"). Reuse is
-    // observable only in allocation count.
+    // One obstacle arena, one cascade-ignore buffer and one checker per top-level
+    // call, reused by every recursion level and every via cascade inside it
+    // (shove.md §15, "Arena the shove transaction"). Upstream reuses its
+    // collections the same way (`ShoveTraceAlgo.java:59` allocates one
+    // `Collection<Item>` per `check` instance, and `MoveDrillItemAlgo.check`
+    // reads the caller's list). Reuse is observable only in allocation count:
+    // `ShoveCheck` is a stateless read-side wrapper (board borrow + blame slot),
+    // and the ignore list is cleared per cascade try, matching upstream's fresh
+    // `LinkedList` per candidate (`ShoveTraceAlgo.java:93`).
     let mut scratch = ShoveScratch::default();
+    let mut checker = ShoveCheck::new(board, *bounds);
+    let mut ignore_items = Vec::new();
     check_shove_segment_impl(
         board,
         bounds,
         &mut scratch,
+        &mut checker,
+        &mut ignore_items,
         line_segment,
         shove_to_the_left,
         layer,
@@ -85,6 +95,8 @@ fn check_shove_segment_impl(
     board: &Board,
     bounds: &IntBox,
     scratch: &mut ShoveScratch,
+    checker: &mut ShoveCheck<'_>,
+    ignore_items: &mut Vec<ItemId>,
     line_segment: &LineSegment,
     shove_to_the_left: bool,
     layer: i32,
@@ -177,14 +189,16 @@ fn check_shove_segment_impl(
                 continue;
             };
             let delta = first.difference_by_int(&via_payload.center);
-            let mut checker = ShoveCheck::new(board, *bounds);
-            let mut ignore_items = Vec::new();
+            // Upstream allocates a fresh ignore list per candidate try
+            // (`ShoveTraceAlgo.java:93`); reusing one buffer with a clear is
+            // the same contents.
+            ignore_items.clear();
             shove_via_ok = checker.check_move_drill_item(
                 via_id,
                 &delta,
                 max_recursion_depth,
                 max_via_recursion_depth - 1,
-                &mut ignore_items,
+                ignore_items,
             );
         }
         if !shove_via_ok {
@@ -240,6 +254,8 @@ fn check_shove_segment_impl(
                 board,
                 bounds,
                 scratch,
+                checker,
+                ignore_items,
                 &curr_line_segment,
                 shove_to_the_left,
                 layer,
