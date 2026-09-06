@@ -178,14 +178,11 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     .get_shape(layer as usize)
                     .map(|shape| 0.5 * shape.max_width())
                     .unwrap_or(0.0);
-                let cand = ViaCandidate {
+                list.push(ViaCandidate {
                     required_radius: via_radius.max(trace_half_width as f64),
                     clearance_class: via.clearance_class() as i32,
                     attach_smd_allowed: via.attach_smd_allowed(),
-                };
-                if !list.contains(&cand) {
-                    list.push(cand);
-                }
+                });
             }
             via_candidates_by_layer.push(list);
         }
