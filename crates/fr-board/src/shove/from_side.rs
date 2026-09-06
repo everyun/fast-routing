@@ -43,16 +43,12 @@ impl FromSide {
     pub fn from_polyline(polyline: &Polyline, no: usize, shape: &Simplex) -> FromSide {
         let mut fromside_no = -1i32;
         let mut intersection = None;
-        let corners: Vec<Point> = (0..shape.border_line_count())
-            .map(|i| shape.corner(i))
-            .collect();
         let bounding_box = shape.bounding_box();
 
         let mut curr_no = no;
         while curr_no > 0 {
             if let Some(segment) = LineSegment::from_polyline(polyline, curr_no) {
-                let intersections =
-                    segment.border_intersections_lines(&shape.arr, &corners, &bounding_box);
+                let intersections = segment.border_intersections_lines(&shape.arr, &bounding_box);
                 if let Some(&border_no) = intersections.first() {
                     fromside_no = border_no as i32;
                     intersection = Some(

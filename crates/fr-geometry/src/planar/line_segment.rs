@@ -470,7 +470,6 @@ impl LineSegment {
     pub fn border_intersections_lines(
         &self,
         border_lines: &[Line],
-        corners: &[Point],
         bounding_box: &IntBox,
     ) -> Vec<usize> {
         if !self.bounding_box().intersects(bounding_box) {
@@ -487,6 +486,12 @@ impl LineSegment {
         let mut intersections: Vec<Point> = Vec::new();
         let line_start = self.start_point();
         let line_end = self.end_point();
+
+        let get_corner = |idx: usize| -> Point {
+            let i = idx % edge_count;
+            let prev = if i == 0 { edge_count - 1 } else { i - 1 };
+            border_lines[i].intersection(&border_lines[prev])
+        };
 
         for edge_line_no in 0..edge_count {
             let next_line = if edge_line_no == edge_count - 1 {
@@ -518,18 +523,20 @@ impl LineSegment {
                     && next_line_side_of_is != Side::OnTheLeft
                 {
                     if prev_line_side_of_is == Side::Collinear {
-                        let prev_prev_corner = if edge_line_no == 0 {
-                            &corners[edge_count - 1]
+                        let prev_prev_idx = if edge_line_no == 0 {
+                            edge_count - 1
                         } else {
-                            &corners[edge_line_no - 1]
+                            edge_line_no - 1
                         };
-                        let next_corner = if edge_line_no == edge_count - 1 {
-                            &corners[0]
+                        let next_idx = if edge_line_no == edge_count - 1 {
+                            0
                         } else {
-                            &corners[edge_line_no + 1]
+                            edge_line_no + 1
                         };
-                        let prev_prev_side = self.middle.side_of_point(prev_prev_corner);
-                        let next_side = self.middle.side_of_point(next_corner);
+                        let prev_prev_corner = get_corner(prev_prev_idx);
+                        let next_corner = get_corner(next_idx);
+                        let prev_prev_side = self.middle.side_of_point(&prev_prev_corner);
+                        let next_side = self.middle.side_of_point(&next_corner);
                         if prev_prev_side == Side::Collinear
                             || next_side == Side::Collinear
                             || prev_prev_side == next_side
@@ -538,16 +545,17 @@ impl LineSegment {
                         }
                     }
                     if next_line_side_of_is == Side::Collinear {
-                        let prev_corner = &corners[edge_line_no];
-                        let next_next_corner = if edge_line_no == edge_count - 2 {
-                            &corners[0]
+                        let next_next_idx = if edge_line_no == edge_count - 2 {
+                            0
                         } else if edge_line_no == edge_count - 1 {
-                            &corners[1]
+                            1
                         } else {
-                            &corners[edge_line_no + 2]
+                            edge_line_no + 2
                         };
-                        let prev_corner_side = self.middle.side_of_point(prev_corner);
-                        let next_next_side = self.middle.side_of_point(next_next_corner);
+                        let prev_corner = get_corner(edge_line_no);
+                        let next_next_corner = get_corner(next_next_idx);
+                        let prev_corner_side = self.middle.side_of_point(&prev_corner);
+                        let next_next_side = self.middle.side_of_point(&next_next_corner);
                         if prev_corner_side == Side::Collinear
                             || next_next_side == Side::Collinear
                             || prev_corner_side == next_next_side

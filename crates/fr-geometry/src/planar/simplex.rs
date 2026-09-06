@@ -1311,15 +1311,17 @@ impl Simplex {
 
     /// Entrance points where `polyline` crosses the boundary of this simplex.
     pub fn entrance_points(&self, polyline: &Polyline) -> Vec<(usize, usize)> {
+        let bbox = self.bounding_box();
+        if !polyline.bounding_box().intersects(&bbox) {
+            return Vec::new();
+        }
         let mut result = Vec::new();
         let mut prev_line_no: Option<usize> = None;
         let mut prev_edge_no: Option<usize> = None;
-        let corners: Vec<Point> = (0..self.arr.len()).map(|i| self.corner(i)).collect();
-        let bbox = self.bounding_box();
 
         for line_no in 1..polyline.arr.len().saturating_sub(1) {
             if let Some(seg) = LineSegment::from_polyline(polyline, line_no) {
-                let curr_intersections = seg.border_intersections_lines(&self.arr, &corners, &bbox);
+                let curr_intersections = seg.border_intersections_lines(&self.arr, &bbox);
                 for edge_no in curr_intersections {
                     if prev_line_no != Some(line_no) || prev_edge_no != Some(edge_no) {
                         result.push((line_no, edge_no));
