@@ -797,6 +797,7 @@ impl<'b> ForcedInserter<'b> {
                 Some(new_corner.clone()),
                 layer,
             )
+            .with_pin_edge_to_turn_dist(-1.0)
             .with_stall_guard(crate::pull_tight::StallGuard::for_mode(
                 BudgetMode::Deterministic,
                 crate::pull_tight::PULL_TIGHT_TIME_LIMIT_MS,

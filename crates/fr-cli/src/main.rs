@@ -254,6 +254,7 @@ struct Args {
     no_optimizer: bool,
     improvement_threshold: Option<f32>,
     cutout_clearance_um: Option<f64>,
+    pin_edge_to_turn_dist: Option<f64>,
     deterministic: bool,
     job_timeout: Option<std::time::Duration>,
     settle_trace: Option<String>,
@@ -368,6 +369,9 @@ fn main() {
                         "job_timeout" => {
                             args.job_timeout = Some(parse_job_timeout(val));
                         }
+                        "pin_edge_to_turn_dist" => {
+                            args.pin_edge_to_turn_dist = val.parse::<f64>().ok();
+                        }
                         "enabled" => match val.to_lowercase().as_str() {
                             "false" | "0" | "off" => args.import_only = true,
                             "true" | "1" | "on" => {}
@@ -463,6 +467,10 @@ fn main() {
                 "note: --pin-frame-fix is a no-op and is deprecated; the importer now places \
                  pads in the pin frame itself (fr-io specctra::build::placed_pad_shapes)"
             ),
+            "--pin-edge-to-turn-dist" => {
+                let v = next!("--pin-edge-to-turn-dist");
+                args.pin_edge_to_turn_dist = v.parse::<f64>().ok();
+            }
             "--router-overrides" => args.router_overrides = true,
             "--emit-boxes" => args.emit_boxes = true,
             "-mp" | "--max-passes" => args.max_passes = Some(parse_max_passes(&next!("-mp"))),
@@ -624,7 +632,8 @@ fn main() {
                 .with_threads(args.threads)
                 .with_parallel_connections(args.parallel_connections)
                 .with_portfolio(args.portfolio.unwrap_or(1))
-                .with_improvement_threshold(args.improvement_threshold),
+                .with_improvement_threshold(args.improvement_threshold)
+                .with_pin_edge_to_turn_dist(args.pin_edge_to_turn_dist),
         ))
     };
     let job = match &session_path {

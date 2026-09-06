@@ -144,6 +144,8 @@ pub struct MazeOptions {
     /// Parallel connection workers requested for the autoroute pass (T3).
     /// `None` / `Some(1)` = sequential. `Some(0)` = automatic from machine.
     pub parallel_connections_requested: Option<usize>,
+    /// Optional override for the pin-edge-to-first-turn distance in board units.
+    pub pin_edge_to_turn_dist: Option<f64>,
 }
 
 impl Default for MazeOptions {
@@ -157,6 +159,7 @@ impl Default for MazeOptions {
             portfolio: 1,
             improvement_threshold: None,
             parallel_connections_requested: None,
+            pin_edge_to_turn_dist: None,
         }
     }
 }
@@ -254,6 +257,12 @@ impl MazeOptions {
             (true, Some(0)) => Threads::single(),
             (_, requested) => Threads::resolve(requested),
         }
+    }
+
+    /// Sets the pin edge to first turn distance override.
+    pub fn with_pin_edge_to_turn_dist(mut self, dist: Option<f64>) -> Self {
+        self.pin_edge_to_turn_dist = dist;
+        self
     }
 }
 
@@ -384,6 +393,9 @@ fn settings_for(design: &ImportedDesign, options: MazeOptions) -> RouterSettings
     if let Some(threshold) = options.improvement_threshold {
         settings.optimizer.improvement_threshold = threshold;
     }
+    if let Some(dist) = options.pin_edge_to_turn_dist {
+        settings.pin_edge_to_turn_dist = Some(dist);
+    }
     settings
 }
 
@@ -406,6 +418,9 @@ fn incomplete_count_of(design: &ImportedDesign) -> usize {
 
 /// Runs [`RouterStage::Maze`] over `design` in place.
 fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterReport {
+    if let Some(dist) = options.pin_edge_to_turn_dist {
+        design.rules.set_pin_edge_to_turn_dist(dist);
+    }
     let settings = settings_for(design, options);
     let scale = board_units_per_mm(design);
     let mut report = RouterReport::default();

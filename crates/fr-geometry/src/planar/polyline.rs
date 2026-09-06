@@ -692,6 +692,12 @@ impl Polyline {
         }
     }
 
+    /// Upstream `Polyline.reverse()`: the lines back to front, each flipped.
+    pub fn reverse(&self) -> Polyline {
+        let reversed: Vec<Line> = self.arr.iter().rev().map(|line| line.opposite()).collect();
+        Polyline::new_from_lines(&reversed)
+    }
+
     /// Combines two polylines if they share an end corner.
     pub fn combine(&self, other: &Polyline) -> Polyline {
         if other.arr.len() < 3 || self.arr.len() < 3 {

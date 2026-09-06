@@ -98,14 +98,15 @@ use std::time::{Duration, Instant};
 
 use fr_board::board::Board;
 use fr_board::clearance::{ClearanceSource, CLEARANCE_SAFETY_MARGIN};
-use fr_board::item::{ItemId, ItemKind};
+use fr_board::item::{FixedState, ItemId, ItemKind};
 use fr_board::net_nos::NetNos;
 use fr_board::search_tree::TreeEntry;
 use fr_board::shape::{AngleRestriction, TileShape};
 use fr_datastructures::arena_shape_tree::QueryStack;
 use fr_datastructures::signum::Signum;
 use fr_geometry::planar::{
-    Direction, FloatPoint, IntBox, IntOctagon, Limits, Line, Point, Polyline, Side, Simplex,
+    Direction, FloatPoint, IntBox, IntOctagon, IntPoint, Limits, Line, Point, Polyline, Side,
+    Simplex,
 };
 use fr_rules::board_rules::BoardRules;
 
@@ -316,6 +317,8 @@ pub struct PullTightAlgo<'b> {
     /// The pins at the trace's end corners. `None` is upstream's `null`, which
     /// switches the acid-trap pin rule off entirely (`:1183-1190`).
     contact_pins: Option<Vec<ItemId>>,
+    /// Active `pin_edge_to_turn_dist` override. `None` falls back to `rules.get_pin_edge_to_turn_dist()`.
+    pin_edge_to_turn_dist_override: Option<f64>,
 
     bounds: IntBox,
     binding: Option<BindingObstacle>,
@@ -376,6 +379,7 @@ impl<'b> PullTightAlgo<'b> {
             curr_net_no_arr: NetNos::default(),
             curr_cl_type: 0,
             contact_pins: None,
+            pin_edge_to_turn_dist_override: None,
             bounds,
             binding: None,
             scratch_entries: Vec::new(),
@@ -606,28 +610,446 @@ impl<'b> PullTightAlgo<'b> {
             layer, polyline, ..
         } = prepared;
 
-        let new_polyline = self.pull_tight_flavor(&polyline, changed_area)?;
-
-        // `change(new_polyline)` (`PolylineTrace.java:942-1009`): swap the
-        // geometry in place — reusing the tree leaves of every segment the move
-        // did not touch — then normalize against the changed-area clip.
-        //
-        // The optimizer's whole job is small local edits to long polylines, so
-        // this is the single call the family's cost is decided by; see
-        // [`Board::change_trace_polyline`] for what it reuses and why.
-        if !self.board.change_trace_polyline(id, new_polyline) {
-            return None;
+        if let Some(new_polyline) = self.pull_tight_flavor(&polyline, changed_area) {
+            // `change(new_polyline)` (`PolylineTrace.java:942-1009`): swap the
+            // geometry in place — reusing the tree leaves of every segment the move
+            // did not touch — then normalize against the changed-area clip.
+            //
+            // The optimizer's whole job is small local edits to long polylines, so
+            // this is the single call the family's cost is decided by; see
+            // [`Board::change_trace_polyline`] for what it reuses and why.
+            if !self.board.change_trace_polyline(id, new_polyline) {
+                return None;
+            }
+            // `change` ends in `this.normalize(clip_shape)` and nothing else
+            // (`PolylineTrace.java:1004`); `normalize` itself splits and then
+            // combines each piece, so an extra `combine_trace` here would be a
+            // second, unsynchronised merge pass. It is per *trace*, not per net —
+            // the whole-net `normalize_traces` upstream reaches for lives in
+            // fork smoothing alone (`PullTightAlgo.java:391`), where an end corner
+            // really has moved onto another trace.
+            let clip = changed_area.area(layer);
+            self.board.normalize_trace(id, Some(&clip));
+            return Some(id);
         }
-        // `change` ends in `this.normalize(clip_shape)` and nothing else
-        // (`PolylineTrace.java:1004`); `normalize` itself splits and then
-        // combines each piece, so an extra `combine_trace` here would be a
-        // second, unsynchronised merge pass. It is per *trace*, not per net —
-        // the whole-net `normalize_traces` upstream reaches for lives in
-        // fork smoothing alone (`PullTightAlgo.java:391`), where an end corner
-        // really has moved onto another trace.
+
+        // Tail ladder (`PolylineTrace.java:855-873`):
+        if self.board.angle_restriction() != AngleRestriction::Ninety
+            && self.pin_edge_to_turn_dist() > 0.0
+        {
+            if self.swap_connection_to_pin(id, true, changed_area) {
+                self.trace_pull_tight(id, changed_area);
+                return Some(id);
+            }
+            if self.swap_connection_to_pin(id, false, changed_area) {
+                self.trace_pull_tight(id, changed_area);
+                return Some(id);
+            }
+            if self.correct_connection_to_pin(id, true, changed_area) {
+                self.trace_pull_tight(id, changed_area);
+                return Some(id);
+            }
+            if self.correct_connection_to_pin(id, false, changed_area) {
+                self.trace_pull_tight(id, changed_area);
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    /// Checks that connection restrictions to contact pins are satisfied.
+    /// If `at_start`, the start of this trace is checked, else the end.
+    /// Upstream `PolylineTrace.check_connection_to_pin` (`:995-1060`).
+    pub fn check_connection_to_pin(&self, trace_id: ItemId, at_start: bool) -> bool {
+        let Some(item) = self.board.store().get(trace_id) else {
+            return true;
+        };
+        let ItemKind::Trace(trace) = &item.kind else {
+            return true;
+        };
+        if trace.polyline.corner_count() < 2 {
+            return true;
+        }
+
+        let end_corner = if at_start {
+            trace.polyline.first_corner()
+        } else {
+            trace.polyline.last_corner()
+        };
+        let prev_end_corner = if at_start {
+            trace.polyline.corner(1)
+        } else {
+            trace.polyline.corner(trace.polyline.corner_count() - 2)
+        };
+
+        let mut contacts = Vec::new();
+        self.board.normal_contacts_at(trace_id, &end_corner, &mut contacts);
+        let mut contact_pin = None;
+        for &contact_id in &contacts {
+            if let Some(c_item) = self.board.store().get(contact_id) {
+                if let ItemKind::Pin(pin) = &c_item.kind {
+                    contact_pin = Some((c_item.clearance_class, pin));
+                    break;
+                }
+            }
+        }
+        let Some((pin_clearance_class, pin)) = contact_pin else {
+            return true;
+        };
+
+        let restrictions = pin.exit_restrictions(self.board, trace.layer);
+        if restrictions.is_empty() {
+            return true;
+        }
+
+        if end_corner == prev_end_corner {
+            return true;
+        }
+        let trace_end_direction = Direction::get_instance(&end_corner, &prev_end_corner);
+
+        let Some(matching) = restrictions.iter().find(|r| r.direction == trace_end_direction) else {
+            return false;
+        };
+
+        let edge_to_turn_dist = self.pin_edge_to_turn_dist();
+        if edge_to_turn_dist < 0.0 {
+            return false;
+        }
+
+        let end_line_length = end_corner.to_float().distance(&prev_end_corner.to_float());
+        let curr_clearance = self.board.clearances().value(
+            item.clearance_class,
+            pin_clearance_class,
+            trace.layer,
+        );
+        let add_width = edge_to_turn_dist.max(f64::from(curr_clearance) + 1.0);
+        let preserve_length = matching.min_length + f64::from(trace.half_width) + add_width;
+        !(preserve_length > end_line_length)
+    }
+
+    /// Checks clearance for all segment shapes of `polyline`.
+    pub fn check_polyline_trace(&mut self, polyline: &Polyline) -> bool {
+        if polyline.arr.len() < 3 {
+            return true;
+        }
+        for i in 0..polyline.arr.len() - 2 {
+            let Some(shape) = polyline.offset_shape(self.curr_half_width, i) else {
+                return false;
+            };
+            if !self.check_trace_shape(&shape) {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Tries to correct a connection restriction of this trace.
+    /// If `at_start`, the start of the trace is corrected, else the end.
+    /// Returns true if the trace was changed.
+    /// Upstream `PolylineTrace.correct_connection_to_pin` (`:1064-1235`).
+    pub fn correct_connection_to_pin(
+        &mut self,
+        id: ItemId,
+        at_start: bool,
+        changed_area: &mut ChangedArea,
+    ) -> bool {
+        if self.check_connection_to_pin(id, at_start) {
+            return false;
+        }
+
+        let Some(item) = self.board.store().get(id) else {
+            return false;
+        };
+        let ItemKind::Trace(trace) = &item.kind else {
+            return false;
+        };
+        let layer = trace.layer;
+        let half_width = trace.half_width;
+        let nets = item.nets.clone();
+        let clearance_class = item.clearance_class;
+
+        let trace_polyline = if at_start {
+            trace.polyline.clone()
+        } else {
+            trace.polyline.reverse()
+        };
+
+        let end_corner = trace_polyline.first_corner();
+        let mut contacts = Vec::new();
+        self.board.normal_contacts_at(id, &end_corner, &mut contacts);
+        let mut contact_pin = None;
+        for &contact_id in &contacts {
+            if let Some(c_item) = self.board.store().get(contact_id) {
+                if let ItemKind::Pin(pin) = &c_item.kind {
+                    contact_pin = Some((c_item.clearance_class, pin.clone()));
+                    break;
+                }
+            }
+        }
+        let Some((pin_clearance_class, pin)) = contact_pin else {
+            return false;
+        };
+
+        let restrictions = pin.exit_restrictions(self.board, layer);
+        if restrictions.is_empty() {
+            return false;
+        }
+
+        let padstack = self.board.padstacks().get(pin.padstack_no);
+        let Some(pin_shape) = padstack.and_then(|p| p.shape_on_layer(layer)) else {
+            return false;
+        };
+        let pin_center = pin.center;
+
+        let edge_to_turn_dist = self.pin_edge_to_turn_dist();
+        if edge_to_turn_dist < 0.0 {
+            return false;
+        }
+        let curr_clearance = self.board.clearances().value(clearance_class, pin_clearance_class, layer);
+        let add_width = edge_to_turn_dist.max(f64::from(curr_clearance) + 1.0);
+
+        let offset_vec = fr_geometry::planar::Vector::Int(pin_center.difference_by_int(&IntPoint::ZERO));
+        let absolute_pin_shape = pin_shape.translate_by(&offset_vec);
+        let mut offset_pin_shape = absolute_pin_shape.offset(f64::from(half_width) + add_width);
+        if self.board.angle_restriction() == AngleRestriction::Ninety || offset_pin_shape.is_int_box() {
+            offset_pin_shape = TileShape::Box(offset_pin_shape.bounding_box());
+        } else if self.board.angle_restriction() == AngleRestriction::FortyFive {
+            offset_pin_shape = TileShape::Oct(offset_pin_shape.bounding_octagon());
+        }
+
+        let entries = offset_pin_shape.entrance_points(&trace_polyline);
+        if entries.is_empty() {
+            return false;
+        }
+        let latest_entry_tuple = *entries.last().unwrap();
+        let border_line_at_entry = offset_pin_shape.border_line(latest_entry_tuple.1);
+        let trace_entry_location_approx = trace_polyline.arr[latest_entry_tuple.0].intersection_approx(&border_line_at_entry);
+
+        let mut min_exit_corner_distance = f64::MAX;
+        let mut nearest_pin_exit_ray = None;
+        let mut nearest_border_line_no = None;
+        let mut pin_exit_direction = None;
+        let mut nearest_exit_corner = None;
+        const TOLERANCE: f64 = 1.0;
+
+        for r in restrictions {
+            let Some(curr_border_no) = offset_pin_shape.intersecting_border_line_no(&pin_center, &r.direction) else {
+                continue;
+            };
+            let curr_ray = Line::new_from_point_and_dir(pin_center, &r.direction);
+            let curr_corner = curr_ray.intersection_approx(&offset_pin_shape.border_line(curr_border_no));
+            let curr_dist = curr_corner.distance_square(&trace_entry_location_approx);
+            let mut new_nearest = false;
+            if curr_dist + TOLERANCE < min_exit_corner_distance {
+                new_nearest = true;
+            } else if curr_dist < min_exit_corner_distance + TOLERANCE {
+                let old_corner = nearest_exit_corner.unwrap_or(curr_corner);
+                for i in 1..trace_polyline.corner_count() {
+                    let tc = trace_polyline.corner_approx(i);
+                    let d_new = tc.distance_square(&curr_corner);
+                    let d_old = tc.distance_square(&old_corner);
+                    if d_new + TOLERANCE < d_old {
+                        new_nearest = true;
+                        break;
+                    } else if d_new > d_old + TOLERANCE {
+                        break;
+                    }
+                }
+            }
+            if new_nearest {
+                min_exit_corner_distance = curr_dist;
+                nearest_pin_exit_ray = Some(curr_ray);
+                nearest_border_line_no = Some(curr_border_no);
+                pin_exit_direction = Some(r.direction);
+                nearest_exit_corner = Some(curr_corner);
+            }
+        }
+
+        let (Some(nearest_pin_exit_ray), Some(nearest_border_line_no), Some(pin_exit_direction)) =
+            (nearest_pin_exit_ray, nearest_border_line_no, pin_exit_direction)
+        else {
+            return false;
+        };
+
+        // Append the polygon piece around the border of the pin shape
+        let corner_count = offset_pin_shape.border_line_count();
+        let clock_wise_side_diff = (nearest_border_line_no as isize - latest_entry_tuple.1 as isize + corner_count as isize) as usize % corner_count;
+        let counter_clock_wise_side_diff = (latest_entry_tuple.1 as isize - nearest_border_line_no as isize + corner_count as isize) as usize % corner_count;
+
+        let mut curr_lines = Vec::new();
+        curr_lines.push(nearest_pin_exit_ray);
+        let mut curr_border_line_no = nearest_border_line_no;
+        if counter_clock_wise_side_diff <= clock_wise_side_diff {
+            for _ in 0..=counter_clock_wise_side_diff {
+                curr_lines.push(offset_pin_shape.border_line(curr_border_line_no));
+                curr_border_line_no = (curr_border_line_no + 1) % corner_count;
+            }
+        } else {
+            for _ in 0..=clock_wise_side_diff {
+                curr_lines.push(offset_pin_shape.border_line(curr_border_line_no));
+                curr_border_line_no = (curr_border_line_no + corner_count - 1) % corner_count;
+            }
+        }
+        curr_lines.push(trace_polyline.arr[latest_entry_tuple.0]);
+
+        let border_polyline = Polyline::new_from_lines(&curr_lines);
+        if !self.check_polyline_trace(&border_polyline) {
+            return false;
+        }
+
+        let mut cut_lines = Vec::with_capacity(trace_polyline.arr.len() - latest_entry_tuple.0 + 1);
+        cut_lines.push(curr_lines[curr_lines.len() - 2]);
+        cut_lines.extend_from_slice(&trace_polyline.arr[latest_entry_tuple.0..]);
+        let cut_polyline = Polyline::new_from_lines(&cut_lines);
+        let mut changed_polyline = if cut_polyline.first_corner() == cut_polyline.last_corner() {
+            border_polyline
+        } else {
+            border_polyline.combine(&cut_polyline)
+        };
+        if !at_start {
+            changed_polyline = changed_polyline.reverse();
+        }
+
+        if !self.board.change_trace_polyline(id, changed_polyline.clone()) {
+            return false;
+        }
+        for corner in changed_polyline.corner_approx_arr() {
+            changed_area.join_point(corner, layer);
+        }
         let clip = changed_area.area(layer);
         self.board.normalize_trace(id, Some(&clip));
-        Some(id)
+
+        // Create a shove_fixed exit line segment
+        let exit_lines = [
+            Line::new_from_point_and_dir(pin_center, &pin_exit_direction.turn_45_degree(2)),
+            nearest_pin_exit_ray,
+            offset_pin_shape.border_line(nearest_border_line_no),
+        ];
+        let exit_line_segment = Polyline::new_from_lines(&exit_lines);
+        for corner in exit_line_segment.corner_approx_arr() {
+            changed_area.join_point(corner, layer);
+        }
+        self.board.insert_trace(
+            exit_line_segment,
+            layer,
+            half_width,
+            nets,
+            clearance_class,
+            FixedState::ShoveFixed,
+            Some(&clip),
+        );
+
+        true
+    }
+
+    /// Looks if another pin connection restriction fits better than the current one
+    /// and changes this trace in that case.
+    /// Upstream `PolylineTrace.swap_connection_to_pin` (`:1237-1298`).
+    pub fn swap_connection_to_pin(
+        &mut self,
+        id: ItemId,
+        at_start: bool,
+        _changed_area: &mut ChangedArea,
+    ) -> bool {
+        let Some(item) = self.board.store().get(id) else {
+            return false;
+        };
+        let ItemKind::Trace(trace) = &item.kind else {
+            return false;
+        };
+        let half_width = trace.half_width;
+        let layer = trace.layer;
+
+        let trace_polyline = if at_start {
+            trace.polyline.clone()
+        } else {
+            trace.polyline.reverse()
+        };
+
+        let end_corner = trace_polyline.first_corner();
+        let mut contacts = Vec::new();
+        self.board.normal_contacts_at(id, &end_corner, &mut contacts);
+        if contacts.len() != 1 {
+            return false;
+        }
+        let contact_id = contacts[0];
+        let Some(contact_item) = self.board.store().get(contact_id) else {
+            return false;
+        };
+        if contact_item.fixed_state != FixedState::ShoveFixed {
+            return false;
+        }
+        let ItemKind::Trace(contact_trace) = &contact_item.kind else {
+            return false;
+        };
+        let contact_polyline = contact_trace.polyline.clone();
+        if contact_polyline.arr.len() < 3 || trace_polyline.arr.len() < 3 {
+            return false;
+        }
+
+        let contact_last_line = contact_polyline.arr[contact_polyline.arr.len() - 2];
+        let first_line = trace_polyline.arr[1];
+
+        let mut check_swap = contact_last_line.direction().projection(&first_line.direction()) == Signum::Negative;
+        if !check_swap {
+            let hw = f64::from(half_width);
+            if trace_polyline.arr.len() > 3
+                && trace_polyline.corner_approx(0).distance_square(&trace_polyline.corner_approx(1)) <= hw * hw
+            {
+                check_swap = contact_last_line.direction().projection(&trace_polyline.arr[2].direction()) == Signum::Negative;
+            }
+        }
+        if !check_swap {
+            return false;
+        }
+
+        // Find pin at start of contact_trace
+        let contact_start = contact_polyline.first_corner();
+        let mut contact_pins = Vec::new();
+        self.board.normal_contacts_at(contact_id, &contact_start, &mut contact_pins);
+        let mut found_pin = None;
+        for &cid in &contact_pins {
+            if let Some(c_item) = self.board.store().get(cid) {
+                if let ItemKind::Pin(pin) = &c_item.kind {
+                    found_pin = Some(pin.clone());
+                    break;
+                }
+            }
+        }
+        let Some(contact_pin) = found_pin else {
+            return false;
+        };
+
+        let combined_polyline = contact_polyline.combine(&trace_polyline);
+        let nearest_dir = contact_pin.calc_nearest_exit_restriction_direction(
+            self.board,
+            &combined_polyline,
+            half_width,
+            layer,
+            self.pin_edge_to_turn_dist(),
+        );
+
+        if nearest_dir.is_none() || nearest_dir == Some(contact_polyline.arr[1].direction()) {
+            return false;
+        }
+
+        // Unfix contact trace and combine
+        self.board.set_item_fixed_state(contact_id, item.fixed_state);
+        self.board.combine_trace(id);
+        true
+    }
+
+    /// Overrides `pin_edge_to_turn_dist` for this pull-tight run (e.g. -1.0 during trace insertion).
+    pub fn with_pin_edge_to_turn_dist(mut self, dist: f64) -> Self {
+        self.pin_edge_to_turn_dist_override = Some(dist);
+        self
+    }
+
+    /// Returns the active `pin_edge_to_turn_dist`.
+    pub fn pin_edge_to_turn_dist(&self) -> f64 {
+        self.pin_edge_to_turn_dist_override
+            .unwrap_or_else(|| self.rules.get_pin_edge_to_turn_dist())
     }
 
     /// `PullTightAlgo.get_instance`'s flavor dispatch (`:71-85`).

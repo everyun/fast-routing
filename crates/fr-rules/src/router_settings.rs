@@ -457,6 +457,9 @@ pub struct RouterSettings {
     pub neck_width_um: f64,
     /// Rip up a routed connection whose new items carry violations. Default `false`.
     pub strict_drc: bool,
+    /// Optional override for the pin-edge-to-first-turn distance in board units.
+    /// `None` preserves the DSN-derived rule.
+    pub pin_edge_to_turn_dist: Option<f64>,
     /// Path for the `RoutingResultManifest` JSON. Default `None`. (Upstream's `clone()` drops
     /// this field — a latent bug we do not reproduce, since we derive `Clone`.)
     pub result_json_path: Option<String>,
@@ -494,6 +497,7 @@ impl Default for RouterSettings {
             hole_clearance_um: 0.0,
             neck_width_um: 0.0,
             strict_drc: false,
+            pin_edge_to_turn_dist: None,
             result_json_path: None,
             layers: Vec::new(),
             fanout: FanoutSettings::default(),

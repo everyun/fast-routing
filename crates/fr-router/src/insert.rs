@@ -426,16 +426,12 @@ impl<'b> ConnectionInserter<'b> {
         // The knob gates exactly one thing — the `swap_connection_to_pin` /
         // `correct_connection_to_pin` ladder at the tail of
         // `PolylineTrace.pull_tight` (`PolylineTrace.java:855-873`, gated on
-        // `> 0`). That ladder is **not ported** (see [`crate::pull_tight`]), so
-        // the knob still has no reader and forcing it here would be theatre:
-        // `rules` is `&BoardRules` on this path, so faking the save/restore
-        // would mean widening the borrow of a value nothing consults.
-        //
-        // The contract is therefore satisfied vacuously, and the *invariant* it
-        // protects — that no pull-tight run inside an insertion may re-route a
-        // pin exit — holds because the ladder does not exist. Whoever ports the
-        // ladder must make this a real save/restore in the same commit; that is
-        // the only reason this comment is still here.
+        // `> 0`). In this port, the per-segment insertion path in
+        // `insert_forced.rs` explicitly arms `PullTightAlgo` with
+        // `.with_pin_edge_to_turn_dist(-1.0)` during line-by-line insertion,
+        // matching upstream's temporary disable without mutating `rules`.
+        // Once the connection is inserted, post-route `opt_changed_area` runs
+        // with the active positive `pin_edge_to_turn_dist`.
 
         let layer = trace.layer;
         let half_width = self.trace_half_width(layer);
