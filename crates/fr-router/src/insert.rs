@@ -290,7 +290,44 @@ impl<'b> ConnectionInserter<'b> {
             for net in item.nets.iter() {
                 changed_nets.insert(*net);
             }
-            for id in connection_items(self.forced.board, ripped.item, stop_at_fanout_via) {
+            let walk = connection_items(self.forced.board, ripped.item, stop_at_fanout_via);
+            if crate::maze::trace::is_enabled() {
+                let describe = |id: ItemId| {
+                    self.forced.board.store().get(id).map(|item| match &item.kind {
+                        ItemKind::Via(v) => format!(
+                            "{:?} Via@{},{} nets={:?}",
+                            id, v.center.x, v.center.y, item.nets
+                        ),
+                        ItemKind::Trace(t) => {
+                            let fc = t.polyline.first_corner().to_float();
+                            let lc = t.polyline.last_corner().to_float();
+                            format!(
+                                "{:?} Trace@{},{}..{},{} nets={:?}",
+                                id,
+                                fc.x as i32,
+                                fc.y as i32,
+                                lc.x as i32,
+                                lc.y as i32,
+                                item.nets
+                            )
+                        }
+                        ItemKind::Pin(p) => format!(
+                            "{id:?} Pin@{},{} nets={:?}",
+                            p.center.x, p.center.y, item.nets
+                        ),
+                        _ => format!("{id:?} other"),
+                    })
+                };
+                let list = walk.iter().filter_map(|id| describe(*id)).collect::<Vec<_>>();
+                crate::maze::trace::conn_landing(&format!(
+                    "FRCONN remove_ripped net={} seed={:?} stop_fanout_via={} walk={}",
+                    self.ctrl().net_no,
+                    ripped.item,
+                    stop_at_fanout_via,
+                    list.join(" | ")
+                ));
+            }
+            for id in walk {
                 ripped_connections.insert(id);
             }
         }
