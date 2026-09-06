@@ -112,6 +112,29 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-full-relay.md` (Issue110-RelayModule Full mode unrouted improved).
   - *Status*: 已对齐.
 
+- **`remove_ripped`'s `FANOUT_VIA` stop uses a stricter fanout-via predicate** (`fr_router::insert::connection_items`, intentional divergence).
+  - *Upstream behaviour*: `Item.get_connection_items(StopConnectionOption.FANOUT_VIA)` stops at a via where
+  `Item.is_fanout_via` (`Item.java:1251-1282`) answers true — a via that touches a lone SMD pad directly
+  or through a trace shorter than `PROTECT_FANOUT_LENGTH × half_width`, **even if the via feeds several
+  escapes**. Main-pass ripups run with this stop whenever fanout is enabled
+  (`BatchAutorouter(job)` → `remove_unconnected_vias = !isFanoutEnabled()`).
+  - *Our behaviour*: kept the stricter pre-`a85e43c` predicate — a via counts as a fanout via only when all
+  of its non-collected contacts are pins — so a main-pass ripup walks **through** multi-escape fanout vias
+  and deletes the neighbouring escapes with it. Verified upstream-faithful port exists and was measured
+  (see below); it is deliberately **not** shipped.
+  - *Why*: with the upstream predicate every main-pass ripup that touches a multi-escape fanout via strands
+  the via's far-side escape as an island needing re-routing; convergence needs more passes. On
+  Issue102-Mars-64 (Doors default, `--deterministic --no-optimizer`) Java's own trajectory passes through
+  **7 unrouted at pass #6** and converges 0u at pass #14 in 43.6 s
+  (`java-stability/Issue102-*.r1.log`), while we need >20 passes — under the ledger's 285 s / 20-pass
+  budget the upstream predicate lands at a stable **7u** (2u at 1200 s), vs **1u** with the stricter
+  predicate. RelayModule Full's 0u (REPORT-full-relay) was achieved with the stricter predicate kept.
+  - *Evidence*: `REPORT-fanout-102.md` §1–§3 (first-divergence ripup walk dump, per-contact evaluation dump
+  proving the upstream-faithful port answers identically to the Java formula, Java trajectory data),
+  dispatcher ruling 2026-09-07.
+  - *Status*: 有意分歧（发货谓词比上游严；上游忠实版保留在 `batch::is_fanout_via`，`remove_tails` 的
+  `FANOUT_VIA` 停止仍用它）。收敛速度差另立任务。
+
 - **Ripped connections are never requeued inside a pass across all pass counts by default**
   (`fr_router::batch::schedule::RequeuePolicy`, default `Never`).
   - *Upstream behaviour*: `app/freerouting/autoroute/BatchAutorouter.java:431-694` derives the work list once per pass

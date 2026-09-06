@@ -399,9 +399,7 @@ pub fn is_fanout_via(
     for contact in contacts.iter().copied() {
         let lone = is_lone_smd_pin(board, contact, scratch);
         if dump {
-            trace_log.push(format!(
-                "{contact:?} lone_pin={lone}",
-            ));
+            trace_log.push(format!("{contact:?} lone_pin={lone}",));
         }
         if lone {
             result = true;
