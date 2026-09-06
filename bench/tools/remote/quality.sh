@@ -2,7 +2,6 @@
 # Dispatches a quality sweep (24 / 46 / OOS) to a remote host (orca/salmon/whale).
 #
 # Usage:
-# Usage:
 #   bench/tools/remote/quality.sh <worktree_or_commit> [--host orca|salmon|whale|<ip>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors full|doors|on|off|default] [-w <workers>]
 #
 # Examples:
@@ -16,10 +15,7 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 
 if [ $# -lt 1 ]; then
-if [ $# -lt 1 ]; then
   echo "usage: $0 <worktree_or_commit> [--host orca|salmon|whale|<ip>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors full|doors|on|off|default] [-w <workers>]" >&2
-  exit 1
-fi
   exit 1
 fi
 

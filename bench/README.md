@@ -444,34 +444,33 @@ multi-pin "nets" need no wires (pins already touching / connected by plane).
   the kind of free win the `java_degenerate` class exists to keep out of the
   numbers.
 
-## Remote quality sweeps (orca)
+## Remote quality sweeps & acceptance tooling
 
-To relieve local machine contention while iterating on router quality, full suite runs (24, 46, and OOS) can be offloaded to the dedicated Debian host **orca** (`172.20.0.6`, 80 cores, 125 GB RAM).
+To relieve local machine contention while iterating on router quality, full suite runs (24, 46, and OOS) can be offloaded to dedicated remote Debian hosts in the subnet (`orca`: `172.20.0.6`, `salmon`: `172.20.0.2`, `whale`: `172.20.0.4`).
 
-### Scripts (`bench/tools/remote/`)
+### Scripts (`bench/tools/remote/` & `bench/tools/`)
 
-- `push.sh <worktree_or_commit>`: pushes the local branch or commit to `orca:~/fr/fast-routing.git`.
-- `quality.sh <worktree_or_commit> [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors on|off] [-w 8]`:
-  1. Pushes code to orca via `push.sh`.
-  2. Updates/creates worktree on orca under `~/fr/worktrees/<branch>`.
-  3. Builds `fr-cli` and `g21-referee` in isolated per-branch target `~/fr/targets/<branch>`.
-  4. Runs boards with concurrency $W=8$ (`nice -n 10`).
-  5. Judges sessions against reference via `g21_judge.py`.
-  6. Rsyncs logs, sessions, and `gate.json` back to Mac under `~/fr-work/logs/remote/<tag>/`.
-- `java_ref.sh [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [-w 8]`:
-  Runs the pinned Freerouting 2.3.0 jar on orca with clean isolated `--user_data_path` per board, syncing sessions and logs back.
+- `accept.sh <worktree|commit> [--host auto|orca|salmon|whale] [--doors full|doors|default] [--suite 24+oos|24|oos|46] [--allow-deadline-noise <N>]`:
+  One-touch acceptance testing script. Auto-probes remote runner loads (preferring `orca` and `salmon`), executes the quality sweep, and calls `accept_compare.py` against the latest mainline baseline under `bench/results/main-sweeps/`. Exits with non-zero code on any regression (+u or added violations).
+- `accept_compare.py <ours gate.json> [baseline gate.json] [--allow-deadline-noise <N>]`:
+  Board-by-board comparator for acceptance. Compares $u$ and $v$, detects added violations, verifies doors mode consistency, and prints a clear `WORSE / same / better` summary table.
+- `push.sh <worktree_or_commit> [--host <host>]`: pushes the branch/commit to the remote bare repo (`~/fr/fast-routing.git`).
+- `quality.sh <worktree_or_commit> [--host <host>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors full|doors|on|off|default] [-w <workers>]`:
+  Executes the remote sweep, judges results, and rsyncs logs, sessions, and `gate.json` back to `~/fr-work/logs/remote/<tag>/`.
+- `java_ref.sh [--host <host>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [-w <workers>]`:
+  Runs the pinned Freerouting 2.3.0 jar on the remote host with clean isolated `--user_data_path` per board.
 
 ### Usage
 
 ```sh
-# Run 46-board quality sweep from current worktree
-bench/tools/remote/quality.sh . --suite 46
+# One-touch acceptance verification for current worktree against latest mainline baseline
+bench/tools/remote/accept.sh . --suite 24
 
-# Run 24-board unique java_finished sweep with 45-degree doors enabled
-bench/tools/remote/quality.sh ~/fr-work/angles --suite 24 --doors on
+# Explicitly test a feature branch with full doors
+bench/tools/remote/accept.sh wip/full-039 --doors full --suite 24
 
-# Run 9-board out-of-sample sweep
-bench/tools/remote/quality.sh . --suite oos
+# Standalone comparison of two gate.json files
+python3 bench/tools/accept_compare.py path/to/ours/gate.json [path/to/baseline/gate.json]
 ```
 
-**Note**: orca has no KiCad installation, so G4 (KiCad DRC and angle checks) remains on the Mac host. Serial ledger timings (README benchmarks) also remain on the quiet Mac host.
+**Note**: orca/salmon/whale have no KiCad installation, so G4 (KiCad DRC and angle checks) remains on the Mac host. Serial ledger timings (README benchmarks) also remain on the quiet Mac host.
