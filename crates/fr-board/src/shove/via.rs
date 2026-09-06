@@ -32,13 +32,17 @@ pub struct ViaLayerPad {
 
 /// A circle snapped to the board's angle restriction — `Circle.bounding_box()`
 /// at 90°, `Circle.bounding_octagon()` otherwise.
-pub fn circle_tile(center: IntPoint, radius: i32, orthogonal: bool) -> Simplex {
+pub fn circle_tile_shape(center: IntPoint, radius: i32, orthogonal: bool) -> TileShape {
     let circle = Circle::new(center, radius);
     if orthogonal {
-        circle.bounding_box().to_simplex()
+        TileShape::Box(circle.bounding_box())
     } else {
-        circle.bounding_octagon().to_simplex()
+        TileShape::Oct(circle.bounding_octagon())
     }
+}
+
+pub fn circle_tile(center: IntPoint, radius: i32, orthogonal: bool) -> Simplex {
+    circle_tile_shape(center, radius, orthogonal).to_simplex()
 }
 
 /// `ForcedViaAlgo.hole_check_shape(padstack, location, board)` (`:240-252`).
@@ -70,6 +74,15 @@ pub fn calculate_from_side(
     is_90_degree: bool,
 ) -> Option<FromSide> {
     let via_box = via_shape.bounding_box();
+    let room_oct = room_shape.to_int_octagon();
+    let contains_check = |pt: &FloatPoint| {
+        if let Some(oct) = room_oct {
+            oct.contains_float_point(pt)
+        } else {
+            room_shape.contains_float(pt, 0.0)
+        }
+    };
+
     for i in 0..4 {
         let (check_point, border_x, border_y) = match i {
             0 => (
@@ -93,7 +106,7 @@ pub fn calculate_from_side(
                 via_location.y,
             ),
         };
-        if room_shape.contains_float(&check_point, 0.0) {
+        if contains_check(&check_point) {
             let from_side_no = if is_90_degree { i } else { 2 * i };
             return Some(FromSide::raw(
                 from_side_no,
@@ -117,7 +130,7 @@ pub fn calculate_from_side(
             via_location.x + dx * diagonal_dist,
             via_location.y + dy * diagonal_dist,
         );
-        if room_shape.contains_float(&check_point, 0.0) {
+        if contains_check(&check_point) {
             let border_point = FloatPoint::new(
                 via_location.x + dx * border_dist,
                 via_location.y + dy * border_dist,
@@ -157,13 +170,14 @@ impl ShoveCheck<'_> {
             return CheckDrillResult::Drillable;
         }
         let orthogonal = self.orthogonal;
-        let tile_shape = circle_tile(location, via_radius.ceil() as i32, orthogonal);
+        let tile_shape = circle_tile_shape(location, via_radius.ceil() as i32, orthogonal);
+        let tile_simplex = tile_shape.to_simplex();
         let check_radius = via_radius
             + 0.5 * self.board.clearances().value(cl_class, cl_class, layer) as f64
             + self.board.min_trace_half_width() as f64;
         let Some(from_side) = calculate_from_side(
             &location.to_float(),
-            &tile_shape,
+            &tile_simplex,
             room_shape,
             check_radius,
             orthogonal,
@@ -186,7 +200,7 @@ impl ShoveCheck<'_> {
         if via_result == CheckDrillResult::NotDrillable || trace_half_width <= 0 {
             return via_result;
         }
-        let start_trace_shape = circle_tile(location, trace_half_width, orthogonal);
+        let start_trace_shape = circle_tile_shape(location, trace_half_width, orthogonal);
         let trace_result = self.check_forced_pad(
             &start_trace_shape,
             Some(from_side),
@@ -255,8 +269,9 @@ impl ShoveCheck<'_> {
             }
             if pad.clearance_class != 0 {
                 if let Some(hole_shape) = hole_shape {
+                    let hole_tile = TileShape::Simplex(hole_shape.clone());
                     if self.check_forced_pad(
-                        hole_shape,
+                        &hole_tile,
                         Some(from_side),
                         pad.layer,
                         net_no_arr,
@@ -273,7 +288,7 @@ impl ShoveCheck<'_> {
                 }
             }
             if pad.trace_pen_half_width > 0 {
-                let start_trace_shape = circle_tile(location, pad.trace_pen_half_width, orthogonal);
+                let start_trace_shape = circle_tile_shape(location, pad.trace_pen_half_width, orthogonal);
                 if self.check_forced_pad(
                     &start_trace_shape,
                     Some(from_side),

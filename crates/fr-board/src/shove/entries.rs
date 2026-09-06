@@ -170,7 +170,16 @@ impl<'a> OffsetParams<'a> {
         trace_half_width: i32,
         trace_cl_class: i32,
     ) -> Simplex {
-        if self.compensation_used {
+        if let Some(oct) = shape.to_int_octagon() {
+            if self.compensation_used {
+                let curr_offset =
+                    self.compensated_half_width(trace_half_width, trace_cl_class) as f64 + C_OFFSET_ADD;
+                oct.offset(curr_offset).to_simplex()
+            } else {
+                let cl_offset = self.clearance_to(trace_cl_class) as f64 + C_OFFSET_ADD;
+                oct.offset(trace_half_width as f64).offset(cl_offset).to_simplex()
+            }
+        } else if self.compensation_used {
             let curr_offset =
                 self.compensated_half_width(trace_half_width, trace_cl_class) as f64 + C_OFFSET_ADD;
             shape.offset(curr_offset)

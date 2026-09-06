@@ -178,11 +178,14 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     .get_shape(layer as usize)
                     .map(|shape| 0.5 * shape.max_width())
                     .unwrap_or(0.0);
-                list.push(ViaCandidate {
+                let cand = ViaCandidate {
                     required_radius: via_radius.max(trace_half_width as f64),
                     clearance_class: via.clearance_class() as i32,
                     attach_smd_allowed: via.attach_smd_allowed(),
-                });
+                };
+                if !list.contains(&cand) {
+                    list.push(cand);
+                }
             }
             via_candidates_by_layer.push(list);
         }
@@ -2152,6 +2155,7 @@ fn link_door_adjustment(shove_to_the_left: bool) -> Adjustment {
 /// One entry of `ctrl.via_rule` resolved for one layer
 /// (`MazeSearchAlgo.java:1186-1194`).
 #[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 struct ViaCandidate {
     /// `max(0.5 * via_shape.max_width(), ctrl.trace_half_width[layer])`.
     required_radius: f64,

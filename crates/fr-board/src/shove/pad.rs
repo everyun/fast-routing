@@ -133,7 +133,7 @@ impl ShoveCheck<'_> {
     #[allow(clippy::too_many_arguments)]
     pub fn check_forced_pad(
         &mut self,
-        pad_shape: &Simplex,
+        pad_shape: &TileShape,
         from_side: Option<FromSide>,
         layer: i32,
         net_no_arr: &NetNos,
@@ -144,20 +144,21 @@ impl ShoveCheck<'_> {
         max_via_recursion_depth: i32,
         check_only_front: bool,
     ) -> CheckDrillResult {
-        if !geom::simplex_contained_in(pad_shape, &self.bounds) {
+        let pad_simplex = pad_shape.to_simplex();
+        if !geom::simplex_contained_in(&pad_simplex, &self.bounds) {
             self.failing_obstacle = self.board_outline();
             return CheckDrillResult::NotDrillable;
         }
         let board = self.board;
         let mut shape_entries = ShapeTraceEntries::new(
-            pad_shape.clone(),
+            pad_simplex.clone(),
             layer,
             net_no_arr.clone(),
             cl_type,
             from_side,
         );
         let mut obstacles = self.scratch.take();
-        geom::overlapping_items_with_clearance(
+        geom::overlapping_items_with_clearance_tile(
             board,
             pad_shape,
             layer,
@@ -181,7 +182,7 @@ impl ShoveCheck<'_> {
                 return CheckDrillResult::NotDrillable;
             }
             let new_via_center =
-                super::drill::try_shove_via_points(board, pad_shape, layer, via_id, cl_type, false);
+                super::drill::try_shove_via_points(board, &pad_simplex, layer, via_id, cl_type, false);
             let Some(&first) = new_via_center.first() else {
                 self.failing_obstacle = Some(via_id);
                 self.scratch.give(obstacles);
@@ -237,7 +238,7 @@ impl ShoveCheck<'_> {
                 let curr_line = piece.polyline.arr[i + 1];
                 let curr_dir = curr_line.direction();
                 let is_in_front = if check_only_front {
-                    in_front_of_pad(&curr_line, pad_shape, from_side_no, piece.half_width, true)
+                    in_front_of_pad(&curr_line, &pad_simplex, from_side_no, piece.half_width, true)
                 } else {
                     true
                 };

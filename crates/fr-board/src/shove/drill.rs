@@ -150,7 +150,7 @@ impl ShoveCheck<'_> {
             };
             let new_shape = curr_shape.translate_by(&fr_geometry::planar::Vector::Int(*vector));
             let curr_tile_shape = drill_tile_shape(&new_shape, orthogonal);
-            let from_side = FromSide::from_point(&Point::Int(center), &curr_tile_shape);
+            let from_side = FromSide::from_point(&Point::Int(center), &curr_tile_shape.to_simplex());
             if self.check_forced_pad(
                 &curr_tile_shape,
                 Some(from_side),
@@ -202,7 +202,7 @@ impl ShoveInsert<'_> {
                 continue;
             };
             let new_shape = curr_shape.translate_by(&fr_geometry::planar::Vector::Int(*vector));
-            let curr_tile_shape = drill_tile_shape(&new_shape, orthogonal);
+            let curr_tile_shape = drill_tile_shape(&new_shape, orthogonal).to_simplex();
             let from_side = FromSide::from_point(&Point::Int(center), &curr_tile_shape);
             if !self.forced_pad(
                 &curr_tile_shape,
@@ -341,14 +341,17 @@ impl ShoveInsert<'_> {
 
 /// The snap upstream applies to a translated drill shape: the bounding box at
 /// 90°, the bounding octagon otherwise (`:63-68`, `:100-105`).
-fn drill_tile_shape(shape: &crate::shape::TileShape, orthogonal: bool) -> Simplex {
+fn drill_tile_shape(shape: &crate::shape::TileShape, orthogonal: bool) -> TileShape {
     if orthogonal {
-        shape.bounding_box().to_simplex()
+        TileShape::Box(shape.bounding_box())
     } else {
-        let simplex = geom::tile_to_simplex(shape);
-        match simplex.bounding_octagon() {
-            Some(octagon) => octagon.to_simplex(),
-            None => simplex,
+        match shape {
+            TileShape::Box(b) => TileShape::Box(*b),
+            TileShape::Oct(o) => TileShape::Oct(*o),
+            TileShape::Simplex(s) => match s.bounding_octagon() {
+                Some(octagon) => TileShape::Oct(octagon),
+                None => TileShape::Simplex(s.clone()),
+            },
         }
     }
 }

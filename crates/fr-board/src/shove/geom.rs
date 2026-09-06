@@ -302,6 +302,59 @@ pub fn nearest_relative_outside_locations(
 ///
 /// `out` comes back in descending item id, which is upstream's `TreeSet<Item>`
 /// order and therefore the order every downstream tie-break depends on.
+pub fn overlapping_items_with_clearance_tile(
+    board: &Board,
+    shape: &TileShape,
+    layer: i32,
+    ignore_nets: &[i32],
+    cl_class: i32,
+    out: &mut Vec<ItemId>,
+) {
+    out.clear();
+    let compensated = board.trees().clearance_compensation_used();
+    if compensated {
+        board.overlapping_items(shape, Some(layer), ignore_nets, out);
+        return;
+    }
+
+    let max_clearance = max_clearance_of(board, cl_class, layer);
+    let reach = (1.2 * max_clearance as f64).ceil() as i32;
+    let broad = shape.enlarge(reach);
+    board.overlapping_items(&broad, Some(layer), ignore_nets, out);
+    if max_clearance == 0 {
+        return;
+    }
+
+    let tree = board.default_tree();
+    let mut curr_half_clearance = -1i32;
+    let mut curr_offset_tile = shape.clone();
+    out.retain(|id| {
+        let Some(item) = board.store().get(*id) else {
+            return false;
+        };
+        let clearance = board
+            .clearances()
+            .value(cl_class, item.clearance_class, layer);
+        let half_clearance = clearance / 2;
+        if half_clearance != curr_half_clearance {
+            curr_half_clearance = half_clearance;
+            curr_offset_tile = shape.enlarge(half_clearance);
+        }
+        let Some(slot) = board.store().slot_of(*id) else {
+            return false;
+        };
+        tree.item_shapes(slot, *id)
+            .iter()
+            .filter(|tile| tile.layer == layer)
+            .any(|tile| {
+                tile.shape
+                    .as_ref()
+                    .map(|item_shape| curr_offset_tile.intersects(item_shape))
+                    .unwrap_or(false)
+            })
+    });
+}
+
 pub fn overlapping_items_with_clearance(
     board: &Board,
     shape: &Simplex,

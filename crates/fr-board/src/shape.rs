@@ -182,6 +182,15 @@ impl TileShape {
         }
     }
 
+    /// Converts to a [`Simplex`].
+    pub fn to_simplex(&self) -> Simplex {
+        match self {
+            TileShape::Box(b) => b.to_simplex(),
+            TileShape::Oct(o) => o.to_simplex(),
+            TileShape::Simplex(s) => s.clone(),
+        }
+    }
+
     /// Converts to the coarser flavor the board's angle restriction calls for
     /// (`search-tree-obstacles.md` §3.4).
     ///
