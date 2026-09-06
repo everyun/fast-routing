@@ -782,10 +782,57 @@ impl<'b> ForcedInserter<'b> {
                             )
                         })
                         .unwrap_or_else(|| "none".to_string());
+                    let mut neighbours = Vec::new();
+                    {
+                        let tree = self.board.default_tree();
+                        let box_shape = last_trace_shape.bounding_box();
+                        let mut ids: Vec<(u32, i32, char)> = Vec::new();
+                        for (id, item) in self.board.store().iter() {
+                            let Some(slot) = self.board.store().slot_of(id) else {
+                                continue;
+                            };
+                            for tile in tree.item_shapes(slot, id) {
+                                if tile.layer != layer {
+                                    continue;
+                                }
+                                let Some(shape) = tile.shape.as_ref() else {
+                                    continue;
+                                };
+                                use fr_board::shape::TileShape;
+                                if !shape.intersects(&TileShape::Box(box_shape)) {
+                                    continue;
+                                }
+                                let kind = match &item.kind {
+                                    fr_board::item::ItemKind::Trace(_) => 'T',
+                                    fr_board::item::ItemKind::Via(_) => 'V',
+                                    fr_board::item::ItemKind::Pin(_) => 'P',
+                                    _ => 'O',
+                                };
+                                ids.push((id.raw(), item.clearance_class, kind));
+                                break;
+                            }
+                        }
+                        ids.sort_unstable();
+                        for (id, _class, kind) in ids.iter().take(12) {
+                            if let Some(item) =
+                                self.board.store().get(fr_board::ItemId::from_raw(*id))
+                            {
+                                neighbours.push(format!(
+                                    "{}#{} net={:?} class={} fixed={:?}",
+                                    kind,
+                                    id,
+                                    item.nets.as_slice(),
+                                    item.clearance_class,
+                                    item.fixed_state
+                                ));
+                            }
+                        }
+                    }
                     crate::maze::trace::conn_landing(&format!(
-                        "FRCONN insert_polyline_fail net={} step=step5_check_failed from={:?} to={:?} last_shape_no={}/{} shape={:?} blocker={}",
+                        "FRCONN insert_polyline_fail net={} step=step5_check_failed from={:?} to={:?} last_shape_no={}/{} shape={:?} blocker={} near=[{}]",
                         self.ctrl.net_no, from_corner, to_corner, last_shape_no, trace_shapes.len(),
-                        last_trace_shape.bounding_box(), blocker
+                        last_trace_shape.bounding_box(), blocker,
+                        neighbours.join("; ")
                     ));
                 }
                 return Some(Point::Int(from_corner));
