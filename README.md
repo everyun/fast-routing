@@ -143,6 +143,29 @@ Four designs where Java's wall-clock is still lower (same serial run, ledger3):
 
 The roadmap attack lines for each are in `docs/ROADMAP.md` ("In progress").
 
+### Post-9b08338 mainline changes
+
+The ledger3 and gate3 numbers above were measured at frozen mainline `9b08338`. After that
+freeze, four behavior-relevant changes landed (provenance: `bench/results/main-sweeps/` — latest
+recorded sweep `d89ded9`, HEAD sweep `54883a1` — and `DECISIONS.md` 2026-09-07 entries):
+
+- **Fallback-via clearance-class fix + board-via fallback default-off** (`d8cc31c`, `3bb7576`):
+  the fallback via uses the net's via clearance class (DSN net-class semantics, zero added
+  violations), and board-level via fallback ships disabled by default per the tree-desync
+  ruling (upstream's fallback is self-consistently wrong: `RoutingBoard.java:1019-1035` assigns
+  the default class on read-back; `DECISIONS.md` 2026-09-07 01:00/01:40). Accepted cost:
+  Issue039 default mode **30 → ~36u**; re-decided when Full becomes default.
+- **Fanout stop rules aligned upstream** (`007d0bb`, `c94876d`): our fanout no-progress stop was
+  removed (the "doesn't lose coverage" argument was falsified by the RelayModule trace),
+  restoring upstream's three stop rules. Win: **Issue219 361 → 299u**; accepted costs:
+  sensor-l6 110 → 119u, power-io 60 → 74u (`DECISIONS.md` 2026-09-07 03:25).
+- **FANOUT_VIA predicate kept as the stricter own version** (revert of the upstream
+  `is_fanout_via` port, `PARITY-DIVERGENCES.md`): a declared intentional divergence that holds
+  **Issue102 at 1u** (the upstream predicate had regressed it to 7u through slower convergence;
+  `DECISIONS.md` 2026-09-07 05:35/06:35).
+- **45° family tree keeps trace/outline strips at their base Simplex** (`d89ded9`): recorded in
+  `docs/PARITY-DIVERGENCES.md`; Issue054 stays at **4.7 s / 0u**.
+
 ### Parallel routing
 
 `--parallel-connections` defaults to **1**: it is the only mode that is bit-for-bit deterministic
