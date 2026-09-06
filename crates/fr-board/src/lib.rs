@@ -94,7 +94,7 @@ pub mod shove;
 pub mod store;
 pub mod trace_ops;
 
-pub use board::{Board, BoardMark, Layer, LayerStructure};
+pub use board::{is_tree_consistency_check_enabled, Board, BoardMark, Layer, LayerStructure};
 pub use clearance::{ClearanceSource, ClearanceTable};
 pub use connectivity::Connectivity;
 pub use history::BoardHistory;

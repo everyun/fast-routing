@@ -892,6 +892,18 @@ impl RoutingJob {
         };
         let routed = router.is_some();
         observe(JobPhase::Routed);
+        if fr_board::is_tree_consistency_check_enabled() {
+            if let Err(errors) = design.board.verify_tree_consistency() {
+                eprintln!(
+                    "FR_TREE_DESYNC: before write_session with {} inconsistencies:",
+                    errors.len()
+                );
+                for err in errors.iter().take(20) {
+                    eprintln!("  {}", err);
+                }
+                panic!("Tree desync before write_session: {} errors", errors.len());
+            }
+        }
         // Session first, referee second — the module docs argue the order. Everything below
         // this line is a description of a board that is already on disk.
         let session = write_session(&design, &self.design_name);

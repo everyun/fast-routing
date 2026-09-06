@@ -1181,7 +1181,43 @@ impl Board {
     pub fn assert_consistent(&self) {
         self.store.assert_consistent();
         self.trees.assert_consistent(&self.store);
+        if let Err(errors) = self.verify_tree_consistency() {
+            panic!(
+                "Board::assert_consistent failed with {} errors:\n{}",
+                errors.len(),
+                errors.join("\n")
+            );
+        }
     }
+
+    /// Verifies that every active search tree's entries match current live items and geometry.
+    pub fn verify_tree_consistency(&self) -> Result<(), Vec<String>> {
+        let errors = self.trees.verify_consistency(&self.store, self.shape_ctx());
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+
+    /// Verifies that the default search tree's entries match current live items and geometry.
+    pub fn verify_default_tree_consistency(&self) -> Result<(), Vec<String>> {
+        let errors = self
+            .trees
+            .default_tree()
+            .verify_consistency(&self.store, self.shape_ctx());
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
+}
+
+/// True when search-tree consistency verification is enabled (debug builds or
+/// `FR_VERIFY_TREE_CONSISTENCY` environment variable set).
+pub fn is_tree_consistency_check_enabled() -> bool {
+    cfg!(debug_assertions) || std::env::var_os("FR_VERIFY_TREE_CONSISTENCY").is_some()
 }
 
 /// How many tile shapes of `old` survive unchanged at each end when its

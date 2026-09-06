@@ -767,6 +767,9 @@ impl BatchLoop {
             outcome.inserted_count += pass.routed;
             outcome.passes.push(pass);
 
+            let is_det = self.config.budget.is_deterministic();
+            check_tree_consistency(board, current_pass, "run_pass", is_det);
+
             current_score = scorer.score(board);
 
             // The pass polls the same budget between its connections and
@@ -819,6 +822,7 @@ impl BatchLoop {
                             consecutive_no_improvement = 0;
                             current_score = scorer.score(board);
                             last_best_score = current_score.normalized;
+                            check_tree_consistency(board, current_pass, "history.restore", is_det);
                         }
                     }
                 }
@@ -915,6 +919,7 @@ impl BatchLoop {
         // pre-pass boards, so this is what recovers a pass that made things
         // worse and then stopped.
         outcome.best_history_score = self.history.max_score();
+        let is_det = self.config.budget.is_deterministic();
         if outcome.best_history_score > current_score.normalized {
             let restored = self
                 .history
@@ -925,6 +930,7 @@ impl BatchLoop {
             if restored {
                 outcome.best_board_restored = true;
                 current_score = scorer.score(board);
+                check_tree_consistency(board, outcome.passes.len() as i32, "history.restore_best", is_det);
             }
         }
 
@@ -933,6 +939,7 @@ impl BatchLoop {
         if !(self.config.remove_unconnected_vias || continue_autorouting || stop_requested) {
             driver.remove_tails(board, StopConnection::None);
             current_score = scorer.score(board);
+            check_tree_consistency(board, outcome.passes.len() as i32, "remove_tails", is_det);
         }
 
         // `:1170` — `bh.clear()`. The snapshots are the run's peak memory and
@@ -969,6 +976,26 @@ struct StagnationState {
     global_best: f64,
     /// `passOfBestScore`.
     best_pass: i32,
+}
+
+fn check_tree_consistency(board: &Board, pass: i32, op: &str, deterministic: bool) {
+    if fr_board::is_tree_consistency_check_enabled()
+        || (deterministic && board.store().len() <= 3000)
+    {
+        if let Err(errors) = board.verify_tree_consistency() {
+            eprintln!(
+                "FR_TREE_DESYNC: at pass {} after {} ({} errors):",
+                pass, op, errors.len()
+            );
+            for err in errors.iter().take(20) {
+                eprintln!("  {}", err);
+            }
+            panic!(
+                "Tree desync detected at pass {} after {}: {} errors (first: {})",
+                pass, op, errors.len(), errors[0]
+            );
+        }
+    }
 }
 
 /// Emits one [`trace`] record for the pass that just ran, and clears `pending`

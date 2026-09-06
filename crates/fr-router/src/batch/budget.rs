@@ -150,6 +150,12 @@ impl BudgetPolicy {
         }
     }
 
+    /// True when deterministic virtual budget mode is active.
+    #[inline]
+    pub fn is_deterministic(&self) -> bool {
+        matches!(self.mode, BudgetMode::Deterministic)
+    }
+
     /// Adds the secondary effort cap.
     pub fn with_effort_ceiling(mut self, ceiling: Option<u64>) -> BudgetPolicy {
         self.effort_ceiling = ceiling;

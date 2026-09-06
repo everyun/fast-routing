@@ -802,6 +802,22 @@ impl<'r> BatchOptimizer<'r> {
             pass.score_after = score_at_pass_end;
             passes.push(pass);
 
+            if fr_board::is_tree_consistency_check_enabled() {
+                if let Err(errors) = board.verify_tree_consistency() {
+                    eprintln!(
+                        "FR_TREE_DESYNC: optimizer pass {} ended with {} inconsistencies:",
+                        current_pass, errors.len()
+                    );
+                    for err in errors.iter().take(20) {
+                        eprintln!("  {}", err);
+                    }
+                    panic!(
+                        "Tree desync detected at optimizer pass {}: {} errors (first: {})",
+                        current_pass, errors.len(), errors[0]
+                    );
+                }
+            }
+
             let pass_improvement = if score_at_pass_start > 0.0 {
                 (score_at_pass_end - score_at_pass_start) / score_at_pass_start
             } else {
