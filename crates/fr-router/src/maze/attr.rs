@@ -63,8 +63,11 @@ thread_local! {
 
     static CHECK_LAYER_VIA_NS: Cell<u64> = const { Cell::new(0) };
     static CHECK_LAYER_VIA_CALLS: Cell<u64> = const { Cell::new(0) };
+    static CHECK_LAYER_VIA_FAILS: Cell<u64> = const { Cell::new(0) };
 
     static SHOVE_TRACE_NS: Cell<u64> = const { Cell::new(0) };
+    static SHOVE_TRACE_CALLS: Cell<u64> = const { Cell::new(0) };
+    static SHOVE_TRACE_FAILS: Cell<u64> = const { Cell::new(0) };
 }
 
 /// Whether attribution is on. Resolved once, from the environment.
@@ -211,19 +214,26 @@ pub(crate) fn add_other_layers(started: Option<Instant>) {
     add_count(&OTHER_LAYERS_CALLS, 1);
 }
 
-pub(crate) fn add_check_layer_via(started: Option<Instant>) {
+pub(crate) fn add_check_layer_via(started: Option<Instant>, success: bool) {
     if started.is_none() {
         return;
     }
     add(&CHECK_LAYER_VIA_NS, elapsed_ns(started));
     add_count(&CHECK_LAYER_VIA_CALLS, 1);
+    if !success {
+        add_count(&CHECK_LAYER_VIA_FAILS, 1);
+    }
 }
 
-pub(crate) fn add_shove_trace(started: Option<Instant>) {
+pub(crate) fn add_shove_trace(started: Option<Instant>, success: bool) {
     if started.is_none() {
         return;
     }
     add(&SHOVE_TRACE_NS, elapsed_ns(started));
+    add_count(&SHOVE_TRACE_CALLS, 1);
+    if !success {
+        add_count(&SHOVE_TRACE_FAILS, 1);
+    }
 }
 
 fn read(cell: &'static std::thread::LocalKey<Cell<u64>>) -> u64 {
@@ -259,7 +269,10 @@ pub fn flush() {
     let other_layers_ns = read(&OTHER_LAYERS_NS);
     let check_layer_via_ns = read(&CHECK_LAYER_VIA_NS);
     let check_layer_via_calls = read(&CHECK_LAYER_VIA_CALLS);
+    let check_layer_via_fails = read(&CHECK_LAYER_VIA_FAILS);
     let shove_trace_ns = read(&SHOVE_TRACE_NS);
+    let shove_trace_calls = read(&SHOVE_TRACE_CALLS);
+    let shove_trace_fails = read(&SHOVE_TRACE_FAILS);
 
     let summary = format!(
         "FRMAZE occupy_ns={occupy_ns} occupy_calls={occupy_calls} \
@@ -274,8 +287,8 @@ pub fn flush() {
          heuristic_ns={heuristic_ns} heuristic_calls={heuristic_calls} \
          drill_pages_ns={drill_pages_ns} drills_of_page_ns={drills_of_page_ns} \
          expand_drill_ns={expand_drill_ns} other_layers_ns={other_layers_ns} \
-         check_layer_via_ns={check_layer_via_ns} check_layer_via_calls={check_layer_via_calls} \
-         shove_trace_ns={shove_trace_ns}\n"
+         check_layer_via_ns={check_layer_via_ns} check_layer_via_calls={check_layer_via_calls} check_layer_via_fails={check_layer_via_fails} \
+         shove_trace_ns={shove_trace_ns} shove_trace_calls={shove_trace_calls} shove_trace_fails={shove_trace_fails}\n"
     );
 
     let mut guard = match sink.lock() {

@@ -788,7 +788,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
                     {
                         let shove_started = crate::maze::attr::start();
                         let shoved = self.shove_trace_room(element, next_room);
-                        crate::maze::attr::add_shove_trace(shove_started);
+                        crate::maze::attr::add_shove_trace(shove_started, shoved);
                         if !shoved {
                             if ripup_costs > 0 {
                                 // Delay the occupation by ripup so another door
@@ -1837,7 +1837,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         let candidates = match self.via_candidates_by_layer.get(layer.max(0) as usize) {
             Some(c) if !c.is_empty() => c,
             _ => {
-                crate::maze::attr::add_check_layer_via(started);
+                crate::maze::attr::add_check_layer_via(started, false);
                 return CheckDrillResult::NotDrillable;
             }
         };
@@ -1888,7 +1888,7 @@ impl<'e, 'b> MazeSearch<'e, 'b> {
         } else {
             CheckDrillResult::NotDrillable
         };
-        crate::maze::attr::add_check_layer_via(started);
+        crate::maze::attr::add_check_layer_via(started, res != CheckDrillResult::NotDrillable);
         res
     }
 
