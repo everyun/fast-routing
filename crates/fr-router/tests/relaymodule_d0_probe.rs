@@ -5,7 +5,6 @@
 
 use std::path::PathBuf;
 
-use fr_board::item::ItemId;
 use fr_board::search_tree::Tiling45Mode;
 use fr_io::specctra;
 use fr_router::ctrl::AutorouteControl;
