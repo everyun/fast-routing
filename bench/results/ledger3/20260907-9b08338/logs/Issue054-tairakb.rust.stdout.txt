@@ -1,0 +1,8 @@
+Imported /Users/strayer/tmp/tairakb.dsn in 0.01s: 2 layers, 6791 items (319 pins, 4 traces, 1 vias)
+Board: 7416 items (319 pins, 492 traces, 138 vias); router delta +488 traces, +137 vias
+Router: 6 passes, 140 routed, 0 failed, 23 ripped, 264 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 996.20 -> 996.20, stopped on near-maximum score
+Referee: 5 clearance violations, 0 of 264 connections incomplete, score 996.20/1000
+Total 4.65s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue054-tairakb.rust.ses

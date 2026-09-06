@@ -1,0 +1,8 @@
+Imported C:\Users\SetonixSynth\Desktop\eeschema files\tidbit audio\2hp passive LED\setonix_2hpblank-pcb.dsn in 0.00s: 2 layers, 199 items (32 pins, 0 traces, 0 vias)
+Board: 227 items (32 pins, 27 traces, 1 vias); router delta +27 traces, +1 vias
+Router: 5 passes, 21 routed, 0 failed, 10 ripped, 2 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.99 -> 999.99, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 23 connections incomplete, score 999.99/1000
+Total 0.23s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue159-setonix_2hp-pcb.rust.ses

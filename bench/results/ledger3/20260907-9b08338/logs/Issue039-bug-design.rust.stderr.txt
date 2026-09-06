@@ -1,0 +1,20 @@
+30 of 204 connections still incomplete
+job budget spent — the session above is the best board the run held (30 of 204 connections incomplete; 0.79s of the budget was reserved for the shutdown)
+      284.35 real       282.66 user         0.90 sys
+           112787456  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+               63938  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                   0  messages sent
+                   0  messages received
+                   0  signals received
+                   0  voluntary context switches
+               86460  involuntary context switches
+       4666967212409  instructions retired
+       1039892723723  cycles elapsed
+            67043808  peak memory footprint

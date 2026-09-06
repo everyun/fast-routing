@@ -1,0 +1,8 @@
+Imported F:\Spiwocoal\Documentos\KiCad Projects\Modular Mechanical Keyboard\Main ISO\Main ISO.dsn in 0.00s: 2 layers, 3210 items (346 pins, 2 traces, 124 vias)
+Board: 3719 items (346 pins, 479 traces, 156 vias); router delta +477 traces, +32 vias
+Router: 6 passes, 227 routed, 0 failed, 65 ripped, 206 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 1 passes, 8 of 50 items improved, score 873.32 -> 873.32, stopped on below improvement threshold
+Referee: 152 clearance violations, 0 of 240 connections incomplete, score 873.32/1000
+Total 10.08s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue035-ReadPlaceScope.rust.ses

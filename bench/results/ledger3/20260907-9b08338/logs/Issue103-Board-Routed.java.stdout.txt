@@ -1,0 +1,17 @@
+2026-09-07 00:52:47.825 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-07 00:52:47.851 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-07 00:52:48.911 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:52:48.927 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:52:49.181 INFO   [8B3F8E\0E28C0] Loading board file 'Issue103-Board-Routed.dsn'...
+2026-09-07 00:52:49.185 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:52:49.202 WARN   Network.insert_net_class: clearance class not found at 'default'
+2026-09-07 00:52:49.758 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:52:49.761 INFO   [8B3F8E\0E28C0] Job '8B3F8E\0E28C0' started at 2026-09-06T16:52:49.761583Z.
+2026-09-07 00:52:49.988 INFO   [8B3F8E\0E28C0] Fanout stage started on board '6f465fcce12e25d6321be7dcdaaaada7' with 0 of 60 SMD pins needing fanout (60 already connected, 0 netless).
+2026-09-07 00:52:50.298 INFO   New version available: v2.4.1
+2026-09-07 00:52:50.544 INFO   [8B3F8E\0E28C0] Fanout pass #1 on board '6f465fcce12e25d6321be7dcdaaaada7' completed in 0.40 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-07 00:52:50.600 INFO   [8B3F8E\0E28C0] Fanout stage completed: started with 60 total SMD pins, completed in 0.55 seconds, escaped pins: 60/60 (100.0%), using 0.67 total CPU seconds, 6.78 GB total allocated, and 3588.5 MB peak heap usage.
+2026-09-07 00:52:50.639 INFO   [8B3F8E\0E28C0] Auto-routing stage started on board '6f465fcce12e25d6321be7dcdaaaada7' for 0 unrouted items.
+2026-09-07 00:52:51.187 INFO   [8B3F8E\0E28C0] Auto-routing pass #1 on board '6f465fcce12e25d6321be7dcdaaaada7' was completed in 0.17 seconds with the score of 982.02 (0 unrouted and 63 violations), using 1.00 CPU seconds and the job allocated 9.80 GB of memory so far.
+2026-09-07 00:52:51.532 INFO   [8B3F8E\0E28C0] Auto-routing stage completed: started with 0 unrouted nets, completed in 1.58 seconds, final score: 982.02 (0 unrouted and 63 violations), using 1.00 total CPU seconds, 9.80 GB total allocated, and 325.3 MB peak heap usage.
+2026-09-07 00:52:51.533 INFO   [8B3F8E\0E28C0] Job '8B3F8E\0E28C0' finished with state: COMPLETED (elapsed: 1.77 seconds, finished at UTC: 2026-09-06T16:52:51.532350Z).

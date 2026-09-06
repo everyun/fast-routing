@@ -1,0 +1,17 @@
+2026-09-07 00:56:59.183 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-07 00:56:59.211 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-07 00:57:00.552 INFO   [17CEE0\DB980C] Loading board file 'Issue110-testProjectFromFreeroutingBugTest01.dsn'...
+2026-09-07 00:57:00.572 INFO   [17CEE0\DB980C] Job '17CEE0\DB980C' started at 2026-09-06T16:57:00.571911Z.
+2026-09-07 00:57:00.609 INFO   [17CEE0\DB980C] Fanout stage started on board '94635e297daaea51a24a4bf832a64b07' with 4 of 16 SMD pins needing fanout (12 already connected, 0 netless).
+2026-09-07 00:57:00.752 INFO   [17CEE0\DB980C] Fanout pass #1 on board '0d51cd17b4f3dfb29e77f25921e46705' completed in 0.13 seconds with 4 SMD pins fanouted, 0 not routed, 0 insert errors, +4 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-07 00:57:00.766 INFO   [17CEE0\DB980C] Fanout pass #2 on board '0d51cd17b4f3dfb29e77f25921e46705' completed in 0.01 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-07 00:57:00.768 INFO   [17CEE0\DB980C] Fanout stage completed: started with 16 total SMD pins, completed in 0.16 seconds, escaped pins: 4/16 (25.0%), using 0.15 total CPU seconds, 0.15 GB total allocated, and 124.4 MB peak heap usage.
+2026-09-07 00:57:00.769 INFO   [17CEE0\DB980C] Auto-routing stage started on board '0d51cd17b4f3dfb29e77f25921e46705' for 4 unrouted items.
+2026-09-07 00:57:00.903 INFO   [17CEE0\DB980C] Auto-routing pass #1 on board '0d51cd17b4f3dfb29e77f25921e46705' was completed in 0.12 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-09-07 00:57:00.912 INFO   [17CEE0\DB980C] Auto-routing pass #2 on board '0f669f507428491f5700a5f33e8bc018' was completed in 0.00 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-09-07 00:57:00.920 INFO   [17CEE0\DB980C] Auto-routing stage completed: started with 4 unrouted nets, completed in 0.33 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-09-07 00:57:00.923 INFO   [17CEE0\DB980C] Optimization stage started on board 'f7d3476e422140bd62a5bb6cd83a4911' with score 999.98 (0 unrouted and 0 violations).
+2026-09-07 00:57:00.925 INFO   [17CEE0\DB980C] Stopping optimizer because the current board score (999.98) is already close to the maximum score (1000). Remaining potential improvement is less than the threshold (1.00%).
+2026-09-07 00:57:00.927 INFO   [17CEE0\DB980C] Optimization stage completed: started with score 999.98 (0 unrouted and 0 violations), completed in 0.00 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.01 GB total allocated, and 301.8 MB peak heap usage.
+2026-09-07 00:57:00.927 INFO   [17CEE0\DB980C] Job '17CEE0\DB980C' finished with state: COMPLETED (elapsed: 0.35 seconds, finished at UTC: 2026-09-06T16:57:00.927260Z).
+2026-09-07 00:57:01.166 INFO   New version available: v2.4.1

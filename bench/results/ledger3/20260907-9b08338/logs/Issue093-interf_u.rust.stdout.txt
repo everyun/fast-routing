@@ -1,0 +1,8 @@
+Imported C:\Users\YI\Downloads\中文测试目录\interf_u.dsn in 0.01s: 2 layers, 1567 items (379 pins, 653 traces, 84 vias)
+Board: 1612 items (379 pins, 698 traces, 84 vias); router delta +45 traces, +0 vias
+Router: 2 passes, 45 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 2 passes, 4 of 90 items improved, score 808.94 -> 808.94, stopped on below improvement threshold
+Referee: 192 clearance violations, 0 of 201 connections incomplete, score 808.94/1000
+Total 0.77s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue093-interf_u.rust.ses

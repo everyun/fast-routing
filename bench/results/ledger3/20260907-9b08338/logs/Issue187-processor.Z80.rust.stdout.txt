@@ -1,0 +1,8 @@
+Imported processor in 0.07s: 2 layers, 7171 items (1365 pins, 2026 traces, 324 vias)
+Board: 7171 items (1365 pins, 2026 traces, 324 vias); router delta +0 traces, +0 vias
+Router: 1 passes, 0 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.98 -> 999.98, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 834 connections incomplete, score 999.98/1000
+Total 1.04s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue187-processor.Z80.rust.ses

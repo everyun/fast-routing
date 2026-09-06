@@ -1,0 +1,71 @@
+2026-09-07 00:56:17.878 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-07 00:56:17.904 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-07 00:56:19.243 INFO   [4E86A5\EE8CF5] Loading board file 'Issue110-testPCBSpecctraFile.dsn'...
+2026-09-07 00:56:19.306 INFO   [4E86A5\EE8CF5] Job '4E86A5\EE8CF5' started at 2026-09-06T16:56:19.306465Z.
+2026-09-07 00:56:19.370 INFO   [4E86A5\EE8CF5] Fanout stage started on board '7dfb78160fafa050b8188909797da3bb' with 22 of 32 SMD pins needing fanout (10 already connected, 0 netless).
+2026-09-07 00:56:19.581 INFO   [4E86A5\EE8CF5] Fanout pass #1 on board '391da4e4803c97bfd5d299249bb2cb5b' completed in 0.19 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +1 extra via (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-07 00:56:19.901 INFO   New version available: v2.4.1
+2026-09-07 00:56:26.965 WARN   BasicBoard.normalize_traces: reached 2000 iterations for net 'GND' — stopping to prevent hang. The board geometry for this net may be oscillating (split/combine cycle); traces are kept as-is and further normalization for this net is suppressed on this board candidate.
+2026-09-07 00:56:27.000 INFO   [4E86A5\EE8CF5] Fanout pass #2 on board 'a96608ae5a6e01d2cca5c52086294538' completed in 7.41 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-07 00:56:27.057 INFO   [4E86A5\EE8CF5] Fanout pass #3 on board '052c9f902a3aa6385f5b9260d34f406b' completed in 0.05 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=300).
+2026-09-07 00:56:27.107 INFO   [4E86A5\EE8CF5] Fanout pass #4 on board 'e76bbfb9882f3a8868c2a2230378552d' completed in 0.04 seconds with 7 SMD pins fanouted, 1 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-09-07 00:56:27.107 INFO   Fanout stopped after 4 passes: no progress for 3 consecutive passes.
+2026-09-07 00:56:27.112 INFO   [4E86A5\EE8CF5] Fanout stage completed: started with 32 total SMD pins, completed in 7.74 seconds, escaped pins: 29/32 (90.6%), using 7.64 total CPU seconds, 55.11 GB total allocated, and 3647.9 MB peak heap usage.
+2026-09-07 00:56:27.116 INFO   [4E86A5\EE8CF5] Auto-routing stage started on board 'e76bbfb9882f3a8868c2a2230378552d' for 26 unrouted items.
+2026-09-07 00:56:31.904 WARN   BasicBoard.normalize_traces: reached 2000 iterations for net 'Net-(C11-Pad1)' — stopping to prevent hang. The board geometry for this net may be oscillating (split/combine cycle); traces are kept as-is and further normalization for this net is suppressed on this board candidate.
+2026-09-07 00:56:36.157 WARN   BasicBoard.normalize_traces: reached 2000 iterations for net 'Net-(C12-Pad1)' — stopping to prevent hang. The board geometry for this net may be oscillating (split/combine cycle); traces are kept as-is and further normalization for this net is suppressed on this board candidate.
+2026-09-07 00:56:36.444 INFO   [4E86A5\EE8CF5] Auto-routing pass #1 on board 'e76bbfb9882f3a8868c2a2230378552d' was completed in 9.28 seconds with the score of 599.99 (21 unrouted and 41 violations), using 15.96 CPU seconds and the job allocated 128.76 GB of memory so far.
+2026-09-07 00:56:37.045 INFO   [4E86A5\EE8CF5] Auto-routing pass #2 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.56 seconds with the score of 599.99 (21 unrouted and 41 violations), using 16.96 CPU seconds and the job allocated 137.42 GB of memory so far.
+2026-09-07 00:56:37.621 INFO   [4E86A5\EE8CF5] Auto-routing pass #3 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.56 seconds with the score of 599.99 (21 unrouted and 41 violations), using 17.95 CPU seconds and the job allocated 147.29 GB of memory so far.
+2026-09-07 00:56:38.186 INFO   [4E86A5\EE8CF5] Auto-routing pass #4 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.55 seconds with the score of 599.99 (21 unrouted and 41 violations), using 17.95 CPU seconds and the job allocated 147.29 GB of memory so far.
+2026-09-07 00:56:38.742 INFO   [4E86A5\EE8CF5] Auto-routing pass #5 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.54 seconds with the score of 599.99 (21 unrouted and 41 violations), using 18.95 CPU seconds and the job allocated 157.49 GB of memory so far.
+2026-09-07 00:56:39.293 INFO   [4E86A5\EE8CF5] Auto-routing pass #6 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 18.95 CPU seconds and the job allocated 157.49 GB of memory so far.
+2026-09-07 00:56:39.838 INFO   [4E86A5\EE8CF5] Auto-routing pass #7 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 19.95 CPU seconds and the job allocated 167.99 GB of memory so far.
+2026-09-07 00:56:40.386 INFO   [4E86A5\EE8CF5] Auto-routing pass #8 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 19.95 CPU seconds and the job allocated 167.99 GB of memory so far.
+2026-09-07 00:56:40.948 INFO   [4E86A5\EE8CF5] Auto-routing pass #9 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.54 seconds with the score of 599.99 (21 unrouted and 41 violations), using 20.95 CPU seconds and the job allocated 177.91 GB of memory so far.
+2026-09-07 00:56:41.495 INFO   [4E86A5\EE8CF5] Auto-routing pass #10 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 21.95 CPU seconds and the job allocated 187.88 GB of memory so far.
+2026-09-07 00:56:42.040 INFO   [4E86A5\EE8CF5] Auto-routing pass #11 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 21.95 CPU seconds and the job allocated 187.88 GB of memory so far.
+2026-09-07 00:56:42.605 INFO   [4E86A5\EE8CF5] Auto-routing pass #12 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 22.95 CPU seconds and the job allocated 198.34 GB of memory so far.
+2026-09-07 00:56:43.147 INFO   [4E86A5\EE8CF5] Auto-routing pass #13 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.52 seconds with the score of 599.99 (21 unrouted and 41 violations), using 22.95 CPU seconds and the job allocated 198.34 GB of memory so far.
+2026-09-07 00:56:43.686 INFO   [4E86A5\EE8CF5] Auto-routing pass #14 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.52 seconds with the score of 599.99 (21 unrouted and 41 violations), using 23.95 CPU seconds and the job allocated 209.06 GB of memory so far.
+2026-09-07 00:56:44.228 INFO   [4E86A5\EE8CF5] Auto-routing pass #15 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.52 seconds with the score of 599.99 (21 unrouted and 41 violations), using 23.95 CPU seconds and the job allocated 209.06 GB of memory so far.
+2026-09-07 00:56:44.767 INFO   [4E86A5\EE8CF5] Auto-routing pass #16 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.52 seconds with the score of 599.99 (21 unrouted and 41 violations), using 24.95 CPU seconds and the job allocated 219.50 GB of memory so far.
+2026-09-07 00:56:45.311 INFO   [4E86A5\EE8CF5] Auto-routing pass #17 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.53 seconds with the score of 599.99 (21 unrouted and 41 violations), using 24.95 CPU seconds and the job allocated 219.50 GB of memory so far.
+2026-09-07 00:56:45.852 INFO   [4E86A5\EE8CF5] Auto-routing pass #18 on board '9f39b777e396f620387cdbf17a46e5e2' was completed in 0.52 seconds with the score of 599.99 (21 unrouted and 41 violations), using 25.95 CPU seconds and the job allocated 230.14 GB of memory so far.
+2026-09-07 00:56:45.857 INFO   [4E86A5\EE8CF5] The router's best score (599.99) has not improved by more than 0.5 points since pass #8. Stopping the auto-router after 18 passes (21 items still unconnected).
+The following connections could not be routed -- please review your design (e.g. check pad clearances, trace width rules, and available routing space):
+  Net 'Net-(C6-Pad1)' (1 unrouted connection):
+    - via  ->  C7-2
+  Net 'Net-(C11-Pad2)' (2 unrouted connections):
+    - C11-2  ->  R17-1
+    - XP4-1  ->  R17-1
+  Net 'Net-(C11-Pad1)' (1 unrouted connection):
+    - C11-1  ->  D2-4
+  Net 'Net-(C12-Pad1)' (1 unrouted connection):
+    - C12-1  ->  D3-4
+  Net 'Net-(D2-Pad2)' (1 unrouted connection):
+    - R16-1  ->  D2-2
+  Net 'Net-(D2-Pad1)' (1 unrouted connection):
+    - via  ->  D2-1
+  Net 'GND' (10 unrouted connections):
+    - R17-2  ->  C10-2
+    - R17-2  ->  XP4-2
+    - C10-2  ->  R18-2
+    - XP2-2  ->  C1-2
+    - R1-1  ->  XP3-2
+    - XP5-2  ->  R18-2
+    - D1-4  ->  R1-1
+    - D2-3  ->  C10-2
+    - C2-2  ->  XP1-2
+    - C2-2  ->  R15-1
+  Net 'VCC' (4 unrouted connections):
+    - via  ->  R14-2
+    - D1-8  ->  R3-1
+    - D1-8  ->  Q1-2
+    - R2-2  ->  R3-1
+2026-09-07 00:56:45.888 INFO   [4E86A5\EE8CF5] Auto-routing stage completed: started with 26 unrouted nets, completed in 26.54 seconds, final score: 599.99 (21 unrouted and 41 violations), using 25.95 total CPU seconds, 230.14 GB total allocated, and 3647.9 MB peak heap usage.
+2026-09-07 00:56:45.904 INFO   [4E86A5\EE8CF5] Optimization stage started on board '9f39b777e396f620387cdbf17a46e5e2' with score 599.99 (21 unrouted and 41 violations).
+2026-09-07 00:56:46.024 INFO   [4E86A5\EE8CF5] Optimizer pass #1 on board '040b054b467b03e7a79585193f77fcd1' was completed in 0.07 seconds with the score of 599.99 (21 unrouted and 41 violations).
+2026-09-07 00:56:46.037 INFO   [4E86A5\EE8CF5] Stopping optimizer because the improvement in this pass (0.0000%) is below the threshold (1.00%).
+2026-09-07 00:56:46.053 INFO   [4E86A5\EE8CF5] Optimization stage completed: started with score 599.99 (21 unrouted and 41 violations), completed in 0.14 seconds, final score: 599.99 (21 unrouted and 41 violations), using 0.13 total CPU seconds, 2.09 GB total allocated, and 2530.6 MB peak heap usage.
+2026-09-07 00:56:46.054 INFO   [4E86A5\EE8CF5] Job '4E86A5\EE8CF5' finished with state: COMPLETED (elapsed: 26.75 seconds, finished at UTC: 2026-09-06T16:56:46.053782Z).

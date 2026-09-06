@@ -1,0 +1,8 @@
+Imported /home/bond12/2/RelayModule.dsn in 0.00s: 2 layers, 905 items (152 pins, 0 traces, 22 vias)
+Board: 1069 items (152 pins, 150 traces, 36 vias); router delta +150 traces, +14 vias
+Router: 15 passes, 103 routed, 0 failed, 60 ripped, 72 pins fanned out
+Router stopped on board complete (1 board restore)
+Optimizer: 0 passes, 0 of 0 items improved, score 990.89 -> 990.89, stopped on near-maximum score
+Referee: 4 clearance violations, 0 of 88 connections incomplete, score 990.89/1000
+Total 15.49s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue110-RelayModule.rust.ses

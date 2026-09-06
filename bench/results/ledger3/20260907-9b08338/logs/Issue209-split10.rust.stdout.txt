@@ -1,0 +1,8 @@
+Imported /split10.dsn in 0.00s: 2 layers, 2327 items (362 pins, 0 traces, 0 vias)
+Board: 2720 items (362 pins, 363 traces, 30 vias); router delta +363 traces, +30 vias
+Router: 4 passes, 144 routed, 0 failed, 10 ripped, 181 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 1 passes, 12 of 50 items improved, score 885.17 -> 885.17, stopped on below improvement threshold
+Referee: 182 clearance violations, 0 of 317 connections incomplete, score 885.17/1000
+Total 3.31s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger3/ledger-a/20260907-003711/ses/Issue209-split10.rust.ses

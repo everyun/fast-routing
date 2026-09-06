@@ -1,0 +1,23 @@
+2026-09-07 00:37:12.338 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-07 00:37:12.372 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-07 00:37:13.441 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:37:13.459 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:37:13.712 INFO   [D3CB41\9F8354] Loading board file 'Issue026-J2_reference.dsn'...
+2026-09-07 00:37:13.715 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:37:13.731 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-07 00:37:13.737 INFO   [D3CB41\9F8354] Job 'D3CB41\9F8354' started at 2026-09-06T16:37:13.737580Z.
+2026-09-07 00:37:13.779 INFO   [D3CB41\9F8354] Fanout stage started on board '7c7fecfd3552392dcd38a410408af309' with 39 of 53 SMD pins needing fanout (12 already connected, 2 netless).
+2026-09-07 00:37:14.261 INFO   [D3CB41\9F8354] Fanout pass #1 on board '76c55f88efda275b2c1444dceb5e98d2' completed in 0.47 seconds with 39 SMD pins fanouted, 0 not routed, 0 insert errors, +20 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-07 00:37:14.329 INFO   [D3CB41\9F8354] Fanout pass #2 on board '869c5bbabb2fd6fdbfa0b26f43d2f224' completed in 0.06 seconds with 1 SMD pin fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-07 00:37:14.383 INFO   [D3CB41\9F8354] Fanout pass #3 on board 'edf9eac9af791ef6c995d27ed2f5ab1e' completed in 0.05 seconds with 1 SMD pin fanouted, 0 not routed, 0 insert errors, +1 extra via (0 SMD pins still to check in pass, ripup costs=300).
+2026-09-07 00:37:14.423 INFO   [D3CB41\9F8354] Fanout pass #4 on board 'edf9eac9af791ef6c995d27ed2f5ab1e' completed in 0.04 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=400).
+2026-09-07 00:37:14.436 INFO   [D3CB41\9F8354] Fanout stage completed: started with 51 total SMD pins, completed in 0.65 seconds, escaped pins: 39/51 (76.5%), using 0.63 total CPU seconds, 3.56 GB total allocated, and 1325.6 MB peak heap usage.
+2026-09-07 00:37:14.439 INFO   [D3CB41\9F8354] Auto-routing stage started on board 'edf9eac9af791ef6c995d27ed2f5ab1e' for 15 unrouted items.
+2026-09-07 00:37:14.695 INFO   [D3CB41\9F8354] Auto-routing pass #1 on board 'edf9eac9af791ef6c995d27ed2f5ab1e' was completed in 0.24 seconds with the score of 999.99 (0 unrouted and 0 violations).
+2026-09-07 00:37:14.703 INFO   New version available: v2.4.1
+2026-09-07 00:37:14.715 INFO   [D3CB41\9F8354] Auto-routing pass #2 on board 'a5e8b9d2ecdb204f905d733279996620' was completed in 0.01 seconds with the score of 999.99 (0 unrouted and 0 violations).
+2026-09-07 00:37:14.730 INFO   [D3CB41\9F8354] Auto-routing stage completed: started with 33 unrouted nets, completed in 0.97 seconds, final score: 999.99 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-09-07 00:37:14.746 INFO   [D3CB41\9F8354] Optimization stage started on board 'ba488aa4b957bc06fc8ecff43811b354' with score 999.99 (0 unrouted and 0 violations).
+2026-09-07 00:37:14.757 INFO   [D3CB41\9F8354] Stopping optimizer because the current board score (999.99) is already close to the maximum score (1000). Remaining potential improvement is less than the threshold (1.00%).
+2026-09-07 00:37:14.770 INFO   [D3CB41\9F8354] Optimization stage completed: started with score 999.99 (0 unrouted and 0 violations), completed in 0.01 seconds, final score: 999.99 (0 unrouted and 0 violations), using 0.01 total CPU seconds, 0.13 GB total allocated, and 254.3 MB peak heap usage.
+2026-09-07 00:37:14.771 INFO   [D3CB41\9F8354] Job 'D3CB41\9F8354' finished with state: COMPLETED (elapsed: 1.03 seconds, finished at UTC: 2026-09-06T16:37:14.770383Z).

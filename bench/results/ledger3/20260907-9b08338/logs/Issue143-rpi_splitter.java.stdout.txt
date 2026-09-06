@@ -1,0 +1,18 @@
+2026-09-07 00:59:47.106 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-07 00:59:47.134 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-07 00:59:48.469 INFO   [BCF53F\7EA5D4] Loading board file 'Issue143-rpi_splitter.dsn'...
+2026-09-07 00:59:48.486 INFO   [BCF53F\7EA5D4] Job 'BCF53F\7EA5D4' started at 2026-09-06T16:59:48.485822Z.
+2026-09-07 00:59:48.512 INFO   [BCF53F\7EA5D4] Fanout stage started on board '41bdd829ad2b842f6957f36ae3c77b28' with 9 of 22 SMD pins needing fanout (1 already connected, 12 netless).
+2026-09-07 00:59:48.681 INFO   [BCF53F\7EA5D4] Fanout pass #1 on board 'a50968679ca3818af40f18239a6be9e7' completed in 0.16 seconds with 9 SMD pins fanouted, 0 not routed, 0 insert errors, +9 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-07 00:59:48.689 INFO   [BCF53F\7EA5D4] Fanout pass #2 on board 'a50968679ca3818af40f18239a6be9e7' completed in 0.01 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-07 00:59:48.690 INFO   [BCF53F\7EA5D4] Fanout stage completed: started with 10 total SMD pins, completed in 0.17 seconds, escaped pins: 9/10 (90.0%), using 0.17 total CPU seconds, 0.33 GB total allocated, and 203.6 MB peak heap usage.
+2026-09-07 00:59:48.691 INFO   [BCF53F\7EA5D4] Auto-routing stage started on board 'a50968679ca3818af40f18239a6be9e7' for 5 unrouted items.
+2026-09-07 00:59:48.797 INFO   [BCF53F\7EA5D4] Auto-routing pass #1 on board 'a50968679ca3818af40f18239a6be9e7' was completed in 0.09 seconds with the score of 599.98 (2 unrouted and 0 violations).
+2026-09-07 00:59:48.883 INFO   [BCF53F\7EA5D4] Auto-routing pass #2 on board '8425aee9a3468a383149f3c93588c615' was completed in 0.08 seconds with the score of 999.97 (0 unrouted and 0 violations).
+2026-09-07 00:59:48.888 INFO   [BCF53F\7EA5D4] Auto-routing pass #3 on board 'ec1f5e7ddeef7cd6dd31990c086e3407' was completed in 0.00 seconds with the score of 999.97 (0 unrouted and 0 violations).
+2026-09-07 00:59:48.892 INFO   [BCF53F\7EA5D4] Auto-routing stage completed: started with 5 unrouted nets, completed in 0.39 seconds, final score: 999.97 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-09-07 00:59:48.895 INFO   [BCF53F\7EA5D4] Optimization stage started on board 'ec1f5e7ddeef7cd6dd31990c086e3407' with score 999.97 (0 unrouted and 0 violations).
+2026-09-07 00:59:48.896 INFO   [BCF53F\7EA5D4] Stopping optimizer because the current board score (999.97) is already close to the maximum score (1000). Remaining potential improvement is less than the threshold (1.00%).
+2026-09-07 00:59:48.897 INFO   [BCF53F\7EA5D4] Optimization stage completed: started with score 999.97 (0 unrouted and 0 violations), completed in 0.00 seconds, final score: 999.97 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.02 GB total allocated, and 414.0 MB peak heap usage.
+2026-09-07 00:59:48.897 INFO   [BCF53F\7EA5D4] Job 'BCF53F\7EA5D4' finished with state: COMPLETED (elapsed: 0.41 seconds, finished at UTC: 2026-09-06T16:59:48.897627Z).
+2026-09-07 00:59:49.366 INFO   New version available: v2.4.1
