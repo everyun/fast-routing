@@ -110,6 +110,7 @@ is a known measurement contaminant). Quality is judged by the independent refere
 | wall-clock geomean, 26 boards both tools finish | **5.92×** vs Java (in-tool geomean **3.37×**) |
 | wall-clock geomean, all 27 `java_finished` boards | **5.47×** (in-tool **3.18×**) |
 | total wall-clock, both-finished 26 boards | Java 685.1 s vs Rust **486.6 s** |
+| total wall-clock, all 27 boards | Java 885.9 s vs Rust **771.0 s** (**1.15×**); total in-tool 838.1 s vs 770.7 s (**1.09×**) |
 | peak RSS, mean over 27 boards | Java 4 778.6 MB vs Rust **64.6 MB** (~74× lower; worst-case 6 961 MB vs 311 MB, ~22×) |
 | added violations (judged − unmodified import) | **0** across all 27 boards |
 | final 46-board suite read (gate3, orca, 9b08338) | **45 / 45 judgeable boards with zero added violations**; comparative vs Java: **11 win / 13 tie / 2 loss**; OOS 9/9 (`bench/results/gate3-quality/20260907-9b08338/`) |
@@ -151,7 +152,7 @@ and referee-clean everywhere. Measured applicability of `--parallel-connections 
 violations) — but on pin-dense congested boards corridor pre-emption makes parallel search
 unequal to serial greedy allocation and can break convergence, so the default stays 1.
 
-The 45° router mode is a compile-time-default choice: `FR_ROUTER_TILING_45=full` selects the
+The 45° router mode is a **runtime** choice via the environment variable `FR_ROUTER_TILING_45=doors|full|off` (default `doors`): the `full` value selects the
 unified full-tiling chain, which matches Java's per-expansion cost on the hardest boards
 (Issue039 ~35.7 µs/exp ≈ Java 36) and wins on multi-layer boards under budget
 (sensor-l6 119u vs Doors 123u), but still regresses a few congested boards
