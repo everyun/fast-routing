@@ -394,8 +394,16 @@ pub fn is_fanout_via(
     let mut contacts = std::mem::take(&mut scratch.contacts);
     normal_contacts(board, id, scratch, &mut contacts);
     let mut result = false;
+    let mut trace_log: Vec<String> = Vec::new();
+    let dump = crate::maze::trace::is_enabled();
     for contact in contacts.iter().copied() {
-        if is_lone_smd_pin(board, contact, scratch) {
+        let lone = is_lone_smd_pin(board, contact, scratch);
+        if dump {
+            trace_log.push(format!(
+                "{contact:?} lone_pin={lone}",
+            ));
+        }
+        if lone {
             result = true;
             break;
         }
@@ -405,25 +413,37 @@ pub fn is_fanout_via(
         let ItemKind::Trace(trace) = &item.kind else {
             continue;
         };
+        let length = trace.polyline.length_total();
+        let protected = length >= PROTECT_FANOUT_LENGTH * f64::from(trace.half_width);
+        if dump {
+            trace_log.push(format!(
+                "{contact:?} trace len={:.0} hw={} protected={protected} ignored={}",
+                length,
+                trace.half_width,
+                ignore.contains(&contact),
+            ));
+        }
         if ignore.contains(&contact) {
             continue;
         }
-        if trace.polyline.length_total() >= PROTECT_FANOUT_LENGTH * f64::from(trace.half_width) {
+        if protected {
             continue;
         }
         let mut trace_contacts = Vec::new();
         normal_contacts(board, contact, scratch, &mut trace_contacts);
         for other in trace_contacts.iter().copied() {
-            if is_lone_smd_pin(board, other, scratch) {
-                result = true;
-                break;
-            }
+            let other_lone = is_lone_smd_pin(board, other, scratch);
             // Shove-fixed two-corner exit traces of SMD pins count too.
             let is_exit_trace = board.store().get(other).is_some_and(|item| {
                 item.fixed_state == FixedState::ShoveFixed
                     && matches!(&item.kind, ItemKind::Trace(t) if t.corner_count() == 2)
             });
-            if is_exit_trace {
+            if dump {
+                trace_log.push(format!(
+                    "{contact:?}->{other:?} lone_pin={other_lone} exit_trace={is_exit_trace}"
+                ));
+            }
+            if other_lone || is_exit_trace {
                 result = true;
                 break;
             }
@@ -431,6 +451,13 @@ pub fn is_fanout_via(
         if result {
             break;
         }
+    }
+    if dump {
+        crate::maze::trace::conn_landing(&format!(
+            "FRCONN is_fanout_via via={id:?} ignore={:?} answer={result} contacts: {}",
+            ignore,
+            trace_log.join(" ; ")
+        ));
     }
     contacts.clear();
     scratch.contacts = contacts;
