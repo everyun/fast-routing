@@ -685,7 +685,7 @@ pub fn fanout_control(
     // `:1025-1046` (row 27): the net class's vias followed by the board's, and
     // the via masks rebuilt over the merged rule.
     if config.fallback_to_board_vias {
-        if let Some(combined) = combined_via_rule(&ctrl.via_rule, rules) {
+        if let Some(combined) = combined_via_rule(&ctrl.via_rule, rules, pin.net_no) {
             ctrl.via_rule = combined;
             ctrl.rebuild_via_info(board, settings.scoring.via_costs(), pin.net_no);
         }
@@ -750,8 +750,16 @@ fn target_distance_square(board: &Board, id: ItemId, pin_center: &IntPoint) -> f
 /// `RoutingBoard.fanout:1025-1046` — the net class's via rule followed by every
 /// board via it does not already contain (row 27's `fallbackToBoardVias`).
 /// `None` when there is nothing to add.
-fn combined_via_rule(class_rule: &ViaRule, rules: &BoardRules) -> Option<ViaRule> {
+fn combined_via_rule(class_rule: &ViaRule, rules: &BoardRules, net_no: i32) -> Option<ViaRule> {
     let board_rule = rules.via_rules.first()?;
+    let target_clearance = rules
+        .nets
+        .get(net_no)
+        .map(|n| n.net_class_index())
+        .and_then(|idx| rules.net_classes.get(idx))
+        .map(|nc| nc.default_item_clearance_classes.get(fr_rules::ItemClass::Via) as usize)
+        .or_else(|| class_rule.get_via(0).map(|v| v.clearance_class()))
+        .unwrap_or(1);
     let mut combined = ViaRule::new(format!("{}_fallback", class_rule.name));
     for index in 0..class_rule.via_count() {
         if let Some(via) = class_rule.get_via(index) {
@@ -764,7 +772,9 @@ fn combined_via_rule(class_rule: &ViaRule, rules: &BoardRules) -> Option<ViaRule
             continue;
         };
         if !combined.contains(via.name()) {
-            combined.append_via(via.clone());
+            let mut fallback_via = via.clone();
+            fallback_via.set_clearance_class(target_clearance);
+            combined.append_via(fallback_via);
             added = true;
         }
     }
