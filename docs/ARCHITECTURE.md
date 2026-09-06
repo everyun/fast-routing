@@ -243,4 +243,9 @@ fresh isolated `--user_data_path` clean Java 2.3.0 baseline, independent referee
   violations across 33 boards, all 9 OOS boards import cleanly with zero unconnected items introduced.
 
 *(gate3, the full 46-board quality re-read at the frozen mainline, is pending:
-`<<GATE3: pending REPORT-gate3-quality.md>>`.)*
+The final full-suite quality read (gate3, orca/salmon, frozen mainline `9b08338`,
+`bench/results/gate3-quality/20260907-9b08338/`): Doors default **45/45 judgeable boards with
+zero added violations**, comparative vs Java 11 win / 13 tie / 2 loss (Issue039 28u vs 10u,
+Issue102 1u vs 0u — the only two boards still behind Java), OOS 9/9 (easyeda 8u beats Java's 9u);
+Full mode 44/45 (Issue039 +1v, the known Full-mode fallback-via issue); SES round-trip fidelity 0
+differences in the three Doors sweeps.)*

@@ -167,9 +167,20 @@ Gates (all executable without a router):
   insert" — upstream specifies check as deliberately optimistic).
 - **M2c** batch loop + optimizer (as shipped in the jar per conformance pass). Full gates:
 - **G2.1** per fixture, referee-judged, default mode, reference config.
-  Latest full-suite read (orca 46-board sweep, ddc6364 / gate2-quality): **43/46 pass** (comparative 20/22 pass, absolute 18/19 pass, crash 1/1 pass).
-  Re-read at the frozen mainline `9b08338` is pending gate3: `<<GATE3: pending REPORT-gate3-quality.md>>`.
-  Serial ledger3 read on the 27 `java_finished` boards (quiet Mac, 9b08338): **25/27 pass**, 0 added violations; the two failures are comparative unrouted only: Issue039 (30u vs reference 10u), Issue102 (1u vs reference 0u).
+  Final read (gate3, orca 46-board sweep at frozen mainline `9b08338`,
+  `bench/results/gate3-quality/20260907-9b08338/main/`): **45/45 judgeable boards, zero added
+  violations**, judge 23/46 (all FAILs comparative-unrouted), comparative vs Java 11 win / 13 tie / 2 loss.
+  Earlier reads: gate2 (ddc6364): 43/46; gate (fc3d67f-era): 40/46.
+  Final read (gate3, orca, frozen mainline `9b08338`, `bench/results/gate3-quality/20260907-9b08338/`):
+  **45/45 judgeable boards with zero added violations** (Doors default); judge total 23/46 pass —
+  every FAIL is a comparative-unrouted miss against Java, never a violation; comparative vs Java
+  **11 win / 13 tie / 2 loss** (losses: Issue039 28u vs reference 10u, converged from gate2's 35u;
+  Issue102 1u vs reference 0u, converged from 6u).
+  Full-mode informational read: 44/45 zero added violations (the sole +1v is Issue039, the known
+  Full-mode fallback-via issue); comparative 11/12/3.
+  SES round-trip fidelity: 0 board differences in the three Doors sweeps.
+  Serial ledger3 read on the 27 `java_finished` boards (quiet Mac, 9b08338): **25/27 pass**, 0 added
+  violations; same two losses (Issue039 30u, Issue102 1u), unrouted only.
   RelayModule routes cleanly (0u/2v vs reference 0u/4v), Issue230 routes cleanly (0u/16v vs reference 2u/16v).
   Method, tooling and worked examples: `bench/README.md` "Judging a session" (normative);
   `bench/tools/g21_judge.py` + `bench/tools/g21_referee/` are its only implementation. Both
@@ -208,7 +219,10 @@ Gates (all executable without a router):
   **0 added violations** on all 27; referee 25/27 (losses: Issue039, Issue102 — unrouted only).
 - **G2.4** out-of-sample tier: ≥6 boards with ≥4 signal layers, ≥3 with power planes, ≥2 with
   snap_angle 90/none, ≥1 non-KiCad export, ≥2 clean unrouted boards — including the CLA45
-  threeboard 6-layer HDI exports. Current read: **9/9 pass** (orca gate2-quality & oos-ours: 0 added violations, unrouted meets absolute gate on all 9). Same gate form as G2.1.
+  threeboard 6-layer HDI exports. Final read (gate3, salmon, frozen mainline `9b08338`,
+  `bench/results/gate3-quality/20260907-9b08338/oos/`): **9/9 pass**, 0 added violations; the one
+  comparative board (easyeda-pcb1) **beats Java: 8u vs 9u**; several absolute boards improved ≥3u
+  over gate2 (power-io −15u, coldfire-unrouted −13u). Same gate form as G2.1.
 
 ### G2.1 progress log
 - 2026-08-29 first read: 15/46 (26 failures = our own 300s timeout writing no SES).
@@ -485,7 +499,7 @@ Four lines remain open against the ledger3 baseline (`9b08338`), each with its o
    zero regression so it can become the default (currently Doors is default; see README "Parallel
    routing").
 4. **Issue039 fanout/ripup convergence** (`wip/039-*` lines) — congested-region search-path
-   divergence; the largest remaining quality gap (30u vs Java 10u) and time loss (284 s vs 201 s).
+   divergence; the largest remaining quality gap (28-30u vs Java 10u after gate3 convergence) and time loss (284 s vs 201 s).
 
 ## Standing risks
 
