@@ -733,12 +733,24 @@ impl<'b> PullTightAlgo<'b> {
         if polyline.arr.len() < 3 {
             return true;
         }
+        let saved_pins = self.contact_pins.take();
+        let touching = self.touching_pins_at_end_corners(
+            polyline,
+            self.curr_layer,
+            self.curr_raw_half_width,
+            &self.curr_net_no_arr.clone(),
+            self.curr_cl_type,
+        );
+        self.contact_pins = Some(touching);
+        let mut ok = true;
         for shape in polyline.offset_shapes(self.curr_half_width) {
             if !self.check_trace_shape(&shape) {
-                return false;
+                ok = false;
+                break;
             }
         }
-        true
+        self.contact_pins = saved_pins;
+        ok
     }
 
     /// Tries to correct a connection restriction of this trace.
