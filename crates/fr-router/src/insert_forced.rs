@@ -432,8 +432,9 @@ impl<'b> ForcedInserter<'b> {
         let (max_rec, max_via_rec, _) = self.budgets();
         let nets = self.nets();
         let mut checker = self.shove_check();
+        let pad_tile = fr_board::TileShape::Simplex(shape.clone());
         checker.check_forced_pad(
-            shape,
+            &pad_tile,
             from_side,
             layer,
             &nets,

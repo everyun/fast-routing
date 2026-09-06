@@ -2154,7 +2154,6 @@ fn link_door_adjustment(shove_to_the_left: bool) -> Adjustment {
 
 /// One entry of `ctrl.via_rule` resolved for one layer
 /// (`MazeSearchAlgo.java:1186-1194`).
-#[derive(Debug, Clone, Copy)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct ViaCandidate {
     /// `max(0.5 * via_shape.max_width(), ctrl.trace_half_width[layer])`.
