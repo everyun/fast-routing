@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# Dispatches a quality sweep (24 / 46 / OOS) to orca (172.20.0.6).
+# Dispatches a quality sweep (24 / 46 / OOS) to a remote host (orca/salmon/whale).
 #
 # Usage:
-#   bench/tools/remote/quality.sh <worktree_or_commit> [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors on|off] [-w 8]
+#   bench/tools/remote/quality.sh <worktree_or_commit> [--host orca|salmon|whale|<ip>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors on|off|default] [-w <workers>]
 #
 # Examples:
 #   bench/tools/remote/quality.sh .
-#   bench/tools/remote/quality.sh ~/fr-work/ci --suite 46
-#   bench/tools/remote/quality.sh fc3d67f --suite 46
-#   bench/tools/remote/quality.sh ~/fr-work/angles --suite 24 --doors on
+#   bench/tools/remote/quality.sh . --host salmon --suite 24
+#   bench/tools/remote/quality.sh ~/fr-work/ci --host 172.20.0.2 --suite 46
+#   bench/tools/remote/quality.sh ddc6364 --host whale --suite 24
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$SCRIPT_DIR/../../.." && pwd)
 
 if [ $# -lt 1 ]; then
-  echo "usage: $0 <worktree_or_commit> [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors on|off] [-w 8]" >&2
+  echo "usage: $0 <worktree_or_commit> [--host orca|salmon|whale|<ip>] [--suite 24|46|oos] [--mp 20] [--job-timeout 285] [--doors on|off|default] [-w <workers>]" >&2
   exit 1
 fi
 
@@ -26,10 +26,15 @@ SUITE="46"
 MP="20"
 JOB_TIMEOUT="285"
 DOORS="default"
-WORKERS="8"
+HOST_ARG="orca"
+WORKERS=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
+    --host)
+      HOST_ARG="$2"
+      shift 2
+      ;;
     --suite)
       SUITE="$2"
       shift 2
@@ -57,25 +62,48 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-REMOTE_HOST=${ORCA_HOST:-"chiqingzhen@172.20.0.6"}
-REMOTE_REPO=${ORCA_REPO:-"~/fr/fast-routing.git"}
+# Resolve host and default concurrency: orca=8, salmon=8, whale=4
+case "$HOST_ARG" in
+  orca|172.20.0.6)
+    REMOTE_IP="172.20.0.6"
+    DEFAULT_W=8
+    HOST_NAME="orca"
+    ;;
+  salmon|172.20.0.2)
+    REMOTE_IP="172.20.0.2"
+    DEFAULT_W=8
+    HOST_NAME="salmon"
+    ;;
+  whale|172.20.0.4)
+    REMOTE_IP="172.20.0.4"
+    DEFAULT_W=4
+    HOST_NAME="whale"
+    ;;
+  *)
+    REMOTE_IP="$HOST_ARG"
+    DEFAULT_W=4
+    HOST_NAME="$HOST_ARG"
+    ;;
+esac
 
-# 1. Push worktree or commit to orca
-source "$SCRIPT_DIR/push.sh" "$TARGET"
+WORKERS=${WORKERS:-$DEFAULT_W}
+
+# 1. Push worktree or commit to target host
+source "$SCRIPT_DIR/push.sh" "$TARGET" --host "$REMOTE_IP"
 BRANCH="$ORCA_BRANCH"
 COMMIT="$ORCA_COMMIT"
 SHORT="$ORCA_SHORT"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 SAFE_BRANCH=$(echo "$BRANCH" | tr '/' '_')
-RUN_TAG="${SAFE_BRANCH}-${SHORT}-${TIMESTAMP}"
+RUN_TAG="${HOST_NAME}-${SAFE_BRANCH}-${SHORT}-${TIMESTAMP}"
 
-echo "==> Remote run tag: $RUN_TAG on $REMOTE_HOST"
+echo "==> Remote run tag: $RUN_TAG on $REMOTE_HOST (W=$WORKERS)"
 
-# 2. Stage runner tools on orca
+# 2. Stage runner tools on remote host
 ssh "$REMOTE_HOST" mkdir -p "\$HOME/fr/tools"
 scp -q "$SCRIPT_DIR/run_suite.py" "$REPO_ROOT/bench/tools/g21_judge.py" "$REMOTE_HOST:~/fr/tools/"
 
-# 3. On orca: checkout/update worktree, build release binaries, run suite
+# 3. On remote host: checkout/update worktree, build release binaries, run suite
 RC=0
 ssh "$REMOTE_HOST" bash -s <<REMOTE_SCRIPT || RC=$?
 set -euo pipefail

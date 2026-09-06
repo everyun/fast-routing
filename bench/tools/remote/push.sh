@@ -1,16 +1,31 @@
 #!/usr/bin/env bash
-# Push the specified worktree or commit to orca's bare repo, preserving branch name.
+# Push the specified worktree or commit to a remote bare repo, preserving branch name.
 #
 # Usage:
-#   bench/tools/remote/push.sh <worktree_or_commit>
+#   bench/tools/remote/push.sh <worktree_or_commit> [--host <host_or_ip>]
 #
-# Example:
+# Examples:
 #   bench/tools/remote/push.sh ~/fr-work/ci
-#   bench/tools/remote/push.sh .
-#   bench/tools/remote/push.sh fc3d67f
+#   bench/tools/remote/push.sh . --host 172.20.0.2
+#   bench/tools/remote/push.sh fc3d67f --host salmon
 set -euo pipefail
 
 TARGET=${1:-.}
+shift || true
+
+HOST_ARG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --host)
+      HOST_ARG="$2"
+      shift 2
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
 if [ -d "$TARGET" ]; then
   ROOT=$(git -C "$TARGET" rev-parse --show-toplevel)
   BRANCH=$(git -C "$TARGET" rev-parse --abbrev-ref HEAD)
@@ -30,7 +45,21 @@ else
   ROOT=$(git rev-parse --show-toplevel)
 fi
 
-REMOTE_HOST=${ORCA_HOST:-"chiqingzhen@172.20.0.6"}
+# Resolve host alias or IP
+REMOTE_IP="172.20.0.6"
+if [ -n "$HOST_ARG" ]; then
+  case "$HOST_ARG" in
+    orca|172.20.0.6) REMOTE_IP="172.20.0.6" ;;
+    salmon|172.20.0.2) REMOTE_IP="172.20.0.2" ;;
+    whale|172.20.0.4) REMOTE_IP="172.20.0.4" ;;
+    *) REMOTE_IP="$HOST_ARG" ;;
+  esac
+elif [ -n "${ORCA_HOST:-}" ]; then
+  REMOTE_IP="${ORCA_HOST#*@}"
+fi
+
+REMOTE_USER=${ORCA_USER:-"chiqingzhen"}
+REMOTE_HOST="${REMOTE_USER}@${REMOTE_IP}"
 REMOTE_REPO=${ORCA_REPO:-"~/fr/fast-routing.git"}
 
 if [ "$BRANCH" = "HEAD" ]; then
@@ -48,3 +77,5 @@ echo "    pushed $DEST_BRANCH @ $SHORT"
 export ORCA_BRANCH="$DEST_BRANCH"
 export ORCA_COMMIT="$COMMIT"
 export ORCA_SHORT="$SHORT"
+export REMOTE_IP="$REMOTE_IP"
+export REMOTE_HOST="$REMOTE_HOST"
