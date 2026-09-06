@@ -20,6 +20,7 @@ pub struct DsnLexer<'a> {
 
 impl<'a> DsnLexer<'a> {
     pub fn new(input: &'a str) -> Self {
+        let input = input.strip_prefix('\u{feff}').unwrap_or(input);
         DsnLexer { input, pos: 0 }
     }
 

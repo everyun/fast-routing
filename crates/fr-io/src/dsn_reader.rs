@@ -19,11 +19,11 @@ impl SExpr {
     /// Recursively parses an S-expression from the token slice.
     pub fn parse_from_tokens(tokens: &[Token]) -> Option<SExpr> {
         let mut cursor = 0;
-        Self::parse_rec(tokens, &mut cursor)
+        Self::parse_rec(tokens, &mut cursor, 0)
     }
 
-    fn parse_rec(tokens: &[Token], cursor: &mut usize) -> Option<SExpr> {
-        if *cursor >= tokens.len() {
+    fn parse_rec(tokens: &[Token], cursor: &mut usize, depth: usize) -> Option<SExpr> {
+        if depth > 512 || *cursor >= tokens.len() {
             return None;
         }
         let tok = &tokens[*cursor];
@@ -36,7 +36,7 @@ impl SExpr {
                         *cursor += 1;
                         break;
                     }
-                    if let Some(child) = Self::parse_rec(tokens, cursor) {
+                    if let Some(child) = Self::parse_rec(tokens, cursor, depth + 1) {
                         items.push(child);
                     } else {
                         break;

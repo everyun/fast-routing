@@ -430,12 +430,34 @@ impl SesFileReader<'_, '_> {
                 )
             })
         };
-        let half_width = jround(self.scale.ses_to_board(width) / 2.0) as i32;
+        let half_width = jround(self.scale.ses_to_board(width) / 2.0)
+            .clamp(0, super::lex::CRIT_INT as i64) as i32;
         let clearance_class = self.item_clearance_class(net_class_index, ItemClass::Trace);
         let fixed = match self.options.compat {
             SesCompat::Upstream => FixedState::UserFixed,
             SesCompat::Lossless => fixed,
         };
+
+        if polyline.corner_count() < 2 || polyline.is_empty() {
+            self.warn("SesReader.read_wire_scope: degenerate wire skipped");
+            self.summary.wires_imported += 1;
+            return true;
+        }
+        for i in 0..polyline.corner_count() {
+            let pt = polyline.corner_approx(i);
+            let limit = super::lex::CRIT_INT;
+            if pt.x < -limit
+                || pt.x > limit
+                || pt.y < -limit
+                || pt.y > limit
+                || !pt.x.is_finite()
+                || !pt.y.is_finite()
+            {
+                self.warn("SesReader.read_wire_scope: wire corner outside CRIT_INT");
+                self.summary.wires_imported += 1;
+                return true;
+            }
+        }
 
         let inserted = match self.options.compat {
             // `SesReader.java:323` uses the *cleaning* insert.

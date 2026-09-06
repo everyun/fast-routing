@@ -937,6 +937,10 @@ impl<'a> Reader<'a> {
             }
             token = self.lexer.next_token();
         }
+        if self.layer_info.len() >= 256 {
+            self.warn("Structure.read_layer_scope: max layer limit reached");
+            return false;
+        }
         if layer_ok {
             let no = self.layer_info.len() as i32;
             self.layer_info.push(DsnLayer {

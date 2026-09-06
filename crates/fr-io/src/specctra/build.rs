@@ -97,13 +97,23 @@ impl PadGeometry {
 
     /// Upstream `ConvexShape.offset(width)` — grow by `width` in every direction.
     pub fn offset(&self, width: f64) -> PadGeometry {
+        if width <= 0.0 || !width.is_finite() {
+            return self.clone();
+        }
         match self {
             PadGeometry::Box(b) => PadGeometry::Box(b.offset(width)),
-            PadGeometry::Octagon(o) => PadGeometry::Octagon(o.offset(width)),
-            PadGeometry::Simplex(s) => PadGeometry::Simplex(s.offset(width)),
-            PadGeometry::Circle(c) => {
-                PadGeometry::Circle(Circle::new(c.center, c.radius + width.jround() as i32))
+            PadGeometry::Octagon(o) => {
+                if o.is_empty() {
+                    PadGeometry::Octagon(*o)
+                } else {
+                    PadGeometry::Octagon(o.offset(width))
+                }
             }
+            PadGeometry::Simplex(s) => PadGeometry::Simplex(s.offset(width)),
+            PadGeometry::Circle(c) => PadGeometry::Circle(Circle::new(
+                c.center,
+                c.radius.saturating_add(width.jround() as i32),
+            )),
         }
     }
 
@@ -598,12 +608,12 @@ impl<'a> Builder<'a> {
         };
         let transform = CoordinateTransform::new(scale_factor, 0.0, 0.0);
 
-        let lower_left = transform
-            .dsn_to_board_point(bounding_box_dsn[0], bounding_box_dsn[1])
-            .jround();
-        let upper_right = transform
-            .dsn_to_board_point(bounding_box_dsn[2], bounding_box_dsn[3])
-            .jround();
+        let p_ll = transform.dsn_to_board_point(bounding_box_dsn[0], bounding_box_dsn[1]);
+        let p_ur = transform.dsn_to_board_point(bounding_box_dsn[2], bounding_box_dsn[3]);
+        let lower_left =
+            FloatPoint::new(clamp_board_coord(p_ll.x), clamp_board_coord(p_ll.y)).jround();
+        let upper_right =
+            FloatPoint::new(clamp_board_coord(p_ur.x), clamp_board_coord(p_ur.y)).jround();
         // §6.2 step 5: the board box is inflated by 1000 board units on every side, which is the
         // margin that lets the router shove traces slightly outside the nominal outline.
         let bounds = IntBox::new(
@@ -737,7 +747,9 @@ impl<'a> Builder<'a> {
                 // §3.4: the PCB-level rounding is round(dsnToBoard(w) / 2) — halve in *board*
                 // units. The net-class-level rule halves in DSN units first; the two differ by
                 // one board unit for odd widths at low resolution and both ship.
-                let half_width = (self.transform.dsn_to_board(*width) / 2.0).jround() as i32;
+                let half_width = clamp_board_coord(self.transform.dsn_to_board(*width) / 2.0)
+                    .max(0.0)
+                    .jround() as i32;
                 self.rules.set_default_trace_half_widths(half_width);
             }
         }
@@ -752,7 +764,9 @@ impl<'a> Builder<'a> {
                     match rule {
                         DsnRule::Width(width) => {
                             let half_width =
-                                (self.transform.dsn_to_board(*width) / 2.0).jround() as i32;
+                                clamp_board_coord(self.transform.dsn_to_board(*width) / 2.0)
+                                    .max(0.0)
+                                    .jround() as i32;
                             self.rules
                                 .set_default_trace_half_width(layer_index as usize, half_width);
                         }
@@ -773,7 +787,9 @@ impl<'a> Builder<'a> {
     /// §7.3 `Structure.setClearanceRule`. Returns true when `smd_to_turn_gap` was seen.
     fn set_clearance_rule(&mut self, value: f64, class_pairs: &[String], layer_index: i32) -> bool {
         let mut found = false;
-        let clearance = self.transform.dsn_to_board(value).jround() as i32;
+        let clearance = clamp_board_coord(self.transform.dsn_to_board(value))
+            .max(0.0)
+            .jround() as i32;
         if class_pairs.is_empty() {
             if layer_index < 0 {
                 self.rules.clearance_matrix.set_default_value(clearance);
@@ -1126,7 +1142,10 @@ impl<'a> Builder<'a> {
         } else {
             self.keepout_clearance_class(area.clearance_class_name.as_deref())
         };
-        let layer = area.shapes[0].layer().clone();
+        let Some(first_shape) = area.shapes.first() else {
+            return;
+        };
+        let layer = first_shape.layer().clone();
         if layer.is_signal_pseudo() {
             for index in 0..self.layer_count {
                 if self.dsn_layers.layers[index].is_signal {
@@ -1199,8 +1218,15 @@ impl<'a> Builder<'a> {
             let Some(shape) = self.area_to_board(&plane.area) else {
                 continue;
             };
-            let layer = plane.area.shapes[0].layer().clone();
-            if layer.no < 0 {
+            if shape.dimension() < 2 {
+                self.warn("Plane.read_scope: degenerate shape skipped");
+                continue;
+            }
+            let Some(first_shape) = plane.area.shapes.first() else {
+                continue;
+            };
+            let layer = first_shape.layer().clone();
+            if layer.no < 0 || layer.no >= self.layer_count as i32 {
                 self.warn("Plane.read_scope: unexpected layer name");
                 continue;
             }
@@ -1389,8 +1415,8 @@ impl<'a> Builder<'a> {
                 name: pin.pin_name.clone(),
                 padstack_index,
                 relative_location: IntVector::new(
-                    self.transform.dsn_to_board(pin.rel_coor[0]).jround() as i32,
-                    self.transform.dsn_to_board(pin.rel_coor[1]).jround() as i32,
+                    clamp_board_coord(self.transform.dsn_to_board(pin.rel_coor[0])).jround() as i32,
+                    clamp_board_coord(self.transform.dsn_to_board(pin.rel_coor[1])).jround() as i32,
                 ),
                 rotation: pin.rotation,
             });
@@ -1558,12 +1584,12 @@ impl<'a> Builder<'a> {
                 }
                 if let Some(entry) = self.netlist.get_mut(&key) {
                     entry.clear();
-                    entry.extend(pin_list.into_iter());
+                    entry.extend(pin_list);
                 }
                 if !net.rules.is_empty() {
                     self.apply_net_rules(&net.name, subnet_number, &net.rules);
                 }
-                subnet_number += 1;
+                subnet_number = subnet_number.saturating_add(1);
             }
         }
     }
@@ -1576,7 +1602,9 @@ impl<'a> Builder<'a> {
                 self.warn("Network.read_net_scope: rule not yet implemented");
                 continue;
             };
-            let half_width = (self.transform.dsn_to_board(*width) / 2.0).jround() as i32;
+            let half_width = clamp_board_coord(self.transform.dsn_to_board(*width) / 2.0)
+                .max(0.0)
+                .jround() as i32;
             let default_clearance = self
                 .rules
                 .get_default_net_class()
@@ -1827,7 +1855,9 @@ impl<'a> Builder<'a> {
             match rule {
                 DsnRule::Width(width) => {
                     // §3.4: the net-class rounding halves in **DSN** units first.
-                    let half_width = self.transform.dsn_to_board(width / 2.0).jround() as i32;
+                    let half_width = clamp_board_coord(self.transform.dsn_to_board(width / 2.0))
+                        .max(0.0)
+                        .jround() as i32;
                     if let Some(net_class) = self.rules.net_classes.get_mut(class_index) {
                         net_class.set_trace_half_width(half_width);
                     }
@@ -1851,7 +1881,9 @@ impl<'a> Builder<'a> {
                     match rule {
                         DsnRule::Width(width) => {
                             let half_width =
-                                self.transform.dsn_to_board(width / 2.0).jround() as i32;
+                                clamp_board_coord(self.transform.dsn_to_board(width / 2.0))
+                                    .max(0.0)
+                                    .jround() as i32;
                             if let Some(net_class) = self.rules.net_classes.get_mut(class_index) {
                                 net_class.set_trace_half_width_on_layer(layer_index, half_width);
                             }
@@ -1904,7 +1936,9 @@ impl<'a> Builder<'a> {
         class_pairs: &[String],
         layer_index: i32,
     ) {
-        let clearance = self.transform.dsn_to_board(value).jround() as i32;
+        let clearance = clamp_board_coord(self.transform.dsn_to_board(value))
+            .max(0.0)
+            .jround() as i32;
         let class_name = self
             .rules
             .net_classes
@@ -2156,7 +2190,9 @@ impl<'a> Builder<'a> {
         class_pairs: &[String],
         layer_index: i32,
     ) {
-        let clearance = self.transform.dsn_to_board(value).jround() as i32;
+        let clearance = clamp_board_coord(self.transform.dsn_to_board(value))
+            .max(0.0)
+            .jround() as i32;
         let first_name = self
             .rules
             .net_classes
@@ -2246,18 +2282,17 @@ impl<'a> Builder<'a> {
             back_index
         };
         let component_no = self.next_component_no;
-        self.next_component_no += 1;
-        // `Component`'s constructor normalizes the rotation into [0, 360) by repeated ±360.
-        let mut rotation = location.rotation;
-        while rotation >= 360.0 {
-            rotation -= 360.0;
-        }
-        while rotation < 0.0 {
-            rotation += 360.0;
-        }
-        let board_location = location
-            .coor
-            .map(|coor| self.transform.dsn_to_board_point(coor[0], coor[1]).jround());
+        self.next_component_no = self.next_component_no.saturating_add(1);
+        // `Component`'s constructor normalizes the rotation into [0, 360).
+        let rotation = if location.rotation.is_finite() {
+            location.rotation.rem_euclid(360.0)
+        } else {
+            0.0
+        };
+        let board_location = location.coor.map(|coor| {
+            let p = self.transform.dsn_to_board_point(coor[0], coor[1]);
+            FloatPoint::new(clamp_board_coord(p.x), clamp_board_coord(p.y)).jround()
+        });
         let mut component = ImportedComponent {
             name: location.name.clone(),
             location: board_location,
@@ -2740,7 +2775,9 @@ impl<'a> Builder<'a> {
         let (layer_index, half_width) = match (&wire.path, &wire.border_shape) {
             (Some(path), _) => (
                 path.layer().no,
-                (self.transform.dsn_to_board(path.path_width() / 2.0)).jround() as i32,
+                clamp_board_coord(self.transform.dsn_to_board(path.path_width() / 2.0))
+                    .max(0.0)
+                    .jround() as i32,
             ),
             (None, Some(border)) => (border.layer().no, 0),
             (None, None) => return,
@@ -2795,7 +2832,8 @@ impl<'a> Builder<'a> {
             Some(DsnShape::PolygonPath { coor, .. }) => {
                 let mut corners = Vec::with_capacity(coor.len() / 2);
                 for pair in coor.chunks_exact(2) {
-                    let point = self.transform.dsn_to_board_point(pair[0], pair[1]);
+                    let p = self.transform.dsn_to_board_point(pair[0], pair[1]);
+                    let point = FloatPoint::new(clamp_board_coord(p.x), clamp_board_coord(p.y));
                     // KiCad occasionally exports courtyard-derived geometry outside the outline;
                     // upstream drops the whole wire. The box was already inflated by 1000 units.
                     if !float_point_in_box(&point, &self.bounds) {
@@ -2811,17 +2849,40 @@ impl<'a> Builder<'a> {
                     &corners.iter().map(|p| Point::Int(*p)).collect::<Vec<_>>(),
                 );
                 let polygon_corners = polygon.corner_array();
-                let has_distinct = polygon_corners
+                if polygon_corners.len() < 2 {
+                    self.warn(
+                        "Wiring: degenerate wire trace skipped (fewer than 2 corners)".to_string(),
+                    );
+                    return;
+                }
+                let has_distinct = polygon_corners[1..]
                     .iter()
-                    .skip(1)
                     .any(|corner| *corner != polygon_corners[0]);
-                if polygon_corners.len() < 2 || !has_distinct {
+                if !has_distinct {
                     self.warn(
                         "Wiring: degenerate wire trace skipped (all corners identical)".to_string(),
                     );
                     return;
                 }
                 let polyline = Polyline::new_from_polygon(&polygon);
+                if polyline.corner_count() < 2 || polyline.is_empty() {
+                    self.warn("Wiring: degenerate wire trace skipped");
+                    return;
+                }
+                for i in 0..polyline.corner_count() {
+                    let pt = polyline.corner_approx(i);
+                    let limit = fr_geometry::planar::Limits::CRIT_INT as f64;
+                    if pt.x < -limit
+                        || pt.x > limit
+                        || pt.y < -limit
+                        || pt.y > limit
+                        || !pt.x.is_finite()
+                        || !pt.y.is_finite()
+                    {
+                        self.warn("Wiring: wire corner outside CRIT_INT");
+                        return;
+                    }
+                }
                 self.items.push(Pending::Trace {
                     polyline,
                     layer: layer_index,
@@ -2835,14 +2896,12 @@ impl<'a> Builder<'a> {
                 // No bounds check and no degeneracy check on this path, exactly as upstream.
                 let mut lines = Vec::with_capacity(coor.len() / 4);
                 for group in coor.chunks_exact(4) {
-                    let a = self
-                        .transform
-                        .dsn_to_board_point(group[0], group[1])
-                        .jround();
-                    let b = self
-                        .transform
-                        .dsn_to_board_point(group[2], group[3])
-                        .jround();
+                    let pa = self.transform.dsn_to_board_point(group[0], group[1]);
+                    let pb = self.transform.dsn_to_board_point(group[2], group[3]);
+                    let a =
+                        FloatPoint::new(clamp_board_coord(pa.x), clamp_board_coord(pa.y)).jround();
+                    let b =
+                        FloatPoint::new(clamp_board_coord(pb.x), clamp_board_coord(pb.y)).jround();
                     lines.push(Line { a, b });
                 }
                 if lines.len() < 3 {
@@ -2850,6 +2909,24 @@ impl<'a> Builder<'a> {
                     return;
                 }
                 let polyline = Polyline::new_from_lines(&lines);
+                if polyline.corner_count() < 2 || polyline.is_empty() {
+                    self.warn("Wiring: degenerate polyline_path skipped");
+                    return;
+                }
+                for i in 0..polyline.corner_count() {
+                    let pt = polyline.corner_approx(i);
+                    let limit = fr_geometry::planar::Limits::CRIT_INT as f64;
+                    if pt.x < -limit
+                        || pt.x > limit
+                        || pt.y < -limit
+                        || pt.y > limit
+                        || !pt.x.is_finite()
+                        || !pt.y.is_finite()
+                    {
+                        self.warn("Wiring: polyline_path corner outside CRIT_INT");
+                        return;
+                    }
+                }
                 self.items.push(Pending::Trace {
                     polyline,
                     layer: layer_index,
@@ -2906,10 +2983,10 @@ impl<'a> Builder<'a> {
                     class.default_item_clearance_classes.get(ItemClass::Via)
                 });
         }
-        let center = self
+        let p = self
             .transform
-            .dsn_to_board_point(via.location[0], via.location[1])
-            .jround();
+            .dsn_to_board_point(via.location[0], via.location[1]);
+        let center = FloatPoint::new(clamp_board_coord(p.x), clamp_board_coord(p.y)).jround();
         let padstack = &self.padstacks[padstack_index];
         let first_layer = padstack.from_layer() as i32;
         let last_layer = padstack.to_layer() as i32;

@@ -407,6 +407,7 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     /// Wraps a DSN source buffer.
     pub fn new(src: &'a [u8]) -> Self {
+        let src = src.strip_prefix(b"\xef\xbb\xbf").unwrap_or(src);
         Lexer {
             src,
             pos: 0,
@@ -770,7 +771,7 @@ impl<'a> Lexer<'a> {
             &self.src[value_start..self.pos + i],
         ));
 
-        if skip_last_char {
+        if skip_last_char && self.byte_at(self.pos + i) == Some(34) {
             i += 1;
         }
         if i > 0 {

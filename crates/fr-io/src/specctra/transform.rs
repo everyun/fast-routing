@@ -93,15 +93,18 @@ pub fn derive_scale_factor(bounding_box_dsn: [f64; 4], resolution: i32) -> Scale
     let mut scale_factor: i64 = i64::from(resolution.max(1));
     let mut max_coor = 0.0f64;
     for value in bounding_box_dsn {
+        if !value.is_finite() {
+            return ScaleFactor::Degenerate;
+        }
         max_coor = max_coor.max((value * f64::from(resolution)).abs());
     }
-    if max_coor == 0.0 {
+    if max_coor == 0.0 || !max_coor.is_finite() {
         return ScaleFactor::Degenerate;
     }
     while 5.0 * max_coor >= CRIT_INT {
         scale_factor /= 10;
         max_coor /= 10.0;
-        if scale_factor == 0 && max_coor < 1.0 {
+        if scale_factor == 0 || !max_coor.is_finite() {
             // Upstream would spin forever only if maxCoor never shrank; it always does. This
             // guard exists so a pathological input cannot hang the importer.
             break;

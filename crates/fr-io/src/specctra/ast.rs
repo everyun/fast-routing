@@ -13,7 +13,7 @@
 //! `Structure.setClearanceRule` re-parses class-pair names with.
 
 use fr_geometry::planar::{
-    Circle, IntBox, IntOctagon, IntPoint, Line, Point, Polygon, Simplex, Vector,
+    Circle, FloatPoint, IntBox, IntOctagon, IntPoint, Line, Point, Polygon, Simplex, Vector,
 };
 
 use super::jround::JavaRound;
@@ -354,6 +354,15 @@ fn bounding_box_of(corners: &[IntPoint]) -> IntBox {
     IntBox::new(min_x, min_y, max_x, max_y)
 }
 
+/// Clamps a coordinate value into the `[-CRIT_INT, CRIT_INT]` envelope.
+pub fn clamp_board_coord(val: f64) -> f64 {
+    if !val.is_finite() {
+        0.0
+    } else {
+        val.clamp(-super::lex::CRIT_INT, super::lex::CRIT_INT)
+    }
+}
+
 /// Upstream `PolygonShape`'s constructor normalization.
 ///
 /// 1. Revert to counter-clockwise if the winding number says clockwise.
@@ -365,7 +374,12 @@ fn bounding_box_of(corners: &[IntPoint]) -> IntBox {
 /// Step 4 is what makes the shape's corner list canonical, and the convex-hull walk in
 /// [`convex_hull`] depends on step 1.
 pub fn normalize_polygon_corners(corners: &[IntPoint]) -> Vec<IntPoint> {
-    let points: Vec<Point> = corners.iter().map(|p| Point::Int(*p)).collect();
+    let limit = super::lex::CRIT_INT as i32;
+    let clamped_corners: Vec<IntPoint> = corners
+        .iter()
+        .map(|p| IntPoint::new(p.x.clamp(-limit, limit), p.y.clamp(-limit, limit)))
+        .collect();
+    let points: Vec<Point> = clamped_corners.iter().map(|p| Point::Int(*p)).collect();
     let polygon = Polygon::new(&points);
     let polygon = if polygon.is_clockwise() == Some(true) {
         polygon.revert_corners()
@@ -415,11 +429,11 @@ pub fn normalize_polygon_corners(corners: &[IntPoint]) -> Vec<IntPoint> {
 /// directed line `from → to`, `0` when collinear. Exact `i64` arithmetic — coordinates are bounded
 /// by `CRIT_INT`, so no `f64` decides an orientation.
 fn side_of(point: &IntPoint, from: &IntPoint, to: &IntPoint) -> i64 {
-    let dx1 = (to.x as i64) - (from.x as i64);
-    let dy1 = (to.y as i64) - (from.y as i64);
-    let dx2 = (point.x as i64) - (from.x as i64);
-    let dy2 = (point.y as i64) - (from.y as i64);
-    (dx1 * dy2 - dy1 * dx2).signum()
+    let dx1 = (to.x as i128) - (from.x as i128);
+    let dy1 = (to.y as i128) - (from.y as i128);
+    let dx2 = (point.x as i128) - (from.x as i128);
+    let dy2 = (point.y as i128) - (from.y as i128);
+    (dx1 * dy2 - dy1 * dx2).signum() as i64
 }
 
 /// Upstream `PolygonShape.convexHull()` — repeatedly drop a corner that is not a left turn.
@@ -495,12 +509,12 @@ pub fn simplify(shape: BoardShape) -> BoardShape {
 pub fn transform_to_board(shape: &DsnShape, transform: &CoordinateTransform) -> Option<BoardShape> {
     match shape {
         DsnShape::Rect { coor, .. } => {
-            let lower_left = transform
-                .dsn_to_board_point(coor[0].min(coor[2]), coor[1].min(coor[3]))
-                .jround();
-            let upper_right = transform
-                .dsn_to_board_point(coor[0].max(coor[2]), coor[1].max(coor[3]))
-                .jround();
+            let p1 = transform.dsn_to_board_point(coor[0].min(coor[2]), coor[1].min(coor[3]));
+            let p2 = transform.dsn_to_board_point(coor[0].max(coor[2]), coor[1].max(coor[3]));
+            let lower_left =
+                FloatPoint::new(clamp_board_coord(p1.x), clamp_board_coord(p1.y)).jround();
+            let upper_right =
+                FloatPoint::new(clamp_board_coord(p2.x), clamp_board_coord(p2.y)).jround();
             Some(BoardShape::Box(IntBox::new(
                 lower_left.x,
                 lower_left.y,
@@ -509,8 +523,13 @@ pub fn transform_to_board(shape: &DsnShape, transform: &CoordinateTransform) -> 
             )))
         }
         DsnShape::Circle { coor, .. } => {
-            let center = transform.dsn_to_board_point(coor[1], coor[2]).jround();
-            let radius = (transform.dsn_to_board(coor[0]) / 2.0).jround() as i32;
+            let center_fp = transform.dsn_to_board_point(coor[1], coor[2]);
+            let center = FloatPoint::new(
+                clamp_board_coord(center_fp.x),
+                clamp_board_coord(center_fp.y),
+            )
+            .jround();
+            let radius = clamp_board_coord(transform.dsn_to_board(coor[0]) / 2.0).jround() as i32;
             Some(BoardShape::Circle(Circle::new(center, radius)))
         }
         DsnShape::Polygon { coor, .. } => {
@@ -536,7 +555,7 @@ pub fn transform_to_board_rel(
         DsnShape::Rect { coor, .. } => {
             let values: Vec<i32> = coor
                 .iter()
-                .map(|v| transform.dsn_to_board(*v).jround() as i32)
+                .map(|v| clamp_board_coord(transform.dsn_to_board(*v)).jround() as i32)
                 .collect();
             // Upstream orders by the y coordinates only, so a rectangle given as
             // (upper-left, lower-right) is repaired but an x-inverted one is not.
@@ -548,11 +567,10 @@ pub fn transform_to_board_rel(
             Some(BoardShape::Box(result))
         }
         DsnShape::Circle { coor, .. } => {
-            let radius = (transform.dsn_to_board(coor[0]) / 2.0).jround() as i32;
-            let center = IntPoint::new(
-                transform.dsn_to_board(coor[1]).jround() as i32,
-                transform.dsn_to_board(coor[2]).jround() as i32,
-            );
+            let radius = clamp_board_coord(transform.dsn_to_board(coor[0]) / 2.0).jround() as i32;
+            let cx = clamp_board_coord(transform.dsn_to_board(coor[1])).jround() as i32;
+            let cy = clamp_board_coord(transform.dsn_to_board(coor[2])).jround() as i32;
+            let center = IntPoint::new(cx, cy);
             Some(BoardShape::Circle(Circle::new(center, radius)))
         }
         DsnShape::Polygon { coor, .. } => {
@@ -589,23 +607,39 @@ fn path_to_board(
     let corners: Vec<fr_geometry::planar::FloatPoint> = coor
         .chunks_exact(2)
         .map(|pair| {
-            if relative {
+            let pt = if relative {
                 fr_geometry::planar::FloatPoint::new(
                     transform.dsn_to_board(pair[0]),
                     transform.dsn_to_board(pair[1]),
                 )
             } else {
                 transform.dsn_to_board_point(pair[0], pair[1])
-            }
+            };
+            fr_geometry::planar::FloatPoint::new(clamp_board_coord(pt.x), clamp_board_coord(pt.y))
         })
         .collect();
-    let offset = transform.dsn_to_board(width) / 2.0;
+    if corners.is_empty() {
+        return BoardShape::Octagon(IntOctagon::EMPTY);
+    }
+    let offset = clamp_board_coord(transform.dsn_to_board(width) / 2.0).max(0.0);
     if corners.len() <= 2 {
         let octagon = fr_geometry::planar::FloatPoint::bounding_octagon(&corners);
-        return BoardShape::Octagon(octagon.offset(offset));
+        if offset > 0.0 {
+            return BoardShape::Octagon(octagon.offset(offset));
+        } else {
+            return BoardShape::Octagon(octagon);
+        }
     }
     let rounded: Vec<IntPoint> = corners.iter().map(|p| p.jround()).collect();
     let normalized = normalize_polygon_corners(&rounded);
+    if normalized.len() < 3 {
+        let octagon = fr_geometry::planar::FloatPoint::bounding_octagon(&corners);
+        if offset > 0.0 {
+            return BoardShape::Octagon(octagon.offset(offset));
+        } else {
+            return BoardShape::Octagon(octagon);
+        }
+    }
     if offset > 0.0 {
         BoardShape::Simplex(bounding_tile(&normalized).enlarge(offset))
     } else {
@@ -618,7 +652,10 @@ where
     F: Fn(f64, f64) -> fr_geometry::planar::FloatPoint,
 {
     coor.chunks_exact(2)
-        .map(|pair| map(pair[0], pair[1]).jround())
+        .map(|pair| {
+            let pt = map(pair[0], pair[1]);
+            FloatPoint::new(clamp_board_coord(pt.x), clamp_board_coord(pt.y)).jround()
+        })
         .collect()
 }
 

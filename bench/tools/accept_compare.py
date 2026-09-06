@@ -131,7 +131,12 @@ def classify_board(
     added = max(0, dv)
 
     # Check timeout board noise tolerance
-    is_timeout = java_class == "java_timeout"
+    is_timeout = (
+        java_class == "java_timeout"
+        or bool(ours.get("timed_out"))
+        or "deadline" in str(ours.get("stop_reason", "")).lower()
+        or (base is not None and ("deadline" in str(base.get("stop_reason", "")).lower() or bool(base.get("timed_out"))))
+    )
     effective_worse_u = du > 0
     note_parts = []
 
