@@ -360,7 +360,79 @@ impl<'b> ForcedInserter<'b> {
             max_rec,
             max_via_rec,
             max_spring_over_rec,
-        )
+        );
+        if !ok && crate::maze::trace::is_enabled() {
+            let blame = checker.failing_obstacle;
+            let describe = |id: ItemId| {
+                self.board.store().get(id).map(|item| {
+                    let anchor = match &item.kind {
+                        ItemKind::Pin(p) => {
+                            format!("Pin@{},{}", p.center.x, p.center.y)
+                        }
+                        ItemKind::Via(v) => {
+                            format!("Via@{},{}", v.center.x, v.center.y)
+                        }
+                        ItemKind::Trace(t) => {
+                            let fc = t.polyline.first_corner();
+                            let lc = t.polyline.last_corner();
+                            format!(
+                                "Trace@{},{}..{},{}",
+                                fc.to_float().x as i32,
+                                fc.to_float().y as i32,
+                                lc.to_float().x as i32,
+                                lc.to_float().y as i32
+                            )
+                        }
+                        _ => "other".to_string(),
+                    };
+                    let slot = self.board.store().slot_of(id);
+                    let tree_bb = slot
+                        .map(|s| self.board.trees().default_tree().item_shapes(s, id))
+                        .and_then(|tiles| {
+                            tiles
+                                .iter()
+                                .find(|t| t.layer == layer)
+                                .map(|t| t.shape.as_ref().map(|s| s.bounding_box()))
+                        })
+                        .flatten();
+                    let tree_bb = tree_bb
+                        .map(|b| format!("tree=[({},{})..({},{})]", b.ll.x, b.ll.y, b.ur.x, b.ur.y))
+                        .unwrap_or_else(|| "tree=none".into());
+                    format!(
+                        "{:?} {} {} nets={:?} fixed={:?} slot={:?}",
+                        id, anchor, tree_bb, item.nets, item.fixed_state, slot
+                    )
+                })
+            };
+            // What did the tree query return for this exact shape?
+            let mut queried = Vec::new();
+            self.board
+                .overlapping_items(&TileShape::Simplex(shape.clone()), Some(layer), &[], &mut queried);
+            queried.sort_unstable();
+            let qlist = queried
+                .iter()
+                .filter_map(|id| describe(*id))
+                .collect::<Vec<_>>()
+                .join(" | ");
+            let bb = shape.bounding_box();
+            crate::maze::trace::conn_landing(&format!(
+                "FRCONN check_fail net={} layer={} shape=[({},{})..({},{})] blame={}",
+                self.ctrl.net_no,
+                layer,
+                bb.ll.x,
+                bb.ll.y,
+                bb.ur.x,
+                bb.ur.y,
+                blame.and_then(describe).unwrap_or_else(|| "outline".into()),
+            ));
+            crate::maze::trace::conn_landing(&format!(
+                "FRCONN check_fail_query net={} n={} items: {}",
+                self.ctrl.net_no,
+                queried.len(),
+                qlist,
+            ));
+        }
+        ok
     }
 
     /// [`Self::check_trace_shape_from`] with no from-side, which makes
