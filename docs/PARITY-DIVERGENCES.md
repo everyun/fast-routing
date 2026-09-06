@@ -39,6 +39,13 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-054-pocket.md` (commit `48ef09d`); eliminates `Issue054-tairakb` Net 10 exhaustion loop, dropping runtime from 78s/1u to 4.7s/0u.
   - *Status*: 已对齐.
 
+- **Trace tree shapes stay at their base Simplex in the 45° family tree**
+  (`fr_board::search_tree::calculate_tree_shapes_for_family`).
+  - *Upstream behaviour*: `ShapeSearchTree45Degree` has no `PolylineTrace` override — strips stay the exact concave Simplex the base class builds (`ShapeSearchTree.java:1039-1051`), and the 45° chain narrows each to `bounding_octagon()` only at its own read sites (`:147-149`).
+  - *Our behaviour*: Trace strips stay at base Simplex in the 45° family tree instead of post-flavoring.
+  - *Evidence*: `REPORT-tree-family-audit.md` (commit `765f161`); cla45-sensor-l6 119→110u, cla45-power-io-l6 76→69u, kicad-coldfire-unrouted 34→26u.
+  - *Status*: 已对齐.
+
 - **Fanout is on by default on the CLI** (`fr-cli`, `--no-fanout` to skip).
   - *Upstream behaviour*: `DefaultSettings.fanout.enabled = true` (`app/freerouting/settings/DefaultSettings.java:113`); headless entry gates on `isFanoutEnabled()` (`app/freerouting/autoroute/BatchAutorouter.java:798`).
   - *Our behaviour*: CLI `-de … -mp 20` enables fanout by default, exactly matching the release jar. Library default (`MazeOptions`) stays off for minimal in-process test harnesses.
