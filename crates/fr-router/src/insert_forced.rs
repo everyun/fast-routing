@@ -771,9 +771,21 @@ impl<'b> ForcedInserter<'b> {
                 FromSide::from_polyline(&combined_polyline, shape_index, &last_trace_shape);
             if !self.check_trace_shape_from(&last_trace_shape, Some(from_side), layer) {
                 if crate::maze::trace::is_enabled() {
+                    let blocker = self
+                        .shove_check()
+                        .failing_obstacle
+                        .and_then(|id| self.board.store().get(id))
+                        .map(|item| {
+                            format!(
+                                "{:?} nets={:?} class={} fixed={:?}",
+                                item.id, item.nets, item.clearance_class, item.fixed_state
+                            )
+                        })
+                        .unwrap_or_else(|| "none".to_string());
                     crate::maze::trace::conn_landing(&format!(
-                        "FRCONN insert_polyline_fail net={} step=step5_check_failed from={:?} to={:?} last_shape_no={}/{}",
-                        self.ctrl.net_no, from_corner, to_corner, last_shape_no, trace_shapes.len()
+                        "FRCONN insert_polyline_fail net={} step=step5_check_failed from={:?} to={:?} last_shape_no={}/{} shape={:?} blocker={}",
+                        self.ctrl.net_no, from_corner, to_corner, last_shape_no, trace_shapes.len(),
+                        last_trace_shape.bounding_box(), blocker
                     ));
                 }
                 return Some(Point::Int(from_corner));
