@@ -418,6 +418,9 @@ pub enum FanoutStop {
     /// The job's wall budget ran out ([`JobDeadline`]). Not an upstream stop
     /// rule — upstream arms no time limit in this stage at all.
     JobDeadline,
+    /// Experimental (`FR_FANOUT_SAFE_STOP=1`): via count flat for 2 passes
+    /// while no fanout-eligible pin is isolated.
+    SafeNoProgress,
 }
 
 /// Everything a fanout run produced.
@@ -457,6 +460,12 @@ pub fn fanout_board(
     let mut scratch = ContactScratch::new();
     let mut previous_state: Option<(usize, usize)> = None;
     let mut identical_passes = 0u32;
+    // Experimental safe stop (report-only, `FR_FANOUT_SAFE_STOP=1`): the
+    // removed via-count stop is only safe once no fanout-eligible pin is left
+    // isolated, so gate it on both conditions.
+    let safe_stop = std::env::var("FR_FANOUT_SAFE_STOP").ok().as_deref() == Some("1");
+    let mut flat_passes = 0u32;
+    let mut previous_vias = usize::MAX;
 
     for pass_no in 0..config.max_passes.max(0) {
         if config.deadline.expired() {
@@ -502,6 +511,34 @@ pub fn fanout_board(
             }
         } else {
             identical_passes = 0;
+        }
+        if safe_stop {
+            // Safe variant of the removed via-count stop: only when no
+            // fanout-eligible pin is left isolated may a flat via count stop
+            // the stage.
+            let isolated = components
+                .iter()
+                .flat_map(|c| c.pins.iter())
+                .filter(|pin| {
+                    board
+                        .store()
+                        .get(pin.item)
+                        .is_some_and(|item| item.layer_range().is_single() && item.nets.len() == 1)
+                })
+                .filter(|pin| {
+                    connected_set(board, pin.net_no, pin.item, scratch).len() <= 1
+                })
+                .count();
+            if counters.via_count == previous_vias {
+                flat_passes += 1;
+                if flat_passes >= 2 && isolated == 0 {
+                    outcome.stop = Some(FanoutStop::SafeNoProgress);
+                    return outcome;
+                }
+            } else {
+                flat_passes = 0;
+            }
+            previous_vias = counters.via_count;
         }
         previous_state = Some(state);
     }
