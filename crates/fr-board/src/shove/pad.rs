@@ -10,6 +10,7 @@ use super::shape_and_from_side::ShapeAndFromSide;
 use super::{ShoveCheck, ShoveInsert};
 use crate::item::{ItemId, ItemKind};
 use crate::net_nos::NetNos;
+use crate::shape::TileShape;
 
 /// `ForcedPadAlgo.CheckDrillResult` (`:349-351`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -14,7 +14,7 @@ use crate::board::Board;
 use crate::clearance::ClearanceSource;
 use crate::item::{ItemId, ItemKind};
 use crate::net_nos::NetNos;
-use crate::shape::AngleRestriction;
+use crate::shape::{AngleRestriction, TileShape};
 
 /// `MoveDrillItemAlgo.try_shove_via_points` (`:187-247`): candidate new centres
 /// for pushing a via out of `obstacle_shape`.

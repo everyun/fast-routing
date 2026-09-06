@@ -6,7 +6,7 @@
 //! pad shapes needs `fr-rules`, which `fr-board` does not depend on, so the
 //! router hands in a ready [`ViaLayerPad`] list.
 
-use fr_geometry::planar::{Circle, FloatPoint, IntPoint, Point, Simplex};
+use fr_geometry::planar::{Area, Circle, FloatPoint, IntPoint, Point, Simplex};
 
 use super::from_side::FromSide;
 use super::pad::CheckDrillResult;
@@ -14,6 +14,7 @@ use super::{ShoveCheck, ShoveInsert};
 use crate::board::Board;
 use crate::clearance::ClearanceSource;
 use crate::net_nos::NetNos;
+use crate::shape::TileShape;
 
 /// One padstack layer of a via, already translated to the insertion point.
 #[derive(Debug, Clone)]
