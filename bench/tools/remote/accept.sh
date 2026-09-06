@@ -171,10 +171,16 @@ sweeps_dir = Path('$REPO_ROOT') / 'bench' / 'results' / 'main-sweeps'
 candidates = []
 for entry in sweeps_dir.iterdir():
     if entry.is_dir():
-        if '$IS_OOS' == '1':
-            gate_path = entry / 'oos' / 'gate.json'
+        if '$DOORS' == 'full':
+            if '$IS_OOS' == '1':
+                gate_path = entry / 'full' / 'oos' / 'gate.json'
+            else:
+                gate_path = entry / 'full' / 'main' / 'gate.json'
         else:
-            gate_path = entry / 'main' / 'gate.json'
+            if '$IS_OOS' == '1':
+                gate_path = entry / 'oos' / 'gate.json'
+            else:
+                gate_path = entry / 'main' / 'gate.json'
         if gate_path.is_file():
             candidates.append((gate_path.stat().st_mtime, gate_path))
 
