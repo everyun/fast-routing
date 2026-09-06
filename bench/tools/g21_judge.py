@@ -251,6 +251,7 @@ def judge_one(name: str, entry: dict, base, ours, java, run) -> dict:
         "wall_s": run.get("wall_s"),
         "timed_out": run.get("timed_out"),
         "stop_reason": run.get("stop_reason"),
+        "doors_mode": run.get("doors_mode"),
         "passes_run": run.get("passes_run"),
         "rss_mb": round((run.get("max_rss_bytes") or 0) / 1e6, 1) or None,
         "self_referee": run.get("self_referee"),
@@ -403,9 +404,12 @@ def report(rows, stream=sys.stdout):
     def cell(unrouted, violations):
         return "n/a" if unrouted is None else f"{unrouted}u/{violations}v"
 
+    modes = {r.get("doors_mode") for r in rows if r.get("doors_mode")}
+    mode_str = f" [doors_mode={', '.join(sorted(modes))}]" if modes else ""
+
     header = (
         f"{'fixture':44s} {'class':15s} {'stability':11s} {'gate':12s} "
-        f"{'input':>9s} {'ours':>9s} {'reference':>9s} verdict  reason"
+        f"{'input':>9s} {'ours':>9s} {'reference':>9s} verdict  reason{mode_str}"
     )
     print(header, file=stream)
     for row in rows:

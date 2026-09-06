@@ -78,12 +78,14 @@ def run_one(
     log = log_dir / f"{board}.log"
 
     env = dict(os.environ)
-    if doors == "doors" or doors == "on":
+    if doors in ("doors", "on"):
         env["FR_ROUTER_TILING_45"] = "doors"
+    elif doors == "full":
+        env["FR_ROUTER_TILING_45"] = "full"
     elif doors == "off":
         env["FR_ROUTER_TILING_45"] = "off"
     elif doors == "default":
-        # Do not override FR_ROUTER_TILING_45, use binary default
+        # Do not override FR_ROUTER_TILING_45, use binary default or ambient env
         env.pop("FR_ROUTER_TILING_45", None)
 
     cmd = [
@@ -130,7 +132,7 @@ def run_one(
     }
 
 
-def build_sweep(log_dir: Path, summary: Path, out: Path) -> None:
+def build_sweep(log_dir: Path, summary: Path, out: Path, doors_mode: str = "default") -> None:
     rc_by_board = {}
     for line in summary.read_text(errors="replace").splitlines():
         parts = line.split()
@@ -162,6 +164,7 @@ def build_sweep(log_dir: Path, summary: Path, out: Path) -> None:
                 "wall_s": None,
                 "timed_out": rc_by_board.get(board) == 124,
                 "stop_reason": stop,
+                "doors_mode": doors_mode,
                 "self_referee": referee,
             }
         )
@@ -176,7 +179,7 @@ def main() -> int:
     ap.add_argument("--mp", type=int, default=20)
     ap.add_argument("--job-timeout", type=int, default=285)
     ap.add_argument("--hard-timeout", type=int, default=None)
-    ap.add_argument("--doors", choices=["default", "on", "off"], default="default")
+    ap.add_argument("--doors", choices=["default", "full", "doors", "on", "off"], default="default")
     ap.add_argument("-w", "--concurrency", type=int, default=8)
     ap.add_argument("--out", required=True, help="Output directory")
     ap.add_argument("--repo-root", default=str(Path(__file__).resolve().parents[3]))
@@ -216,8 +219,22 @@ def main() -> int:
     sweep_file = out_dir / "sweep.json"
     gate_file = out_dir / "gate.json"
 
+    effective_doors = args.doors
+    if args.doors in ("doors", "on"):
+        effective_doors = "doors"
+    elif args.doors == "full":
+        effective_doors = "full"
+    elif args.doors == "off":
+        effective_doors = "off"
+    elif args.doors == "default":
+        ambient = os.environ.get("FR_ROUTER_TILING_45")
+        if ambient:
+            effective_doors = f"default({ambient})"
+        else:
+            effective_doors = "default"
+
     print(f"==> Suite: {args.suite} ({len(boards)} boards) W={args.concurrency} mp={args.mp} "
-          f"job_timeout={args.job_timeout}s doors={args.doors}")
+          f"job_timeout={args.job_timeout}s doors={effective_doors}")
     print(f"    bin:       {bin_path}")
     print(f"    referee:   {referee_path}")
     print(f"    fixtures:  {fixtures_dir}")
@@ -227,7 +244,7 @@ def main() -> int:
     with summary_file.open("w") as s:
         s.write(
             f"SUITE_START {utc()} suite={args.suite} W={args.concurrency} mp={args.mp} "
-            f"job_timeout={args.job_timeout} hard_timeout={hard_timeout} doors={args.doors} "
+            f"job_timeout={args.job_timeout} hard_timeout={hard_timeout} doors={effective_doors} "
             f"bin={bin_path} n={len(boards)}\n"
         )
         s.flush()
@@ -264,7 +281,7 @@ def main() -> int:
         total_wall = round(time.monotonic() - t_start, 1)
         s.write(f"SUITE_END {utc()} n={len(boards)} total_wall_s={total_wall}\n")
 
-    build_sweep(log_dir, summary_file, sweep_file)
+    build_sweep(log_dir, summary_file, sweep_file, doors_mode=effective_doors)
     print(f"==> Boards done in {total_wall}s; running g21_judge.py...")
 
     judge_script = repo_root / "bench/tools/g21_judge.py"
