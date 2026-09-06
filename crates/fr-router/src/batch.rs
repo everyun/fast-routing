@@ -666,9 +666,19 @@ fn emit_conn_landing(
         .saturating_sub(expansions_before);
     crate::maze::trace::conn_landing(&format!(
         "FRCONN conn pass={pass_no} net={} src={src_type}@{},{} item={} exp={expansions} \
-         ok={state} traces={trace_count} path={paths} vias={via_count}:{vias}",
-        entry.net_no, anchor.x, anchor.y, entry.item,
+         ok={state} ripped={} traces={trace_count} path={paths} vias={via_count}:{vias}",
+        entry.net_no,
+        anchor.x,
+        anchor.y,
+        entry.item,
+        attempt.ripped.len(),
     ));
+    for net in &attempt.changed_nets {
+        crate::maze::trace::conn_landing(&format!(
+            "FRCONN rip pass={pass_no} src_net={} ripped_net={}",
+            entry.net_no, net,
+        ));
+    }
 }
 
 fn point_int(point: &Point) -> IntPoint {
