@@ -35,13 +35,22 @@
 //! # Divergence: the no-progress detector
 //!
 //! The release stops a fanout run on `routed == 0`, on three consecutive
-//! *identical* `(routed_count, via_count)` pairs, and on an unchanged board hash
-//! (rows 21-23). Its own comment records the motivating failure — Issue219,
-//! **14 identical passes** where pins kept ripping each other's escapes — which
-//! the three-pass oscillation rule only caught because the pairs were bit-equal.
-//! We additionally stop after [`NO_PROGRESS_PASS_LIMIT`] consecutive passes that
-//! routed nothing new, which is strictly earlier and never later. Recorded in
-//! `docs/PARITY-DIVERGENCES.md`.
+//! *identical* `(routed_count, via_count)` pairs (rows 21-22). Its own comment
+//! records the motivating failure — Issue219, **14 identical passes** where
+//! pins kept ripping each other's escapes — which the three-pass oscillation
+//! rule only caught because the pairs were bit-equal.
+//!
+//! We once additionally stopped after 2 consecutive passes whose via count did
+//! not grow. That detector is **removed**: its safety argument — a pass that
+//! escapes no new pin cannot lose coverage — is false. A pass may route only
+//! re-escapes of already-escaped pins (ripping their old escapes first) while
+//! other pins sit isolated from earlier failed re-escapes; the via count stays
+//! flat, the stop fires, and the stage hands the main router a board with
+//! unescaped pins the pass loop then cannot repair (measured: Issue110-
+//! RelayModule Full 2u where Doors/Java reach 0u, and Issue039's Full gap —
+//! both traced to this early stop in REPORT-full-relay.md and
+//! REPORT-tiling45-full.md §3.1). Coverage is upstream's contract here; CPU
+//! spin is bounded by the oscillation rule, `maxPasses` and the job deadline.
 //!
 //! # Job deadline
 //!
@@ -72,10 +81,6 @@ pub const DEFAULT_MAX_PASSES: i32 = 20;
 /// `BatchFanout.STAGNATION_PASS_LIMIT` (`:95`), row 22: three consecutive
 /// identical `(routed_count << 32) ^ via_count` values stop the run.
 pub const STAGNATION_PASS_LIMIT: u32 = 3;
-
-/// Our earlier stop: this many consecutive passes that routed nothing new.
-/// See the module docs' divergence note.
-pub const NO_PROGRESS_PASS_LIMIT: u32 = 2;
 
 /// `router.fanout.maxEscapeLengthMm` default (`DefaultSettings.java:118`),
 /// row 10 — confirmed against the shipped settings, not the null fallback.
@@ -160,8 +165,6 @@ pub struct FanoutConfig {
     pub density_radius: f64,
     /// `router.fanout.fallbackToBoardVias` (row 27).
     pub fallback_to_board_vias: bool,
-    /// Consecutive zero-progress passes that stop the stage (our divergence).
-    pub no_progress_pass_limit: u32,
     /// The job's wall budget, polled before every pass and every pin.
     /// Defaults to [`JobDeadline::ambient`]; [`JobDeadline::NONE`] opts out.
     pub deadline: JobDeadline,
@@ -189,7 +192,6 @@ impl FanoutConfig {
             max_escape_length: settings.fanout.max_escape_length_mm * scale,
             density_radius: SURROUNDINGS_DENSITY_RADIUS_MM * scale,
             fallback_to_board_vias: settings.fanout.fallback_to_board_vias,
-            no_progress_pass_limit: NO_PROGRESS_PASS_LIMIT,
             deadline: JobDeadline::ambient(),
         }
     }
@@ -397,9 +399,6 @@ pub enum FanoutStop {
     NothingRouted,
     /// Three consecutive identical `(routed, vias)` pairs (row 22).
     Oscillation,
-    /// [`FanoutConfig::no_progress_pass_limit`] zero-progress passes — our
-    /// earlier stop.
-    NoProgress,
     /// `maxPasses` reached (row 20).
     MaxPasses,
     /// `maxItems` reached (row 24).
@@ -450,7 +449,6 @@ pub fn fanout_board(
     let mut scratch = ContactScratch::new();
     let mut previous_state: Option<(usize, usize)> = None;
     let mut identical_passes = 0u32;
-    let mut zero_progress_passes = 0u32;
 
     for pass_no in 0..config.max_passes.max(0) {
         if config.deadline.expired() {
@@ -483,20 +481,11 @@ pub fn fanout_board(
             outcome.stop = Some(FanoutStop::NothingRouted);
             return outcome;
         }
-        // Our earlier stop; `routed == 0` above already covers the zero case,
-        // so this fires on a pass that routed only pins it had routed before,
-        // i.e. the board's escape count did not grow.
-        let state = (counters.routed, counters.via_count);
-        if previous_state.is_some_and(|previous| previous.1 >= state.1) {
-            zero_progress_passes += 1;
-            if zero_progress_passes >= config.no_progress_pass_limit {
-                outcome.stop = Some(FanoutStop::NoProgress);
-                return outcome;
-            }
-        } else {
-            zero_progress_passes = 0;
-        }
         // Row 22 — the release's `(routed << 32) ^ vias` oscillation detector.
+        // Upstream has no via-growth stop here: a pass that routes only
+        // re-escapes of already-escaped pins can leave other pins isolated,
+        // and only more passes repair them (see the module docs).
+        let state = (counters.routed, counters.via_count);
         if previous_state == Some(state) {
             identical_passes += 1;
             if identical_passes >= STAGNATION_PASS_LIMIT {

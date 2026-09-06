@@ -74,13 +74,11 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-neckdown.md`; no 46-fixture board requires destination pin neckdown.
   - *Status*: 待核实 / 待定 (low priority capability stub; no corpus fixture exercises it).
 
-- **Fanout no-progress stop** (`fr_router::fanout`, `NO_PROGRESS_PASS_LIMIT = 2`, intentional divergence).
-  - *Upstream behaviour*: `app/freerouting/autoroute/BatchFanout.java:82-144` stops a fanout run on three conditions only:
-  `routed_count == 0` (`:111-113`), three consecutive bit-identical `(routed_count << 32) ^ via_count` signatures (`:114-130`),
-  or unchanged board hash (`:134-138`). On dense SMD boards (`Issue219-LogicBoard_smt`) it runs 14 identical passes without progress.
-  - *Our behaviour*: additionally stops after 2 consecutive passes whose via count did not grow (0 new escapes), while retaining all upstream stop conditions.
-  - *Evidence*: `REPORT-fanout-diff.md` (Issue219 fanout stage time reduced by 71s without losing escapes).
-  - *Status*: 有意分歧.
+- **Fanout no-progress stop** (`fr_router::fanout`) — **removed**, was an intentional divergence.
+  - *Upstream behaviour*: `app/freerouting/autoroute/BatchFanout.java:82-144` stops a fanout run on three conditions only: `routed_count == 0` (`:111-113`), three consecutive bit-identical `(routed_count << 32) ^ via_count` signatures (`:114-130`, `STAGNATION_PASS_LIMIT = 3`), and unchanged board hash (`:134-138`).
+  - *Our behaviour*: dropped the extra 2-pass flat via count stop (commit `wip/full-relay` `f753361`), restoring upstream's exact three stop rules.
+  - *Evidence*: `REPORT-full-relay.md` (Issue110-RelayModule Full mode unrouted improved).
+  - *Status*: 已对齐.
 
 - **Ripped connections are never requeued inside a pass across all pass counts by default**
   (`fr_router::batch::schedule::RequeuePolicy`, default `Never`).

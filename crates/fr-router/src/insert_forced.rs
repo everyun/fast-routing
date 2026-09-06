@@ -350,7 +350,7 @@ impl<'b> ForcedInserter<'b> {
         let nets = self.nets();
         let cl_class = self.ctrl.trace_clearance_class_no;
         let mut checker = self.shove_check();
-        checker.check(
+        let ok = checker.check(
             shape,
             from_side,
             None,
@@ -406,8 +406,12 @@ impl<'b> ForcedInserter<'b> {
             };
             // What did the tree query return for this exact shape?
             let mut queried = Vec::new();
-            self.board
-                .overlapping_items(&TileShape::Simplex(shape.clone()), Some(layer), &[], &mut queried);
+            self.board.overlapping_items(
+                &TileShape::Simplex(shape.clone()),
+                Some(layer),
+                &[],
+                &mut queried,
+            );
             queried.sort_unstable();
             let qlist = queried
                 .iter()
