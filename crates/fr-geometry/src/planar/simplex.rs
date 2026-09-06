@@ -1314,11 +1314,7 @@ impl Simplex {
         let mut result = Vec::new();
         let mut prev_line_no: Option<usize> = None;
         let mut prev_edge_no: Option<usize> = None;
-        let corners: Vec<Point> = if let Some(oct) = self.to_int_octagon() {
-            (0..8).map(|i| Point::Int(oct.corner(i))).collect()
-        } else {
-            (0..self.arr.len()).map(|i| self.corner(i)).collect()
-        };
+        let corners: Vec<Point> = (0..self.arr.len()).map(|i| self.corner(i)).collect();
         let bbox = self.bounding_box();
 
         for line_no in 1..polyline.arr.len().saturating_sub(1) {

@@ -75,15 +75,6 @@ pub fn calculate_from_side(
     is_90_degree: bool,
 ) -> Option<FromSide> {
     let via_box = via_shape.bounding_box();
-    let room_oct = room_shape.to_int_octagon();
-    let contains_check = |pt: &FloatPoint| {
-        if let Some(oct) = room_oct {
-            oct.contains_float_point(pt)
-        } else {
-            room_shape.contains_float(pt, 0.0)
-        }
-    };
-
     for i in 0..4 {
         let (check_point, border_x, border_y) = match i {
             0 => (
@@ -107,7 +98,7 @@ pub fn calculate_from_side(
                 via_location.y,
             ),
         };
-        if contains_check(&check_point) {
+        if room_shape.contains_float(&check_point, 0.0) {
             let from_side_no = if is_90_degree { i } else { 2 * i };
             return Some(FromSide::raw(
                 from_side_no,
@@ -131,7 +122,7 @@ pub fn calculate_from_side(
             via_location.x + dx * diagonal_dist,
             via_location.y + dy * diagonal_dist,
         );
-        if contains_check(&check_point) {
+        if room_shape.contains_float(&check_point, 0.0) {
             let border_point = FloatPoint::new(
                 via_location.x + dx * border_dist,
                 via_location.y + dy * border_dist,
