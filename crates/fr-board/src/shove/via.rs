@@ -6,7 +6,7 @@
 //! pad shapes needs `fr-rules`, which `fr-board` does not depend on, so the
 //! router hands in a ready [`ViaLayerPad`] list.
 
-use fr_geometry::planar::{Area, Circle, FloatPoint, IntPoint, Point, Simplex};
+use fr_geometry::planar::{Circle, FloatPoint, IntPoint, Point, Simplex};
 
 use super::from_side::FromSide;
 use super::pad::CheckDrillResult;
