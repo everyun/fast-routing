@@ -253,8 +253,9 @@ impl ShoveCheck<'_> {
                 calc_from_side_offset,
                 pad.clearance_class,
             );
+            let pad_tile = TileShape::Simplex(pad.shape.clone());
             if self.check_forced_pad(
-                &pad.shape,
+                &pad_tile,
                 Some(from_side),
                 pad.layer,
                 net_no_arr,
