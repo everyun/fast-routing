@@ -128,7 +128,7 @@ pub use batch::{
 };
 pub use ctrl::AutorouteControl;
 pub use engine::AutorouteEngine;
-pub use fanout::{fanout_board, FanoutConfig, FanoutOutcome};
+pub use fanout::{fanout_board, FanoutConfig, FanoutOutcome, FanoutStop};
 pub use maze::search::{MazeSearch, SearchFailure, SettleRecord};
 pub use optimizer::{
     route_then_optimize, run_optimization_stage, BatchOptimizer, ItemRouteResult, LengthMetric,

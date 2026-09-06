@@ -413,8 +413,37 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     if options.fanout {
         let config = FanoutConfig::from_settings(&settings, scale);
         // Disjoint field borrows: the router needs `&mut board` and `&rules` at once.
+        let started = std::time::Instant::now();
         let outcome = fanout_board(&mut design.board, &design.rules, &settings, &config);
         report.fanouted = outcome.total_items_fanouted;
+        // Upstream logs one INFO line per pass and one for the stage
+        // (`BatchFanout.java:96-144`); the completion line is what makes the
+        // stage's wall cost and stop rule visible in a plain CLI run.
+        let pass_summary = outcome
+            .passes
+            .iter()
+            .map(|p| p.routed.to_string())
+            .collect::<Vec<_>>()
+            .join("+");
+        let stop = match outcome.stop {
+            Some(fr_router::fanout::FanoutStop::NothingRouted) => "nothing routed",
+            Some(fr_router::fanout::FanoutStop::Oscillation) => "oscillation",
+            Some(fr_router::fanout::FanoutStop::MaxPasses) => "max passes",
+            Some(fr_router::fanout::FanoutStop::MaxItems) => "max items",
+            Some(fr_router::fanout::FanoutStop::BoardUnchanged) => "board unchanged",
+            Some(fr_router::fanout::FanoutStop::NothingToDo) => "nothing to do",
+            Some(fr_router::fanout::FanoutStop::JobDeadline) => "deadline",
+            None => "not started",
+        };
+        eprintln!(
+            "Fanout stage completed: {} passes (routed {} per pass), \
+             escaped pins: {}, stop: {}, in {:.2} seconds",
+            outcome.passes.len(),
+            pass_summary,
+            outcome.total_items_fanouted,
+            stop,
+            started.elapsed().as_secs_f64(),
+        );
     }
 
     // The batch loop needs three things the design knows and the board does not: whether the
