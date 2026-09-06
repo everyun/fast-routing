@@ -1,0 +1,17 @@
+2026-09-06 12:32:13.754 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-06 12:32:13.784 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-06 12:32:15.110 INFO   [9A12BC\BBB234] Loading board file 'Issue143-rpi_splitter_mod.dsn'...
+2026-09-06 12:32:15.128 INFO   [9A12BC\BBB234] Job '9A12BC\BBB234' started at 2026-09-06T04:32:15.128703Z.
+2026-09-06 12:32:15.159 INFO   [9A12BC\BBB234] Fanout stage started on board '73375e53f834c65d8e536ed8add4c8e5' with 2 of 22 SMD pins needing fanout (3 already connected, 17 netless).
+2026-09-06 12:32:15.252 INFO   [9A12BC\BBB234] Fanout pass #1 on board '3e9e43235b5823b612f95f19e2d521e4' completed in 0.09 seconds with 2 SMD pins fanouted, 0 not routed, 0 insert errors, +2 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-06 12:32:15.260 INFO   [9A12BC\BBB234] Fanout pass #2 on board '3e9e43235b5823b612f95f19e2d521e4' completed in 0.01 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-06 12:32:15.263 INFO   [9A12BC\BBB234] Fanout stage completed: started with 5 total SMD pins, completed in 0.10 seconds, escaped pins: 2/5 (40.0%), using 0.10 total CPU seconds, 0.06 GB total allocated, and 203.6 MB peak heap usage.
+2026-09-06 12:32:15.265 INFO   [9A12BC\BBB234] Auto-routing stage started on board '3e9e43235b5823b612f95f19e2d521e4' for 1 unrouted item.
+2026-09-06 12:32:15.314 INFO   [9A12BC\BBB234] Auto-routing pass #1 on board '3e9e43235b5823b612f95f19e2d521e4' was completed in 0.03 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-09-06 12:32:15.318 INFO   [9A12BC\BBB234] Auto-routing pass #2 on board '9a12f2adcd4325061bbe69e4b39ec64c' was completed in 0.00 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-09-06 12:32:15.326 INFO   [9A12BC\BBB234] Auto-routing stage completed: started with 1 unrouted nets, completed in 0.18 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-09-06 12:32:15.330 INFO   [9A12BC\BBB234] Optimization stage started on board '9a12f2adcd4325061bbe69e4b39ec64c' with score 999.98 (0 unrouted and 0 violations).
+2026-09-06 12:32:15.332 INFO   [9A12BC\BBB234] Stopping optimizer because the current board score (999.98) is already close to the maximum score (1000). Remaining potential improvement is less than the threshold (1.00%).
+2026-09-06 12:32:15.333 INFO   [9A12BC\BBB234] Optimization stage completed: started with score 999.98 (0 unrouted and 0 violations), completed in 0.00 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.01 GB total allocated, and 29.7 MB peak heap usage.
+2026-09-06 12:32:15.334 INFO   [9A12BC\BBB234] Job '9A12BC\BBB234' finished with state: COMPLETED (elapsed: 0.20 seconds, finished at UTC: 2026-09-06T04:32:15.333727Z).
+2026-09-06 12:32:15.743 INFO   New version available: v2.4.1

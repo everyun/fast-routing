@@ -1,0 +1,17 @@
+2026-09-06 12:24:50.510 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-06 12:24:50.543 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-06 12:24:51.612 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-06 12:24:51.630 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-06 12:24:51.882 INFO   [165EED\073E93] Loading board file 'Issue103-Board-Routed.dsn'...
+2026-09-06 12:24:51.885 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-06 12:24:51.909 WARN   Network.insert_net_class: clearance class not found at 'default'
+2026-09-06 12:24:52.467 WARN   Structure.create_board: The DSN file was exported from an old KiCad version that has known compatibility issues. Please update KiCad to version 6 or newer.
+2026-09-06 12:24:52.471 INFO   [165EED\073E93] Job '165EED\073E93' started at 2026-09-06T04:24:52.470876Z.
+2026-09-06 12:24:52.714 INFO   [165EED\073E93] Fanout stage started on board '6f465fcce12e25d6321be7dcdaaaada7' with 0 of 60 SMD pins needing fanout (60 already connected, 0 netless).
+2026-09-06 12:24:53.018 INFO   New version available: v2.4.1
+2026-09-06 12:24:53.228 INFO   [165EED\073E93] Fanout pass #1 on board '6f465fcce12e25d6321be7dcdaaaada7' completed in 0.36 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-06 12:24:53.284 INFO   [165EED\073E93] Fanout stage completed: started with 60 total SMD pins, completed in 0.51 seconds, escaped pins: 60/60 (100.0%), using 0.63 total CPU seconds, 6.79 GB total allocated, and 1939.7 MB peak heap usage.
+2026-09-06 12:24:53.320 INFO   [165EED\073E93] Auto-routing stage started on board '6f465fcce12e25d6321be7dcdaaaada7' for 0 unrouted items.
+2026-09-06 12:24:53.846 INFO   [165EED\073E93] Auto-routing pass #1 on board '6f465fcce12e25d6321be7dcdaaaada7' was completed in 0.19 seconds with the score of 982.02 (0 unrouted and 63 violations), using 0.98 CPU seconds and the job allocated 10.44 GB of memory so far.
+2026-09-06 12:24:54.175 INFO   [165EED\073E93] Auto-routing stage completed: started with 0 unrouted nets, completed in 1.52 seconds, final score: 982.02 (0 unrouted and 63 violations), using 0.98 total CPU seconds, 10.44 GB total allocated, and 1029.3 MB peak heap usage.
+2026-09-06 12:24:54.175 INFO   [165EED\073E93] Job '165EED\073E93' finished with state: COMPLETED (elapsed: 1.70 seconds, finished at UTC: 2026-09-06T04:24:54.175159Z).

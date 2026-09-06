@@ -1,0 +1,17 @@
+2026-09-06 12:29:15.379 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-06 12:29:15.409 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-06 12:29:16.738 INFO   [0F334D\938F2D] Loading board file 'Issue110-testProjectFromFreeroutingBugTest01.dsn'...
+2026-09-06 12:29:16.756 INFO   [0F334D\938F2D] Job '0F334D\938F2D' started at 2026-09-06T04:29:16.756171Z.
+2026-09-06 12:29:16.791 INFO   [0F334D\938F2D] Fanout stage started on board '94635e297daaea51a24a4bf832a64b07' with 4 of 16 SMD pins needing fanout (12 already connected, 0 netless).
+2026-09-06 12:29:16.913 INFO   [0F334D\938F2D] Fanout pass #1 on board '0d51cd17b4f3dfb29e77f25921e46705' completed in 0.11 seconds with 4 SMD pins fanouted, 0 not routed, 0 insert errors, +4 extra vias (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-06 12:29:16.925 INFO   [0F334D\938F2D] Fanout pass #2 on board '0d51cd17b4f3dfb29e77f25921e46705' completed in 0.01 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-06 12:29:16.927 INFO   [0F334D\938F2D] Fanout stage completed: started with 16 total SMD pins, completed in 0.13 seconds, escaped pins: 4/16 (25.0%), using 0.13 total CPU seconds, 0.15 GB total allocated, and 124.6 MB peak heap usage.
+2026-09-06 12:29:16.928 INFO   [0F334D\938F2D] Auto-routing stage started on board '0d51cd17b4f3dfb29e77f25921e46705' for 4 unrouted items.
+2026-09-06 12:29:17.054 INFO   [0F334D\938F2D] Auto-routing pass #1 on board '0d51cd17b4f3dfb29e77f25921e46705' was completed in 0.12 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-09-06 12:29:17.062 INFO   [0F334D\938F2D] Auto-routing pass #2 on board '0f669f507428491f5700a5f33e8bc018' was completed in 0.00 seconds with the score of 999.98 (0 unrouted and 0 violations).
+2026-09-06 12:29:17.070 INFO   [0F334D\938F2D] Auto-routing stage completed: started with 4 unrouted nets, completed in 0.30 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-09-06 12:29:17.073 INFO   [0F334D\938F2D] Optimization stage started on board 'f7d3476e422140bd62a5bb6cd83a4911' with score 999.98 (0 unrouted and 0 violations).
+2026-09-06 12:29:17.075 INFO   [0F334D\938F2D] Stopping optimizer because the current board score (999.98) is already close to the maximum score (1000). Remaining potential improvement is less than the threshold (1.00%).
+2026-09-06 12:29:17.077 INFO   [0F334D\938F2D] Optimization stage completed: started with score 999.98 (0 unrouted and 0 violations), completed in 0.00 seconds, final score: 999.98 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.01 GB total allocated, and 302.3 MB peak heap usage.
+2026-09-06 12:29:17.077 INFO   [0F334D\938F2D] Job '0F334D\938F2D' finished with state: COMPLETED (elapsed: 0.32 seconds, finished at UTC: 2026-09-06T04:29:17.077443Z).
+2026-09-06 12:29:17.487 INFO   New version available: v2.4.1

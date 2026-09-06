@@ -1,0 +1,19 @@
+Picked up JAVA_TOOL_OPTIONS: -Djava.awt.headless=true
+       28.43 real        43.71 user         1.38 sys
+          6423658496  maximum resident set size
+                   0  average shared memory size
+                   0  average unshared data size
+                   0  average unshared stack size
+              424577  page reclaims
+                   0  page faults
+                   0  swaps
+                   0  block input operations
+                   0  block output operations
+                  64  messages sent
+                  91  messages received
+                 108  signals received
+                  26  voluntary context switches
+               75338  involuntary context switches
+        564901489916  instructions retired
+        162310621114  cycles elapsed
+          6398334616  peak memory footprint

@@ -1,0 +1,7 @@
+Imported ERISC 4 in 0.06s: 2 layers, 4618 items (984 pins, 2326 traces, 443 vias)
+Board: 4617 items (984 pins, 2325 traces, 443 vias); router delta -1 traces, +0 vias
+Router: 1 passes, 0 routed, 0 failed, 0 ripped, 0 pins fanned out
+Router stopped on board complete (0 board restores)
+Referee: 63 clearance violations, 0 of 702 connections incomplete, score 982.02/1000
+Total 0.77s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger2/ledger-a/20260906-120733/ses/Issue103-Board-Routed.rust.ses

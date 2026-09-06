@@ -1,0 +1,8 @@
+Imported untitled.brd in 0.00s: 2 layers, 33 items (24 pins, 0 traces, 0 vias)
+Board: 34 items (24 pins, 1 traces, 0 vias); router delta +1 traces, +0 vias
+Router: 1 passes, 0 routed, 0 failed, 0 ripped, 2 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.99 -> 999.99, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 1 connections incomplete, score 999.99/1000
+Total 0.00s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger2/ledger-a/20260906-120733/ses/Issue143-rpi_splitter_mod.rust.ses

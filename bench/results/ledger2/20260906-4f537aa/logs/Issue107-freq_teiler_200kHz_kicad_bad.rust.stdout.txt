@@ -1,0 +1,30 @@
+ShoveCheck::check failed: not stored, blame=Some(ItemId(85))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1286))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1286))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1286))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1286))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1286))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1286))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(1165))
+ShoveCheck::check failed: stack_depth=2 trace_piece_count=2 max_rec=20
+ShoveCheck::check failed: stack_depth=2 trace_piece_count=2 max_rec=20
+ShoveCheck::check failed: stack_depth=2 trace_piece_count=2 max_rec=20
+ShoveCheck::check failed: not stored, blame=Some(ItemId(40))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(40))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(777))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(777))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(51))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(51))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(84))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(84))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(84))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(84))
+ShoveCheck::check failed: not stored, blame=Some(ItemId(84))
+Imported Z:\Desktop\SelcoGit\af_freq_teiler_200kHz\freq_teiler_200kHz_kicad\freq_teiler_200kHz_kicad.dsn in 0.00s: 2 layers, 1797 items (257 pins, 9 traces, 0 vias)
+Board: 1983 items (257 pins, 194 traces, 1 vias); router delta +185 traces, +1 vias
+Router: 4 passes, 165 routed, 0 failed, 7 ripped, 0 pins fanned out
+Router stopped on board complete (0 board restores)
+Optimizer: 0 passes, 0 of 0 items improved, score 999.99 -> 999.99, stopped on near-maximum score
+Referee: 0 clearance violations, 0 of 177 connections incomplete, score 999.99/1000
+Total 1.19s
+Exported Specctra SES session file: /Users/chiqingzhen/fr-work/logs/ledger2/ledger-a/20260906-120733/ses/Issue107-freq_teiler_200kHz_kicad_bad.rust.ses

@@ -1,0 +1,19 @@
+2026-09-06 12:35:28.395 INFO   Freerouting v2.3.0 (build-date: 2026-08-07)
+2026-09-06 12:35:28.424 WARN   Couldn't get screen resolution. If you are running in a headless environment, disable the GUI by setting gui.enabled to false.
+2026-09-06 12:35:29.751 INFO   [923CB5\58E7D5] Loading board file 'Issue159-setonix_2hp-pcb.dsn'...
+2026-09-06 12:35:29.781 INFO   [923CB5\58E7D5] Job '923CB5\58E7D5' started at 2026-09-06T04:35:29.780955Z.
+2026-09-06 12:35:29.823 INFO   [923CB5\58E7D5] Fanout stage started on board '432fdcaa37dd699637deadfcdf3639ad' with 2 of 2 SMD pins needing fanout (0 already connected, 0 netless).
+2026-09-06 12:35:29.910 INFO   [923CB5\58E7D5] Fanout pass #1 on board 'bfee2c5a7e37dbd95973edb14eefce02' completed in 0.08 seconds with 2 SMD pins fanouted, 0 not routed, 0 insert errors, +1 extra via (0 SMD pins still to check in pass, ripup costs=100).
+2026-09-06 12:35:29.921 INFO   [923CB5\58E7D5] Fanout pass #2 on board 'bfee2c5a7e37dbd95973edb14eefce02' completed in 0.01 seconds with 0 SMD pins fanouted, 0 not routed, 0 insert errors, +0 extra vias (0 SMD pins still to check in pass, ripup costs=200).
+2026-09-06 12:35:29.923 INFO   [923CB5\58E7D5] Fanout stage completed: started with 2 total SMD pins, completed in 0.10 seconds, escaped pins: 2/2 (100.0%), using 0.10 total CPU seconds, 0.06 GB total allocated, and 44.9 MB peak heap usage.
+2026-09-06 12:35:29.925 INFO   [923CB5\58E7D5] Auto-routing stage started on board 'bfee2c5a7e37dbd95973edb14eefce02' for 22 unrouted items.
+2026-09-06 12:35:30.198 INFO   [923CB5\58E7D5] Auto-routing pass #1 on board 'bfee2c5a7e37dbd95973edb14eefce02' was completed in 0.26 seconds with the score of 869.56 (3 unrouted and 0 violations).
+2026-09-06 12:35:30.374 INFO   [923CB5\58E7D5] Auto-routing pass #2 on board '562ef2b129a84b3bff104883032cb86b' was completed in 0.17 seconds with the score of 956.51 (1 unrouted and 0 violations).
+2026-09-06 12:35:30.453 INFO   [923CB5\58E7D5] Auto-routing pass #3 on board 'fcad29b59ed4b30f8274fc52b6394e46' was completed in 0.07 seconds with the score of 999.99 (0 unrouted and 0 violations).
+2026-09-06 12:35:30.464 INFO   [923CB5\58E7D5] Auto-routing pass #4 on board '554e17d6c2d299b98b90673a0300b352' was completed in 0.00 seconds with the score of 999.99 (0 unrouted and 0 violations).
+2026-09-06 12:35:30.466 INFO   New version available: v2.4.1
+2026-09-06 12:35:30.473 INFO   [923CB5\58E7D5] Auto-routing stage completed: started with 23 unrouted nets, completed in 0.67 seconds, final score: 999.99 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.00 GB total allocated, and 0.0 MB peak heap usage.
+2026-09-06 12:35:30.477 INFO   [923CB5\58E7D5] Optimization stage started on board '554e17d6c2d299b98b90673a0300b352' with score 999.99 (0 unrouted and 0 violations).
+2026-09-06 12:35:30.480 INFO   [923CB5\58E7D5] Stopping optimizer because the current board score (999.99) is already close to the maximum score (1000). Remaining potential improvement is less than the threshold (1.00%).
+2026-09-06 12:35:30.483 INFO   [923CB5\58E7D5] Optimization stage completed: started with score 999.99 (0 unrouted and 0 violations), completed in 0.00 seconds, final score: 999.99 (0 unrouted and 0 violations), using 0.00 total CPU seconds, 0.02 GB total allocated, and 399.8 MB peak heap usage.
+2026-09-06 12:35:30.484 INFO   [923CB5\58E7D5] Job '923CB5\58E7D5' finished with state: COMPLETED (elapsed: 0.70 seconds, finished at UTC: 2026-09-06T04:35:30.483586Z).
