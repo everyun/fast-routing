@@ -227,13 +227,20 @@ The original 300 s / `-mp 20` baseline (`bench/results/20260828-013025/`):
 - Peak RSS: 0.4 – 11.1 GB (p50 ≈ 4 GB)
 - Uncapped campaign: 11 of 14 ex-timeout boards costed at 18 690.5 s = 5.19 h.
 
-### Current fast-routing performance (Round 2 Serial Ledger, quiet Mac)
+### Current fast-routing performance (Round 3 Serial Ledger, quiet Mac)
 
-Measured on commit `4f537aa` (`bench/results/ledger2/20260906-4f537aa/`, 27 `java_finished` boards, `-mp 20` with fanout and optimizer enabled, fresh isolated `--user_data_path` Java baseline):
-- **In-tool speedup**: geometric mean **2.51×** vs clean Java 2.3.0 (up from Round 1 1.88×);
-- **Wall-clock speedup**: geometric mean **4.69×** (up from Round 1 3.76×);
-- **Total in-tool time**: 0.98× (Java 868.8 s vs Rust 889.3 s); both-finished 26 boards in-tool 1.10×;
-- **Memory footprint**: mean peak RSS 69 MB vs Java 4.9 GB (~71× reduction);
-- **Quality**: 0 added violations across 25/27 boards.
+Measured on commit `9b08338` (`bench/results/ledger3/20260907-9b08338/`, 27 `java_finished`
+boards, `-mp 20` with fanout and optimizer enabled, J/R interleaved per board, W=1 `nice -n 10`,
+fresh isolated `--user_data_path` clean Java 2.3.0 baseline, independent referee judging):
+- **Wall-clock speedup**: geometric mean **5.47×** vs clean Java 2.3.0 (up from Round 2 4.69×);
+  **5.92×** on the 26 boards both tools finish;
+- **In-tool speedup**: geometric mean **3.18×** (up from Round 2 2.51×); **3.37×** both-finished;
+- **Total wall-clock**: Java 685.1 s vs Rust 486.6 s on the both-finished 26;
+- **Memory footprint**: mean peak RSS **64.6 MB** vs Java 4 778.6 MB (~74× reduction; worst-case 311 MB vs 6 961 MB, ~22×);
+- **Quality**: 0 added violations across all 27 boards; referee 25/27 (the two losses are
+  comparative unrouted only: Issue039 30u vs 10u, Issue102 1u vs 0u — see ROADMAP "In progress");
+- G4 product gate (KiCad 10.0.5, `bench/results/g4-gate/c58cb47/`): 0 router-generated angle
+  violations across 33 boards, all 9 OOS boards import cleanly with zero unconnected items introduced.
 
-*(Note: Authoritative benchmark figures will be finalized in the final release round after all quality fixes are landed).*
+*(gate3, the full 46-board quality re-read at the frozen mainline, is pending:
+`<<GATE3: pending REPORT-gate3-quality.md>>`.)*

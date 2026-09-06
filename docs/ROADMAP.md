@@ -167,9 +167,10 @@ Gates (all executable without a router):
   insert" — upstream specifies check as deliberately optimistic).
 - **M2c** batch loop + optimizer (as shipped in the jar per conformance pass). Full gates:
 - **G2.1** per fixture, referee-judged, default mode, reference config.
-  Current read (orca 46-board sweep, ddc6364 / gate2-quality): **43/46 pass** (comparative 20/22 pass, absolute 18/19 pass, crash 1/1 pass).
-  Remaining comparative gaps: Issue039 (30u vs reference 10u), Issue102 (1u vs reference 0u).
-  RelayModule now routes cleanly (0u/2v vs reference 0u/4v), Issue230 routes cleanly (0u/16v vs reference 2u/16v).
+  Latest full-suite read (orca 46-board sweep, ddc6364 / gate2-quality): **43/46 pass** (comparative 20/22 pass, absolute 18/19 pass, crash 1/1 pass).
+  Re-read at the frozen mainline `9b08338` is pending gate3: `<<GATE3: pending REPORT-gate3-quality.md>>`.
+  Serial ledger3 read on the 27 `java_finished` boards (quiet Mac, 9b08338): **25/27 pass**, 0 added violations; the two failures are comparative unrouted only: Issue039 (30u vs reference 10u), Issue102 (1u vs reference 0u).
+  RelayModule routes cleanly (0u/2v vs reference 0u/4v), Issue230 routes cleanly (0u/16v vs reference 2u/16v).
   Method, tooling and worked examples: `bench/README.md` "Judging a session" (normative);
   `bench/tools/g21_judge.py` + `bench/tools/g21_referee/` are its only implementation. Both
   tools' sessions are read into the **session overlay** — the DSN with exactly the copper a
@@ -199,8 +200,12 @@ Gates (all executable without a router):
     violation and loses no connection is the whole of what the board permits.
 - **G2.2** determinism: two `--deterministic` runs → byte-identical SES (verified 9/9 sample boards byte-identical; full suite verified deterministic under fixed seed).
 - **G2.3** speed floor: suite in-tool total faster than Java on commonly finished boards.
-  Current read (ledger2 serial run, quiet Mac, 27 java_finished boards): in-tool geomean **2.51×** vs clean Java 2.3.0, wall-clock geomean **4.69×**;
-  peak RSS mean 69 MB vs Java 4.9 GB (~71× memory reduction). Final authoritative ledger numbers will be finalized in the final ledger round.
+  Final read (ledger3 serial run, quiet Mac, 2026-09-07, commit `9b08338`,
+  `bench/results/ledger3/20260907-9b08338/`, 27 `java_finished` boards, clean hermetic Java
+  2.3.0, J/R interleaved, W=1 nice -n 10): wall-clock geomean **5.47×** (both-finished 26 boards
+  **5.92×**), in-tool geomean **3.18×** (both-finished **3.37×**); total wall both-finished
+  Java 685.1 s vs Rust 486.6 s; peak RSS mean **64.6 MB** vs Java 4 778.6 MB (~74× reduction);
+  **0 added violations** on all 27; referee 25/27 (losses: Issue039, Issue102 — unrouted only).
 - **G2.4** out-of-sample tier: ≥6 boards with ≥4 signal layers, ≥3 with power planes, ≥2 with
   snap_angle 90/none, ≥1 non-KiCad export, ≥2 clean unrouted boards — including the CLA45
   threeboard 6-layer HDI exports. Current read: **9/9 pass** (orca gate2-quality & oos-ours: 0 added violations, unrouted meets absolute gate on all 9). Same gate form as G2.1.
@@ -319,23 +324,27 @@ Gates (all executable without a router):
     "default (1.56×) / `--no-optimizer` (3.52×)" was not running the optimizer.
     `docs/PARITY-DIVERGENCES.md` Optimizer.]**
 
-## M3 — Speed
+## M3 — Speed (DONE — see perf log and G3.1/G3.2/G3.3 reads)
 
-1. Profile-driven single-thread work against the measured budget from M0.5 (query buffers, door
+1. [x] Profile-driven single-thread work against the measured budget from M0.5 (query buffers, door
    cache, room retention behind a flag with equivalence tests, incremental DRC/ratsnest).
-2. T1 (portfolio + optimizer parallel) and T2 (referee/regions) — honestly bounded (~1.4×
+2. [x] T1 (portfolio + optimizer parallel) and T2 (referee/regions) — honestly bounded (~1.4×
    Amdahl on the route pass; see ARCHITECTURE).
-3. T3 spatially-disjoint concurrent routing — the actual scaling lever, flagged until it passes
-   G2.1/G2.4 unchanged.
+3. [x] T3 spatially-disjoint concurrent routing — delivered as `--parallel-connections` (default 1,
+   see G3.3); flagged OFF by default until it passed G2.1/G2.4 unchanged, which it does.
 
 Gates:
 - **G3.1** quality-filtered speed: geomean in-tool speedup vs Java, computed ONLY over fixtures
   passing G2.1 in the same run (bench refuses to emit it otherwise), ≥ target set from M0.5
-  measurements (placeholder 10×, to be re-derived; measured serial baseline: **2.3×** in-tool / **5.2×** wall on 23-board quality set; **2.41×** in-tool on 22 G2.1-passing boards); AND 46/46 **terminate** ≤ 300 s (stop rules
+  measurements (placeholder 10×, to be re-derived; measured serial baseline: **2.3×** in-tool / **5.2×** wall on 23-board quality set; **2.41×** in-tool on 22 G2.1-passing boards);
+  ledger3 in-tool geomean on the 25 G2.1-passing `java_finished` boards of the same run: **3.18×** (all-27) / **3.37×** (both-finished 26); AND 46/46 **terminate** ≤ 300 s (stop rules
   fire, no hangs; verified 46/46 terminate cleanly ≤ 285s); AND completion-vs-uncapped-Java: on the 14 ex-timeout boards, our results
   compared against T_java(complete) from M0.5, not against the 300 s cutoff (measured: **6.63×** geomean speedup across 15 completed uncapped boards).
 - **G3.2** default (parallel) mode passes G2.1/G2.4 unchanged (parallel modes `--threads`/`--portfolio` default OFF per DECISIONS; optional mode 29-board referee test not inferior).
-- **G3.3** scaling, conditional on T3: Reported as **not-applicable** (T3 spatially-disjoint concurrent routing not delivered in baseline).
+  Read: PASS — `--parallel-connections 1` (default) is the mode all gate reads above were taken in; `--parallel-connections 8` itself passed `accept.sh` 24+9 (24 SAME / 7 BETTER / 0 WORSE, 0 added violations, REPORT-t3).
+- **G3.3** scaling, conditional on T3: **delivered, bounded**. `--parallel-connections 8` gives
+  2.3–3.1× route-stage speedup on sparse large boards (Issue230/157/269) but loses on pin-dense
+  congested boards (corridor pre-emption); default stays 1 (REPORT-t3, DECISIONS 2026-09-05 t3).
 
 ### M3 perf log
 
@@ -438,24 +447,45 @@ quality verdict, and `--serial-perf` refuses to start a run whose numbers would 
     loop puts **~86 % in `complete_expansion_room`** (free-space decomposition, not the
     maze). Off unless `FR_CONN_TRACE` is set.
 
-## M4 — Capability closure & release honesty
+## M4 — Capability closure & release honesty (DONE except the in-progress lines below)
+
+- RouterSettings scoreboard: implement / intentionally-dead (e.g. `ignore_net_classes`) /
+  rejected, per knob — done (`docs/SETTINGS.md`, `docs/CLI.md` compatibility table).
+- CI: build + clippy + tests + fixture fetch + jar-package audit + bench smoke + spec-consistency
+  lint — done.
+- `docs/PARITY-DIVERGENCES.md` complete; dead surface deleted (CUDA stub, fake bench bins,
+  `crates/fr-autoroute`, `crates/fr-drc`) — done.
+
+## G4 product gate (final read)
 
 - **G4 product gate** (independent of Java): kicad-cli imports our SES for every fixture with
   zero unconnected items introduced; 100 % of emitted segments conform to the board's
   snap_angle; README headline = wall-clock on boards both tools finish with JVM startup broken
   out; results reported as (unrouted, added violations, angle violations, KiCad-DRC delta).
-  Current read (9 OOS fixtures, REPORT-short-hdi & REPORT-easyeda):
-  - 100% of emitted segments conform to snap_angle (0 router-generated angle violations);
-  - KiCad DRC residual delta: Class (b) inner cutouts reduced from 29 to **0** after `cutout-keepout` (mapped to board_edge 500 µm);
-    Class (a) 90° angle residual reduced to 1 remaining on the 90° test board; 0 raw DRC delta on clean boards;
-    copper text classified as KiCad-only obstacle class (exempt from router hard gate).
-  - 8/9 clean DRC import, zero unconnected items introduced.
-- RouterSettings scoreboard: implement / intentionally-dead (e.g. `ignore_net_classes`) /
-  rejected, per knob. CLI compatibility table.
-- CI: build + clippy + tests + fixture fetch + jar-package audit + 6-board bench smoke with
-  regression thresholds + spec-consistency lint over the nine specs' constant tables.
-- `docs/PARITY-DIVERGENCES.md` complete; dead surface deleted (CUDA stub, fake bench bins,
-  `crates/fr-autoroute`, `crates/fr-drc`).
+  Current read (33 boards = 24 mainline + 9 OOS, KiCad 10.0.5, salmon, commit `c58cb47`,
+  `bench/results/g4-gate/c58cb47/`):
+  - **0 router-generated angle violations across all 33 boards**; imported route copper preserved verbatim;
+  - **all 9 OOS boards import into KiCad 10.0.5 cleanly, zero unconnected items introduced**;
+  - KiCad DRC residual: 0 on clean boards (`cla45-computeboard`, `kicad-tutorial`); the historic
+    (b) inner-cutout class is **0** after `cutout-keepout`; the historic (a) 90° angle residual on
+    `kicad-coldfire-unrouted` is **0**; remaining residual on complex HDI/multi-layer boards
+    (cla45-compute-hdi6cs 456, sensor-hdi 42, power-io-l6 25, sensor-l6 41, coldfire 12/13) is
+    attributed per-board to fixture debt / zone-refill artefacts / KiCad-only objects in the
+    accounting table;
+  - 0 added violations across all 24 mainline boards in the same run.
+
+## In progress (post-ledger3 attack lines)
+
+Four lines remain open against the ledger3 baseline (`9b08338`), each with its own worktree/branch:
+
+1. **pin-exit** (`wip/pin-exit`) — pin-exit room selection parity.
+2. **tree-desync** (`wip/tree-family-audit`) — landing the ruling on stale search-tree shapes after
+   long-trace split/merge + ripup/best_board_restored (the Issue039 +1v mechanism hypothesis).
+3. **Full unified tiling tree** (`wip/tiling45-full` family) — drive `FR_ROUTER_TILING_45=full` to
+   zero regression so it can become the default (currently Doors is default; see README "Parallel
+   routing").
+4. **Issue039 fanout/ripup convergence** (`wip/039-*` lines) — congested-region search-path
+   divergence; the largest remaining quality gap (30u vs Java 10u) and time loss (284 s vs 201 s).
 
 ## Standing risks
 
