@@ -2657,7 +2657,9 @@ impl<'a> Builder<'a> {
                 exit_restrictions.push(Vec::new());
                 continue;
             };
-            if matches!(raw_geom, PadGeometry::Circle(_)) {
+            // Upstream only implements exit restrictions for IntBox and IntOctagon
+            // (Padstack.java:113: if (!(curr_shape instanceof IntBox || curr_shape instanceof IntOctagon)) return result;)
+            if !matches!(raw_geom, PadGeometry::Box(_) | PadGeometry::Octagon(_)) {
                 exit_restrictions.push(Vec::new());
                 continue;
             }

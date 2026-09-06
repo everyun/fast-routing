@@ -733,10 +733,7 @@ impl<'b> PullTightAlgo<'b> {
         if polyline.arr.len() < 3 {
             return true;
         }
-        for i in 0..polyline.arr.len() - 2 {
-            let Some(shape) = polyline.offset_shape(self.curr_half_width, i) else {
-                return false;
-            };
+        for shape in polyline.offset_shapes(self.curr_half_width) {
             if !self.check_trace_shape(&shape) {
                 return false;
             }
@@ -911,6 +908,17 @@ impl<'b> PullTightAlgo<'b> {
             changed_polyline = changed_polyline.reverse();
         }
 
+        // Create a shove_fixed exit line segment and verify its clearance before applying changes
+        let exit_lines = [
+            Line::new_from_point_and_dir(pin_center, &pin_exit_direction.turn_45_degree(2)),
+            nearest_pin_exit_ray,
+            offset_pin_shape.border_line(nearest_border_line_no),
+        ];
+        let exit_line_segment = Polyline::new_from_lines(&exit_lines);
+        if !self.check_polyline_trace(&exit_line_segment) {
+            return false;
+        }
+
         if !self.board.change_trace_polyline(id, changed_polyline.clone()) {
             return false;
         }
@@ -920,13 +928,6 @@ impl<'b> PullTightAlgo<'b> {
         let clip = changed_area.area(layer);
         self.board.normalize_trace(id, Some(&clip));
 
-        // Create a shove_fixed exit line segment
-        let exit_lines = [
-            Line::new_from_point_and_dir(pin_center, &pin_exit_direction.turn_45_degree(2)),
-            nearest_pin_exit_ray,
-            offset_pin_shape.border_line(nearest_border_line_no),
-        ];
-        let exit_line_segment = Polyline::new_from_lines(&exit_lines);
         for corner in exit_line_segment.corner_approx_arr() {
             changed_area.join_point(corner, layer);
         }
