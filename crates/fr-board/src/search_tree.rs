@@ -757,8 +757,8 @@ impl SearchTree {
         let mut mid_leaves: Vec<ArenaLeafId> = Vec::with_capacity(middle.len());
         for (offset, simplex) in middle.into_iter().enumerate() {
             let mut shape = TileShape::Simplex(simplex);
-            if self.angle_family == TreeAngleFamily::FortyFive {
-                shape = shape.to_flavor(AngleRestriction::FortyFive);
+            if self.angle_family == TreeAngleFamily::Ninety {
+                shape = shape.to_flavor(AngleRestriction::Ninety);
             }
             mid_hulls.push(hull_box(&shape));
             mid_leaves.push(self.tree.insert(
@@ -1843,17 +1843,17 @@ fn sort_entries(out: &mut [TreeEntry]) {
 /// [`calculate_tree_shapes`] in a chosen angle family.
 ///
 /// [`TreeAngleFamily::AnyAngle`] is `ShapeSearchTree` itself.
-/// [`TreeAngleFamily::FortyFive`] is `ShapeSearchTree45Degree`, whose three
-/// overrides all have the same shape — *"call super, then coarsen every result
-/// to its bounding octagon"* (`:442-461` for areas and the outline;
-/// `:411-439` for drills, which additionally keeps a box a box "to avoid small
-/// corner cutoffs when taking the offset as an octagon"). Both of those are
-/// [`TileShape::to_flavor`]`(FortyFive)`, so the family is one post-pass:
-///
-/// * a `Box` stays a `Box` — the octagon-that-is-a-box rule of §3.3;
-/// * an `Oct` stays itself;
-/// * a `Simplex` — a trace segment or an outline strip — becomes its bounding
-///   octagon, which for 45°-restricted geometry is the same region.
+/// [`TreeAngleFamily::FortyFive`] is `ShapeSearchTree45Degree`, whose
+/// overrides coarsen **only the classes they touch** (`:442-461` for areas and
+/// the outline; `:411-439` for drills, which additionally keeps a box a box
+/// "to avoid small corner cutoffs when taking the offset as an octagon").
+/// `PolylineTrace` has no override — its strips stay the exact Simplex the
+/// base class builds and are narrowed to `bounding_octagon()` only where the
+/// 45° chain reads them (`:147-149`) — so the family post-pass here skips
+/// traces and the outline: flavoring a strip with oblique edges onto its
+/// bounding octagon strictly *grows* it past the copper (the Issue054
+/// /row4 dead pocket), and the growth is invisible to the 45° chain's own
+/// octagon-narrowing reads while being wrong for every exact-shape read.
 ///
 /// The drill and area arms already ran `to_flavor(ctx.angle_restriction)` before
 /// the compensation was applied, because §3.4 makes that a *board rule*; on a
@@ -1875,6 +1875,19 @@ pub fn calculate_tree_shapes_for_family(
     match family {
         TreeAngleFamily::AnyAngle => {}
         TreeAngleFamily::FortyFive => {
+            // Upstream's 45° tree re-flavors only the classes it overrides:
+            // drills are octagons by construction (`:411-440`) and
+            // ObstacleArea/BoardOutline take their enclosing `bounding_octagon`
+            // (`:442-460`). `PolylineTrace` has **no** override
+            // (`ShapeSearchTree.java:1039-1051`): its strips keep the exact
+            // Simplex the base class builds, miter corners included, and the
+            // 45° chain narrows them to `bounding_octagon()` at each read
+            // (`:147-149`) — so flavoring them here can only grow them, and on
+            // oblique imported segments it grows past the copper. Traces keep
+            // their base shape; see also the outline note below.
+            if matches!(item.kind, ItemKind::Trace(_) | ItemKind::BoardOutline(_)) {
+                return;
+            }
             for tile in out.iter_mut() {
                 if let Some(shape) = tile.shape.take() {
                     tile.shape = Some(shape.to_flavor(AngleRestriction::FortyFive));
@@ -1882,6 +1895,9 @@ pub fn calculate_tree_shapes_for_family(
             }
         }
         TreeAngleFamily::Ninety => {
+            // The 90° tree's outline override is `bounding_box()`
+            // (`ShapeSearchTree90Degree.java:364-371`) — the same enclosing
+            // region `to_flavor(Ninety)` produces, so every class converts.
             for tile in out.iter_mut() {
                 if let Some(shape) = tile.shape.take() {
                     tile.shape = Some(shape.to_flavor(AngleRestriction::Ninety));
@@ -2830,7 +2846,7 @@ mod tests {
     /// The 45° tree stores octagons where the any-angle tree stores simplices,
     /// and the region is the same for a 45°-restricted trace.
     #[test]
-    fn the_fortyfive_family_octagonizes_trace_shapes_without_moving_them() {
+    fn the_fortyfive_family_keeps_trace_strips_without_moving_them() {
         let fixture = Fixture::new();
         let item = trace_item(
             &[1],
@@ -2860,6 +2876,9 @@ mod tests {
             &mut oct,
         );
 
+        // Upstream's 45° tree has no `PolylineTrace` override, so the strips
+        // stay the exact offset simplexes the base class builds — flavoring
+        // one onto its bounding octagon can only grow it past the copper.
         assert_eq!(any.len(), oct.len());
         for (a, o) in any.iter().zip(oct.iter()) {
             let a = a.shape.as_ref().unwrap();
@@ -2869,12 +2888,10 @@ mod tests {
                 "the any-angle tree keeps the exact offset simplex"
             );
             assert!(
-                matches!(o, TileShape::Oct(_) | TileShape::Box(_)),
-                "the 45° tree stores an octagon"
+                matches!(o, TileShape::Simplex(_)),
+                "the 45° tree keeps the trace strip a simplex too"
             );
-            // A 45°-restricted segment's octagon-clipped offset simplex *is*
-            // its own bounding octagon, so the box must not have moved.
-            assert_eq!(a.bounding_box(), o.bounding_box());
+            assert_eq!(a, o, "the 45° family must not move a trace strip");
         }
     }
 
@@ -2923,10 +2940,14 @@ mod tests {
             any.tile_shape(slot, id, 0).unwrap(),
             TileShape::Simplex(_)
         ));
-        assert!(!matches!(
-            oct.tile_shape(slot, id, 0).unwrap(),
-            TileShape::Simplex(_)
-        ));
+        // Traces are not overridden in the 45° family — the two trees store
+        // the same strip. (The classes the 45° tree *does* coarsen — drills,
+        // areas, and the outline's bounding octagon — are covered by the
+        // family-function tests above and in tree_family_shapes_test.)
+        assert_eq!(
+            any.tile_shape(slot, id, 0).unwrap(),
+            oct.tile_shape(slot, id, 0).unwrap()
+        );
 
         // Asking twice is idempotent, and the whole board stays consistent.
         manager.ensure_compensated_tree_with_family(
