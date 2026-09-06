@@ -1558,6 +1558,14 @@ impl<'r> BatchRouter<'r> {
                             let mark = board.begin();
                             let mut committed = false;
 
+                            let expansions_before = crate::maze::trace::is_enabled().then(|| {
+                                fr_metrics::counters::value(
+                                    fr_metrics::counters::Counter::Expansions,
+                                )
+                            });
+                            let incomplete_before = crate::optimizer::trace::is_enabled()
+                                .then(|| incomplete_count(board));
+
                             if let (Some(located), Some(ctrl)) = (&c.located, &c.ctrl) {
                                 if let Ok(insert) = crate::insert::insert_connection(
                                     board, self.rules, ctrl, located, c.bounds,
@@ -1609,6 +1617,33 @@ impl<'r> BatchRouter<'r> {
                                             .push((start, self.routed_copper.len()));
                                         outcome.ripped_item_count += c.outcome.ripped.len();
 
+                                        if let Some(expansions_before) = expansions_before {
+                                            emit_conn_landing(
+                                                board,
+                                                ctx.pass_no,
+                                                entry,
+                                                first_new_id,
+                                                expansions_before,
+                                                &c.outcome,
+                                            );
+                                        }
+                                        if let Some(incomplete_before) = incomplete_before {
+                                            crate::optimizer::trace::Conn {
+                                                pass_no: ctx.pass_no,
+                                                net_no: entry.net_no,
+                                                state: c.outcome.state(),
+                                                ripped: c.outcome.ripped.len(),
+                                                budget_ms: ctx.connection_budget().limit_ms(),
+                                                used_ms: c.usage.time_used_ms,
+                                                hit_budget: c.usage.hit_budget,
+                                                incomplete: (
+                                                    incomplete_before,
+                                                    incomplete_count(board),
+                                                ),
+                                            }
+                                            .emit();
+                                        }
+
                                         if self.requeue_active && outcome.requeued < requeue_budget
                                         {
                                             for net_no in c.outcome.changed_nets.iter().copied() {
@@ -1646,12 +1681,52 @@ impl<'r> BatchRouter<'r> {
                             outcome.skipped += 1;
                         }
                         _ => {
-                            self.total_items_routed += 1;
-                            outcome.not_routed += 1;
-                            outcome.time_used_ms += c.usage.time_used_ms;
-                            outcome.effort_used += c.usage.effort_used;
-                            if c.usage.hit_budget {
-                                outcome.connections_hitting_budget += 1;
+                            let connected =
+                                connected_set(board, entry.net_no, entry.item, &mut self.scratch);
+                            if unconnected_set(board, entry.net_no, &connected).is_empty() {
+                                self.total_items_routed += 1;
+                                outcome.skipped += 1;
+                            } else {
+                                let first_new_id = board.store().next_id();
+                                let expansions_before =
+                                    crate::maze::trace::is_enabled().then(|| {
+                                        fr_metrics::counters::value(
+                                            fr_metrics::counters::Counter::Expansions,
+                                        )
+                                    });
+                                let incomplete_before = crate::optimizer::trace::is_enabled()
+                                    .then(|| incomplete_count(board));
+
+                                self.total_items_routed += 1;
+                                outcome.not_routed += 1;
+                                outcome.time_used_ms += c.usage.time_used_ms;
+                                outcome.effort_used += c.usage.effort_used;
+                                if c.usage.hit_budget {
+                                    outcome.connections_hitting_budget += 1;
+                                }
+                                if let Some(expansions_before) = expansions_before {
+                                    emit_conn_landing(
+                                        board,
+                                        ctx.pass_no,
+                                        entry,
+                                        first_new_id,
+                                        expansions_before,
+                                        &c.outcome,
+                                    );
+                                }
+                                if let Some(incomplete_before) = incomplete_before {
+                                    crate::optimizer::trace::Conn {
+                                        pass_no: ctx.pass_no,
+                                        net_no: entry.net_no,
+                                        state: c.outcome.state(),
+                                        ripped: c.outcome.ripped.len(),
+                                        budget_ms: ctx.connection_budget().limit_ms(),
+                                        used_ms: c.usage.time_used_ms,
+                                        hit_budget: c.usage.hit_budget,
+                                        incomplete: (incomplete_before, incomplete_count(board)),
+                                    }
+                                    .emit();
+                                }
                             }
                         }
                     }
