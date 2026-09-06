@@ -1,0 +1,370 @@
+[
+ {
+  "fixture": "Issue006-LPC18XX_43XX_SCH.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": null,
+  "doors_mode": "full",
+  "self_referee": null
+ },
+ {
+  "fixture": "Issue015-StackOverflow.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "pass limit (3 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 511 clearance violations, 6 of 520 connections incomplete, score 791.92/1000"
+ },
+ {
+  "fixture": "Issue022-AutoRouter_interrupted.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (3 board restores, finished on the best board seen, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 531 clearance violations, 10 of 552 connections incomplete, score 789.49/1000"
+ },
+ {
+  "fixture": "Issue026-J2_reference.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 33 connections incomplete, score 999.98/1000"
+ },
+ {
+  "fixture": "Issue027-zMRETestFixture.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "pass limit (2 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 1138 clearance violations, 5 of 1078 connections incomplete, score 784.23/1000"
+ },
+ {
+  "fixture": "Issue029-hw48na.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (1 board restore, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 451 clearance violations, 23 of 461 connections incomplete, score 754.44/1000"
+ },
+ {
+  "fixture": "Issue034-Green14SegLED.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 147 connections incomplete, score 999.98/1000"
+ },
+ {
+  "fixture": "Issue035-ReadPlaceScope.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 152 clearance violations, 0 of 240 connections incomplete, score 873.32/1000"
+ },
+ {
+  "fixture": "Issue039-bug-design.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 25 clearance violations, 42 of 204 connections incomplete, score 769.59/1000"
+ },
+ {
+  "fixture": "Issue054-tairakb.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 5 clearance violations, 1 of 264 connections incomplete, score 992.41/1000"
+ },
+ {
+  "fixture": "Issue066-Project_GP8B.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 23 clearance violations, 417 of 759 connections incomplete, score 444.52/1000"
+ },
+ {
+  "fixture": "Issue070-Autorouter_FQ101_PCB_2022-05-13.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 275 clearance violations, 27 of 410 connections incomplete, score 800.00/1000"
+ },
+ {
+  "fixture": "Issue093-interf_u.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 192 clearance violations, 0 of 201 connections incomplete, score 808.94/1000"
+ },
+ {
+  "fixture": "Issue102-Mars-64-revE-rot00.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "pass limit (1 board restore)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 64 clearance violations, 1 of 106 connections incomplete, score 869.75/1000"
+ },
+ {
+  "fixture": "Issue103-Board-Routed.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 63 clearance violations, 0 of 702 connections incomplete, score 982.02/1000"
+ },
+ {
+  "fixture": "Issue103-Board-Unrouted.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 60 clearance violations, 202 of 702 connections incomplete, score 695.14/1000"
+ },
+ {
+  "fixture": "Issue107-freq_teiler_200kHz_kicad.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 169 connections incomplete, score 999.99/1000"
+ },
+ {
+  "fixture": "Issue107-freq_teiler_200kHz_kicad_bad.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 177 connections incomplete, score 999.99/1000"
+ },
+ {
+  "fixture": "Issue110-Pajalnaja_stancija.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 18 clearance violations, 6 of 109 connections incomplete, score 911.91/1000"
+ },
+ {
+  "fixture": "Issue110-RelayModule.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 4 clearance violations, 2 of 88 connections incomplete, score 968.17/1000"
+ },
+ {
+  "fixture": "Issue110-testPCBSpecctraFile.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 41 clearance violations, 3 of 73 connections incomplete, score 846.57/1000"
+ },
+ {
+  "fixture": "Issue110-testProjectFromFreeroutingBugTest.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 4 connections incomplete, score 999.98/1000"
+ },
+ {
+  "fixture": "Issue110-testProjectFromFreeroutingBugTest01.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 4 connections incomplete, score 999.98/1000"
+ },
+ {
+  "fixture": "Issue110-Паяльная станция.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 18 clearance violations, 6 of 109 connections incomplete, score 911.91/1000"
+ },
+ {
+  "fixture": "Issue113-Protein.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 44 clearance violations, 86 of 444 connections incomplete, score 786.47/1000"
+ },
+ {
+  "fixture": "Issue143-rpi_splitter.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 5 connections incomplete, score 999.97/1000"
+ },
+ {
+  "fixture": "Issue143-rpi_splitter_mod.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 1 connections incomplete, score 999.99/1000"
+ },
+ {
+  "fixture": "Issue145-smoothieboard.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 112 clearance violations, 139 of 793 connections incomplete, score 796.46/1000"
+ },
+ {
+  "fixture": "Issue153-wavefolder.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 9 clearance violations, 0 of 81 connections incomplete, score 977.77/1000"
+ },
+ {
+  "fixture": "Issue155-CH376_MCP795_Module.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 53 connections incomplete, score 999.99/1000"
+ },
+ {
+  "fixture": "Issue157-TeamAdapt-LinePCB.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 18 clearance violations, 2 of 226 connections incomplete, score 975.21/1000"
+ },
+ {
+  "fixture": "Issue159-setonix_2hp-pcb.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 23 connections incomplete, score 999.99/1000"
+ },
+ {
+  "fixture": "Issue163-pic_programmer.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 6 clearance violations, 0 of 126 connections incomplete, score 990.47/1000"
+ },
+ {
+  "fixture": "Issue178-KeebMaker_Sofle_Choc.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 20 clearance violations, 27 of 426 connections incomplete, score 927.20/1000"
+ },
+ {
+  "fixture": "Issue179-Autorouter_PCB1_2023-3-24.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 37 clearance violations, 23 of 68 connections incomplete, score 552.94/1000"
+ },
+ {
+  "fixture": "Issue187-processor.Z80.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 834 connections incomplete, score 999.98/1000"
+ },
+ {
+  "fixture": "Issue190-processor.Z80.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 1372 clearance violations, 0 of 834 connections incomplete, score 670.97/1000"
+ },
+ {
+  "fixture": "Issue208-freerouting.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 17 clearance violations, 378 of 424 connections incomplete, score 100.47/1000"
+ },
+ {
+  "fixture": "Issue209-split05.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 182 clearance violations, 14 of 317 connections incomplete, score 841.00/1000"
+ },
+ {
+  "fixture": "Issue209-split10.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 182 clearance violations, 0 of 317 connections incomplete, score 885.17/1000"
+ },
+ {
+  "fixture": "Issue214-freerouting.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 192 clearance violations, 1 of 413 connections incomplete, score 904.59/1000"
+ },
+ {
+  "fixture": "Issue217-8088sbc.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 235 connections incomplete, score 999.99/1000"
+ },
+ {
+  "fixture": "Issue219-LogicBoard_smt.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 365 of 993 connections incomplete, score 632.41/1000"
+ },
+ {
+  "fixture": "Issue229-display-8-digit-hc595.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 0 clearance violations, 0 of 64 connections incomplete, score 999.98/1000"
+ },
+ {
+  "fixture": "Issue230-CNH_Functional_Tester_1.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 16 clearance violations, 0 of 203 connections incomplete, score 984.23/1000"
+ },
+ {
+  "fixture": "Issue269-caniot-tiny-arm.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (1 board restore, finished on the best board seen, 1 connections hit their budget)",
+  "doors_mode": "full",
+  "self_referee": "Referee: 4 clearance violations, 79 of 192 connections incomplete, score 584.37/1000"
+ }
+]

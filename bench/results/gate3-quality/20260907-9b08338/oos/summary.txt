@@ -1,0 +1,11 @@
+SUITE_START 2026-09-06T16:36:28Z suite=oos W=8 mp=20 job_timeout=285 hard_timeout=320 doors=default bin=/home/chiqingzhen/fr/targets/rev-9b08338/release/fr-cli n=9
+cla45-computeboard rc=0 wall=0.03 ses_bytes=1931
+kicad-tutorial rc=0 wall=0.22 ses_bytes=473
+kicad-coldfire rc=0 wall=42.3 ses_bytes=513849
+easyeda-pcb1 rc=2 wall=87.19 ses_bytes=17315
+cla45-sensor-hdi rc=2 wall=190.26 ses_bytes=132769
+cla45-compute-hdi6cs rc=4 wall=281.1 ses_bytes=227864
+kicad-coldfire-unrouted rc=4 wall=283.65 ses_bytes=192784
+cla45-power-io-l6 rc=4 wall=283.67 ses_bytes=55597
+cla45-sensor-l6 rc=4 wall=284.69 ses_bytes=94411
+SUITE_END 2026-09-06T16:41:12Z n=9 total_wall_s=284.7

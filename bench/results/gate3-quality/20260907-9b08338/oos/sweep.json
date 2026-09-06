@@ -1,0 +1,74 @@
+[
+ {
+  "fixture": "cla45-compute-hdi6cs.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 3077 clearance violations, 614 of 1692 connections incomplete, score 273.40/1000"
+ },
+ {
+  "fixture": "cla45-computeboard.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 0 clearance violations, 0 of 0 connections incomplete, score 0.00/1000"
+ },
+ {
+  "fixture": "cla45-power-io-l6.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 531 clearance violations, 60 of 495 connections incomplete, score 664.23/1000"
+ },
+ {
+  "fixture": "cla45-sensor-hdi.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 645 clearance violations, 3 of 375 connections incomplete, score 647.99/1000"
+ },
+ {
+  "fixture": "cla45-sensor-l6.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 10 clearance violations, 110 of 369 connections incomplete, score 696.47/1000"
+ },
+ {
+  "fixture": "easyeda-pcb1.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "stagnation (global) (0 board restores)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 45 clearance violations, 8 of 81 connections incomplete, score 790.12/1000"
+ },
+ {
+  "fixture": "kicad-coldfire-unrouted.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "job deadline (0 board restores, 1 connections hit their budget)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 12 clearance violations, 25 of 541 connections incomplete, score 949.34/1000"
+ },
+ {
+  "fixture": "kicad-coldfire.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 218 clearance violations, 0 of 541 connections incomplete, score 919.40/1000"
+ },
+ {
+  "fixture": "kicad-tutorial.dsn",
+  "wall_s": null,
+  "timed_out": false,
+  "stop_reason": "board complete (0 board restores)",
+  "doors_mode": "default",
+  "self_referee": "Referee: 0 clearance violations, 0 of 0 connections incomplete, score 0.00/1000"
+ }
+]
