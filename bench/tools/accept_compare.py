@@ -188,18 +188,23 @@ def compare_gates(
     base_modes = {r.get("doors_mode") for r in base_list if r.get("doors_mode")}
 
     # Union of fixtures routed in ours or base
+    # If ours is a subset (e.g. 24 or oos suite), only compare fixtures present in ours.
+    # Otherwise missing baseline boards would be reported as MISSING.
     fixtures = sorted(
         set(
             k
             for k, v in ours_map.items()
             if v.get("ours_unrouted") is not None
         )
-        | set(
-            k
-            for k, v in base_map.items()
-            if v.get("ours_unrouted") is not None
-        )
     )
+    if not fixtures:
+        fixtures = sorted(
+            set(
+                k
+                for k, v in base_map.items()
+                if v.get("ours_unrouted") is not None
+            )
+        )
 
     rows = []
     worse_count = 0

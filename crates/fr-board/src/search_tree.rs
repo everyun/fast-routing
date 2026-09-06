@@ -1684,6 +1684,9 @@ pub fn calculate_tree_shapes_for_family(
     out: &mut Vec<ItemTileShape>,
 ) {
     calculate_tree_shapes(item, tree_class, ctx, out);
+    if matches!(item.kind, ItemKind::BoardOutline(_)) {
+        return;
+    }
     match family {
         TreeAngleFamily::AnyAngle => {}
         TreeAngleFamily::FortyFive => {

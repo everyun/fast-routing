@@ -32,6 +32,13 @@ ARCHITECTURE "Budgets".
   fanout /CAN_RX escape avoids dead pockets and routes cleanly in pass 1.
   On easyeda-pcb1 fanout runs 127× faster (4.07 s vs 515.9 s, matching jar parity).
 
+- **BoardOutline tree shapes stay Simplex in 45° family tree**
+  (`fr_board::search_tree::calculate_tree_shapes_for_family`, skip added in `48ef09d`).
+  - *Upstream behaviour*: Upstream builds outline tree shapes in base class `ShapeSearchTree.java:971-1024` as a 3-line polyline offset (concave Simplex strip). `ShapeSearchTree45Degree` does not re-flavor them into exact octagons (its only outline override is `:453-460`, which replaces each strip by `bounding_octagon()`).
+  - *Our behaviour*: Outline strips stay Simplex rather than converting into tighter 45° octagons via `TileShape::to_flavor(FortyFive)` which would swallow boundary pads.
+  - *Evidence*: `REPORT-054-pocket.md` (commit `48ef09d`); eliminates `Issue054-tairakb` Net 10 exhaustion loop, dropping runtime from 78s/1u to 4.7s/0u.
+  - *Status*: 已对齐.
+
 - **Fanout is on by default on the CLI** (`fr-cli`, `--no-fanout` to skip).
   - *Upstream behaviour*: `DefaultSettings.fanout.enabled = true` (`app/freerouting/settings/DefaultSettings.java:113`); headless entry gates on `isFanoutEnabled()` (`app/freerouting/autoroute/BatchAutorouter.java:798`).
   - *Our behaviour*: CLI `-de … -mp 20` enables fanout by default, exactly matching the release jar. Library default (`MazeOptions`) stays off for minimal in-process test harnesses.
