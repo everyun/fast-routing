@@ -164,6 +164,11 @@ pub struct FanoutConfig {
     /// `surroundings_density` radius, in board units.
     pub density_radius: f64,
     /// `router.fanout.fallbackToBoardVias` (row 27).
+    ///
+    /// Resolved from [`FanoutSettings::fallback_to_board_vias`] (shipping
+    /// default `false`, a documented divergence) with the
+    /// `FR_FANOUT_FALLBACK_VIAS` environment override on top: set it to `1`
+    /// to restore upstream's fallback behaviour for one run.
     pub fallback_to_board_vias: bool,
     /// The job's wall budget, polled before every pass and every pin.
     /// Defaults to [`JobDeadline::ambient`]; [`JobDeadline::NONE`] opts out.
@@ -191,7 +196,10 @@ impl FanoutConfig {
             min_escape_length: settings.fanout.min_escape_length_mm * scale,
             max_escape_length: settings.fanout.max_escape_length_mm * scale,
             density_radius: SURROUNDINGS_DENSITY_RADIUS_MM * scale,
-            fallback_to_board_vias: settings.fanout.fallback_to_board_vias,
+            fallback_to_board_vias: std::env::var(FALLBACK_VIAS_ENV)
+                .ok()
+                .and_then(|v| parse_fallback_env(&v))
+                .unwrap_or(settings.fanout.fallback_to_board_vias),
             deadline: JobDeadline::ambient(),
         }
     }
@@ -573,6 +581,24 @@ pub fn fanout_pass(
     counters
 }
 
+/// Environment override for [`FanoutConfig::fallback_to_board_vias`].
+///
+/// Set to `1` (or `true`/`on`/`yes`) to restore upstream's fallback for one
+/// run; `0` / `false` / `off` / `no` forces it off. Any other value leaves
+/// the settings default, which is itself `false` — see
+/// PARITY-DIVERGENCES.md, "fanout fallbackToBoardVias".
+pub const FALLBACK_VIAS_ENV: &str = "FR_FANOUT_FALLBACK_VIAS";
+
+/// Parses one [`FALLBACK_VIAS_ENV`] value; `None` = "not a switch, use the
+/// settings default".
+fn parse_fallback_env(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "1" | "true" | "on" | "yes" => Some(true),
+        "0" | "false" | "off" | "no" => Some(false),
+        _ => None,
+    }
+}
+
 /// Row 27: skip a pin whose net class defines no via, unless
 /// `fallbackToBoardVias` is on **and** the board's first via rule has a via.
 pub fn net_can_use_vias(rules: &BoardRules, net_no: i32, fallback_to_board_vias: bool) -> bool {
@@ -757,7 +783,10 @@ fn combined_via_rule(class_rule: &ViaRule, rules: &BoardRules, net_no: i32) -> O
         .get(net_no)
         .map(|n| n.net_class_index())
         .and_then(|idx| rules.net_classes.get(idx))
-        .map(|nc| nc.default_item_clearance_classes.get(fr_rules::ItemClass::Via) as usize)
+        .map(|nc| {
+            nc.default_item_clearance_classes
+                .get(fr_rules::ItemClass::Via) as usize
+        })
         .or_else(|| class_rule.get_via(0).map(|v| v.clearance_class()))
         .unwrap_or(1);
     let mut combined = ViaRule::new(format!("{}_fallback", class_rule.name));
@@ -797,6 +826,48 @@ fn via_count(board: &Board) -> usize {
 mod tests {
     use super::*;
     use crate::test_support::TestFixture;
+
+    /// The shipping default is the scheduler-accepted divergence: the fallback
+    /// lends a via whose clearance class is the *default net class's*, which
+    /// under correct per-net semantics can land under-clearanced (Issue039
+    /// via(1462338,-671317), 2448 actual vs 2502 required). Upstream defaults
+    /// it on (`DefaultSettings.java:123`) and never sees the defect because its
+    /// SesReader re-imports vias with the default class too
+    /// (`SesReader.java:359-363`). `FR_FANOUT_FALLBACK_VIAS=1` restores it.
+    #[test]
+    fn fallback_to_board_vias_ships_off_and_the_env_switch_restores_it() {
+        assert!(!RouterSettings::default().fanout.fallback_to_board_vias);
+        // The env override parses as a three-way switch, not a presence flag.
+        assert_eq!(parse_fallback_env("1"), Some(true));
+        assert_eq!(parse_fallback_env("on"), Some(true));
+        assert_eq!(parse_fallback_env("0"), Some(false));
+        assert_eq!(parse_fallback_env("off"), Some(false));
+        // Not a switch: leave the (now-off) settings default in charge.
+        assert_eq!(parse_fallback_env(""), None);
+        assert_eq!(parse_fallback_env("junk"), None);
+    }
+
+    /// With the fallback off (the shipping default), a net whose class has no
+    /// via rule cannot borrow the board's — upstream's
+    /// `BatchFanout.java:196-199` skip, minus the fallback arm.
+    #[test]
+    fn a_net_without_class_vias_cannot_borrow_board_vias_when_the_fallback_is_off() {
+        let fixture = TestFixture::empty_two_layer();
+        let rules = &fixture.rules;
+        let net_no = crate::test_support::TEST_NET;
+        // The fixture's net class carries vias, so only the fallback flag can
+        // make the difference here.
+        assert!(net_can_use_vias(rules, net_no, true));
+        assert_eq!(
+            net_can_use_vias(rules, net_no, false),
+            rules
+                .nets
+                .get(net_no)
+                .and_then(|net| rules.net_classes.get(net.net_class_index()))
+                .and_then(|class| class.get_via_rule())
+                .is_some_and(|rule| rule.via_count() > 0)
+        );
+    }
 
     #[test]
     fn the_release_sorting_keys_are_snake_case() {

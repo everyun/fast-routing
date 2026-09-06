@@ -276,7 +276,10 @@ impl AutorouteControl {
                     .cloned()
                     .or_else(|| {
                         let default_rule = rules.get_default_via_rule()?;
-                        let via_cl = class.default_item_clearance_classes.get(fr_rules::ItemClass::Via) as usize;
+                        let via_cl = class
+                            .default_item_clearance_classes
+                            .get(fr_rules::ItemClass::Via)
+                            as usize;
                         let mut adjusted = ViaRule::new(default_rule.name.clone());
                         for i in 0..default_rule.via_count() {
                             if let Some(v) = default_rule.get_via(i) {

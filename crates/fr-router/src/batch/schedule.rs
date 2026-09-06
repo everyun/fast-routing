@@ -930,7 +930,12 @@ impl BatchLoop {
             if restored {
                 outcome.best_board_restored = true;
                 current_score = scorer.score(board);
-                check_tree_consistency(board, outcome.passes.len() as i32, "history.restore_best", is_det);
+                check_tree_consistency(
+                    board,
+                    outcome.passes.len() as i32,
+                    "history.restore_best",
+                    is_det,
+                );
             }
         }
 
@@ -985,14 +990,19 @@ fn check_tree_consistency(board: &Board, pass: i32, op: &str, deterministic: boo
         if let Err(errors) = board.verify_tree_consistency() {
             eprintln!(
                 "FR_TREE_DESYNC: at pass {} after {} ({} errors):",
-                pass, op, errors.len()
+                pass,
+                op,
+                errors.len()
             );
             for err in errors.iter().take(20) {
                 eprintln!("  {}", err);
             }
             panic!(
                 "Tree desync detected at pass {} after {}: {} errors (first: {})",
-                pass, op, errors.len(), errors[0]
+                pass,
+                op,
+                errors.len(),
+                errors[0]
             );
         }
     }

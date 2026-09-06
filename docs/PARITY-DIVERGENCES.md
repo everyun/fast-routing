@@ -45,6 +45,31 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-burners.md` (commit `3851aa3`), `bench/results/ledger2/20260906-4f537aa/gate.json`.
   - *Status*: 已对齐.
 
+- **`fanout.fallbackToBoardVias` ships OFF; fallback vias inherit the routed net's via clearance class**
+  (`fr_rules::router_settings::FanoutSettings::fallback_to_board_vias`, default `false`;
+  `FR_FANOUT_FALLBACK_VIAS=1` restores the upstream behaviour for one run).
+  - *Upstream behaviour*: the fanout borrows board-wide vias when the net class's via rule is empty
+    (`RoutingBoard.java:1019-1035`, gate at `BatchFanout.java:196-199`, default on at
+    `DefaultSettings.java:123`). The lent `ViaInfo` keeps its own clearance class, which is the
+    **default net class's** (`Network.java:317-343`), and insertion uses exactly that class
+    (`ForcedViaAlgo.java:230`). Upstream never notices the resulting under-clearance because its
+    `SesReader` re-imports vias with the *default* net class's via clearance too
+    (`SesReader.java:359-363`) — router and re-importer are consistently wrong together.
+  - *Our behaviour*: (a) a fallback via is re-classed to the routed net's `ItemClass::Via`
+    clearance (`fanout.rs::combined_via_rule`, `ctrl.rs::init_net`), and (b) the fallback itself
+    ships off, because even re-classed, borrowing a smaller board via changes Power-class fanout
+    geometry and costs unrouted (Issue039 Doors 28u → 44u with fallback on and correct classes).
+    Our Lossless SES reader restores the item's own net class on re-import, so an under-clearanced
+    fallback via *is* charged — the two behaviours upstream stacks cannot hide it.
+  - *Evidence*: `REPORT-tree-desync.md` (commit `3c19050`): three-arm A/B/C on Issue039 —
+    A (upstream-identical) Full-mode +1v at `via(1462338,-671317)` (2448 actual vs 2502 required);
+    B (fallback on, correct classes) 0 added v both modes, Doors 44u;
+    C (fallback off) 0 added v both modes, Doors 35u, Full 38u. Ship default = C; re-enable with
+    `FR_FANOUT_FALLBACK_VIAS=1`.
+  - *Status*: 有意分歧 (upstream default on → ours off; upstream via-class semantics broken →
+    ours per-net). Revisit if the 45° Full mode becomes the shipping default: there B (fallback
+    on, correct classes) beat both A and C (32u/25v vs A 40u/26v, C 38u/25v).
+
 - **Pull-tight fork-splice recheck** (`fr_router::pull_tight`,
   `PullTightAlgo::check_fork_splice`, called from the acute branch of all
   four §6.4 end-corner rules).

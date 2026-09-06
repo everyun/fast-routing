@@ -186,7 +186,19 @@ pub struct FanoutSettings {
     pub end_via_diameter_mm: f64,
     /// `"outer_first"` (default), `"inner_first"` (= the v1.9 order) or `"unsorted"`.
     pub pin_sorting_order: String,
-    /// Use board-wide via rules when the net's via list is empty. Default `true`.
+    /// Use board-wide via rules when the net's via list is empty.
+    ///
+    /// Upstream default is `true` (`DefaultSettings.java:123`), but shipping
+    /// default here is **`false`** — a deliberate divergence (see
+    /// `PARITY-DIVERGENCES.md`, "fanout fallbackToBoardVias"): the fallback
+    /// lends a board-default via whose clearance class is the *default net
+    /// class's*, not the routed net's, so under correct per-net clearance
+    /// semantics the lent via can land under-clearanced (Issue039
+    /// via(1462338,-671317): 2448 actual vs 2502 required on the Power net).
+    /// Upstream never notices because its SesReader re-imports vias with the
+    /// default class too (`SesReader.java:359-363`); our Lossless reader
+    /// restores the net class and charges it. Re-enable per run with
+    /// `FR_FANOUT_FALLBACK_VIAS=1` or a settings file with `true`.
     pub fallback_to_board_vias: bool,
     /// Stage timeout string; `None` = no stage timeout.
     pub timeout: Option<String>,
@@ -206,7 +218,9 @@ impl Default for FanoutSettings {
             start_via_diameter_mm: 0.250,
             end_via_diameter_mm: 0.250,
             pin_sorting_order: "outer_first".to_string(),
-            fallback_to_board_vias: true,
+            // Deliberate divergence from `DefaultSettings.java:123` (which sets
+            // `true`): see the field docs and PARITY-DIVERGENCES.md.
+            fallback_to_board_vias: false,
             timeout: None,
         }
     }

@@ -1221,11 +1221,7 @@ impl SearchTree {
     /// Audits the search tree against `store`, verifying that every live item has
     /// exact matching tile shapes, hulls, layers, and active leaves in this tree.
     /// Also checks for any orphaned or ghost slot entries and leaf count consistency.
-    pub fn verify_consistency(
-        &self,
-        store: &ItemStore,
-        ctx: ShapeContext<'_>,
-    ) -> Vec<String> {
+    pub fn verify_consistency(&self, store: &ItemStore, ctx: ShapeContext<'_>) -> Vec<String> {
         let mut errors = Vec::new();
         let mut expected_shapes = Vec::new();
 
@@ -1242,7 +1238,11 @@ impl SearchTree {
             let Some(entry) = self.slots.get(slot.index()) else {
                 errors.push(format!(
                     "tree (class {}, {:?}): item {} at slot {} has no entry in tree (slots len {})",
-                    self.compensated_class, self.angle_family, item.id, slot.index(), self.slots.len()
+                    self.compensated_class,
+                    self.angle_family,
+                    item.id,
+                    slot.index(),
+                    self.slots.len()
                 ));
                 continue;
             };
@@ -1250,7 +1250,11 @@ impl SearchTree {
             if entry.id != item.id {
                 errors.push(format!(
                     "tree (class {}, {:?}): slot {} holds entry id {} but store has item {}",
-                    self.compensated_class, self.angle_family, slot.index(), entry.id, item.id
+                    self.compensated_class,
+                    self.angle_family,
+                    slot.index(),
+                    entry.id,
+                    item.id
                 ));
                 continue;
             }
@@ -1267,10 +1271,16 @@ impl SearchTree {
             if entry.shapes.len() != expected_shapes.len() {
                 errors.push(format!(
                     "tree (class {}, {:?}): item {} shape count mismatch: tree has {}, expected {}",
-                    self.compensated_class, self.angle_family, item.id, entry.shapes.len(), expected_shapes.len()
+                    self.compensated_class,
+                    self.angle_family,
+                    item.id,
+                    entry.shapes.len(),
+                    expected_shapes.len()
                 ));
             } else {
-                for (idx, (actual, expected)) in entry.shapes.iter().zip(expected_shapes.iter()).enumerate() {
+                for (idx, (actual, expected)) in
+                    entry.shapes.iter().zip(expected_shapes.iter()).enumerate()
+                {
                     if actual.layer != expected.layer {
                         errors.push(format!(
                             "tree (class {}, {:?}): item {} shape {} layer mismatch: tree has {}, expected {}",
@@ -1300,7 +1310,11 @@ impl SearchTree {
             if entry.leaves.len() != occupied_count {
                 errors.push(format!(
                     "tree (class {}, {:?}): item {} leaf count {} != occupied shapes {}",
-                    self.compensated_class, self.angle_family, item.id, entry.leaves.len(), occupied_count
+                    self.compensated_class,
+                    self.angle_family,
+                    item.id,
+                    entry.leaves.len(),
+                    occupied_count
                 ));
             }
 
@@ -1331,7 +1345,11 @@ impl SearchTree {
                 if !entry.leaves.is_empty() || !entry.shapes.is_empty() || !entry.hulls.is_empty() {
                     errors.push(format!(
                         "tree (class {}, {:?}): unassigned slot {} still has {} leaves, {} shapes",
-                        self.compensated_class, self.angle_family, slot_index, entry.leaves.len(), entry.shapes.len()
+                        self.compensated_class,
+                        self.angle_family,
+                        slot_index,
+                        entry.leaves.len(),
+                        entry.shapes.len()
                     ));
                 }
                 continue;
@@ -1348,7 +1366,11 @@ impl SearchTree {
                     if store.slot_of(entry.id).map(|s| s.index()) != Some(slot_index) {
                         errors.push(format!(
                             "tree (class {}, {:?}): item {} at slot {} but store slot is {:?}",
-                            self.compensated_class, self.angle_family, entry.id, slot_index, store.slot_of(entry.id)
+                            self.compensated_class,
+                            self.angle_family,
+                            entry.id,
+                            slot_index,
+                            store.slot_of(entry.id)
                         ));
                     }
                 }
@@ -1358,7 +1380,10 @@ impl SearchTree {
         if total_leaves != self.tree.len() {
             errors.push(format!(
                 "tree (class {}, {:?}): slot table accounts for {} leaves but arena tree holds {}",
-                self.compensated_class, self.angle_family, total_leaves, self.tree.len()
+                self.compensated_class,
+                self.angle_family,
+                total_leaves,
+                self.tree.len()
             ));
         }
 
@@ -1589,11 +1614,7 @@ impl SearchTreeManager {
     }
 
     /// Audits every active search tree against `store`.
-    pub fn verify_consistency(
-        &self,
-        store: &ItemStore,
-        ctx: ShapeContext<'_>,
-    ) -> Vec<String> {
+    pub fn verify_consistency(&self, store: &ItemStore, ctx: ShapeContext<'_>) -> Vec<String> {
         let mut errors = Vec::new();
         for tree in self.trees() {
             errors.extend(tree.verify_consistency(store, ctx));

@@ -1115,7 +1115,9 @@ fn test_router_settings_defaults_match_default_settings() {
     assert_eq!(s.fanout.start_via_diameter_mm, 0.250);
     assert_eq!(s.fanout.end_via_diameter_mm, 0.250);
     assert_eq!(s.fanout.pin_sorting_order, "outer_first");
-    assert!(s.fanout.fallback_to_board_vias);
+    // Deliberate divergence from upstream's `true` (DefaultSettings.java:123);
+    // see FanoutSettings::fallback_to_board_vias docs and PARITY-DIVERGENCES.md.
+    assert!(!s.fanout.fallback_to_board_vias);
     assert_eq!(s.fanout.timeout, None);
 
     // Optimizer (§3.4).

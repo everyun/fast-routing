@@ -806,14 +806,17 @@ impl<'r> BatchOptimizer<'r> {
                 if let Err(errors) = board.verify_tree_consistency() {
                     eprintln!(
                         "FR_TREE_DESYNC: optimizer pass {} ended with {} inconsistencies:",
-                        current_pass, errors.len()
+                        current_pass,
+                        errors.len()
                     );
                     for err in errors.iter().take(20) {
                         eprintln!("  {}", err);
                     }
                     panic!(
                         "Tree desync detected at optimizer pass {}: {} errors (first: {})",
-                        current_pass, errors.len(), errors[0]
+                        current_pass,
+                        errors.len(),
+                        errors[0]
                     );
                 }
             }
