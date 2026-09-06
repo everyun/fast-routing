@@ -885,23 +885,18 @@ fn normal_contacts(
         .collect()
 }
 
-/// `Item.is_fanout_via(collected)`: a via whose only contacts, besides the ones
-/// already collected, are pins.
+/// `Item.is_fanout_via(collected)` (`Item.java:1251-1282`): a via touched by a
+/// lone SMD pad — directly, or through a short trace with a lone SMD pad or a
+/// shove-fixed two-corner exit trace on its far end. Contact traces already in
+/// `collected` are ignored. The walk in [`connection_items`] stops at such a
+/// via when `remove_ripped` runs with the `FANOUT_VIA` stop option, so the
+/// predicate must be upstream's: a via that feeds *several* escapes still
+/// counts as a fanout via, and stopping there is what keeps one pin's ripup
+/// from destroying a neighbouring pin's escape.
 fn is_fanout_via(board: &Board, via: ItemId, collected: &BTreeSet<ItemId>) -> bool {
-    let mut scratch = Vec::new();
-    let contacts = normal_contacts(board, via, &mut scratch);
-    let mut saw_pin = false;
-    for (contact, _, _) in contacts {
-        if collected.contains(&contact) {
-            continue;
-        }
-        match board.store().get(contact).map(|item| &item.kind) {
-            Some(ItemKind::Pin(_)) => saw_pin = true,
-            Some(_) => return false,
-            None => {}
-        }
-    }
-    saw_pin
+    let ignore: Vec<ItemId> = collected.iter().copied().collect();
+    let mut scratch = crate::batch::ContactScratch::new();
+    crate::batch::is_fanout_via(board, via, &ignore, &mut scratch)
 }
 
 fn as_int(point: &Point) -> Option<IntPoint> {
