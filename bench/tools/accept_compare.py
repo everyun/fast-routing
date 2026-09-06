@@ -16,17 +16,67 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
-def find_latest_baseline(repo_root: Path) -> Path:
-    """Find gate.json in the latest commit under bench/results/main-sweeps/."""
+def detect_doors_mode(gate_path: Path) -> str:
+    """Detect the doors mode recorded in a gate.json.
+
+    Returns "full", "default", or "unknown" (missing / inconsistent
+    doors_mode fields, e.g. sweeps from before mode recording).
+    """
+    with open(gate_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    modes = {
+        r.get("doors_mode")
+        for r in data
+        if isinstance(r, dict)
+    } - {None, ""}
+    if modes == {"full"}:
+        return "full"
+    if modes and modes <= {"default", "doors", "off"}:
+        return "default"
+    return "unknown"
+
+
+def infer_suite(gate_path: Path) -> str:
+    """Infer whether a gate.json is an OOS suite run from fixture names."""
+    with open(gate_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    for r in data:
+        fixture = str(r.get("fixture", "")) if isinstance(r, dict) else ""
+        if "cla45-" in fixture or "kicad-" in fixture or "easyeda-" in fixture:
+            return "oos"
+    return "main"
+
+
+def find_latest_baseline(repo_root: Path, doors_mode: str = "default", suite: str = "main") -> Path:
+    """Find the latest baseline gate.json under bench/results/main-sweeps/
+
+    matching the given doors_mode and suite.
+
+    Layout:
+      - default mode: <sha>/<suite>/gate.json
+      - full mode:    <sha>/full/<suite>/gate.json
+
+    Raises FileNotFoundError when no same-mode baseline exists (rather than
+    silently comparing against the wrong mode).
+    """
+    if doors_mode not in ("full", "default"):
+        raise ValueError(
+            f"doors_mode of ours gate is '{doors_mode}' (unknown); cannot select "
+            f"a same-mode baseline automatically. Pass an explicit baseline path "
+            f"or re-run the sweep with mode recording (rebase onto >= 790ad8e)."
+        )
+
     sweeps_dir = repo_root / "bench" / "results" / "main-sweeps"
     if not sweeps_dir.is_dir():
         raise FileNotFoundError(f"Baseline directory not found: {sweeps_dir}")
 
-    # Inspect all candidate directories containing main/gate.json
+    rel = Path("full") / suite if doors_mode == "full" else Path(suite)
+
+    # Inspect all candidate directories containing <rel>/gate.json
     candidates = []
     for entry in sweeps_dir.iterdir():
         if entry.is_dir():
-            gate_path = entry / "main" / "gate.json"
+            gate_path = entry / rel / "gate.json"
             if gate_path.is_file():
                 # Query commit timestamp if directory name looks like a git commit hash
                 commit_ts = None
@@ -48,8 +98,19 @@ def find_latest_baseline(repo_root: Path) -> Path:
                 ts = commit_ts if commit_ts is not None else gate_path.stat().st_mtime
                 candidates.append((ts, entry.name, gate_path))
 
+    if not candidates and doors_mode == "default" and suite == "oos":
+        # Fallback for OOS baseline if not yet in main-sweeps
+        fallback = repo_root / "bench" / "results" / "gate2-quality" / "20260906-ddc6364" / "oos" / "gate.json"
+        if fallback.is_file():
+            candidates.append((fallback.stat().st_mtime, fallback.name, fallback))
+
     if not candidates:
-        raise FileNotFoundError(f"No baseline main/gate.json found under {sweeps_dir}")
+        raise FileNotFoundError(
+            f"No same-mode baseline found: looked for {rel}/gate.json "
+            f"(doors_mode={doors_mode}, suite={suite}) under {sweeps_dir}. "
+            f"Run a mainline sweep with --doors {doors_mode} first, or pass an "
+            f"explicit baseline path."
+        )
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     return candidates[0][2]
@@ -309,7 +370,7 @@ def print_comparison_table(
     print("=" * 95, file=stream)
 
 
-def main() -> int:
+def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Acceptance gate comparison.")
     parser.add_argument("ours", type=Path, help="Path to ours gate.json")
     parser.add_argument("baseline", nargs="?", type=Path, default=None,
@@ -321,7 +382,7 @@ def main() -> int:
     parser.add_argument("--repo-root", type=Path, default=None,
                         help="Root of fast-routing repository")
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     repo_root = args.repo_root
     if repo_root is None:
@@ -329,15 +390,35 @@ def main() -> int:
         repo_root = Path(__file__).resolve().parents[2]
 
     base_path = args.baseline
+    ours_mode = detect_doors_mode(args.ours)
     if base_path is None:
-        base_path = find_latest_baseline(repo_root)
-
+        if ours_mode == "unknown":
+            print(
+                "Error: ours gate.json has no usable doors_mode records; refusing to "
+                "auto-select a baseline of unknown mode. Pass an explicit baseline path.",
+                file=sys.stderr,
+            )
+            return 2
+        suite = infer_suite(args.ours)
+        base_path = find_latest_baseline(repo_root, doors_mode=ours_mode, suite=suite)
     if not args.ours.is_file():
         print(f"Error: ours file not found: {args.ours}", file=sys.stderr)
         return 2
     if not base_path.is_file():
         print(f"Error: baseline file not found: {base_path}", file=sys.stderr)
         return 2
+
+    if args.baseline is not None:
+        # Explicit baseline: refuse cross-mode comparison instead of warning.
+        base_mode = detect_doors_mode(base_path)
+        if ours_mode != "unknown" and base_mode != "unknown" and ours_mode != base_mode:
+            print(
+                f"Error: doors mode mismatch: ours gate is '{ours_mode}' but baseline "
+                f"{base_path} is '{base_mode}'. Comparing different modes is invalid; "
+                f"select a same-mode baseline.",
+                file=sys.stderr,
+            )
+            return 2
 
     rows, summary = compare_gates(
         args.ours,

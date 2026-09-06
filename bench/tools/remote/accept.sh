@@ -167,29 +167,14 @@ import sys
 sys.path.insert(0, '$REPO_ROOT/bench/tools')
 import accept_compare
 
-sweeps_dir = Path('$REPO_ROOT') / 'bench' / 'results' / 'main-sweeps'
-candidates = []
-for entry in sweeps_dir.iterdir():
-    if entry.is_dir():
-        if '$IS_OOS' == '1':
-            gate_path = entry / 'oos' / 'gate.json'
-        else:
-            gate_path = entry / 'main' / 'gate.json'
-        if gate_path.is_file():
-            candidates.append((gate_path.stat().st_mtime, gate_path))
-
-if not candidates and '$IS_OOS' == '1':
-    # Fallback for OOS baseline if not yet in main-sweeps
-    fallback = Path('$REPO_ROOT') / 'bench' / 'results' / 'gate2-quality' / '20260906-ddc6364' / 'oos' / 'gate.json'
-    if fallback.is_file():
-        candidates.append((fallback.stat().st_mtime, fallback))
-
-if candidates:
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    print(candidates[0][1])
-else:
-    sys.exit(1)
-")
+gate = Path('$g')
+mode = accept_compare.detect_doors_mode(gate)
+suite = accept_compare.infer_suite(gate)
+print(accept_compare.find_latest_baseline(Path('$REPO_ROOT'), doors_mode=mode, suite=suite))
+") || {
+    echo "error: failed to resolve a same-mode baseline for $g (see message above)" >&2
+    exit 2
+  }
 
   echo "==> Baseline gate for $g: $LATEST_BASELINE"
 
