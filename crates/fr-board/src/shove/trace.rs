@@ -35,7 +35,7 @@ use super::entries::{
 use super::from_side::FromSide;
 use super::geom;
 use super::shape_and_from_side::ShapeAndFromSide;
-use super::{ShoveCheck, ShoveInsert, FULL_SHOVE};
+use super::{ShoveCheck, ShoveInsert, ShoveScratch, FULL_SHOVE};
 use crate::board::Board;
 use crate::clearance::ClearanceSource;
 use crate::item::{FixedState, ItemId, ItemKind, ObstacleKind};
@@ -50,6 +50,41 @@ use crate::net_nos::NetNos;
 pub fn check_shove_segment(
     board: &Board,
     bounds: &IntBox,
+    line_segment: &LineSegment,
+    shove_to_the_left: bool,
+    layer: i32,
+    net_no_arr: &NetNos,
+    trace_half_width: i32,
+    cl_type: i32,
+    max_recursion_depth: i32,
+    max_via_recursion_depth: i32,
+) -> f64 {
+    // One obstacle arena per top-level call, reused by every recursion level
+    // inside it (shove.md §15, "Arena the shove transaction"). Reuse is
+    // observable only in allocation count.
+    let mut scratch = ShoveScratch::default();
+    check_shove_segment_impl(
+        board,
+        bounds,
+        &mut scratch,
+        line_segment,
+        shove_to_the_left,
+        layer,
+        net_no_arr,
+        trace_half_width,
+        cl_type,
+        max_recursion_depth,
+        max_via_recursion_depth,
+    )
+}
+
+/// The recursion body of [`check_shove_segment`]; `scratch` is threaded through
+/// so a warm cascade reuses one obstacle buffer per level instead of allocating.
+#[allow(clippy::too_many_arguments)]
+fn check_shove_segment_impl(
+    board: &Board,
+    bounds: &IntBox,
+    scratch: &mut ShoveScratch,
     line_segment: &LineSegment,
     shove_to_the_left: bool,
     layer: i32,
@@ -85,7 +120,7 @@ pub fn check_shove_segment(
         cl_type,
         Some(from_side),
     );
-    let mut obstacles = Vec::new();
+    let mut obstacles = scratch.take();
     geom::overlapping_items_with_clearance(
         board,
         &trace_shape,
@@ -95,6 +130,9 @@ pub fn check_shove_segment(
         &mut obstacles,
     );
     let obstacles_shovable = shape_entries.store_items(board, &obstacles, false, true);
+    // `obstacles` is dead past `store_items`; return the buffer for the next
+    // recursion level instead of dropping it.
+    scratch.give(obstacles);
     if !obstacles_shovable || shape_entries.trace_tails_in_shape() {
         return 0.0;
     }
@@ -198,9 +236,10 @@ pub fn check_shove_segment(
             if !is_in_front {
                 continue;
             }
-            let shove_ok_length = check_shove_segment(
+            let shove_ok_length = check_shove_segment_impl(
                 board,
                 bounds,
+                scratch,
                 &curr_line_segment,
                 shove_to_the_left,
                 layer,
