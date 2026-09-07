@@ -71,6 +71,8 @@ use fr_rules::router_settings::RouterSettings;
 use fr_rules::via_rule::ViaRule;
 
 use crate::batch::schedule::JobDeadline;
+use std::time::Instant;
+
 use crate::batch::{connected_set, unconnected_set, AttemptOutcome, AttemptState, ContactScratch};
 use crate::ctrl::AutorouteControl;
 
@@ -173,6 +175,11 @@ pub struct FanoutConfig {
     /// The job's wall budget, polled before every pass and every pin.
     /// Defaults to [`JobDeadline::ambient`]; [`JobDeadline::NONE`] opts out.
     pub deadline: JobDeadline,
+    /// When a job budget exists, the stage may spend at most this fraction of
+    /// what remains when it starts (`0.0` = uncapped; the shipping default is
+    /// `0.25`, `FR_FANOUT_BUDGET_PCT` overrides). No deadline — no cap, and
+    /// the stage behaves exactly as upstream.
+    pub budget_fraction: f64,
 }
 
 impl FanoutConfig {
@@ -196,6 +203,7 @@ impl FanoutConfig {
             min_escape_length: settings.fanout.min_escape_length_mm * scale,
             max_escape_length: settings.fanout.max_escape_length_mm * scale,
             density_radius: SURROUNDINGS_DENSITY_RADIUS_MM * scale,
+            budget_fraction: budget_fraction_from_env(),
             fallback_to_board_vias: std::env::var(FALLBACK_VIAS_ENV)
                 .ok()
                 .and_then(|v| parse_fallback_env(&v))
@@ -383,6 +391,8 @@ fn sort_pins(pins: &mut [FanoutPin], order: PinSortingOrder) {
 pub struct FanoutPassCounters {
     /// 0-based pass number, the ripup and per-pin-budget multiplier minus one.
     pub pass_no: i32,
+    /// The stage's own budget ran out mid-pass (`FanoutStop::StageBudget`).
+    pub stage_budget_hit: bool,
     /// The ripup budget the pass ran at, or `-1` for "no ripup".
     pub ripup_costs: i32,
     /// Pins that escaped in this pass.
@@ -466,6 +476,14 @@ pub fn fanout_board(
     let safe_stop = std::env::var("FR_FANOUT_SAFE_STOP").ok().as_deref() == Some("1");
     let mut flat_passes = 0u32;
     let mut previous_vias = usize::MAX;
+    // The stage's share of the job budget: only when a job deadline exists
+    // (`FR_FANOUT_BUDGET_PCT`/default 25%). Without a deadline — upstream's
+    // world, and every `--deterministic` byte-comparison — this is `None` and
+    // the stage is uncapped.
+    let stage_deadline = (config.budget_fraction > 0.0)
+        .then_some(())
+        .and(|()| config.deadline.remaining())
+        .map(|remaining| Instant::now() + remaining.mul_f64(config.budget_fraction));
 
     for pass_no in 0..config.max_passes.max(0) {
         if config.deadline.expired() {
@@ -485,8 +503,16 @@ pub fn fanout_board(
             pass_no,
             &mut outcome.total_items_fanouted,
             &mut scratch,
+            stage_deadline,
         );
         outcome.passes.push(counters);
+        if counters.stage_budget_hit {
+            // The stage's share of the job budget is spent. Leaves the board
+            // exactly as the deadline poll does — between pins, mid-pass
+            // attempts never cut.
+            outcome.stop = Some(FanoutStop::StageBudget);
+            return outcome;
+        }
         if config.deadline.expired() {
             // A pass cut short between pins must not be read as the release's
             // `routed == 0` stop below — the reason is the deadline.
@@ -552,6 +578,7 @@ pub fn fanout_board(
 /// `start_ripup_costs * (pass_no + 1)` and the per-pin budget is
 /// [`DEFAULT_MAX_MILLISECONDS_PER_PIN`] `* (pass_no + 1)` (rows 25-26).
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 pub fn fanout_pass(
     board: &mut Board,
     rules: &BoardRules,
@@ -561,6 +588,7 @@ pub fn fanout_pass(
     pass_no: i32,
     total_items_fanouted: &mut usize,
     scratch: &mut ContactScratch,
+    stage_deadline: Option<Instant>,
 ) -> FanoutPassCounters {
     let ripup_costs = if config.ripup_allowed {
         config.start_ripup_costs.saturating_mul(pass_no + 1)
@@ -577,6 +605,13 @@ pub fn fanout_pass(
             if config.deadline.expired() {
                 // Between pins, never inside one pin's attempt: what a
                 // deadline cut inserts must not depend on machine load.
+                counters.via_count = via_count(board);
+                return counters;
+            }
+            if stage_deadline.is_some_and(|at| Instant::now() >= at) {
+                // The stage's share of the job budget is spent; same
+                // between-pins contract as the job deadline above.
+                counters.stage_budget_hit = true;
                 counters.via_count = via_count(board);
                 return counters;
             }
@@ -625,6 +660,24 @@ pub fn fanout_pass(
 /// the settings default, which is itself `false` — see
 /// PARITY-DIVERGENCES.md, "fanout fallbackToBoardVias".
 pub const FALLBACK_VIAS_ENV: &str = "FR_FANOUT_FALLBACK_VIAS";
+
+/// Shipping default for [`FanoutConfig::budget_fraction`]: a quarter of the
+/// job budget, the smallest share at which every corpus board's fanout stage
+/// still finishes its work (REPORT-fanout-budget.md §R 扫描).
+pub const DEFAULT_BUDGET_FRACTION: f64 = 0.25;
+
+/// `FR_FANOUT_BUDGET_PCT` — the budget share in whole percent, for sweeps.
+pub const BUDGET_PCT_ENV: &str = "FR_FANOUT_BUDGET_PCT";
+
+/// Resolves [`FanoutConfig::budget_fraction`]: `FR_FANOUT_BUDGET_PCT` in
+/// whole percent, else [`DEFAULT_BUDGET_FRACTION`]. Out-of-range or unparsable
+/// values fall back to the default.
+fn budget_fraction_from_env() -> f64 {
+    match std::env::var(BUDGET_PCT_ENV).ok().as_deref().and_then(|v| v.parse::<f64>().ok()) {
+        pct if (0.0..=100.0).contains(&pct) => pct / 100.0,
+        _ => DEFAULT_BUDGET_FRACTION,
+    }
+}
 
 /// Parses one [`FALLBACK_VIAS_ENV`] value; `None` = "not a switch, use the
 /// settings default".
