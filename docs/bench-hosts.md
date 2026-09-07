@@ -1,14 +1,14 @@
 # Remote Benchmarking Hosts
 
-To prevent local CPU contention and ensure repeatable, hermetic testing, test sweeps (24-board unique, 46-board main suite, and 9-board OOS) can be offloaded to dedicated remote Debian servers in the private subnet (`172.20.0.0/24`).
+To prevent local CPU contention and ensure repeatable, hermetic testing, test sweeps (24-board unique, 46-board main suite, and 9-board OOS) can be offloaded to dedicated remote Debian servers.
 
 ## Available Hosts
 
-| Host Alias | IP Address | CPU Cores | RAM | Default Concurrency ($W$) | Role / Workload Policy |
+| Host Alias | Address | CPU Cores | RAM | Default Concurrency ($W$) | Role / Workload Policy |
 |---|---|---|---|---|---|
-| **orca** | `172.20.0.6` | 80 cores (`x86_64`) | 125 GiB | 8 | Dedicated primary test runner / GPU experiments |
-| **salmon** | `172.20.0.2` | 64 cores (`x86_64`) | 125 GiB | 8 | Secondary test runner (also runs k8s / VMs) |
-| **whale** | `172.20.0.4` | 8 cores (`x86_64`) | 251 GiB | 4 | Tertiary test runner (also runs NAS / ZFS / k8s) |
+| **orca** | per ops notes | 80 cores (`x86_64`) | 125 GiB | 8 | Dedicated primary test runner / GPU experiments |
+| **salmon** | per ops notes | 64 cores (`x86_64`) | 125 GiB | 8 | Secondary test runner (also runs k8s / VMs) |
+| **whale** | per ops notes | 8 cores (`x86_64`) | 251 GiB | 4 | Tertiary test runner (also runs NAS / ZFS / k8s) |
 
 > **Critical Host Safety Rule**: Never kill or interfere with existing non-fast-routing services or Docker containers on remote hosts. All fast-routing operations must remain inside `~/fr/` (local NVMe), and remote jobs must run with `nice -n 10`.
 
@@ -33,9 +33,9 @@ Measured under single-thread execution (`-mp 1 --no-optimizer`, in-tool routing 
 
 | Host | Issue026-J2 (in-tool s) | Issue155-CH376 (in-tool s) | Single-Core Relative Speed |
 |---|---|---|---|
-| **salmon** (`172.20.0.2`) | 0.77 s | 3.06 s | **1.35x** |
-| **orca** (`172.20.0.6`) | 1.07 s | 4.12 s | **1.00x** (baseline) |
-| **whale** (`172.20.0.4`) | 1.42 s | 5.58 s | **0.74x** |
+| **salmon** | 0.77 s | 3.06 s | **1.35x** |
+| **orca** | 1.07 s | 4.12 s | **1.00x** (baseline) |
+| **whale** | 1.42 s | 5.58 s | **0.74x** |
 
 ### Cross-Host 285 s Deadline Incomparability
 

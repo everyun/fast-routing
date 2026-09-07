@@ -169,8 +169,8 @@ recorded sweep `d89ded9`, HEAD sweep `54883a1` — and `DECISIONS.md` 2026-09-07
   exists (`TASK-fanout-budget`).
 - **FANOUT_VIA predicate kept as the stricter own version** (revert of the upstream
   `is_fanout_via` port, `PARITY-DIVERGENCES.md`): a declared intentional divergence that holds
-  **Issue102 at 1u** (the upstream predicate had regressed it to 7u through slower convergence;
-  `DECISIONS.md` 2026-09-07 05:35/06:35).
+  **Issue102 at 1u** (the upstream predicate had regressed it to 13u in the orca sweep through
+  slower convergence; `DECISIONS.md` 2026-09-07 05:35/06:35).
 - **45° family tree keeps trace/outline strips at their base Simplex** (`d89ded9`): recorded in
   `docs/PARITY-DIVERGENCES.md`; Issue054 stays at **4.7 s / 0u**.
 
@@ -206,9 +206,11 @@ bench/tools/remote/accept.sh <worktree-or-commit> --suite 24+oos --doors default
 ```
 
 Remote test machines (quality sweeps only; serial timings are always taken on a quiet Mac):
-- **orca** 172.20.0.6 — 80-core Debian 13
-- **salmon** 172.20.0.2 — EPYC 32c/64t (fastest single-core, use for deadline-sensitive suites)
-- **whale** 172.20.0.4 — old Xeon, non-deadline boards and byte-identity checks only
+- **orca** — 80-core Debian 13
+- **salmon** — EPYC 32c/64t (fastest single-core, use for deadline-sensitive suites)
+- **whale** — old Xeon, non-deadline boards and byte-identity checks only
+
+Addresses are in the local ops notes.
 
 ## License
 

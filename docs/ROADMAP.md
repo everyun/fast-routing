@@ -350,7 +350,8 @@ Gates (all executable without a router):
 Gates:
 - **G3.1** quality-filtered speed: geomean in-tool speedup vs Java, computed ONLY over fixtures
   passing G2.1 in the same run (bench refuses to emit it otherwise), ≥ target set from M0.5
-  measurements (placeholder 10×, to be re-derived; measured serial baseline: **2.3×** in-tool / **5.2×** wall on 23-board quality set; **2.41×** in-tool on 22 G2.1-passing boards);
+  measurements (**3.18×** in-tool geomean / **5.47×** wall from ledger3, see
+  `bench/results/ledger3/20260907-9b08338/`; measured serial baseline: **2.3×** in-tool / **5.2×** wall on 23-board quality set; **2.41×** in-tool on 22 G2.1-passing boards);
   ledger3 in-tool geomean on the 25 G2.1-passing `java_finished` boards of the same run: **3.18×** (all-27) / **3.37×** (both-finished 26); AND 46/46 **terminate** ≤ 300 s (stop rules
   fire, no hangs; verified 46/46 terminate cleanly ≤ 285s); AND completion-vs-uncapped-Java: on the 14 ex-timeout boards, our results
   compared against T_java(complete) from M0.5, not against the 300 s cutoff (measured: **6.63×** geomean speedup across 15 completed uncapped boards).
