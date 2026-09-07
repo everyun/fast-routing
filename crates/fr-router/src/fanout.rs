@@ -484,8 +484,8 @@ pub fn fanout_board(
     // world, and every `--deterministic` byte-comparison — this is `None` and
     // the stage is uncapped.
     let stage_deadline = (config.budget_fraction > 0.0)
-        .then_some(())
-        .and(|()| config.deadline.remaining())
+        .then(|| config.deadline.remaining())
+        .flatten()
         .map(|remaining| Instant::now() + remaining.mul_f64(config.budget_fraction));
 
     for pass_no in 0..config.max_passes.max(0) {
@@ -681,7 +681,7 @@ fn budget_fraction_from_env() -> f64 {
         .as_deref()
         .and_then(|v| v.parse::<f64>().ok())
     {
-        pct if (0.0..=100.0).contains(&pct) => pct / 100.0,
+        Some(pct) if (0.0..=100.0).contains(&pct) => pct / 100.0,
         _ => DEFAULT_BUDGET_FRACTION,
     }
 }
