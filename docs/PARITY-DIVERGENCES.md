@@ -615,3 +615,17 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-shove-oracle.md` (commit `da4f76f`), `REPORT-shove-remeasure.md` (margin model `c93830b` caused 14 of 24 boards to lose connections;
   retained model achieves 0 added violations and beats Java on Issue034).
   - *Status*: 有意分歧 (retained model strictly superior in quality and routability).
+
+- **Fanout stage is capped to a share of the job budget** (`fr_router::fanout`, `FR_FANOUT_BUDGET_PCT`, intentional divergence).
+  - *Upstream behaviour*: `BatchFanout.java:82-144` has no job-budget concept; the stage runs to its three
+  stop rules regardless of wall clock.
+  - *Our behaviour*: when a job deadline is armed (`--job-timeout`), the stage spends at most
+  `FR_FANOUT_BUDGET_PCT` (default 25) percent of what remains when it starts, then stops between pins with
+  `FanoutStop::StageBudget`. Without a deadline the stage is uncapped and byte-identical to upstream
+  (verified: Issue102 det, no deadline, SES md5 equal).
+  - *Why*: dropping the fanout no-progress stop (REPORT-full-relay.md) let dense boards' fanout stages
+  consume most of the job budget before the main router could repair their output. Measured at 285 s
+  (REPORT-fanout-budget.md): compute-hdi6cs fanout 280.7 s → 70.3 s and 614u → 607u; Issue219 77 s cap →
+  299u → 275u; sensor-l6 96.5 s cap → 119u → 117u; Issue039 unaffected (its fanout needs only 24 s —
+  its regression is escape-count-driven, not time-driven).
+  - *Status*: 有意分歧（仅当存在 job 预算时生效）.
