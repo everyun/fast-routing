@@ -159,6 +159,14 @@ recorded sweep `d89ded9`, HEAD sweep `54883a1` — and `DECISIONS.md` 2026-09-07
   removed (the "doesn't lose coverage" argument was falsified by the RelayModule trace),
   restoring upstream's three stop rules. Win: **Issue219 361 → 299u**; accepted costs:
   sensor-l6 110 → 119u, power-io 60 → 74u (`DECISIONS.md` 2026-09-07 03:25).
+- **Issue039 under a job deadline — measured, not the same as budgetless quality.** Serial
+  salmon, `-mp 20 --job-timeout 285`, default mode (integrator's merge records,
+  `REPORT-integrate.md`): `9b08338` ≈ **30u/25v** → current mainline (`ece1508`) **40u/25v**.
+  Cause: with the no-progress stop removed, fanout escapes more pins (606 → 729) and takes
+  longer, so only 6 passes finish before the deadline — a **budget-allocation problem, not a
+  search regression**: without a deadline, deterministic 20-pass runs on the current mainline
+  are **4u better** than `9b08338`. Fix in progress: cap the fanout stage when a job budget
+  exists (`TASK-fanout-budget`).
 - **FANOUT_VIA predicate kept as the stricter own version** (revert of the upstream
   `is_fanout_via` port, `PARITY-DIVERGENCES.md`): a declared intentional divergence that holds
   **Issue102 at 1u** (the upstream predicate had regressed it to 7u through slower convergence;
