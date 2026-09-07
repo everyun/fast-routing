@@ -936,7 +936,7 @@ pub fn route_with_control(
                     budget_mode,
                     TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
                 ));
-                algo.opt_changed_area(&mut changed_area);
+                algo.opt_changed_area_with_costs(&mut changed_area, Some(&ctrl.trace_costs));
             }
 
             // The ripup bookkeeping is done either way: a connection that tore
@@ -1620,7 +1620,10 @@ impl<'r> BatchRouter<'r> {
                                         budget_mode,
                                         TIME_LIMIT_TO_PREVENT_ENDLESS_LOOP_MS,
                                     ));
-                                    algo.opt_changed_area(&mut changed_area);
+                                    algo.opt_changed_area_with_costs(
+                                        &mut changed_area,
+                                        Some(&ctrl.trace_costs),
+                                    );
 
                                     if insert.board_changed {
                                         board.commit(mark);

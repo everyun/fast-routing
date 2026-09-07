@@ -317,7 +317,7 @@ pub struct PullTightAlgo<'b> {
     /// switches the acid-trap pin rule off entirely (`:1183-1190`).
     contact_pins: Option<Vec<ItemId>>,
 
-    bounds: IntBox,
+    pub(crate) bounds: IntBox,
     binding: Option<BindingObstacle>,
 
     // ---- scratch, reused across every candidate (spec §11 "Arena the polylines") ----
@@ -473,20 +473,21 @@ impl<'b> PullTightAlgo<'b> {
 
     // ---- §5.2 the regional driver ----------------------------------------
 
-    /// `opt_changed_area` (`:88-133`) — optimize every trace overlapping the
-    /// per-layer changed region, until a whole round changes nothing.
+    /// `opt_changed_area` (`:88-133`) — optimize every trace (and optionally via)
+    /// overlapping the per-layer changed region, until a whole round changes nothing.
     ///
-    /// `changed_area` is consumed as upstream consumes `board.changed_area`:
-    /// each layer's region is read, **cleared**, then enlarged by
-    /// `1.5 * (max_clearance(layer) + 2 * max_trace_half_width)` (`:108-109`).
-    /// Every accepted move re-joins its touched corners into it, so the loop
-    /// chases ripples to a fixed point — or to the time limit.
-    ///
-    /// Returns true when anything changed.
-    ///
-    /// The via branch (`OptViaAlgo.opt_via_location`, `:128`) is not ported;
-    /// vias are left where the inserter put them.
+    /// When `trace_costs` is `Some`, vias are also optimized via
+    /// [`PullTightAlgo::opt_via_location`], matching upstream `PullTightAlgo.java:128`.
     pub fn opt_changed_area(&mut self, changed_area: &mut ChangedArea) -> bool {
+        self.opt_changed_area_with_costs(changed_area, None)
+    }
+
+    /// `opt_changed_area` with optional per-layer trace costs for via optimization.
+    pub fn opt_changed_area_with_costs(
+        &mut self,
+        changed_area: &mut ChangedArea,
+        trace_costs: Option<&[fr_rules::router_settings::ExpansionCostFactor]>,
+    ) -> bool {
         let mut anything_changed = false;
         let mut something_changed = true;
         while something_changed {
@@ -524,10 +525,10 @@ impl<'b> PullTightAlgo<'b> {
                     &mut candidates,
                 );
                 candidates.retain(|id| {
-                    self.board
-                        .store()
-                        .get(*id)
-                        .is_some_and(|item| matches!(item.kind, ItemKind::Trace(_)))
+                    self.board.store().get(*id).is_some_and(|item| {
+                        matches!(item.kind, ItemKind::Trace(_))
+                            || (trace_costs.is_some() && matches!(item.kind, ItemKind::Via(_)))
+                    })
                 });
                 candidates.sort_unstable();
 
@@ -535,30 +536,36 @@ impl<'b> PullTightAlgo<'b> {
                     if self.is_stop_requested() {
                         return anything_changed;
                     }
-                    // Liveness: a previous move's normalization may have
-                    // removed or split this trace.
-                    if !self
-                        .board
-                        .store()
-                        .get(id)
-                        .is_some_and(|item| matches!(item.kind, ItemKind::Trace(_)))
-                    {
+                    let Some(item) = self.board.store().get(id) else {
                         continue;
-                    }
-                    if self.trace_pull_tight(id, changed_area).is_some() {
-                        something_changed = true;
-                        anything_changed = true;
-                        if self.split_traces_at_keep_point() {
-                            break;
+                    };
+                    match &item.kind {
+                        ItemKind::Trace(_) => {
+                            if self.trace_pull_tight(id, changed_area).is_some() {
+                                something_changed = true;
+                                anything_changed = true;
+                                if self.split_traces_at_keep_point() {
+                                    break;
+                                }
+                            } else if self.smoothen_end_corners_at_trace(id, changed_area) {
+                                // `:123-126` — §6.4. The `break` is upstream's, and it
+                                // is not cosmetic: this branch removes and re-inserts
+                                // items, so the rest of the snapshot may name ids that
+                                // no longer exist.
+                                something_changed = true;
+                                anything_changed = true;
+                                break;
+                            }
                         }
-                    } else if self.smoothen_end_corners_at_trace(id, changed_area) {
-                        // `:123-126` — §6.4. The `break` is upstream's, and it
-                        // is not cosmetic: this branch removes and re-inserts
-                        // items, so the rest of the snapshot may name ids that
-                        // no longer exist.
-                        something_changed = true;
-                        anything_changed = true;
-                        break;
+                        ItemKind::Via(_) => {
+                            if let Some(costs) = trace_costs {
+                                if self.opt_via_location(id, Some(costs), 10, changed_area) {
+                                    something_changed = true;
+                                    anything_changed = true;
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }

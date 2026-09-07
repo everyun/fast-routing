@@ -108,6 +108,7 @@ pub mod insert_forced;
 pub mod locate;
 pub mod locate45;
 pub mod maze;
+pub mod opt_via;
 pub mod optimizer;
 pub mod pull_tight;
 pub mod pull_tight45;

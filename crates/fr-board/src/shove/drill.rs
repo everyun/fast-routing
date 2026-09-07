@@ -224,7 +224,59 @@ impl ShoveInsert<'_> {
                     .join_point(curr_bounding_box.corner(j).to_float(), layer);
             }
         }
-        self.board.translate_drill_item(drill_item, vector)
+        let old_center = center;
+        let new_center = center.translate_by_int(vector);
+
+        let mut contact_traces: Vec<(i32, i32, i32)> = Vec::new();
+        if old_center != new_center {
+            let mut contacts = Vec::new();
+            self.board
+                .normal_contacts_at(drill_item, &Point::Int(old_center), &mut contacts);
+            for &c_id in &contacts {
+                if let Some(c_item) = self.board.store().get(c_id) {
+                    if let ItemKind::Trace(t) = &c_item.kind {
+                        contact_traces.push((t.layer, t.half_width, c_item.clearance_class));
+                    }
+                }
+            }
+            contact_traces.sort_unstable();
+            contact_traces.dedup();
+        }
+
+        if !self.board.translate_drill_item(drill_item, vector) {
+            return false;
+        }
+
+        if !contact_traces.is_empty() {
+            let mut connect_points = vec![old_center];
+            let add_corner = match self.board.angle_restriction() {
+                AngleRestriction::Ninety => old_center.ninety_degree_corner(&new_center, true),
+                AngleRestriction::FortyFive => {
+                    old_center.fortyfive_degree_corner(&new_center, true)
+                }
+                AngleRestriction::None => None,
+            };
+            if let Some(corner) = add_corner {
+                if corner != old_center && corner != new_center {
+                    connect_points.push(corner);
+                }
+            }
+            connect_points.push(new_center);
+            let polyline = fr_geometry::planar::Polyline::from_int_points(&connect_points);
+            for (layer, half_width, cl_class) in contact_traces {
+                let clip = self.changed.area(layer);
+                self.board.insert_trace(
+                    polyline.clone(),
+                    layer,
+                    half_width,
+                    nets.clone(),
+                    cl_class,
+                    crate::item::FixedState::Unfixed,
+                    clip.as_ref(),
+                );
+            }
+        }
+        true
     }
 
     /// `MoveDrillItemAlgo.shove_vias(obstacle_shape, …)` (`:128-181`).
