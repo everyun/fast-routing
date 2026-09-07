@@ -554,9 +554,7 @@ pub fn fanout_board(
                         .get(pin.item)
                         .is_some_and(|item| item.layer_range().is_single() && item.nets.len() == 1)
                 })
-                .filter(|pin| {
-                    connected_set(board, pin.net_no, pin.item, &mut scratch).len() <= 1
-                })
+                .filter(|pin| connected_set(board, pin.net_no, pin.item, &mut scratch).len() <= 1)
                 .count();
             if counters.via_count == previous_vias {
                 flat_passes += 1;
@@ -580,7 +578,6 @@ pub fn fanout_board(
 /// `pass_no` is **0-based**, matching the release: the ripup budget is
 /// `start_ripup_costs * (pass_no + 1)` and the per-pin budget is
 /// [`DEFAULT_MAX_MILLISECONDS_PER_PIN`] `* (pass_no + 1)` (rows 25-26).
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 pub fn fanout_pass(
     board: &mut Board,
@@ -1044,6 +1041,7 @@ mod tests {
                     pass_no,
                     &mut total,
                     &mut scratch,
+                    None,
                 )
                 .ripup_costs
             };
@@ -1262,6 +1260,7 @@ mod tests {
             0,
             &mut total,
             &mut scratch,
+            None,
         );
         assert_eq!(counters.routed, 0);
         assert_eq!(counters.not_routed, 0);
