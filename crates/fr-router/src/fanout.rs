@@ -431,6 +431,9 @@ pub enum FanoutStop {
     /// Experimental (`FR_FANOUT_SAFE_STOP=1`): via count flat for 2 passes
     /// while no fanout-eligible pin is isolated.
     SafeNoProgress,
+    /// The stage's share of the job budget ran out (intentional divergence,
+    /// "job budget 下 fanout 封顶"; only when a job deadline exists).
+    StageBudget,
 }
 
 /// Everything a fanout run produced.
@@ -673,7 +676,11 @@ pub const BUDGET_PCT_ENV: &str = "FR_FANOUT_BUDGET_PCT";
 /// whole percent, else [`DEFAULT_BUDGET_FRACTION`]. Out-of-range or unparsable
 /// values fall back to the default.
 fn budget_fraction_from_env() -> f64 {
-    match std::env::var(BUDGET_PCT_ENV).ok().as_deref().and_then(|v| v.parse::<f64>().ok()) {
+    match std::env::var(BUDGET_PCT_ENV)
+        .ok()
+        .as_deref()
+        .and_then(|v| v.parse::<f64>().ok())
+    {
         pct if (0.0..=100.0).contains(&pct) => pct / 100.0,
         _ => DEFAULT_BUDGET_FRACTION,
     }
