@@ -165,8 +165,9 @@ recorded sweep `d89ded9`, HEAD sweep `54883a1` — and `DECISIONS.md` 2026-09-07
   Cause: with the no-progress stop removed, fanout escapes more pins (606 → 729) and takes
   longer, so only 6 passes finish before the deadline — a **budget-allocation problem, not a
   search regression**: without a deadline, deterministic 20-pass runs on the current mainline
-  are **4u better** than `9b08338`. Fix in progress: cap the fanout stage when a job budget
-  exists (`TASK-fanout-budget`).
+  are **4u better** than `9b08338`. Landed (`2a26e1a`): the fanout stage's share of the job
+  budget is capped at **25%** (`FR_FANOUT_BUDGET_PCT` overrides; no deadline — no cap, and
+  no-deadline deterministic runs stay byte-identical).
 - **FANOUT_VIA predicate kept as the stricter own version** (revert of the upstream
   `is_fanout_via` port, `PARITY-DIVERGENCES.md`): a declared intentional divergence that holds
   **Issue102 at 1u** (the upstream predicate had regressed it to 13u in the orca sweep through
