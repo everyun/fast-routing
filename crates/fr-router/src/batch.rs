@@ -753,6 +753,7 @@ pub fn autoroute_item(
     net_no: i32,
     ripup_costs: i32,
     remove_unconnected_vias: bool,
+    fail_rips: bool,
     clock: Option<&mut ConnectionClock>,
     scratch: &mut ContactScratch,
 ) -> AttemptOutcome {
@@ -800,6 +801,7 @@ pub fn autoroute_item(
     ctrl.ripup_allowed = true;
     ctrl.ripup_costs = ripup_costs;
     ctrl.remove_unconnected_vias = remove_unconnected_vias;
+    ctrl.fail_rips = fail_rips;
 
     route_with_control(board, rules, ctrl, &start, &destination, clock)
 }
@@ -875,7 +877,14 @@ pub fn route_with_control(
         ..AttemptOutcome::default()
     };
 
-    match crate::insert::insert_connection(board, rules, &ctrl, &located, bounds) {
+    match crate::insert::insert_connection_with_fail_mode(
+        board,
+        rules,
+        &ctrl,
+        &located,
+        bounds,
+        ctrl.fail_rips || crate::insert::keep_insert_fail_rips(),
+    ) {
         Ok(insert) => {
             // `BatchAutorouter.autoroute_item` (`:1327-1333`): every ROUTED
             // result is followed by a pull-tight over the region the insertion
@@ -1374,6 +1383,7 @@ impl<'r> BatchRouter<'r> {
             entry.net_no,
             ctx.ripup_costs,
             ctx.remove_unconnected_vias,
+            crate::insert::fail_rips_for(ctx.pass_no, ctx.incomplete_at_start),
             Some(&mut clock),
             &mut self.scratch,
         );

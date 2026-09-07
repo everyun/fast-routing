@@ -449,6 +449,10 @@ pub struct PassContext {
     /// Whether the end-of-pass tail cleanup may delete fanout vias
     /// (`:657-661`).
     pub remove_unconnected_vias: bool,
+    /// The incomplete-connection count at pass start — the state the
+    /// late-game insert-failure policy (REPORT-latefail) conditions on.
+    /// [`usize::MAX`] = unknown (never gate on it).
+    pub incomplete_at_start: usize,
     /// The job's wall budget, polled between the pass's connections.
     /// [`JobDeadline::NONE`] unless one was armed.
     pub deadline: JobDeadline,
@@ -468,6 +472,7 @@ impl PassContext {
             ripup_costs: start_ripup_costs.saturating_mul(pass_no),
             budget: policy.for_pass(pass_no),
             remove_unconnected_vias,
+            incomplete_at_start: usize::MAX,
             deadline: JobDeadline::ambient(),
         }
     }
@@ -476,6 +481,12 @@ impl PassContext {
     /// hands its driver, and what a test uses to avoid the ambient one.
     pub fn with_deadline(mut self, deadline: JobDeadline) -> PassContext {
         self.deadline = deadline;
+        self
+    }
+
+    /// Sets the pass-start incomplete count (see the field docs).
+    pub fn with_incomplete_at_start(mut self, incomplete: usize) -> PassContext {
+        self.incomplete_at_start = incomplete;
         self
     }
 
@@ -743,6 +754,7 @@ impl BatchLoop {
                 &self.config.budget,
                 self.config.remove_unconnected_vias,
             )
+            .with_incomplete_at_start(crate::batch::incomplete_count(board))
             .with_deadline(self.config.deadline);
             let pass_started = trace::is_enabled().then(Instant::now);
             let pass = driver.run_pass(board, &ctx);

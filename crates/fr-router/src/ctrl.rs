@@ -141,6 +141,10 @@ pub struct AutorouteControl {
     /// Normally true; false during the fanout pre-pass, which is what keeps the
     /// fanout ripup protection alive.
     pub remove_unconnected_vias: bool,
+    /// Whether a failed insertion keeps its ripup instead of rolling back —
+    /// the batch router's late-game policy (REPORT-latefail), `false` for the
+    /// fanout path and by default.
+    pub fail_rips: bool,
     /// Automatic neckdown at pins.
     pub with_neckdown: bool,
     /// Shove recursion depth for traces. `0` disables shoving; M2a leaves the
@@ -250,6 +254,7 @@ impl AutorouteControl {
             fanout_max_escape_length: None,
             fanout_min_escape_length: None,
             remove_unconnected_vias: true,
+            fail_rips: false,
             with_neckdown: settings.automatic_neckdown,
             max_shove_trace_recursion_depth: MAX_SHOVE_TRACE_RECURSION_DEPTH,
             max_shove_via_recursion_depth: MAX_SHOVE_VIA_RECURSION_DEPTH,

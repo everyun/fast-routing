@@ -165,13 +165,13 @@ pub fn insert_connection(
         ctrl,
         connection,
         bounds,
-        keep_insert_fail_rips(),
+        fail_rips_for(i32::MAX, usize::MAX),
     )
 }
 
-/// [`insert_connection`] with the failure mode explicit — the env-gated entry
-/// point dispatches here, and the tests inject the mode directly so they do
-/// not depend on process-global state.
+/// [`insert_connection`] with the failure mode explicit — the batch router
+/// computes the mode from its pass context ([`fail_rips_for`]); the tests
+/// inject the mode directly so they do not depend on process-global state.
 pub fn insert_connection_with_fail_mode(
     board: &mut Board,
     rules: &BoardRules,
@@ -246,12 +246,8 @@ pub fn insert_connection_with_fail_mode(
 }
 
 /// The `FR_INSERT_FAIL_KEEP_RIPS` switch: upstream's non-transactional insert
-/// failure. Off (default) keeps this port's transactional rollback; on, a
-/// failed insertion keeps the ripup (victims stay torn, returning to the
-/// unrouted queue) and cleans the abandoned attempt's own tails, which is the
-/// board-evolution channel upstream's late-pass oscillation escapes through
-/// (REPORT-convergence §5.3).
-fn keep_insert_fail_rips() -> bool {
+/// failure, forced on for every pass regardless of context.
+pub fn keep_insert_fail_rips() -> bool {
     static KEEP_RIPS: OnceLock<bool> = OnceLock::new();
     *KEEP_RIPS.get_or_init(|| {
         std::env::var("FR_INSERT_FAIL_KEEP_RIPS")
@@ -263,6 +259,47 @@ fn keep_insert_fail_rips() -> bool {
             })
             .unwrap_or(false)
     })
+}
+
+/// The late-game insert-failure policy (REPORT-latefail): the upstream
+/// non-transactional failure is enabled **only in the endgame**, where its
+/// board-evolution channel is what breaks a stagnated board and its torn-copper
+/// cost is bounded by how little is left to lose.
+///
+/// Active when the pass started with at most [`late_fail_k`] incomplete
+/// connections and the pass number has reached [`late_fail_n`]; the
+/// `FR_INSERT_FAIL_KEEP_RIPS` override wins over both.
+/// Defaults `K = 3`, `N = 8`, overridable per run for scans.
+fn late_fail_k() -> usize {
+    static K: OnceLock<usize> = OnceLock::new();
+    *K.get_or_init(|| {
+        std::env::var("FR_LATE_FAIL_K")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(3)
+    })
+}
+
+fn late_fail_n() -> i32 {
+    static N: OnceLock<i32> = OnceLock::new();
+    *N.get_or_init(|| {
+        std::env::var("FR_LATE_FAIL_N")
+            .ok()
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(8)
+    })
+}
+
+/// The insert-failure mode for one connection attempt: `pass_no` and the
+/// pass-start incomplete count come from the pass context; `usize::MAX` (=
+/// unknown) never activates the late-game arm.
+pub fn fail_rips_for(pass_no: i32, incomplete_at_start: usize) -> bool {
+    if keep_insert_fail_rips() {
+        return true;
+    }
+    incomplete_at_start != usize::MAX
+        && incomplete_at_start <= late_fail_k()
+        && pass_no >= late_fail_n()
 }
 
 struct ConnectionInserter<'b> {
