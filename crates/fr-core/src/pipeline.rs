@@ -433,7 +433,6 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
             Some(fr_router::fanout::FanoutStop::BoardUnchanged) => "board unchanged",
             Some(fr_router::fanout::FanoutStop::NothingToDo) => "nothing to do",
             Some(fr_router::fanout::FanoutStop::JobDeadline) => "deadline",
-            Some(fr_router::fanout::FanoutStop::SafeNoProgress) => "safe no progress",
             None => "not started",
         };
         eprintln!(
