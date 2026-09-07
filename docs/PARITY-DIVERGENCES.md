@@ -106,6 +106,28 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-neckdown.md`; no 46-fixture board requires destination pin neckdown.
   - *Status*: 待核实 / 待定 (low priority capability stub; no corpus fixture exercises it).
 
+- **Failed insertions are transactional** (`fr_router::insert::insert_connection`; `FR_INSERT_FAIL_KEEP_RIPS=1` restores upstream).
+  - *Upstream behaviour*: the autoroute package has no undo — a failed insertion keeps the ripup
+    (torn victims stay torn and return to the unrouted queue via the next pass's work list) and
+    removes only the abandoned attempt's own trace stubs
+    (`InsertFoundConnectionAlgo.java:250-268`; `BatchAutorouter.java:651-661` end-of-pass
+    `remove_tails` catches the rest). The board therefore evolves across late passes, which is the
+    escape channel behind upstream's endgame oscillation.
+  - *Our behaviour*: the whole insertion runs inside one `Board::begin`/`rollback_to` pair, so a
+    failure leaves the board bit-identical — fewer mutations than the release, never more, and no
+    orphan copper. `FR_INSERT_FAIL_KEEP_RIPS=1` restores upstream's semantics per run (keeping the
+    ripup, cleaning only the routed net's tails; our post-insert DRC acceptance guard rolls back
+    in both modes).
+  - *Evidence*: `REPORT-nontransactional.md` (commit `c00be1a`): with the switch on, Issue102 det
+    Doors converges to **0u at pass 14, board complete** — the same pass count as the Java
+    reference (score 879.18 vs 879.21) — where the transactional default stalls at 1u and stops on
+    stagnation at pass 19. Cost elsewhere: Issue039 det 24u → 31u, Issue034 det 0u → 2u; four
+    regression-check boards unchanged; zero added violations across the 24-board suite
+    (`salmon:/home/chiqingzhen/fr/runs/conv-nt-envon/doors/gate.json`). Shipped default stays
+    transactional (deliberate divergence); a targeted late-game policy is evaluated separately
+    (REPORT-latefail).
+  - *Status*: 有意分歧 (default transactional; upstream semantics behind the switch).
+
 - **Fanout no-progress stop** (`fr_router::fanout`) — **removed**, was an intentional divergence.
   - *Upstream behaviour*: `app/freerouting/autoroute/BatchFanout.java:82-144` stops a fanout run on three conditions only: `routed_count == 0` (`:111-113`), three consecutive bit-identical `(routed_count << 32) ^ via_count` signatures (`:114-130`, `STAGNATION_PASS_LIMIT = 3`), and unchanged board hash (`:134-138`).
   - *Our behaviour*: dropped the extra 2-pass flat via count stop (commit `wip/full-relay` `f753361`), restoring upstream's exact three stop rules.
