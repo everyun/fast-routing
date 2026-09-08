@@ -174,6 +174,14 @@ recorded sweep `d89ded9`, HEAD sweep `54883a1` — and `DECISIONS.md` 2026-09-07
   slower convergence; `DECISIONS.md` 2026-09-07 05:35/06:35).
 - **45° family tree keeps trace/outline strips at their base Simplex** (`d89ded9`): recorded in
   `docs/PARITY-DIVERGENCES.md`; Issue054 stays at **4.7 s / 0u**.
+- **OptViaAlgo via location optimization during pull-tight** (`767283d`, `fdc0259`): ported
+  upstream's `OptViaAlgo` (`REPORT-optvia.md`, `DECISIONS.md` 2026-09-08 20:20). Win:
+  **Issue039 deterministic 20-pass converges to 4u/25v** (Java reference: 10u), and 285s deadline
+  improves to **24u** (from 39u); `cla45-power-io-l6` 285s improves to **64u** (from 74u);
+  `cla45-sensor-l6` improves to **113u** (from 115u). Accepted costs: `kicad-coldfire-unrouted`
+  285s 9u → 19u (opt-via work makes passes slightly more expensive, finishing fewer passes before
+  cutoff), `easyeda-pcb1` 8u → 9u, and `Issue102` under Full mode 285s 0u → 1u (serial det stays
+  **0u board complete**).
 
 ### Parallel routing
 
