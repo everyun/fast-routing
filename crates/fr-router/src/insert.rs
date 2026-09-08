@@ -269,14 +269,14 @@ pub fn keep_insert_fail_rips() -> bool {
 /// Active when the pass started with at most [`late_fail_k`] incomplete
 /// connections and the pass number has reached [`late_fail_n`]; the
 /// `FR_INSERT_FAIL_KEEP_RIPS` override wins over both.
-/// Defaults `K = 3`, `N = 8`, overridable per run for scans.
+/// Defaults `K = 2`, `N = 8`, overridable per run for scans.
 fn late_fail_k() -> usize {
     static K: OnceLock<usize> = OnceLock::new();
     *K.get_or_init(|| {
         std::env::var("FR_LATE_FAIL_K")
             .ok()
             .and_then(|v| v.trim().parse().ok())
-            .unwrap_or(3)
+            .unwrap_or(2)
     })
 }
 
@@ -1099,5 +1099,22 @@ mod tests {
         let trace = fixture.trace_id();
         assert_eq!(connection_items(&fixture.board, trace, false), vec![trace]);
         let _ = TEST_NET;
+    }
+
+    #[test]
+    fn default_late_fail_policy_activates_at_k2_n8() {
+        // Unknown incomplete count never activates.
+        assert!(!fail_rips_for(10, usize::MAX));
+        // Before pass N (8), never activates even if incomplete <= K.
+        assert!(!fail_rips_for(7, 2));
+        assert!(!fail_rips_for(7, 1));
+        // At or after pass 8, activates when incomplete <= 2.
+        assert!(fail_rips_for(8, 2));
+        assert!(fail_rips_for(8, 1));
+        assert!(fail_rips_for(8, 0));
+        assert!(fail_rips_for(12, 2));
+        // Incomplete count 3 exceeds default K=2, so does not activate.
+        assert!(!fail_rips_for(8, 3));
+        assert!(!fail_rips_for(14, 3));
     }
 }
