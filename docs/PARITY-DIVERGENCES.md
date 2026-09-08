@@ -157,6 +157,27 @@ ARCHITECTURE "Budgets".
   - *Status*: 有意分歧（发货谓词比上游严；上游忠实版保留在 `batch::is_fanout_via`，`remove_tails` 的
   `FANOUT_VIA` 停止仍用它）。收敛速度差另立任务。
 
+- **Spring-over bypass of non-convex obstacle areas via layer change**
+  (`fr_board::shove::trace`, `ShoveTraceAlgo.java:521-532` vs `crates/fr-board/src/shove/trace.rs:743-747`).
+  - *Upstream behaviour*: In `ShoveTraceAlgo.spring_over` (`:521-532`), upstream checks if an obstacle area is convex/single-element:
+    ```java
+    if (found_obstacle instanceof ObstacleArea || found_obstacle instanceof Trace) {
+      if (found_obstacle.tree_shape_count(search_tree) == 1) {
+        obstacle_shape = found_obstacle.get_tree_shape(search_tree, 0);
+      } else {
+        try_spring_over = false;
+      }
+    }
+    if (!try_spring_over) {
+      this.board.set_shove_failing_obstacle(found_obstacle);
+      return null;
+    }
+    ```
+    When a single-layer trace candidate touches an `ObstacleArea` with `tree_shape_count > 1` (such as a 16-sided keepout polygon composed of multiple convex pieces), upstream immediately aborts pre-shove obstacle wrapping, returning `null` from `spring_over` and failing trace insertion (`InsertFoundConnectionAlgo.java:66` `insert_trace` fails → `get_instance` returns `null`), discarding the entire connection attempt.
+  - *Our behaviour*: Our shove check has the exact same conservative check (`crates/fr-board/src/shove/trace.rs:743-747`: `if shapes.len() == 1 { ... } else { try_spring_over = false; }`). However, on dense multi-layer boards like `cla45-sensor-l6` (pass 1, item 25 `net 193` `J_CAM-52`), earlier successful shove-routing on neighboring nets (`net 56`) leads our maze search to find a superior 3D via-transition topology (crossing Layer 0 to bypass the congestion and the Layer 5 keepout polygon entirely) rather than Java's greedy single-layer path that collided with the keepout. We successfully route and insert the connection with 0 added violations.
+  - *Evidence*: `REPORT-insert-null.md` (exact Java lab jar trace logs: `SPRING_OVER_FAIL_193 reason=try_spring_over_false id=5 type=ObstacleArea layer=5-5 bbox=[(19000,-35500)..(20500,-18500)] tree_shapes=16` followed by `FRLAB insert_fail net=193 reason=insert_null`).
+  - *Status*: 有意分歧（正向能力差异：底层检查与上游严格对齐，迷宫探索能力更优避免了单层非凸禁布区拒载）。
+
 - **Ripped connections are never requeued inside a pass across all pass counts by default**
   (`fr_router::batch::schedule::RequeuePolicy`, default `Never`).
   - *Upstream behaviour*: `app/freerouting/autoroute/BatchAutorouter.java:431-694` derives the work list once per pass
