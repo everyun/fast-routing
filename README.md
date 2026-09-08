@@ -181,7 +181,8 @@ recorded sweep `d89ded9`, HEAD sweep `54883a1` — and `DECISIONS.md` 2026-09-07
   `cla45-sensor-l6` improves to **113u** (from 115u). Accepted costs: `kicad-coldfire-unrouted`
   285s 9u → 19u (opt-via work makes passes slightly more expensive, finishing fewer passes before
   cutoff), `easyeda-pcb1` 8u → 9u, and `Issue102` under Full mode 285s 0u → 1u (serial det stays
-  **0u board complete**).
+  **0u board complete**); Doors 285 s Issue102 0u → 2u (det still 0u at pass 17 vs 11; fix in
+  progress, TASK-102-deadline).
 
 ### Parallel routing
 
