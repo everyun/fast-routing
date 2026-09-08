@@ -1,0 +1,61 @@
+fixture                                      class           stability   gate             input      ours reference verdict  reason [doors_mode=full]
+Issue006-LPC18XX_43XX_SCH.dsn                java_crash      no_result   -                  n/a       n/a       n/a pass     input is not a routable board; both tools no-op
+Issue015-StackOverflow.dsn                   java_timeout    no_result   -            146u/466v       n/a       n/a FAIL     no session produced
+Issue022-AutoRouter_interrupted.dsn          java_timeout    no_result   -            235u/470v       n/a       n/a FAIL     no session produced
+Issue026-J2_reference.dsn                    java_finished   stable      comparative     33u/0v     0u/0v     0u/0v pass     comparative gate met
+Issue027-zMRETestFixture.dsn                 java_timeout    no_result   -            938u/1138v       n/a       n/a FAIL     no session produced
+Issue029-hw48na.dsn                          java_timeout    no_result   -            189u/411v       n/a       n/a FAIL     no session produced
+Issue034-Green14SegLED.dsn                   java_finished   stable      comparative    147u/0v     0u/0v     9u/0v pass     comparative gate met
+Issue035-ReadPlaceScope.dsn                  java_finished   stable      comparative  240u/152v   0u/152v   4u/152v pass     comparative gate met
+Issue039-bug-design.dsn                      java_finished   stable      comparative   204u/25v   27u/25v   10u/25v FAIL     unrouted 27 > reference 10
+Issue054-tairakb.dsn                         java_finished   stable      comparative    257u/5v     1u/5v     5u/5v pass     comparative gate met
+Issue066-Project_GP8B.dsn                    java_timeout    no_result   -             733u/23v       n/a       n/a FAIL     no session produced
+Issue070-Autorouter_FQ101_PCB_2022-05-13.d   java_timeout    no_result   -            254u/167v       n/a       n/a FAIL     no session produced
+Issue093-interf_u.dsn                        java_finished   stable      comparative   43u/188v   0u/188v  19u/188v pass     comparative gate met
+Issue102-Mars-64-revE-rot00.dsn              java_finished   stable      comparative   106u/64v    1u/64v    0u/64v FAIL     unrouted 1 > reference 0
+Issue103-Board-Routed.dsn                    java_finished   stable      comparative     0u/63v    0u/63v    0u/63v pass     comparative gate met
+Issue103-Board-Unrouted.dsn                  java_timeout    no_result   -             702u/60v       n/a       n/a FAIL     no session produced
+Issue107-freq_teiler_200kHz_kicad.dsn        java_finished   stable      comparative    164u/0v     0u/0v     0u/0v pass     comparative gate met
+Issue107-freq_teiler_200kHz_kicad_bad.dsn    java_finished   stable      -              172u/0v       n/a     0u/0v FAIL     no session produced
+Issue110-Pajalnaja_stancija.dsn              java_finished   stable      comparative   109u/18v    6u/18v    6u/18v pass     comparative gate met
+Issue110-RelayModule.dsn                     java_finished   stable      comparative     88u/2v     2u/2v     0u/4v FAIL     unrouted 2 > reference 0
+Issue110-testPCBSpecctraFile.dsn             java_finished   stable      comparative    26u/36v    3u/36v   21u/36v pass     comparative gate met
+Issue110-testProjectFromFreeroutingBugTest   java_finished   stable      comparative      4u/0v     0u/0v     0u/0v pass     comparative gate met
+Issue110-testProjectFromFreeroutingBugTest   java_finished   stable      -                4u/0v       n/a     0u/0v FAIL     no session produced
+Issue110-Паяльная станция.dsn                java_finished   stable      -             109u/18v       n/a    6u/18v FAIL     no session produced
+Issue113-Protein.dsn                         java_timeout    no_result   -             351u/44v       n/a       n/a FAIL     no session produced
+Issue143-rpi_splitter.dsn                    java_finished   stable      comparative      5u/0v     0u/0v     0u/0v pass     comparative gate met
+Issue143-rpi_splitter_mod.dsn                java_finished   stable      -                1u/0v       n/a     0u/0v FAIL     no session produced
+Issue145-smoothieboard.dsn                   java_timeout    no_result   -            746u/112v       n/a       n/a FAIL     no session produced
+Issue153-wavefolder.dsn                      java_finished   stable      comparative     27u/0v     0u/0v     3u/0v pass     comparative gate met
+Issue155-CH376_MCP795_Module.dsn             java_finished   stable      comparative     53u/0v     0u/0v     0u/0v pass     comparative gate met
+Issue157-TeamAdapt-LinePCB.dsn               java_finished   stable      comparative   226u/11v    2u/11v   14u/11v pass     comparative gate met
+Issue159-setonix_2hp-pcb.dsn                 java_finished   stable      comparative     23u/0v     0u/0v     0u/0v pass     comparative gate met
+Issue163-pic_programmer.dsn                  java_finished   stable      comparative     23u/6v     0u/6v     9u/6v pass     comparative gate met
+Issue178-KeebMaker_Sofle_Choc.dsn            java_timeout    no_result   -             418u/20v       n/a       n/a FAIL     no session produced
+Issue179-Autorouter_PCB1_2023-3-24.dsn       java_timeout    no_result   -              68u/37v       n/a       n/a FAIL     no session produced
+Issue187-processor.Z80.dsn                   java_finished   stable      absolute         0u/0v     0u/0v       n/a pass     absolute gate met (java_finished but its session is absent from the reference run)
+Issue190-processor.Z80.dsn                   java_timeout    no_result   -             18u/577v       n/a       n/a FAIL     no session produced
+Issue208-freerouting.dsn                     java_timeout    no_result   -             378u/17v       n/a       n/a FAIL     no session produced
+Issue209-split05.dsn                         java_timeout    no_result   -            272u/182v       n/a       n/a FAIL     no session produced
+Issue209-split10.dsn                         java_finished   stable      comparative  272u/182v   0u/182v   2u/182v pass     comparative gate met
+Issue214-freerouting.dsn                     java_timeout    no_result   -             153u/83v       n/a       n/a FAIL     no session produced
+Issue217-8088sbc.dsn                         java_finished   stable      comparative    235u/0v     0u/0v     7u/0v pass     comparative gate met
+Issue219-LogicBoard_smt.dsn                  java_timeout    no_result   -              981u/0v       n/a       n/a FAIL     no session produced
+Issue229-display-8-digit-hc595.dsn           java_degenerate stable      -               20u/0v       n/a    64u/0v FAIL     no session produced
+Issue230-CNH_Functional_Tester_1.dsn         java_finished   stable      comparative   149u/16v    0u/16v    2u/16v pass     comparative gate met
+Issue269-caniot-tiny-arm.dsn                 java_timeout    no_result   absolute       107u/4v    81u/4v       n/a pass     absolute gate met
+
+SES round-trip fidelity: 0 board(s) judged differently from the in-memory board
+
+per class:
+  java_crash/-                      1/ 1 pass
+  java_degenerate/-                 0/ 1 pass
+  java_finished/-                   0/ 4 pass
+  java_finished/absolute            1/ 1 pass
+  java_finished/comparative        19/22 pass
+  java_timeout/-                    0/16 pass
+  java_timeout/absolute             1/ 1 pass
+  TOTAL                            22/46 pass
+
+wrote /home/chiqingzhen/fr/runs/salmon-tmp_optvia74-fdc0259-20260908-214209/gate.json

@@ -1,0 +1,20 @@
+fixture                                      class           stability   gate             input      ours reference verdict  reason [doors_mode=default]
+cla45-compute-hdi6cs.dsn                     java_timeout    no_result   absolute     848u/3049v 607u/3049v       n/a pass     absolute gate met
+cla45-computeboard.dsn                       java_degenerate stable      absolute         0u/0v     0u/0v     0u/0v pass     absolute gate met
+cla45-power-io-l6.dsn                        java_timeout    no_result   absolute     163u/298v  64u/298v       n/a pass     absolute gate met
+cla45-sensor-hdi.dsn                         java_timeout    no_result   absolute      83u/276v   4u/276v       n/a pass     absolute gate met
+cla45-sensor-l6.dsn                          java_timeout    no_result   absolute      369u/10v  113u/10v       n/a pass     absolute gate met
+easyeda-pcb1.dsn                             java_finished   stable      comparative    75u/45v    9u/45v    9u/45v pass     comparative gate met
+kicad-coldfire-unrouted.dsn                  java_timeout    no_result   absolute      482u/12v   19u/12v       n/a pass     absolute gate met
+kicad-coldfire.dsn                           java_timeout    no_result   absolute      429u/73v    0u/73v       n/a pass     absolute gate met
+kicad-tutorial.dsn                           java_degenerate stable      absolute         0u/0v     0u/0v     0u/0v pass     absolute gate met
+
+SES round-trip fidelity: 0 board(s) judged differently from the in-memory board
+
+per class:
+  java_degenerate/absolute          2/ 2 pass
+  java_finished/comparative         1/ 1 pass
+  java_timeout/absolute             6/ 6 pass
+  TOTAL                             9/ 9 pass
+
+wrote /home/chiqingzhen/fr/runs/salmon-tmp_optvia74-fdc0259-20260908-213415/gate.json
