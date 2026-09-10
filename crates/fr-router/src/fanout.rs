@@ -464,6 +464,18 @@ pub fn fanout_board(
     settings: &RouterSettings,
     config: &FanoutConfig,
 ) -> FanoutOutcome {
+    fanout_board_with_observer(board, rules, settings, config, None)
+}
+
+/// Same as [`fanout_board`], but emits [`crate::observer::RouterEvent::FanoutPass`]
+/// after each pass if an observer is provided.
+pub fn fanout_board_with_observer(
+    board: &mut Board,
+    rules: &BoardRules,
+    settings: &RouterSettings,
+    config: &FanoutConfig,
+    mut observer: Option<&mut (dyn crate::observer::RouterObserver + '_)>,
+) -> FanoutOutcome {
     let mut outcome = FanoutOutcome::default();
     let components = components(board, config.pin_sorting_order, config.density_radius);
     if components.is_empty() {
@@ -497,6 +509,7 @@ pub fn fanout_board(
             outcome.stop = Some(FanoutStop::MaxItems);
             return outcome;
         }
+        let pass_start = Instant::now();
         let counters = fanout_pass(
             board,
             rules,
@@ -509,6 +522,14 @@ pub fn fanout_board(
             stage_deadline,
         );
         outcome.passes.push(counters);
+        if let Some(obs) = observer.as_deref_mut() {
+            obs.on_event(crate::observer::RouterEvent::FanoutPass {
+                pass: (pass_no + 1) as u32,
+                routed: counters.routed as u32,
+                escapes: outcome.total_items_fanouted as u32,
+                elapsed_s: pass_start.elapsed().as_secs_f64(),
+            });
+        }
         if counters.stage_budget_hit {
             // The stage's share of the job budget is spent. Leaves the board
             // exactly as the deadline poll does — between pins, mid-pass

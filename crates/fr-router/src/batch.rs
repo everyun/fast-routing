@@ -1141,6 +1141,17 @@ pub struct BatchRouter<'r> {
     /// inner reroute uses this to skip leftover unrouted nets that have already
     /// been tried against the current board.
     pub net_filter: Option<std::collections::BTreeSet<i32>>,
+    /// Optional event observer.
+    pub observer: Option<Box<dyn crate::observer::RouterObserver>>,
+    /// Minimum interval between in-pass snapshot events in milliseconds.
+    pub snapshot_interval_ms: u64,
+    /// Optional snapshot model generator callback.
+    pub snapshot_fn: Option<crate::observer::SnapshotFn>,
+    /// Cooperative cancellation flag.
+    pub cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    /// Instant when job started, for snapshot elapsed time reporting.
+    pub job_start: std::time::Instant,
+    last_snapshot_at: std::time::Instant,
 }
 
 impl<'r> BatchRouter<'r> {
@@ -1169,7 +1180,43 @@ impl<'r> BatchRouter<'r> {
             routed_copper: Vec::new(),
             routed_copper_spans: Vec::new(),
             net_filter: None,
+            observer: None,
+            snapshot_interval_ms: 500,
+            snapshot_fn: None,
+            cancel: None,
+            job_start: std::time::Instant::now(),
+            last_snapshot_at: std::time::Instant::now(),
         }
+    }
+
+    /// Attaches an observer to this router.
+    pub fn with_observer(mut self, observer: Box<dyn crate::observer::RouterObserver>) -> Self {
+        self.observer = Some(observer);
+        self
+    }
+
+    /// Sets the snapshot throttling interval in milliseconds.
+    pub fn with_snapshot_interval_ms(mut self, interval_ms: u64) -> Self {
+        self.snapshot_interval_ms = interval_ms;
+        self
+    }
+
+    /// Sets the snapshot producer callback.
+    pub fn with_snapshot_fn(mut self, f: crate::observer::SnapshotFn) -> Self {
+        self.snapshot_fn = Some(f);
+        self
+    }
+
+    /// Sets the cooperative cancellation flag.
+    pub fn with_cancel(mut self, cancel: std::sync::Arc<std::sync::atomic::AtomicBool>) -> Self {
+        self.cancel = Some(cancel);
+        self
+    }
+
+    /// Sets the job start instant for elapsed time reporting in snapshots.
+    pub fn with_job_start(mut self, start: std::time::Instant) -> Self {
+        self.job_start = start;
+        self
     }
 
     /// Sets the parallel connection workers budget.
@@ -1434,6 +1481,34 @@ impl<'r> BatchRouter<'r> {
             _ => outcome.not_routed += 1,
         }
         outcome.ripped_item_count += attempt.ripped.len();
+
+        if let Some(obs) = &mut self.observer {
+            obs.on_event(crate::observer::RouterEvent::ConnectionDone {
+                pass: ctx.pass_no as u32,
+                net: entry.net_no,
+                ok: attempt.state() == AttemptState::Routed,
+                ripped: attempt.ripped.len() as u32,
+                elapsed_ms: usage.time_used_ms as f64,
+            });
+            if obs.wants_snapshot()
+                && self.last_snapshot_at.elapsed()
+                    >= std::time::Duration::from_millis(self.snapshot_interval_ms)
+            {
+                if let Some(snap_fn) = &self.snapshot_fn {
+                    let stats = crate::snapshot::Stats {
+                        incomplete: incomplete_count(board) as u32,
+                        violations: 0,
+                        pass: ctx.pass_no as u32,
+                        elapsed_s: self.job_start.elapsed().as_secs_f64(),
+                        score: 0.0,
+                        items: board.store().len() as u32,
+                    };
+                    let model = snap_fn(board, stats);
+                    obs.on_event(crate::observer::RouterEvent::Snapshot(model));
+                    self.last_snapshot_at = std::time::Instant::now();
+                }
+            }
+        }
         if self.requeue_active && outcome.requeued < requeue_budget {
             for net_no in attempt.changed_nets.iter().copied() {
                 if net_no == entry.net_no {
@@ -1845,6 +1920,10 @@ impl<'r> BatchRouter<'r> {
     pub fn run(&mut self, board: &mut Board, max_passes: i32) -> RunOutcome {
         let max_passes = max_passes.max(1);
         self.requeue_active = self.requeue_policy.applies_to(max_passes);
+        let mut deadline = schedule::JobDeadline::ambient();
+        if let Some(cancel) = &self.cancel {
+            deadline = deadline.with_cancel(cancel.clone());
+        }
         let config = LoopConfig {
             max_passes,
             start_ripup_costs: self.start_ripup_costs,
@@ -1852,7 +1931,7 @@ impl<'r> BatchRouter<'r> {
             remove_unconnected_vias: self.remove_unconnected_vias,
             history_limit: history::MAX_HISTORY_SIZE,
             budget: self.budget,
-            deadline: schedule::JobDeadline::ambient(),
+            deadline,
         };
         // Copied out of `self` so the scorer's borrow of the rules is
         // independent of the `&mut self` the loop takes as its driver.
@@ -1881,6 +1960,53 @@ impl PassDriver for BatchRouter<'_> {
         // room database subscribes to, with `delta` telling it which items
         // moved (`ARCHITECTURE.md`, fr-board mechanism 2).
         self.scratch = ContactScratch::new();
+    }
+
+    fn on_pass_started(&mut self, pass: u32, incomplete: u32) {
+        if let Some(obs) = &mut self.observer {
+            obs.on_event(crate::observer::RouterEvent::PassStarted { pass, incomplete });
+        }
+    }
+
+    fn on_pass_finished(
+        &mut self,
+        pass: u32,
+        score: &crate::batch::scoring::BoardScore,
+        elapsed_s: f64,
+        board: &Board,
+    ) {
+        if let Some(obs) = &mut self.observer {
+            obs.on_event(crate::observer::RouterEvent::PassFinished {
+                pass,
+                incomplete: score.incomplete_count as u32,
+                violations: score.violation_count as u32,
+                elapsed_s,
+                score: score.normalized,
+            });
+            if obs.wants_snapshot() {
+                if let Some(snap_fn) = &self.snapshot_fn {
+                    let stats = crate::snapshot::Stats {
+                        incomplete: score.incomplete_count as u32,
+                        violations: score.violation_count as u32,
+                        pass,
+                        elapsed_s: self.job_start.elapsed().as_secs_f64(),
+                        score: score.normalized,
+                        items: board.store().len() as u32,
+                    };
+                    let model = snap_fn(board, stats);
+                    obs.on_event(crate::observer::RouterEvent::Snapshot(model));
+                    self.last_snapshot_at = std::time::Instant::now();
+                }
+            }
+        }
+    }
+
+    fn on_stopped(&mut self, reason: &str) {
+        if let Some(obs) = &mut self.observer {
+            obs.on_event(crate::observer::RouterEvent::Stopped {
+                reason: reason.to_string(),
+            });
+        }
     }
 }
 

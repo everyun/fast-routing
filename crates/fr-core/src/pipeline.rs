@@ -76,7 +76,7 @@ use fr_router::batch::budget::BudgetPolicy;
 use fr_router::batch::portfolio::{self, PortfolioConfig};
 use fr_router::batch::threads::Threads;
 use fr_router::batch::BatchRouter;
-use fr_router::fanout::{fanout_board, FanoutConfig};
+use fr_router::fanout::{fanout_board_with_observer, FanoutConfig};
 use fr_router::optimizer::{run_optimization_stage_with_threads, LoopExit};
 use fr_router::StopReason;
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
@@ -405,16 +405,37 @@ fn incomplete_count_of(design: &ImportedDesign) -> usize {
 }
 
 /// Runs [`RouterStage::Maze`] over `design` in place.
-fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterReport {
+fn run_maze_stage(
+    design: &mut ImportedDesign,
+    options: MazeOptions,
+    mut observer: Option<Box<dyn fr_router::observer::RouterObserver>>,
+    snapshot_interval_ms: u64,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+) -> RouterReport {
+    let started_total = std::time::Instant::now();
     let settings = settings_for(design, options);
     let scale = board_units_per_mm(design);
     let mut report = RouterReport::default();
+
+    if let Some(obs) = &mut observer {
+        obs.on_event(fr_router::observer::RouterEvent::JobStarted {
+            design: design.design_name.clone(),
+            layers: design.board.layers().len() as u16,
+            connections: incomplete_count_of(design) as u32,
+        });
+    }
 
     if options.fanout {
         let config = FanoutConfig::from_settings(&settings, scale);
         // Disjoint field borrows: the router needs `&mut board` and `&rules` at once.
         let started = std::time::Instant::now();
-        let outcome = fanout_board(&mut design.board, &design.rules, &settings, &config);
+        let outcome = fanout_board_with_observer(
+            &mut design.board,
+            &design.rules,
+            &settings,
+            &config,
+            observer.as_deref_mut(),
+        );
         report.fanouted = outcome.total_items_fanouted;
         // Upstream logs one INFO line per pass and one for the stage
         // (`BatchFanout.java:96-144`); the completion line is what makes the
@@ -461,7 +482,17 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
         .with_fanout(options.fanout)
         .with_board_units_per_mm(scale)
         .with_budget(budget)
-        .with_parallel_connections(options.parallel_connections());
+        .with_parallel_connections(options.parallel_connections())
+        .with_snapshot_interval_ms(snapshot_interval_ms);
+    if let Some(c) = cancel {
+        router = router.with_cancel(c);
+    }
+    if let Some(obs) = observer {
+        router = router.with_observer(obs);
+        router = router.with_snapshot_fn(Box::new(|b, s| {
+            std::sync::Arc::new(crate::snapshot::snapshot(b, s))
+        }));
+    }
     // T1b. A portfolio of one is the plain run and clones nothing, so the
     // default path through here is byte-identical to the pre-portfolio one; the
     // `total_items_routed` item-cap check below reads the router either way,
@@ -571,6 +602,13 @@ fn run_maze_stage(design: &mut ImportedDesign, options: MazeOptions) -> RouterRe
     if let Some(optimizer) = &report.optimizer {
         report.incomplete_count = optimizer.incomplete_count;
     }
+    if let Some(obs) = &mut router.observer {
+        obs.on_event(fr_router::observer::RouterEvent::Finished {
+            incomplete: report.incomplete_count as u32,
+            violations: 0,
+            elapsed_s: started_total.elapsed().as_secs_f64(),
+        });
+    }
     fr_router::rooms::attr::flush();
     report
 }
@@ -600,6 +638,7 @@ fn describe_stop(reason: Option<StopReason>) -> &'static str {
         Some(StopReason::GlobalStagnation) => "stagnation (global)",
         Some(StopReason::JobDeadline) => "job deadline",
         Some(StopReason::Interrupted) => "interrupt",
+        Some(StopReason::Cancelled) => "cancelled",
     }
 }
 
@@ -776,10 +815,17 @@ pub struct RoutingJob {
     /// `None` leaves the caller to write [`JobReport::ses`] itself, which then
     /// necessarily happens *after* the referee.
     session_path: Option<PathBuf>,
+    observer: std::sync::Mutex<Option<Box<dyn fr_router::observer::RouterObserver>>>,
+    snapshot_interval_ms: u64,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl std::fmt::Debug for RoutingJob {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let has_observer = self
+            .observer
+            .lock()
+            .map_or(false, |guard| guard.is_some());
         f.debug_struct("RoutingJob")
             .field("design_name", &self.design_name)
             .field("source_bytes", &self.source.len())
@@ -788,6 +834,8 @@ impl std::fmt::Debug for RoutingJob {
             .field("stage", &self.stage)
             .field("referee_threads", &self.referee_threads)
             .field("session_path", &self.session_path)
+            .field("has_observer", &has_observer)
+            .field("snapshot_interval_ms", &self.snapshot_interval_ms)
             .finish()
     }
 }
@@ -807,6 +855,9 @@ impl RoutingJob {
             stage: RouterStage::default(),
             referee_threads: Threads::single(),
             session_path: None,
+            observer: std::sync::Mutex::new(None),
+            snapshot_interval_ms: 500,
+            cancel: None,
         }
     }
 
@@ -869,6 +920,29 @@ impl RoutingJob {
         &self.design_name
     }
 
+    /// Attaches an observer to receive engine progress and lifecycle events.
+    pub fn with_observer(self, observer: Box<dyn fr_router::observer::RouterObserver>) -> RoutingJob {
+        if let Ok(mut guard) = self.observer.lock() {
+            *guard = Some(observer);
+        }
+        self
+    }
+
+    /// Sets the minimum throttling interval between in-pass snapshots in milliseconds.
+    pub fn with_snapshot_interval_ms(mut self, interval_ms: u64) -> RoutingJob {
+        self.snapshot_interval_ms = interval_ms;
+        self
+    }
+
+    /// Sets a cooperative cancellation flag.
+    pub fn with_cancel(
+        mut self,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) -> RoutingJob {
+        self.cancel = Some(cancel);
+        self
+    }
+
     /// Stage 1 on its own: DSN bytes → board + rules.
     ///
     /// Exposed because the two gate emitters ([`fr_io::golden_dump`] and
@@ -915,11 +989,18 @@ impl RoutingJob {
         // nothing to size it from, and after the router stage it is too late — the stage is
         // what has to stop early.
         let reserved = fr_router::reserve_job_tail(tail_reserve_for(&design));
+        let observer = self.observer.lock().ok().and_then(|mut g| g.take());
         // The router stage. `ImportOnly` is a no-op *by construction*: its arm does not receive
         // `&mut design`, so no future edit to it can start mutating the board by accident.
         let router = match self.stage {
             RouterStage::ImportOnly => None,
-            RouterStage::Maze(options) => Some(run_maze_stage(&mut design, options)),
+            RouterStage::Maze(options) => Some(run_maze_stage(
+                &mut design,
+                options,
+                observer,
+                self.snapshot_interval_ms,
+                self.cancel.clone(),
+            )),
         };
         let routed = router.is_some();
         observe(JobPhase::Routed);

@@ -108,6 +108,7 @@ pub mod insert_forced;
 pub mod locate;
 pub mod locate45;
 pub mod maze;
+pub mod observer;
 pub mod opt_via;
 pub mod optimizer;
 pub mod pull_tight;
@@ -116,6 +117,7 @@ pub mod pull_tight90;
 pub mod pull_tight_any;
 pub mod result;
 pub mod rooms;
+pub mod snapshot;
 
 #[cfg(any(test, feature = "test-support"))]
 pub mod test_support;
@@ -129,8 +131,9 @@ pub use batch::{
 };
 pub use ctrl::AutorouteControl;
 pub use engine::AutorouteEngine;
-pub use fanout::{fanout_board, FanoutConfig, FanoutOutcome, FanoutStop};
+pub use fanout::{fanout_board, fanout_board_with_observer, FanoutConfig, FanoutOutcome, FanoutStop};
 pub use maze::search::{MazeSearch, SearchFailure, SettleRecord};
+pub use observer::{FileTraceObserver, RouterConfig, RouterEvent, RouterObserver, SnapshotFn};
 pub use optimizer::{
     route_then_optimize, run_optimization_stage, BatchOptimizer, ItemRouteResult, LengthMetric,
     LoopExit, OptimizerOutcome, OptimizerPassOutcome, PassExit, StageOutcome,
