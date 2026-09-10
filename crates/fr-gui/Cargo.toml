@@ -1,0 +1,21 @@
+[package]
+name = "fr-gui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+default-run = "fr-gui"
+description = "GPUI-based interactive graphical interface for fast-routing."
+
+[dependencies]
+gpui = "0.2.2"
+tiny-skia = "0.11"
+image = { version = "0.25", default-features = false, features = ["png"] }
+fr-io = { path = "../fr-io" }
+fr-board = { path = "../fr-board" }
+fr-geometry = { path = "../fr-geometry" }
+
+[[bin]]
+name = "fr-gui"
+path = "src/main.rs"
