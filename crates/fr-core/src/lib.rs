@@ -24,11 +24,16 @@
 
 pub mod drc_report;
 pub mod pipeline;
+pub mod snapshot;
 
 pub use drc_report::{report as drc_json_report, ReportOptions, DRC_IMPORT_OPTIONS};
 pub use pipeline::{
     arm_job_deadline, job_budget_spent, request_job_stop, BoardCensus, JobError, JobPhase,
     JobReport, MazeOptions, OptimizerReport, Referee, RouterReport, RouterStage, RoutingJob,
+};
+pub use snapshot::{
+    snapshot, snapshot_with_resolution, AreaKind, AreaShape, FixState, LayerInfo, PadShape,
+    RatLine, RenderModel, Stats, TraceShape, ViaShape, DEFAULT_RESOLUTION,
 };
 
 /// Returns the crate version.
