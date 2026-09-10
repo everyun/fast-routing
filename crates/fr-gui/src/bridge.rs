@@ -247,11 +247,10 @@ impl JobBridge {
         Ok(())
     }
 
-    /// Stops the routing job cooperatively via cancellation flag and deadline.
+    /// Stops the routing job cooperatively via cancellation flag.
     pub fn stop(&mut self) {
         if self.state == JobState::Running || self.state == JobState::Paused {
             self.cancel_flag.store(true, Ordering::SeqCst);
-            fr_core::request_job_stop();
             self.state = JobState::Stopping;
             self.log("Cancel signal sent to routing engine...".into());
         }
