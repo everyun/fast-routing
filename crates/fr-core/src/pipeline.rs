@@ -76,7 +76,8 @@ use fr_router::batch::budget::BudgetPolicy;
 use fr_router::batch::portfolio::{self, PortfolioConfig};
 use fr_router::batch::threads::Threads;
 use fr_router::batch::BatchRouter;
-use fr_router::fanout::{fanout_board_with_observer, FanoutConfig};
+use fr_router::fanout::FanoutConfig;
+use fr_router::observer::{RouterEvent, RouterObserver, SnapshotFn};
 use fr_router::optimizer::{run_optimization_stage_with_threads, LoopExit};
 use fr_router::StopReason;
 use fr_rules::router_settings::{BoardAspectRatio, RouterSettings};
@@ -408,33 +409,29 @@ fn incomplete_count_of(design: &ImportedDesign) -> usize {
 fn run_maze_stage(
     design: &mut ImportedDesign,
     options: MazeOptions,
-    mut observer: Option<Box<dyn fr_router::observer::RouterObserver>>,
+    observer: &mut Option<Box<dyn RouterObserver>>,
     snapshot_interval_ms: u64,
-    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    snapshot_fn: &mut Option<SnapshotFn>,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    job_start: std::time::Instant,
 ) -> RouterReport {
-    let started_total = std::time::Instant::now();
     let settings = settings_for(design, options);
     let scale = board_units_per_mm(design);
     let mut report = RouterReport::default();
 
-    if let Some(obs) = &mut observer {
-        obs.on_event(fr_router::observer::RouterEvent::JobStarted {
-            design: design.design_name.clone(),
-            layers: design.board.layers().len() as u16,
-            connections: incomplete_count_of(design) as u32,
-        });
-    }
-
     if options.fanout {
-        let config = FanoutConfig::from_settings(&settings, scale);
+        let mut config = FanoutConfig::from_settings(&settings, scale);
+        config.deadline = config.deadline.with_cancel(cancel.clone());
         // Disjoint field borrows: the router needs `&mut board` and `&rules` at once.
         let started = std::time::Instant::now();
-        let outcome = fanout_board_with_observer(
+        let outcome = fr_router::fanout::fanout_board_with_observer(
             &mut design.board,
             &design.rules,
             &settings,
             &config,
-            observer.as_deref_mut(),
+            observer
+                .as_mut()
+                .map(|b| &mut **b as &mut dyn RouterObserver),
         );
         report.fanouted = outcome.total_items_fanouted;
         // Upstream logs one INFO line per pass and one for the stage
@@ -467,6 +464,25 @@ fn run_maze_stage(
             stop,
             started.elapsed().as_secs_f64(),
         );
+
+        if let Some(obs) = observer.as_deref_mut() {
+            if obs.wants_snapshot() {
+                let stats = crate::snapshot::Stats {
+                    incomplete: incomplete_count_of(design) as u32,
+                    violations: 0,
+                    pass: 0,
+                    elapsed_s: job_start.elapsed().as_secs_f64(),
+                    score: 0.0,
+                    items: design.board.store().len() as u32,
+                };
+                let model = if let Some(sf) = snapshot_fn.as_ref() {
+                    sf(&design.board, stats)
+                } else {
+                    std::sync::Arc::new(crate::snapshot::snapshot(&design.board, stats))
+                };
+                obs.on_event(RouterEvent::Snapshot(model));
+            }
+        }
     }
 
     // The batch loop needs three things the design knows and the board does not: whether the
@@ -483,12 +499,16 @@ fn run_maze_stage(
         .with_board_units_per_mm(scale)
         .with_budget(budget)
         .with_parallel_connections(options.parallel_connections())
+        .with_cancel(cancel)
+        .with_job_start(job_start)
         .with_snapshot_interval_ms(snapshot_interval_ms);
-    if let Some(c) = cancel {
-        router = router.with_cancel(c);
-    }
-    if let Some(obs) = observer {
+    if let Some(obs) = observer.take() {
         router = router.with_observer(obs);
+    }
+    let had_snap_fn = snapshot_fn.is_some();
+    if let Some(sf) = snapshot_fn.take() {
+        router = router.with_snapshot_fn(sf);
+    } else {
         router = router.with_snapshot_fn(Box::new(|b, s| {
             std::sync::Arc::new(crate::snapshot::snapshot(b, s))
         }));
@@ -539,6 +559,13 @@ fn run_maze_stage(
     } else {
         router.run(&mut design.board, options.max_passes)
     };
+
+    if let Some(obs) = router.observer.take() {
+        *observer = Some(obs);
+    }
+    if had_snap_fn {
+        *snapshot_fn = router.snapshot_fn.take();
+    }
     report.passes = outcome.passes.len();
     report.routed = outcome.passes.iter().map(|pass| pass.routed).sum();
     report.ripped = outcome
@@ -601,13 +628,6 @@ fn run_maze_stage(
     // describe; the referee re-derives it below and the two must agree.
     if let Some(optimizer) = &report.optimizer {
         report.incomplete_count = optimizer.incomplete_count;
-    }
-    if let Some(obs) = &mut router.observer {
-        obs.on_event(fr_router::observer::RouterEvent::Finished {
-            incomplete: report.incomplete_count as u32,
-            violations: 0,
-            elapsed_s: started_total.elapsed().as_secs_f64(),
-        });
     }
     fr_router::rooms::attr::flush();
     report
@@ -815,17 +835,14 @@ pub struct RoutingJob {
     /// `None` leaves the caller to write [`JobReport::ses`] itself, which then
     /// necessarily happens *after* the referee.
     session_path: Option<PathBuf>,
-    observer: std::sync::Mutex<Option<Box<dyn fr_router::observer::RouterObserver>>>,
+    observer: std::sync::Mutex<Option<Box<dyn RouterObserver>>>,
     snapshot_interval_ms: u64,
-    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
+    snapshot_fn: std::sync::Mutex<Option<SnapshotFn>>,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl std::fmt::Debug for RoutingJob {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let has_observer = self
-            .observer
-            .lock()
-            .map_or(false, |guard| guard.is_some());
         f.debug_struct("RoutingJob")
             .field("design_name", &self.design_name)
             .field("source_bytes", &self.source.len())
@@ -834,8 +851,12 @@ impl std::fmt::Debug for RoutingJob {
             .field("stage", &self.stage)
             .field("referee_threads", &self.referee_threads)
             .field("session_path", &self.session_path)
-            .field("has_observer", &has_observer)
+            .field("has_observer", &self.observer.lock().unwrap().is_some())
             .field("snapshot_interval_ms", &self.snapshot_interval_ms)
+            .field(
+                "cancel",
+                &self.cancel.load(std::sync::atomic::Ordering::Relaxed),
+            )
             .finish()
     }
 }
@@ -857,7 +878,8 @@ impl RoutingJob {
             session_path: None,
             observer: std::sync::Mutex::new(None),
             snapshot_interval_ms: 500,
-            cancel: None,
+            snapshot_fn: std::sync::Mutex::new(None),
+            cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 
@@ -915,22 +937,21 @@ impl RoutingJob {
         self
     }
 
-    /// The `(base_design …)` token this job will write.
-    pub fn design_name(&self) -> &str {
-        &self.design_name
-    }
-
-    /// Attaches an observer to receive engine progress and lifecycle events.
-    pub fn with_observer(self, observer: Box<dyn fr_router::observer::RouterObserver>) -> RoutingJob {
-        if let Ok(mut guard) = self.observer.lock() {
-            *guard = Some(observer);
-        }
+    /// Attaches an observer for routing lifecycle and progress events.
+    pub fn with_observer(self, observer: Box<dyn RouterObserver>) -> RoutingJob {
+        *self.observer.lock().unwrap() = Some(observer);
         self
     }
 
-    /// Sets the minimum throttling interval between in-pass snapshots in milliseconds.
+    /// Sets the throttle interval between in-pass snapshot captures in milliseconds (default 500).
     pub fn with_snapshot_interval_ms(mut self, interval_ms: u64) -> RoutingJob {
         self.snapshot_interval_ms = interval_ms;
+        self
+    }
+
+    /// Sets the snapshot model producer function.
+    pub fn with_snapshot_fn(self, f: SnapshotFn) -> RoutingJob {
+        *self.snapshot_fn.lock().unwrap() = Some(f);
         self
     }
 
@@ -939,8 +960,13 @@ impl RoutingJob {
         mut self,
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> RoutingJob {
-        self.cancel = Some(cancel);
+        self.cancel = cancel;
         self
+    }
+
+    /// The `(base_design …)` token this job will write.
+    pub fn design_name(&self) -> &str {
+        &self.design_name
     }
 
     /// Stage 1 on its own: DSN bytes → board + rules.
@@ -976,6 +1002,7 @@ impl RoutingJob {
     /// It is not a progress API — the callback runs on the job's own thread and
     /// blocks it.
     pub fn run_observed(&self, observe: &mut dyn FnMut(JobPhase)) -> Result<JobReport, JobError> {
+        let job_start = std::time::Instant::now();
         let import_started = std::time::Instant::now();
         let mut design = self.import()?;
         let import_duration = import_started.elapsed();
@@ -984,12 +1011,33 @@ impl RoutingJob {
         // whole reason both exist.
         let import_census = BoardCensus::of(&design.board);
         observe(JobPhase::Imported);
+
+        let mut observer_guard = self.observer.lock().unwrap();
+        let mut observer = observer_guard.take();
+        let mut snapshot_fn_guard = self.snapshot_fn.lock().unwrap();
+        let mut snapshot_fn = snapshot_fn_guard.take();
+
+        if let Some(obs) = &mut observer {
+            let shapes = shape_store(&design.board);
+            let view = StoreView::new(
+                design.board.store(),
+                &shapes,
+                &design.rules.clearance_matrix,
+                design.board.layers().len(),
+            );
+            let conn = board_connectivity(&view);
+            obs.on_event(RouterEvent::JobStarted {
+                design: self.design_name.clone(),
+                layers: design.board.layers().len() as u16,
+                connections: conn.max_connections as u32,
+            });
+        }
+
         // The board is known now, so the job's wall budget can finally reserve what its own
         // shutdown will cost (`fr_router::reserve_job_tail`). Before the import there is
         // nothing to size it from, and after the router stage it is too late — the stage is
         // what has to stop early.
         let reserved = fr_router::reserve_job_tail(tail_reserve_for(&design));
-        let observer = self.observer.lock().ok().and_then(|mut g| g.take());
         // The router stage. `ImportOnly` is a no-op *by construction*: its arm does not receive
         // `&mut design`, so no future edit to it can start mutating the board by accident.
         let router = match self.stage {
@@ -997,9 +1045,11 @@ impl RoutingJob {
             RouterStage::Maze(options) => Some(run_maze_stage(
                 &mut design,
                 options,
-                observer,
+                &mut observer,
                 self.snapshot_interval_ms,
+                &mut snapshot_fn,
                 self.cancel.clone(),
+                job_start,
             )),
         };
         let routed = router.is_some();
@@ -1026,6 +1076,37 @@ impl RoutingJob {
         observe(JobPhase::SessionWritten);
         let referee = Referee::judge_with_threads(&design, &self.weights, self.referee_threads);
         observe(JobPhase::Judged);
+
+        if let Some(obs) = &mut observer {
+            let is_cancelled = self.cancel.load(std::sync::atomic::Ordering::Relaxed);
+            let stopped_reason = if is_cancelled {
+                Some("cancelled")
+            } else if let Some(r) = &router {
+                match r.stop_reason {
+                    "job deadline" => Some("deadline"),
+                    "interrupt" => Some("interrupted"),
+                    "cancelled" => Some("cancelled"),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            if let Some(reason) = stopped_reason {
+                obs.on_event(RouterEvent::Stopped {
+                    reason: reason.to_string(),
+                });
+            } else {
+                obs.on_event(RouterEvent::Finished {
+                    incomplete: referee.stats.incomplete_count as u32,
+                    violations: referee.stats.clearance_violation_count as u32,
+                    elapsed_s: job_start.elapsed().as_secs_f64(),
+                });
+            }
+        }
+
+        *observer_guard = observer;
+        *snapshot_fn_guard = snapshot_fn;
         Ok(JobReport {
             session_path: self.session_path.clone(),
             tail_reserve: reserved,

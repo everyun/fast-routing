@@ -131,7 +131,9 @@ pub use batch::{
 };
 pub use ctrl::AutorouteControl;
 pub use engine::AutorouteEngine;
-pub use fanout::{fanout_board, fanout_board_with_observer, FanoutConfig, FanoutOutcome, FanoutStop};
+pub use fanout::{
+    fanout_board, fanout_board_with_observer, FanoutConfig, FanoutOutcome, FanoutStop,
+};
 pub use maze::search::{MazeSearch, SearchFailure, SettleRecord};
 pub use observer::{FileTraceObserver, RouterConfig, RouterEvent, RouterObserver, SnapshotFn};
 pub use optimizer::{

@@ -1250,7 +1250,7 @@ mod tests {
 
     impl PassDriver for ScriptedDriver {
         fn run_pass(&mut self, board: &mut Board, ctx: &PassContext) -> PassOutcome {
-            self.seen.push(*ctx);
+            self.seen.push(ctx.clone());
             // Past the end of the script the board simply stops changing, which
             // is the flat-score case every stagnation rule is about.
             let script = self
