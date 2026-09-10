@@ -24,12 +24,19 @@
 
 pub mod drc_report;
 pub mod pipeline;
+pub mod snapshot;
 
 pub use drc_report::{report as drc_json_report, ReportOptions, DRC_IMPORT_OPTIONS};
+pub use fr_router::observer::{
+    self, FileTraceObserver, RouterConfig, RouterEvent, RouterObserver, SnapshotFn,
+};
 pub use pipeline::{
     arm_job_deadline, job_budget_spent, request_job_stop, BoardCensus, JobError, JobPhase,
     JobReport, MazeOptions, OptimizerReport, Referee, RouterReport, RouterStage, RoutingJob,
 };
+
+/// Alias for [`RoutingJob`] matching GUI contract.
+pub type Job = RoutingJob;
 
 /// Returns the crate version.
 pub fn version() -> &'static str {

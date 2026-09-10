@@ -276,6 +276,8 @@ pub enum StopCause {
     Deadline,
     /// A signal handler called [`request_job_stop`].
     Interrupt,
+    /// The run was cancelled via a shared cancellation flag.
+    Cancelled,
 }
 
 /// A wall budget for the whole job, polled between connections and between
@@ -286,20 +288,28 @@ pub enum StopCause {
 /// `TimeLimit` and governs *one* connection, while this governs the run. The
 /// two meet in [`PassContext::connection_budget`], which never hands a
 /// connection more time than the job has left.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct JobDeadline {
     at: Option<Instant>,
     /// Whether [`job_stop_requested`] also counts as expiry. Only the ambient
     /// deadline watches the flag; an explicit one is a pure clock, so a test
     /// can never be disturbed by a signal handler another test installed.
     watch_stop_flag: bool,
+    /// Shared cancellation flag.
+    cancel_flag: Option<std::sync::Arc<AtomicBool>>,
 }
 
 /// `Instant` is not `Eq`-comparable through a derive on an `Option`? It is —
 /// but the flag makes the derived equality misleading, so it is spelled out.
 impl PartialEq for JobDeadline {
     fn eq(&self, other: &Self) -> bool {
-        self.at == other.at && self.watch_stop_flag == other.watch_stop_flag
+        self.at == other.at
+            && self.watch_stop_flag == other.watch_stop_flag
+            && match (&self.cancel_flag, &other.cancel_flag) {
+                (None, None) => true,
+                (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
+                _ => false,
+            }
     }
 }
 
@@ -311,6 +321,7 @@ impl JobDeadline {
     pub const NONE: JobDeadline = JobDeadline {
         at: None,
         watch_stop_flag: false,
+        cancel_flag: None,
     };
 
     /// The process-wide deadline set by [`arm_job_deadline`], **minus the
@@ -333,6 +344,7 @@ impl JobDeadline {
                 .get()
                 .map(|at| at.checked_sub(reserve).unwrap_or(*at)),
             watch_stop_flag: true,
+            cancel_flag: None,
         }
     }
 
@@ -342,6 +354,7 @@ impl JobDeadline {
         JobDeadline {
             at: JOB_DEADLINE.get().copied(),
             watch_stop_flag: true,
+            cancel_flag: None,
         }
     }
 
@@ -351,6 +364,7 @@ impl JobDeadline {
         JobDeadline {
             at: Instant::now().checked_add(after),
             watch_stop_flag: false,
+            cancel_flag: None,
         }
     }
 
@@ -360,20 +374,32 @@ impl JobDeadline {
         JobDeadline {
             at: Some(Instant::now()),
             watch_stop_flag: false,
+            cancel_flag: None,
         }
+    }
+
+    /// Attaches a shared cancellation flag to this deadline.
+    pub fn with_cancel(mut self, cancel: std::sync::Arc<AtomicBool>) -> JobDeadline {
+        self.cancel_flag = Some(cancel);
+        self
     }
 
     /// Whether a budget was armed at all. A run with none never reads the
     /// clock.
     pub fn is_armed(&self) -> bool {
-        self.at.is_some() || self.watch_stop_flag
+        self.at.is_some() || self.watch_stop_flag || self.cancel_flag.is_some()
     }
 
     /// Why the budget is gone, or `None` while it lasts.
     ///
-    /// The stop flag is checked first: an operator's `SIGTERM` is the more
-    /// informative of the two when both are true.
+    /// The cancellation flag and stop flag are checked first: an explicit
+    /// stop or cancellation is the more informative cause when both are true.
     pub fn cause(&self) -> Option<StopCause> {
+        if let Some(cancel) = &self.cancel_flag {
+            if cancel.load(Ordering::Relaxed) {
+                return Some(StopCause::Cancelled);
+            }
+        }
         if self.watch_stop_flag && job_stop_requested() {
             return Some(StopCause::Interrupt);
         }
@@ -437,7 +463,7 @@ impl RequeuePolicy {
 }
 
 /// What one pass is told before it runs.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PassContext {
     /// 1-based pass number.
     pub pass_no: i32,
@@ -548,6 +574,22 @@ pub trait PassDriver {
     /// a no-op because a driver that builds its engine per connection has
     /// nothing to invalidate.
     fn on_board_restored(&mut self, _board: &Board, _delta: &StoreDelta) {}
+
+    /// Hook called right before an autoroute pass starts.
+    fn on_pass_started(&mut self, _pass: u32, _incomplete: u32) {}
+
+    /// Hook called right after an autoroute pass finishes and is scored.
+    fn on_pass_finished(
+        &mut self,
+        _pass: u32,
+        _score: &BoardScore,
+        _elapsed_s: f64,
+        _board: &Board,
+    ) {
+    }
+
+    /// Hook called when routing is stopped early (e.g. deadline or cancelled).
+    fn on_stopped(&mut self, _reason: &str) {}
 }
 
 /// Why the loop stopped.
@@ -580,10 +622,12 @@ pub enum StopReason {
     /// A signal handler called [`request_job_stop`]. Same path as
     /// [`StopReason::JobDeadline`].
     Interrupted,
+    /// The job was cancelled by an external cancel signal.
+    Cancelled,
 }
 
 /// The knobs of one batch run.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct LoopConfig {
     /// Pass cap. `<= 0` is upstream's uncapped loop (`:931` skips the check),
     /// which only the stop rules then end — see the CLI divergence in
@@ -731,6 +775,12 @@ impl BatchLoop {
                 outcome.stop_reason = Some(match cause {
                     StopCause::Deadline => StopReason::JobDeadline,
                     StopCause::Interrupt => StopReason::Interrupted,
+                    StopCause::Cancelled => StopReason::Cancelled,
+                });
+                driver.on_stopped(match cause {
+                    StopCause::Deadline => "deadline",
+                    StopCause::Interrupt => "interrupted",
+                    StopCause::Cancelled => "cancelled",
                 });
                 break;
             }
@@ -755,10 +805,11 @@ impl BatchLoop {
                 self.config.remove_unconnected_vias,
             )
             .with_incomplete_at_start(crate::batch::incomplete_count(board))
-            .with_deadline(self.config.deadline);
-            let pass_started = trace::is_enabled().then(Instant::now);
+            .with_deadline(self.config.deadline.clone());
+            let pass_start_instant = Instant::now();
+            driver.on_pass_started(current_pass as u32, ctx.incomplete_at_start as u32);
             let pass = driver.run_pass(board, &ctx);
-            pass_elapsed = pass_started.map_or(Duration::ZERO, |at| at.elapsed());
+            pass_elapsed = pass_start_instant.elapsed();
             pass_pending = true;
             // `:947` + `:688` — `autoroute_pass` returns false on an empty work
             // list (the board is complete) and on a pass that attempted nothing.
@@ -783,6 +834,12 @@ impl BatchLoop {
             check_tree_consistency(board, current_pass, "run_pass", is_det);
 
             current_score = scorer.score(board);
+            driver.on_pass_finished(
+                current_pass as u32,
+                &current_score,
+                pass_elapsed.as_secs_f64(),
+                board,
+            );
 
             // The pass polls the same budget between its connections and
             // returns early when it runs out, so a pass that ended that way is
@@ -796,6 +853,12 @@ impl BatchLoop {
                 outcome.stop_reason = Some(match cause {
                     StopCause::Deadline => StopReason::JobDeadline,
                     StopCause::Interrupt => StopReason::Interrupted,
+                    StopCause::Cancelled => StopReason::Cancelled,
+                });
+                driver.on_stopped(match cause {
+                    StopCause::Deadline => "deadline",
+                    StopCause::Interrupt => "interrupted",
+                    StopCause::Cancelled => "cancelled",
                 });
                 break;
             }
@@ -1188,7 +1251,7 @@ mod tests {
 
     impl PassDriver for ScriptedDriver {
         fn run_pass(&mut self, board: &mut Board, ctx: &PassContext) -> PassOutcome {
-            self.seen.push(*ctx);
+            self.seen.push(ctx.clone());
             // Past the end of the script the board simply stops changing, which
             // is the flat-score case every stagnation rule is about.
             let script = self
