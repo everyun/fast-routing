@@ -92,6 +92,7 @@ fn draw_text(pixmap: &mut Pixmap, x: f32, y: f32, text: &str, color: Color) {
 }
 
 /// Renders a full GUI shell screenshot (toolbar, layer panel, canvas, status bar).
+#[allow(clippy::too_many_arguments)]
 pub fn render_gui_screenshot(
     model: &RenderModel,
     layer_visible: &[bool],
@@ -287,8 +288,10 @@ pub fn render_gui_screenshot(
     // Draw Board Outline (Areas with Kind::Outline)
     let mut outline_paint = Paint::default();
     outline_paint.set_color_rgba8(0x64, 0x96, 0xFF, 0xFF);
-    let mut outline_stroke = Stroke::default();
-    outline_stroke.width = 1.5;
+    let outline_stroke = Stroke {
+        width: 1.5,
+        ..Default::default()
+    };
 
     for area in &model.areas {
         if area.polygon.len() < 2 {
@@ -383,8 +386,10 @@ pub fn render_gui_screenshot(
         );
 
         let stroke_w = ((trace.half_width * 2.0 * zoom) as f32).max(1.0);
-        let mut stroke = Stroke::default();
-        stroke.width = stroke_w;
+        let stroke = Stroke {
+            width: stroke_w,
+            ..Default::default()
+        };
 
         let mut pb = PathBuilder::new();
         let (p0x, p0y) = to_screen(trace.points[0][0], trace.points[0][1]);
@@ -435,8 +440,10 @@ pub fn render_gui_screenshot(
     // Draw Ratsnest
     let mut rat_paint = Paint::default();
     rat_paint.set_color_rgba8(0x00, 0xDD, 0xFF, 0xC0);
-    let mut rat_stroke = Stroke::default();
-    rat_stroke.width = 1.0;
+    let rat_stroke = Stroke {
+        width: 1.0,
+        ..Default::default()
+    };
 
     for (idx, rat) in model.ratsnest.iter().enumerate() {
         let is_sel = selected_incomplete == Some(idx);
@@ -449,8 +456,10 @@ pub fn render_gui_screenshot(
             if is_sel {
                 let mut sel_paint = Paint::default();
                 sel_paint.set_color_rgba8(0xFF, 0xE0, 0x00, 0xFF);
-                let mut sel_stroke = Stroke::default();
-                sel_stroke.width = 3.5;
+                let sel_stroke = Stroke {
+                    width: 3.5,
+                    ..Default::default()
+                };
                 pixmap.stroke_path(&path, &sel_paint, &sel_stroke, Transform::identity(), None);
 
                 let mut dot_pb = PathBuilder::new();

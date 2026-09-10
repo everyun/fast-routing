@@ -9,10 +9,9 @@ use std::path::Path;
 use fr_board::item::{FixedState, ItemKind};
 use fr_board::search_tree::placed_area_pieces;
 use fr_board::TileShape;
+use fr_core::snapshot::*;
 use fr_io::specctra::ast::BoardShape;
 use fr_io::specctra::ImportedDesign;
-
-use crate::model::*;
 
 fn map_fix_state(f: FixedState) -> FixState {
     match f {
@@ -527,5 +526,34 @@ pub fn sample_board() -> RenderModel {
         areas,
         ratsnest,
         stats,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sample_board_has_expected_structure() {
+        let model = sample_board();
+        assert_eq!(model.layers.len(), 4);
+        assert_eq!(model.layers[0].name, "F.Cu");
+        assert_eq!(model.layers[3].name, "B.Cu");
+        assert!(!model.traces.is_empty());
+        assert!(!model.vias.is_empty());
+        assert!(!model.pads.is_empty());
+        assert!(!model.ratsnest.is_empty());
+        assert!(model.stats.items > 0);
+    }
+
+    #[test]
+    fn layer_palette_matches_java_palette() {
+        let f_cu = layer_color(0, 4, true);
+        assert!((f_cu[0] - 200.0 / 255.0).abs() < 1e-4);
+        assert!((f_cu[1] - 52.0 / 255.0).abs() < 1e-4);
+
+        let b_cu = layer_color(3, 4, true);
+        assert!((b_cu[0] - 77.0 / 255.0).abs() < 1e-4);
+        assert!((b_cu[1] - 127.0 / 255.0).abs() < 1e-4);
     }
 }
