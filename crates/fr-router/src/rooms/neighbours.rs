@@ -427,7 +427,9 @@ impl AutorouteEngine<'_> {
         second: RoomId,
         make_door_shape: impl FnOnce() -> Simplex,
     ) -> bool {
-        self.insert_door_ok_with(first, second, || first_distinct_door_line(&make_door_shape()))
+        self.insert_door_ok_with(first, second, || {
+            first_distinct_door_line(&make_door_shape())
+        })
     }
 
     fn insert_door_ok_with(

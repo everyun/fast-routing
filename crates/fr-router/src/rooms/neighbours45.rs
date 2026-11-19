@@ -783,11 +783,13 @@ impl AutorouteEngine<'_> {
                 let neighbour_room = match obstacle {
                     Obstacle::Room(other) => Some(other),
                     Obstacle::Item(item, index, slot) => {
-                        let routable = self
-                            .board
-                            .store()
-                            .item_at_slot(slot)
-                            .is_some_and(|board_item| board_item.id == item && board_item.is_routable());
+                        let routable =
+                            self.board
+                                .store()
+                                .item_at_slot(slot)
+                                .is_some_and(|board_item| {
+                                    board_item.id == item && board_item.is_routable()
+                                });
                         if routable {
                             self.obstacle_room(item, index)
                         } else {
@@ -796,9 +798,9 @@ impl AutorouteEngine<'_> {
                     }
                 };
                 if let Some(neighbour_room) = neighbour_room {
-                    if self.insert_door_ok_lazy(room_id, neighbour_room, || {
-                        intersection.to_simplex()
-                    }) {
+                    if self
+                        .insert_door_ok_lazy(room_id, neighbour_room, || intersection.to_simplex())
+                    {
                         // `ExpansionDoor`'s 2-argument constructor derives the
                         // dimension from the shared shape.
                         self.rooms.add_room_door(room_id, neighbour_room, dimension);
