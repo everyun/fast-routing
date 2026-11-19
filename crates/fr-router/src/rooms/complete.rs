@@ -189,7 +189,7 @@ impl AutorouteEngine<'_> {
         // One buffer for every restrain of the call: the appending
         // `restrain_shape` allocates nothing itself.
         let mut restrained: Vec<CompletedShape> = Vec::new();
-        if self.complete_room_count_on_layer(layer) > 96 {
+        if self.complete_room_count_on_layer(layer) > 384 {
             let initial_bounding = bounding;
             let collect_rooms_started = crate::rooms::attr::start();
             let cutoff =

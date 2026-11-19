@@ -1057,15 +1057,16 @@ impl Board {
     ///
     /// `layer` of `None` is upstream's `-1`, "any layer".
     pub fn pick_items(&self, location: &Point, layer: Option<i32>, out: &mut Vec<ItemId>) {
-        let mut stack = fr_datastructures::arena_shape_tree::QueryStack::new();
-        self.trees.default_tree().overlapping_items(
-            &self.store,
-            &TileShape::from_point(location),
-            layer,
-            &[],
-            &mut stack,
-            out,
-        );
+        with_query_stack(|stack| {
+            self.trees.default_tree().overlapping_items(
+                &self.store,
+                &TileShape::from_point(location),
+                layer,
+                &[],
+                stack,
+                out,
+            );
+        });
     }
 
     /// Items overlapping `shape` on `layer`, upstream's
@@ -1077,15 +1078,37 @@ impl Board {
         ignore_nets: &[i32],
         out: &mut Vec<ItemId>,
     ) {
-        let mut stack = fr_datastructures::arena_shape_tree::QueryStack::new();
-        self.trees.default_tree().overlapping_items(
-            &self.store,
-            shape,
-            layer,
-            ignore_nets,
-            &mut stack,
-            out,
-        );
+        with_query_stack(|stack| {
+            self.trees.default_tree().overlapping_items(
+                &self.store,
+                shape,
+                layer,
+                ignore_nets,
+                stack,
+                out,
+            );
+        });
+    }
+
+    /// Broad-phase bounds-only item query on `bounds` and `layer`, descending
+    /// id order.
+    pub fn overlapping_items_bounds_only(
+        &self,
+        bounds: &fr_datastructures::arena_shape_tree::OctBounds,
+        layer: Option<i32>,
+        ignore_nets: &[i32],
+        out: &mut Vec<ItemId>,
+    ) {
+        with_query_stack(|stack| {
+            self.trees.default_tree().overlapping_items_bounds_only(
+                &self.store,
+                bounds,
+                layer,
+                ignore_nets,
+                stack,
+                out,
+            );
+        });
     }
 
     /// Tree entries overlapping `shape` on `layer`, sorted descending by id
@@ -1097,15 +1120,16 @@ impl Board {
         ignore_nets: &[i32],
         out: &mut Vec<TreeEntry>,
     ) {
-        let mut stack = fr_datastructures::arena_shape_tree::QueryStack::new();
-        self.trees.default_tree().overlapping_tree_entries(
-            &self.store,
-            shape,
-            layer,
-            ignore_nets,
-            &mut stack,
-            out,
-        );
+        with_query_stack(|stack| {
+            self.trees.default_tree().overlapping_tree_entries(
+                &self.store,
+                shape,
+                layer,
+                ignore_nets,
+                stack,
+                out,
+            );
+        });
     }
 
     /// Upstream `Item.getNormalContacts(point)` — the **strict** connection
@@ -1218,6 +1242,22 @@ impl Board {
 /// `FR_VERIFY_TREE_CONSISTENCY` environment variable set).
 pub fn is_tree_consistency_check_enabled() -> bool {
     cfg!(debug_assertions) || std::env::var_os("FR_VERIFY_TREE_CONSISTENCY").is_some()
+}
+
+fn with_query_stack<R>(
+    f: impl FnOnce(&mut fr_datastructures::arena_shape_tree::QueryStack) -> R,
+) -> R {
+    use fr_datastructures::arena_shape_tree::QueryStack;
+    thread_local! {
+        static QUERY_STACK: std::cell::RefCell<QueryStack> = std::cell::RefCell::new(QueryStack::new());
+    }
+    QUERY_STACK.with(|cell| match cell.try_borrow_mut() {
+        Ok(mut guard) => f(&mut guard),
+        Err(_) => {
+            let mut fallback = QueryStack::new();
+            f(&mut fallback)
+        }
+    })
 }
 
 /// How many tile shapes of `old` survive unchanged at each end when its

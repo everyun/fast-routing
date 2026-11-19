@@ -178,6 +178,20 @@ impl Line {
                 let other_y = other.a.y;
                 return Point::Int(IntPoint::new(self.a.x + other_y - self.a.y, other_y));
             }
+            if delta2.x == -delta2.y {
+                let c_minus = i64::from(self.a.x) - i64::from(self.a.y);
+                let c_plus = i64::from(other.a.x) + i64::from(other.a.y);
+                let x2 = c_plus + c_minus;
+                if (x2 & 1) == 0 {
+                    let x = x2 >> 1;
+                    let y = (c_plus - c_minus) >> 1;
+                    if x.abs() <= i64::from(Limits::CRIT_INT)
+                        && y.abs() <= i64::from(Limits::CRIT_INT)
+                    {
+                        return Point::Int(IntPoint::new(x as i32, y as i32));
+                    }
+                }
+            }
         } else if delta1.x == -delta1.y {
             // this line is left diagonal (-45°)
             if delta2.x == 0 {
@@ -188,6 +202,64 @@ impl Line {
                 let other_y = other.a.y;
                 return Point::Int(IntPoint::new(self.a.x + self.a.y - other_y, other_y));
             }
+            if delta2.x == delta2.y {
+                let c_plus = i64::from(self.a.x) + i64::from(self.a.y);
+                let c_minus = i64::from(other.a.x) - i64::from(other.a.y);
+                let x2 = c_plus + c_minus;
+                if (x2 & 1) == 0 {
+                    let x = x2 >> 1;
+                    let y = (c_plus - c_minus) >> 1;
+                    if x.abs() <= i64::from(Limits::CRIT_INT)
+                        && y.abs() <= i64::from(Limits::CRIT_INT)
+                    {
+                        return Point::Int(IntPoint::new(x as i32, y as i32));
+                    }
+                }
+            }
+        }
+
+        // Exact i128 intersection inside coordinate envelope (avoids ~12 BigInt
+        // heap allocations on every integer-valued arbitrary-angle intersection).
+        let max_coord = self.a.x.unsigned_abs()
+            | self.a.y.unsigned_abs()
+            | self.b.x.unsigned_abs()
+            | self.b.y.unsigned_abs()
+            | other.a.x.unsigned_abs()
+            | other.a.y.unsigned_abs()
+            | other.b.x.unsigned_abs()
+            | other.b.y.unsigned_abs();
+        if max_coord <= Limits::CRIT_INT as u32 {
+            let d1x = i64::from(delta1.x);
+            let d1y = i64::from(delta1.y);
+            let d2x = i64::from(delta2.x);
+            let d2y = i64::from(delta2.y);
+            let mut det = d2x * d1y - d2y * d1x;
+            let det1 = i64::from(self.a.x) * d1y - i64::from(self.a.y) * d1x;
+            let det2 = i64::from(other.a.x) * d2y - i64::from(other.a.y) * d2x;
+            let mut is_x = i128::from(det1) * i128::from(d2x) - i128::from(det2) * i128::from(d1x);
+            let mut is_y = i128::from(det1) * i128::from(d2y) - i128::from(det2) * i128::from(d1y);
+            if det != 0 {
+                if det < 0 {
+                    det = -det;
+                    is_x = -is_x;
+                    is_y = -is_y;
+                }
+                let det128 = i128::from(det);
+                if is_x % det128 == 0 && is_y % det128 == 0 {
+                    is_x /= det128;
+                    is_y /= det128;
+                    let crit = i128::from(Limits::CRIT_INT);
+                    if is_x.abs() <= crit && is_y.abs() <= crit {
+                        return Point::Int(IntPoint::new(is_x as i32, is_y as i32));
+                    }
+                    det = 1;
+                }
+            }
+            return Point::Rational(RationalPoint::new(
+                BigInt::from(is_x),
+                BigInt::from(is_y),
+                BigInt::from(det),
+            ));
         }
 
         // General arbitrary-angle intersection via BigInteger

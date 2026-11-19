@@ -1028,6 +1028,36 @@ impl SearchTree {
         out.dedup();
     }
 
+    /// [`overlapping_items`](SearchTree::overlapping_items) with the per-leaf
+    /// exact shape test omitted — returning the bounds-overlap superset in
+    /// descending item id order, deduplicated. Used where the caller immediately
+    /// runs a pairwise symmetric clearance test (`ShapeSearchTree.java:439-454`).
+    pub fn overlapping_items_bounds_only(
+        &self,
+        store: &ItemStore,
+        bounds: &OctBounds,
+        layer: Option<i32>,
+        ignore_nets: &[i32],
+        stack: &mut QueryStack,
+        out: &mut Vec<ItemId>,
+    ) {
+        out.clear();
+        self.visit(
+            store,
+            bounds,
+            layer,
+            ignore_nets,
+            stack,
+            |payload, tile, _| {
+                if tile.shape.is_some() {
+                    out.push(payload.item);
+                }
+            },
+        );
+        out.sort_unstable_by(|a, b| b.cmp(a));
+        out.dedup();
+    }
+
     /// The shared broad-phase walk: reject every hit leaf the cheapest way
     /// available, and hand the survivors' tile shape and hull to `visit`.
     ///

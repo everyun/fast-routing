@@ -806,17 +806,15 @@ impl<'b> AutorouteEngine<'b> {
         let rooms_started = crate::rooms::attr::start();
         if layer >= 0 {
             if let Some(list) = self.complete_rooms_by_layer.get(layer as usize) {
-                if list.len() <= 96 {
+                if list.len() <= 384 {
                     let query_bounds = fr_board::shape::TileShape::Box(query_box).bounds();
                     for &(room_id, _, ref bounds, bbox) in list.iter().rev() {
-                        let room = self.rooms.room(room_id);
-                        if room.alive
-                            && room.kind == RoomKind::CompleteFree
-                            && bounds.intersects(&query_bounds)
-                            && query_box.intersects(&bbox)
-                        {
-                            obstacles.push(Obstacle::Room(room_id));
-                            self.scratch_hit_bounds.push(bbox);
+                        if query_box.intersects(&bbox) && bounds.intersects(&query_bounds) {
+                            let room = self.rooms.room(room_id);
+                            if room.alive && room.kind == RoomKind::CompleteFree {
+                                obstacles.push(Obstacle::Room(room_id));
+                                self.scratch_hit_bounds.push(bbox);
+                            }
                         }
                     }
                     crate::rooms::attr::add_room_walk(rooms_started, list.len() as u64);
@@ -862,14 +860,12 @@ impl<'b> AutorouteEngine<'b> {
         let rooms_started = crate::rooms::attr::start();
         let query_bounds = fr_board::shape::TileShape::Box(query_box).bounds();
         for &(room_id, _, ref bounds, bbox) in tail.iter().rev() {
-            let room = self.rooms.room(room_id);
-            if room.alive
-                && room.kind == RoomKind::CompleteFree
-                && bounds.intersects(&query_bounds)
-                && query_box.intersects(&bbox)
-            {
-                obstacles.push(Obstacle::Room(room_id));
-                self.scratch_hit_bounds.push(bbox);
+            if query_box.intersects(&bbox) && bounds.intersects(&query_bounds) {
+                let room = self.rooms.room(room_id);
+                if room.alive && room.kind == RoomKind::CompleteFree {
+                    obstacles.push(Obstacle::Room(room_id));
+                    self.scratch_hit_bounds.push(bbox);
+                }
             }
         }
         crate::rooms::attr::add_collect_rooms(rooms_started);
@@ -877,9 +873,9 @@ impl<'b> AutorouteEngine<'b> {
         Some((first_id_no, std::cmp::Reverse(first_room)))
     }
 
-    /// Stage 1B of room completion gather: queries `room_trees[layer]` on the
-    /// (typically shrunk) `query_box`, keeping only rooms strictly older than
-    /// `cutoff_key`.
+    /// Stage 1B of room completion gather: scans the ordered layer prefix in
+    /// L1 cache when compact (`<= 512` older rooms), otherwise queries
+    /// `room_trees[layer]` on the shrunk `query_box` for rooms `< cutoff_key`.
     pub(crate) fn collect_older_room_obstacles_box(
         &mut self,
         query_box: IntBox,
@@ -890,6 +886,28 @@ impl<'b> AutorouteEngine<'b> {
         obstacles.clear();
         self.scratch_hit_bounds.clear();
         let rooms_started = crate::rooms::attr::start();
+        if layer >= 0 {
+            if let Some(list) = self.complete_rooms_by_layer.get(layer as usize) {
+                let older_len =
+                    list.partition_point(|&(r, id, _, _)| (id, std::cmp::Reverse(r)) < cutoff_key);
+                if older_len <= 512 {
+                    let query_bounds = fr_board::shape::TileShape::Box(query_box).bounds();
+                    for &(room_id, _, ref bounds, bbox) in list[..older_len].iter().rev() {
+                        if query_box.intersects(&bbox) && bounds.intersects(&query_bounds) {
+                            let room = self.rooms.room(room_id);
+                            if room.alive && room.kind == RoomKind::CompleteFree {
+                                obstacles.push(Obstacle::Room(room_id));
+                                self.scratch_hit_bounds.push(bbox);
+                            }
+                        }
+                    }
+                    crate::rooms::attr::add_room_walk(rooms_started, older_len as u64);
+                    crate::rooms::attr::add_collect_rooms(rooms_started);
+                    crate::rooms::attr::add_room_survivors(obstacles.len() as u64);
+                    return;
+                }
+            }
+        }
         self.collect_room_obstacles_tree(
             query_box,
             layer,

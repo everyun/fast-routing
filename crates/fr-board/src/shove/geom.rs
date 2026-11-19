@@ -318,12 +318,20 @@ pub fn overlapping_items_with_clearance_tile(
     }
 
     let max_clearance = max_clearance_of(board, cl_class, layer);
-    let reach = (1.2 * max_clearance as f64).ceil() as i32;
-    let broad = shape.enlarge(reach);
-    board.overlapping_items(&broad, Some(layer), ignore_nets, out);
     if max_clearance == 0 {
+        board.overlapping_items(shape, Some(layer), ignore_nets, out);
         return;
     }
+    let reach = (1.2 * max_clearance as f64).ceil() as i32 + 4;
+    let broad_bounds = match shape {
+        TileShape::Box(b) => TileShape::Box(b.offset(f64::from(reach))).bounds(),
+        TileShape::Oct(o) => TileShape::Oct(o.offset(f64::from(reach))).bounds(),
+        TileShape::Simplex(s) => match s.bounding_octagon() {
+            Some(oct) => TileShape::Oct(oct.offset(f64::from(reach))).bounds(),
+            None => TileShape::Simplex(s.offset(f64::from(reach))).bounds(),
+        },
+    };
+    board.overlapping_items_bounds_only(&broad_bounds, Some(layer), ignore_nets, out);
 
     let tree = board.default_tree();
     let shape_bbox = shape.bounded_bounding_box();
@@ -384,12 +392,16 @@ pub fn overlapping_items_with_clearance(
     // (`ShapeSearchTree.java:439-446`); the exact per-item test below is what
     // decides.
     let max_clearance = max_clearance_of(board, cl_class, layer);
-    let reach = 1.2 * max_clearance as f64;
-    let broad = TileShape::Simplex(shape.offset(reach));
-    board.overlapping_items(&broad, Some(layer), ignore_nets, out);
     if max_clearance == 0 {
+        board.overlapping_items(&query_shape, Some(layer), ignore_nets, out);
         return;
     }
+    let reach = (1.2 * max_clearance as f64).ceil() as i32 + 4;
+    let broad_bounds = match shape.bounding_octagon() {
+        Some(oct) => TileShape::Oct(oct.offset(f64::from(reach))).bounds(),
+        None => TileShape::Simplex(shape.offset(f64::from(reach))).bounds(),
+    };
+    board.overlapping_items_bounds_only(&broad_bounds, Some(layer), ignore_nets, out);
 
     let tree = board.default_tree();
     let shape_bbox = shape.bounded_bounding_box();

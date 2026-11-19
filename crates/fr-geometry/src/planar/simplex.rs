@@ -1735,8 +1735,26 @@ fn sat_line_corner(l1: &Line, l2: &Line) -> Option<SatCorner> {
         if z == 0 {
             return None;
         }
-        let det1 = i64::from(l1.a.x) * i64::from(l1.b.y) - i64::from(l1.a.y) * i64::from(l1.b.x);
-        let det2 = i64::from(l2.a.x) * i64::from(l2.b.y) - i64::from(l2.a.y) * i64::from(l2.b.x);
+        // Cancel a_x * a_y algebraically: a_x * d_y - a_y * d_x == det(a, b),
+        // keeping intermediates small (<= 2^37) when direction deltas <= 2048.
+        let det1 = i64::from(l1.a.x) * d1y - i64::from(l1.a.y) * d1x;
+        let det2 = i64::from(l2.a.x) * d2y - i64::from(l2.a.y) * d2x;
+        if (d1x.unsigned_abs() | d1y.unsigned_abs() | d2x.unsigned_abs() | d2y.unsigned_abs())
+            <= 2048
+        {
+            let mut x = det1 * d2x - det2 * d1x;
+            let mut y = det1 * d2y - det2 * d1y;
+            if z < 0 {
+                z = -z;
+                x = -x;
+                y = -y;
+            }
+            return Some(SatCorner {
+                x: i128::from(x),
+                y: i128::from(y),
+                z: i128::from(z),
+            });
+        }
         let mut x = i128::from(det1) * i128::from(d2x) - i128::from(det2) * i128::from(d1x);
         let mut y = i128::from(det1) * i128::from(d2y) - i128::from(det2) * i128::from(d1y);
         if z < 0 {
@@ -1820,6 +1838,10 @@ pub struct SatCorners {
     /// Inline up to 10 corners (spills to heap for 11..=32); avoids
     /// zero-initializing and copying 1.5 KiB per call.
     buf: SmallVec<[SatCorner; 10]>,
+    /// True when every corner fits `|x|, |y| <= 2^49` and `|z| <= 2^23`, so
+    /// lines with `|dx|, |dy| <= 2048` and `|a| <= CRIT_INT` evaluate strictly
+    /// in `i64`.
+    fast_i64: bool,
 }
 
 /// The largest border-line count the SAT fast path handles; bigger simplexes
@@ -1846,7 +1868,8 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
     if !(3..=SAT_MAX_LINES).contains(&n) {
         return None;
     }
-    let mut buf = SmallVec::with_capacity(n);
+    let mut buf: SmallVec<[SatCorner; 10]> = SmallVec::with_capacity(n);
+    let mut fast_i64 = true;
     for i in 0..n {
         let prev = lines[if i == 0 { n - 1 } else { i - 1 }];
         let curr = lines[i];
@@ -1859,9 +1882,16 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
         if prev_delta.determinant(&curr_delta) <= 0 {
             return None;
         }
-        buf.push(sat_line_corner(&prev, &curr)?);
+        let corner = sat_line_corner(&prev, &curr)?;
+        if corner.x.unsigned_abs() > (1u128 << 49)
+            || corner.y.unsigned_abs() > (1u128 << 49)
+            || corner.z.unsigned_abs() > (1u128 << 23)
+        {
+            fast_i64 = false;
+        }
+        buf.push(corner);
     }
-    Some(SatCorners { buf })
+    Some(SatCorners { buf, fast_i64 })
 }
 
 /// Checks whether every border line of `shape` sits within `CRIT_INT` so
@@ -1878,17 +1908,47 @@ fn sat_shape_in_envelope(shape: &Simplex) -> bool {
     max_coord <= Limits::CRIT_INT as u32
 }
 
+/// Returns `Some((vx, vy, c))` when `line` can be evaluated against a
+/// `fast_i64` corner via `vx * y - vy * x + c * z` without `i64` overflow.
+#[inline]
+fn sat_line_fast_i64(line: &Line) -> Option<(i64, i64, i64)> {
+    let vx = i64::from(line.b.x) - i64::from(line.a.x);
+    let vy = i64::from(line.b.y) - i64::from(line.a.y);
+    if (vx.unsigned_abs() | vy.unsigned_abs()) <= 2048
+        && (line.a.x.unsigned_abs() | line.a.y.unsigned_abs()) <= Limits::CRIT_INT as u32
+    {
+        let c = vy * i64::from(line.a.x) - vx * i64::from(line.a.y);
+        Some((vx, vy, c))
+    } else {
+        None
+    }
+}
+
 /// Verifies that every corner is feasible (on the right of, or on, every border
 /// line) without requiring distinctness (empty intersection only needs
 /// non-empty compact convex polygon feasible, even a point or segment).
 fn sat_verify_feasible(shape: &Simplex, corners: &SatCorners) -> Option<bool> {
     let n = shape.arr.len();
     let in_envelope = sat_shape_in_envelope(shape);
-    for i in 0..corners.buf.len() {
-        let corner = &corners.buf[i];
-        let prev_i = if i == 0 { n - 1 } else { i - 1 };
-        for (j, line) in shape.arr.iter().enumerate() {
-            if in_envelope && (j == i || j == prev_i) {
+    for (j, line) in shape.arr.iter().enumerate() {
+        let next_j = if j + 1 == n { 0 } else { j + 1 };
+        if corners.fast_i64 {
+            if let Some((vx, vy, c)) = sat_line_fast_i64(line) {
+                for (i, corner) in corners.buf.iter().enumerate() {
+                    if in_envelope && (i == j || i == next_j) {
+                        continue;
+                    }
+                    let det =
+                        vx * (corner.y as i64) - vy * (corner.x as i64) + c * (corner.z as i64);
+                    if det < 0 {
+                        return None;
+                    }
+                }
+                continue;
+            }
+        }
+        for (i, corner) in corners.buf.iter().enumerate() {
+            if in_envelope && (i == j || i == next_j) {
                 continue;
             }
             if sat_side_of_corner(line, corner)? == Side::OnTheLeft {
@@ -1914,18 +1974,35 @@ fn sat_verify_feasible(shape: &Simplex, corners: &SatCorners) -> Option<bool> {
 fn sat_verify_corners(shape: &Simplex, corners: &SatCorners) -> Option<usize> {
     let n = shape.arr.len();
     let in_envelope = sat_shape_in_envelope(shape);
-    let mut distinct = 0usize;
-    for i in 0..corners.buf.len() {
-        let corner = &corners.buf[i];
-        let prev_i = if i == 0 { n - 1 } else { i - 1 };
-        for (j, line) in shape.arr.iter().enumerate() {
-            if in_envelope && (j == i || j == prev_i) {
+    for (j, line) in shape.arr.iter().enumerate() {
+        let next_j = if j + 1 == n { 0 } else { j + 1 };
+        if corners.fast_i64 {
+            if let Some((vx, vy, c)) = sat_line_fast_i64(line) {
+                for (i, corner) in corners.buf.iter().enumerate() {
+                    if in_envelope && (i == j || i == next_j) {
+                        continue;
+                    }
+                    let det =
+                        vx * (corner.y as i64) - vy * (corner.x as i64) + c * (corner.z as i64);
+                    if det < 0 {
+                        return None;
+                    }
+                }
+                continue;
+            }
+        }
+        for (i, corner) in corners.buf.iter().enumerate() {
+            if in_envelope && (i == j || i == next_j) {
                 continue;
             }
             if sat_side_of_corner(line, corner)? == Side::OnTheLeft {
                 return None;
             }
         }
+    }
+    let mut distinct = 0usize;
+    for i in 0..corners.buf.len() {
+        let corner = &corners.buf[i];
         let mut duplicate = false;
         for existing in &corners.buf[..i] {
             if sat_corner_eq(existing, corner)? {
@@ -1946,6 +2023,19 @@ fn sat_verify_corners(shape: &Simplex, corners: &SatCorners) -> Option<usize> {
 /// itself (an empty, point or segment intersection, never 2-dimensional).
 fn sat_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
     'lines: for line in lines {
+        if corners.fast_i64 {
+            if let Some((vx, vy, c)) = sat_line_fast_i64(line) {
+                for corner in &corners.buf {
+                    let det =
+                        vx * (corner.y as i64) - vy * (corner.x as i64) + c * (corner.z as i64);
+                    // Positive determinant corresponds to `Side::OnTheRight`.
+                    if det > 0 {
+                        continue 'lines;
+                    }
+                }
+                return Some(true);
+            }
+        }
         for corner in &corners.buf {
             if sat_side_of_corner(line, corner)? == Side::OnTheRight {
                 continue 'lines;
@@ -1961,6 +2051,19 @@ fn sat_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
 /// `false`.
 fn sat_strictly_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
     'lines: for line in lines {
+        if corners.fast_i64 {
+            if let Some((vx, vy, c)) = sat_line_fast_i64(line) {
+                for corner in &corners.buf {
+                    let det =
+                        vx * (corner.y as i64) - vy * (corner.x as i64) + c * (corner.z as i64);
+                    // Non-negative determinant is Collinear or OnTheRight (not strictly left).
+                    if det >= 0 {
+                        continue 'lines;
+                    }
+                }
+                return Some(true);
+            }
+        }
         for corner in &corners.buf {
             if sat_side_of_corner(line, corner)? != Side::OnTheLeft {
                 continue 'lines;
