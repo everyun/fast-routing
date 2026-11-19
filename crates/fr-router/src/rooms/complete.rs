@@ -11,7 +11,6 @@
 //!   `complete_neighbour_rooms` / `remove_complete_expansion_room`
 //!   (`autoroute/AutorouteEngine.java:394-568`) — the lifecycle around it.
 
-use fr_board::shape::TileShape;
 use fr_geometry::planar::{IntBox, Line, LineSegment, Side, Simplex};
 
 use crate::engine::{AutorouteEngine, Obstacle};
@@ -177,20 +176,18 @@ impl AutorouteEngine<'_> {
         // query is the `_for_completion` entry point rather than
         // `overlapping_obstacles_tile` followed by a second sort of the same
         // list.
+        // Phase 1: gather overlapping complete rooms first (they precede all items in
+        // completion order), carve against them, and shrink `bounding` before querying
+        // items. That shrinks most room completions from a board-wide scan to 1–4 local
+        // grid cells while preserving the exact obstacle carve sequence.
+        fr_metrics::counters::bump::tree_queries(1);
         let (mut obstacles, mut own_net) = self.take_collect_vecs();
-        let collect_started = crate::rooms::attr::start();
-        self.overlapping_obstacles_tile_for_completion(
-            &TileShape::Box(bounding),
-            Some(layer),
-            self.ctrl.net_no,
-            &mut obstacles,
-            &mut own_net,
-        );
-        crate::rooms::attr::add_collect(collect_started, obstacles.len());
+        let collect_rooms_started = crate::rooms::attr::start();
+        self.collect_room_obstacles_box(bounding, layer, &mut obstacles);
+        crate::rooms::attr::add_collect(collect_rooms_started, obstacles.len());
 
         let carve_started = crate::rooms::attr::start();
         let mut carve_hits = 0u64;
-        let paired_bounds = self.scratch_hit_bounds.len() == obstacles.len();
         // Double-buffer: draining `result` moves unchanged candidates instead
         // of cloning their simplexes, and `new_result` is allocated once per
         // call instead of once per obstacle (28 M hits on Issue039).
@@ -198,19 +195,85 @@ impl AutorouteEngine<'_> {
         // One buffer for every restrain of the call: the appending
         // `restrain_shape` allocates nothing itself.
         let mut restrained: Vec<CompletedShape> = Vec::new();
-        // By-index, not drain: `Obstacle` is `Copy`, and the vec stays
-        // un-borrowed so the early return below can hand it back to the pool.
-        for index in 0..obstacles.len() {
-            let obstacle = obstacles[index];
+        if !self.carve_obstacle_slice(
+            &obstacles,
+            layer,
+            ignore_room,
+            ignore_shape,
+            &mut result,
+            &mut new_result,
+            &mut restrained,
+            &mut bounding,
+            &mut carve_hits,
+        ) {
+            crate::rooms::attr::add_carve(carve_started, carve_hits);
+            self.give_back_collect_vecs(obstacles, own_net);
+            return Vec::new();
+        }
+
+        // Phase 2: gather items against the room-carved `bounding` (padded by ±4
+        // board units to absorb 1-ulp floor/ceil float rounding across cuts).
+        obstacles.clear();
+        own_net.clear();
+        self.scratch_hit_bounds.clear();
+        let item_query_box = IntBox::new(
+            bounding.ll.x.saturating_sub(4),
+            bounding.ll.y.saturating_sub(4),
+            bounding.ur.x.saturating_add(4),
+            bounding.ur.y.saturating_add(4),
+        );
+        let collect_items_started = crate::rooms::attr::start();
+        self.collect_item_obstacles_box(
+            item_query_box,
+            layer,
+            self.ctrl.net_no,
+            &mut obstacles,
+            &mut own_net,
+        );
+        crate::rooms::attr::add_collect(collect_items_started, obstacles.len());
+
+        if !self.carve_obstacle_slice(
+            &obstacles,
+            layer,
+            ignore_room,
+            ignore_shape,
+            &mut result,
+            &mut new_result,
+            &mut restrained,
+            &mut bounding,
+            &mut carve_hits,
+        ) {
+            crate::rooms::attr::add_carve(carve_started, carve_hits);
+            self.give_back_collect_vecs(obstacles, own_net);
+            return Vec::new();
+        }
+        crate::rooms::attr::add_carve(carve_started, carve_hits);
+        self.give_back_collect_vecs(obstacles, own_net);
+
+        self.divide_large_rooms(result)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn carve_obstacle_slice(
+        &mut self,
+        obstacles: &[Obstacle],
+        layer: i32,
+        ignore_room: Option<RoomId>,
+        ignore_shape: Option<&Simplex>,
+        result: &mut Vec<CompletedShape>,
+        new_result: &mut Vec<CompletedShape>,
+        restrained: &mut Vec<CompletedShape>,
+        bounding: &mut IntBox,
+        carve_hits: &mut u64,
+    ) -> bool {
+        let paired_bounds = self.scratch_hit_bounds.len() == obstacles.len();
+        for (index, &obstacle) in obstacles.iter().enumerate() {
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {
                 continue;
             }
-            // Layer and bounds first, shape second. The walk above ran against
-            // the *initial* bound, so by now `bounding` has usually shrunk past
-            // most of what it returned — 95.7 % of the layer-matching obstacles
-            // on `Issue230`. The box-query collect already filtered by layer
-            // and stashed each hit's box in `scratch_hit_bounds`; reading that
-            // is one integer-box test instead of `slot_of` + tile load.
+            // Layer and bounds first, shape second. The box-query collect already
+            // filtered by layer and stashed each hit's box in `scratch_hit_bounds`;
+            // reading that is one integer-box test instead of `slot_of` + tile load.
             let obstacle_bounds = if paired_bounds {
                 self.scratch_hit_bounds[index]
             } else {
@@ -219,7 +282,7 @@ impl AutorouteEngine<'_> {
                     _ => continue,
                 }
             };
-            if obstacle_bounds.is_empty() || !obstacle_bounds.intersects(&bounding) {
+            if obstacle_bounds.is_empty() || !obstacle_bounds.intersects(bounding) {
                 continue;
             }
             crate::rooms::attr::add_carve_survivor();
@@ -245,13 +308,6 @@ impl AutorouteEngine<'_> {
                     .map(|bbox| bbox.intersects(&obstacle_bounds))
                     .unwrap_or(true)
                 {
-                    // SAT gate: the same answer as
-                    // `intersection().dimension() == 2` (property-pinned in
-                    // `fr_geometry::tests::sat_overlap_test`) without
-                    // materializing the intersection. The intersection itself
-                    // is only needed for the from-door containment check below,
-                    // which only fires for room obstacles with an ignore
-                    // shape — everything else skips the allocation entirely.
                     let sat_started = crate::rooms::attr::start();
                     let fast = sat_overlap(
                         &candidate,
@@ -288,9 +344,9 @@ impl AutorouteEngine<'_> {
                     let mut something_changed = false;
                     if !ignore_expansion_room {
                         something_changed = true;
-                        carve_hits += 1;
+                        *carve_hits += 1;
                         restrained.clear();
-                        self.restrain_shape(&candidate, &obstacle_shape, &mut restrained);
+                        self.restrain_shape(&candidate, &obstacle_shape, restrained);
                         for room in restrained.drain(..) {
                             union_bbox(&mut new_bounding, room.cached_bbox());
                             new_result.push(room);
@@ -305,20 +361,13 @@ impl AutorouteEngine<'_> {
                     new_result.push(candidate);
                 }
             }
-            std::mem::swap(&mut result, &mut new_result);
+            std::mem::swap(result, new_result);
             match new_bounding {
-                Some(bb) => bounding = bb,
-                None => {
-                    crate::rooms::attr::add_carve(carve_started, carve_hits);
-                    self.give_back_collect_vecs(obstacles, own_net);
-                    return Vec::new();
-                }
+                Some(bb) => *bounding = bb,
+                None => return false,
             }
         }
-        crate::rooms::attr::add_carve(carve_started, carve_hits);
-        self.give_back_collect_vecs(obstacles, own_net);
-
-        self.divide_large_rooms(result)
+        true
     }
 
     /// `ShapeSearchTree.restrain_shape` (`:664-782`), the geometric heart.
@@ -813,8 +862,9 @@ fn border_segment(shape: &Simplex, index: usize) -> Option<LineSegment> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Obstacle, TileShape};
+    use super::Obstacle;
     use crate::test_support::TestFixture;
+    use fr_board::shape::TileShape;
     use fr_geometry::planar::IntBox;
 
     #[test]

@@ -720,16 +720,30 @@ impl<'b> AutorouteEngine<'b> {
         obstacles: &mut Vec<Obstacle>,
         own_net: &mut Vec<(ItemId, u16)>,
     ) {
+        self.collect_room_obstacles_box(query_box, layer, obstacles);
+        own_net.clear();
+        self.collect_item_obstacles_box(query_box, layer, net_no, obstacles, own_net);
+    }
+
+    /// Room-only half of `collect_obstacles_box`. Resets `obstacles` and
+    /// `self.scratch_hit_bounds` and emits matching [`Obstacle::Room`]s in
+    /// completion order (descending `id_no`).
+    pub(crate) fn collect_room_obstacles_box(
+        &mut self,
+        query_box: IntBox,
+        layer: i32,
+        obstacles: &mut Vec<Obstacle>,
+    ) {
         self.ensure_item_cache();
+        obstacles.clear();
         self.scratch_hit_bounds.clear();
 
         let rooms_started = crate::rooms::attr::start();
         // Rooms first: the completion key sorts every room ahead of every
         // item, so an ordered rooms run followed by an ordered items run is
         // the sorted list. The walk + filter runs against the room tree as
-        // before, then sorts by RoomId only to dedup, and finally by
-        // descending id_no — the two-room-list sorts are over the few
-        // survivors, not the whole candidate set.
+        // before, then sorts by (-id_no, RoomId) only to dedup without extra
+        // allocations.
         self.scratch_rooms.clear();
         let walk_started = crate::rooms::attr::start();
         // The room's layer is fixed at insertion, so the walk only touches the
@@ -743,43 +757,47 @@ impl<'b> AutorouteEngine<'b> {
         }
         crate::rooms::attr::add_room_walk(walk_started, self.scratch_rooms.len() as u64);
         let mut rooms = std::mem::take(&mut self.scratch_rooms);
-        // Fast path: if there is only 1 room leaf, skip sort_by_cached_key and dedup!
-        if rooms.len() <= 1 {
-            rooms.retain(|(_, room)| {
-                let room = self.rooms.room(*room);
-                room.alive
-                    && room.kind == RoomKind::CompleteFree
-                    && room.layer == layer
-                    && query_box.intersects(&room.octagon().bounding_box())
-            });
-            for (_, room) in &rooms {
-                obstacles.push(Obstacle::Room(*room));
-                self.scratch_hit_bounds
-                    .push(self.rooms.room(*room).octagon().bounding_box());
-            }
-        } else {
-            rooms.retain(|(_, room)| {
-                let room = self.rooms.room(*room);
-                room.alive
-                    && room.kind == RoomKind::CompleteFree
-                    && room.layer == layer
-                    && query_box.intersects(&room.octagon().bounding_box())
-            });
-            rooms.sort_by_cached_key(|(_, room)| {
-                let room = *room;
-                (-self.rooms.room(room).id_no, room)
+        rooms.retain(|(_, room)| {
+            let room = self.rooms.room(*room);
+            room.alive
+                && room.kind == RoomKind::CompleteFree
+                && room.layer == layer
+                && query_box.intersects(&room.octagon().bounding_box())
+        });
+        if rooms.len() > 1 {
+            rooms.sort_unstable_by(|(_, a), (_, b)| {
+                self.rooms
+                    .room(*b)
+                    .id_no
+                    .cmp(&self.rooms.room(*a).id_no)
+                    .then_with(|| a.cmp(b))
             });
             rooms.dedup_by_key(|(_, room)| *room);
-            for (_, room) in &rooms {
-                obstacles.push(Obstacle::Room(*room));
-                self.scratch_hit_bounds
-                    .push(self.rooms.room(*room).octagon().bounding_box());
-            }
+        }
+        for (_, room) in &rooms {
+            obstacles.push(Obstacle::Room(*room));
+            self.scratch_hit_bounds
+                .push(self.rooms.room(*room).octagon().bounding_box());
         }
         rooms.clear();
         self.scratch_rooms = rooms;
         crate::rooms::attr::add_collect_rooms(rooms_started);
         crate::rooms::attr::add_room_survivors(obstacles.len() as u64);
+    }
+
+    /// Item-only half of `collect_obstacles_box`. Appends matching items and
+    /// their bounds (`self.scratch_hit_bounds`) in completion order without
+    /// clearing existing entries, so callers can run room carving first and
+    /// query items against the shrunk candidate box.
+    pub(crate) fn collect_item_obstacles_box(
+        &mut self,
+        query_box: IntBox,
+        layer: i32,
+        net_no: i32,
+        obstacles: &mut Vec<Obstacle>,
+        own_net: &mut Vec<(ItemId, u16)>,
+    ) {
+        self.ensure_item_cache();
 
         // Split borrows: the cache is read, the hit lists are written.
         let items_started = crate::rooms::attr::start();
@@ -812,6 +830,7 @@ impl<'b> AutorouteEngine<'b> {
             layers, marks, gen, ..
         } = item_cache;
         let Some(layer_items) = layers.get(layer as usize) else {
+            crate::rooms::attr::add_collect_items(items_started);
             return;
         };
         let grid_and_range = layer_items

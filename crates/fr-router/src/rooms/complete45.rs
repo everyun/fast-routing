@@ -63,7 +63,6 @@
 //!   room is not growing and the contained shape is not shrinking.
 
 use fr_board::search_tree::Tiling45Mode;
-use fr_board::shape::TileShape;
 use fr_geometry::planar::{IntOctagon, Side, Simplex};
 
 use crate::engine::{AutorouteEngine, Obstacle};
@@ -160,49 +159,82 @@ impl AutorouteEngine<'_> {
             contained: contained_oct,
         }];
 
-        // Upstream re-walks the tree with a shrinking `bounding_shape`; this
-        // gathers once against the *start* bound, for the reason spelled out in
-        // `complete::complete_shape`: the walk's own filter is a bounding-shape
-        // test, the query returns a superset, and every extra entry is a no-op
-        // because it fails the `overlaps` gate below. The query goes in as a
-        // box so the tree's per-leaf filter stays four integer comparisons.
-        //
-        // Unlike `complete::complete_shape` this does **not** re-sort into the
-        // `ShapeTree.Leaf` order: `ShapeSearchTree45Degree.complete_shape`
-        // (`:127-200`) never got the `Collections.sort` its orthogonal sibling
-        // did and still carves in raw `node_stack` pop order, which is a tree
-        // shape we do not reproduce. The query's ascending-id order stands in
-        // for it — deterministic, but not numerically upstream's, which is one
-        // more reason the 45° chain ships behind `TILING_45_ENV`.
-        let mut obstacles = Vec::new();
-        let mut own_net = Vec::new();
-        self.overlapping_obstacles_tile_for_completion(
-            &TileShape::Box(start.bounding_box()),
-            Some(layer),
+        // Two-phase gather matching `complete_shape_inner`: rooms first against
+        // `start`, then items against the shrunk candidate union box.
+        fr_metrics::counters::bump::tree_queries(1);
+        let (mut obstacles, mut own_net) = self.take_collect_vecs();
+        let mut bounding = start.bounding_box();
+        self.collect_room_obstacles_box(bounding, layer, &mut obstacles);
+        if !self.carve_obstacle_slice_45(
+            &obstacles,
+            ignore_room,
+            ignore_oct,
+            &mut result,
+            &mut bounding,
+        ) {
+            self.give_back_collect_vecs(obstacles, own_net);
+            return Vec::new();
+        }
+
+        obstacles.clear();
+        own_net.clear();
+        self.scratch_hit_bounds.clear();
+        let item_query_box = fr_geometry::planar::IntBox::new(
+            bounding.ll.x.saturating_sub(4),
+            bounding.ll.y.saturating_sub(4),
+            bounding.ur.x.saturating_add(4),
+            bounding.ur.y.saturating_add(4),
+        );
+        self.collect_item_obstacles_box(
+            item_query_box,
+            layer,
             self.ctrl.net_no,
             &mut obstacles,
             &mut own_net,
         );
+        let survived = self.carve_obstacle_slice_45(
+            &obstacles,
+            ignore_room,
+            ignore_oct,
+            &mut result,
+            &mut bounding,
+        );
+        self.give_back_collect_vecs(obstacles, own_net);
+        if !survived {
+            return Vec::new();
+        }
 
-        for obstacle in obstacles {
+        // `:214` then `:216-218`: divide, then drop any room the contained
+        // shape already swallows, which is what stops the completion loop.
+        self.divide_large_rooms_45(result)
+            .into_iter()
+            .filter(|room| !octagon_contains(&room.contained, &room.shape))
+            .collect()
+    }
+
+    fn carve_obstacle_slice_45(
+        &mut self,
+        obstacles: &[Obstacle],
+        ignore_room: Option<RoomId>,
+        ignore_oct: Option<IntOctagon>,
+        result: &mut Vec<Room45>,
+        bounding: &mut fr_geometry::planar::IntBox,
+    ) -> bool {
+        let paired_bounds = self.scratch_hit_bounds.len() == obstacles.len();
+        let mut new_result: Vec<Room45> = Vec::new();
+        for (index, &obstacle) in obstacles.iter().enumerate() {
             if Some(obstacle) == ignore_room.map(Obstacle::Room) {
                 continue;
             }
-            if self.obstacle_layer(obstacle) != Some(layer) {
-                continue;
+            if paired_bounds {
+                let hit_bounds = self.scratch_hit_bounds[index];
+                if hit_bounds.is_empty() || !hit_bounds.intersects(bounding) {
+                    continue;
+                }
             }
             let Some(obstacle_oct) = self.obstacle_octagon(obstacle) else {
                 continue;
             };
-            // Cheap integer reject before the exact loop: the item octagon
-            // is memoized per connection (see `tile_octagon_cache`), so this
-            // box costs four integer reads. `octagon_overlaps` implies the
-            // bounding boxes intersect, so an obstacle disjoint from every
-            // candidate's box keeps all of them unchanged — exactly the
-            // loop's answer. (`scratch_hit_bounds` would avoid the memo
-            // read, but the plain `overlapping_obstacles_tile` re-sorts for
-            // the neighbour order after collecting, so it is not paired
-            // with the collect's bounds here.)
             let obstacle_bounds = obstacle_oct.bounding_box();
             if !result
                 .iter()
@@ -211,8 +243,8 @@ impl AutorouteEngine<'_> {
                 continue;
             }
 
-            let mut new_result: Vec<Room45> = Vec::new();
-            for candidate in &result {
+            new_result.clear();
+            for candidate in result.iter() {
                 if !octagon_overlaps(&candidate.shape, &obstacle_oct) {
                     // `:186-192`
                     new_result.push(*candidate);
@@ -235,18 +267,21 @@ impl AutorouteEngine<'_> {
                 }
                 self.restrain_shape_45(candidate, &obstacle_oct, &mut new_result);
             }
-            result = new_result;
-            if result.is_empty() {
-                return Vec::new();
+            std::mem::swap(result, &mut new_result);
+            let mut next_box: Option<fr_geometry::planar::IntBox> = None;
+            for candidate in result.iter() {
+                let cb = candidate.shape.bounding_box();
+                next_box = Some(match next_box {
+                    Some(acc) => acc.union(&cb),
+                    None => cb,
+                });
+            }
+            match next_box {
+                Some(bb) => *bounding = bb,
+                None => return false,
             }
         }
-
-        // `:214` then `:216-218`: divide, then drop any room the contained
-        // shape already swallows, which is what stops the completion loop.
-        self.divide_large_rooms_45(result)
-            .into_iter()
-            .filter(|room| !octagon_contains(&room.contained, &room.shape))
-            .collect()
+        true
     }
 
     /// The octagon flavor of a room shape that may be **unbounded**.
