@@ -25,6 +25,25 @@ impl Direction {
         if x == 0 && y == 0 {
             return Direction { x: 0, y: 0 };
         }
+        // Zero-GCD fast paths for 0°, 90°, and 45° directions (most PCB geometry).
+        if x == 0 {
+            return Direction {
+                x: 0,
+                y: y.signum(),
+            };
+        }
+        if y == 0 {
+            return Direction {
+                x: x.signum(),
+                y: 0,
+            };
+        }
+        if x.unsigned_abs() == y.unsigned_abs() {
+            return Direction {
+                x: x.signum(),
+                y: y.signum(),
+            };
+        }
         let gcd = BigIntAux::binary_gcd(x.abs(), y.abs());
         if gcd > 1 {
             Direction {

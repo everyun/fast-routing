@@ -37,15 +37,13 @@ pub struct CompletedShape {
     /// inner `None` = the shape is unbounded.
     pub bbox: std::cell::Cell<Option<Option<IntBox>>>,
     /// Memo of [`CompletedShape::cached_sat`]: the candidate's SAT vertex list
-    /// plus its (pair-independent) verification verdict, shared by reference
-    /// so the carve loop's per-obstacle moves of the candidate stay cheap.
-    /// Outer `Some` = computed.
-    pub sat: std::cell::RefCell<Option<Option<std::rc::Rc<SatMemo>>>>,
+    /// plus its (pair-independent) verification verdict.
+    pub sat: std::cell::OnceCell<Option<SatMemo>>,
 }
 
 /// A candidate's verified SAT data; see [`Simplex::sat_corners`] and
 /// [`Simplex::sat_verify`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SatMemo {
     /// The adjacent-pair corners.
     pub corners: fr_geometry::planar::SatCorners,
@@ -72,16 +70,15 @@ impl CompletedShape {
     /// per candidate — the carve loop tests the same candidate against
     /// hundreds of obstacles. `None` = the fast path does not apply to this
     /// shape (unbounded/degenerate boundary).
-    pub fn cached_sat(&self) -> Option<std::rc::Rc<SatMemo>> {
-        if let Some(memo) = self.sat.borrow().as_ref() {
-            return memo.clone();
-        }
-        let computed = self.shape.sat_corners().map(|corners| {
-            let verified = self.shape.sat_verify(&corners);
-            std::rc::Rc::new(SatMemo { corners, verified })
-        });
-        *self.sat.borrow_mut() = Some(computed.clone());
-        computed
+    pub fn cached_sat(&self) -> Option<&SatMemo> {
+        self.sat
+            .get_or_init(|| {
+                self.shape.sat_corners().map(|corners| {
+                    let verified = self.shape.sat_verify(&corners);
+                    SatMemo { corners, verified }
+                })
+            })
+            .as_ref()
     }
 }
 
@@ -138,7 +135,7 @@ impl AutorouteEngine<'_> {
                 contained: contained.clone(),
                 oct: None,
                 bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                sat: std::cell::OnceCell::new(),
             });
         }
         if result.is_empty() {
@@ -285,17 +282,26 @@ impl AutorouteEngine<'_> {
             if obstacle_bounds.is_empty() || !obstacle_bounds.intersects(bounding) {
                 continue;
             }
+            // Reject obstacles whose interior cannot overlap any surviving
+            // candidate before materializing or fetching their tile shape / SAT.
+            let any_strict_overlap = result.iter().any(|candidate| {
+                candidate
+                    .cached_bbox()
+                    .map(|bbox| {
+                        !(bbox.ur.x <= obstacle_bounds.ll.x
+                            || obstacle_bounds.ur.x <= bbox.ll.x
+                            || bbox.ur.y <= obstacle_bounds.ll.y
+                            || obstacle_bounds.ur.y <= bbox.ll.y)
+                    })
+                    .unwrap_or(true)
+            });
+            if !any_strict_overlap {
+                continue;
+            }
             crate::rooms::attr::add_carve_survivor();
-            let Some(obstacle_shape) = self.obstacle_shape_rc(obstacle) else {
+            let Some((obstacle_shape, obstacle_sat)) = self.obstacle_shape_and_sat(obstacle) else {
                 continue;
             };
-            // The obstacle's SAT data is pair-independent: compute it once for
-            // the whole candidate loop. `None` = the exact-construction
-            // fallback for every candidate below.
-            let obstacle_sat = obstacle_shape.sat_corners().map(|corners| {
-                let verified = obstacle_shape.sat_verify(&corners);
-                (corners, verified)
-            });
 
             new_result.clear();
             let mut new_bounding: Option<IntBox> = None;
@@ -314,7 +320,7 @@ impl AutorouteEngine<'_> {
                         candidate_bbox,
                         &obstacle_bounds,
                         &obstacle_shape,
-                        obstacle_sat.as_ref(),
+                        obstacle_sat.as_deref(),
                     );
                     let overlaps = match fast {
                         Some(overlaps) => {
@@ -423,14 +429,14 @@ impl AutorouteEngine<'_> {
         }
 
         if let Some(cut_line) = cut_line {
-            let piece = room_shape.intersection(&geom::half_plane(&cut_line));
+            let piece = room_shape.intersection_with_line(&cut_line);
             if piece.dimension() >= 2 {
                 out.push(CompletedShape {
                     shape: piece,
                     contained: shape_to_be_contained.clone(),
                     oct: None,
                     bbox: std::cell::Cell::new(None),
-                    sat: std::cell::RefCell::new(None),
+                    sat: std::cell::OnceCell::new(),
                 });
             }
             crate::rooms::attr::add_restrain(restrain_started);
@@ -466,28 +472,27 @@ impl AutorouteEngine<'_> {
             return;
         };
 
-        let cut_half_plane = geom::half_plane(&split_line);
-        let new_contained = shape_to_be_contained.intersection(&cut_half_plane);
-        let piece = room_shape.intersection(&cut_half_plane);
+        let new_contained = shape_to_be_contained.intersection_with_line(&split_line);
+        let piece = room_shape.intersection_with_line(&split_line);
         if piece.dimension() >= 2 {
             out.push(CompletedShape {
                 shape: piece,
                 contained: new_contained,
                 oct: None,
                 bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                sat: std::cell::OnceCell::new(),
             });
         }
-        let opposite_half_plane = geom::half_plane(&split_line.opposite());
-        let rest_piece = room_shape.intersection(&opposite_half_plane);
+        let opposite_line = split_line.opposite();
+        let rest_piece = room_shape.intersection_with_line(&opposite_line);
         if rest_piece.dimension() >= 2 {
-            let rest_contained = shape_to_be_contained.intersection(&opposite_half_plane);
+            let rest_contained = shape_to_be_contained.intersection_with_line(&opposite_line);
             let rest = CompletedShape {
                 shape: rest_piece,
                 contained: rest_contained,
                 oct: None,
                 bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                sat: std::cell::OnceCell::new(),
             };
             self.restrain_shape(&rest, obstacle_shape, out);
         }
@@ -549,7 +554,7 @@ impl AutorouteEngine<'_> {
                     contained,
                     oct: None,
                     bbox: std::cell::Cell::new(None),
-                    sat: std::cell::RefCell::new(None),
+                    sat: std::cell::OnceCell::new(),
                 }
             })
             .collect();

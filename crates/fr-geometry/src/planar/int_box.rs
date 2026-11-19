@@ -436,7 +436,7 @@ impl IntBox {
             Line::new_from_point_and_dir(self.ur, &Direction::LEFT),
             Line::new_from_point_and_dir(self.ll, &Direction::DOWN),
         ];
-        Simplex::new(lines.to_vec())
+        Simplex::from_slice(&lines)
     }
 
     /// Cuts this box out of `outer`, returning up to 4 rectangular IntBoxes.

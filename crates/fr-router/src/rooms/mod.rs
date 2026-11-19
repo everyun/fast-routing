@@ -27,7 +27,8 @@
 //!    [`crate::maze::nodes::NodeArena`] through a block base, so the
 //!    between-connection reset is a generation bump.
 
-use std::cell::Cell;
+use std::cell::{Cell, OnceCell};
+use std::rc::Rc;
 
 use fr_board::item::ItemId;
 use fr_datastructures::arena_shape_tree::ArenaLeafId;
@@ -152,6 +153,10 @@ pub struct Room {
     /// [`Simplex::bounding_octagon`]. A `Cell` because it is a pure memo — every
     /// write to `shape` goes through [`Room::set_shape`], which clears it.
     shape_oct: Cell<Option<IntOctagon>>,
+    /// SAT vertex list and verification verdict for `shape`, memoized per room
+    /// shape so the carve loop does not re-verify the same obstacle room across
+    /// subsequent completions. Cleared whenever `set_shape*` updates `shape`.
+    shape_sat: OnceCell<Option<Rc<(fr_geometry::planar::SatCorners, Option<bool>)>>>,
 }
 
 /// The coordinate envelope, standing in for the bounding octagon of an
@@ -208,15 +213,16 @@ impl Room {
         }
     }
 
-    /// Replaces the room shape, invalidating the octagon memo.
+    /// Replaces the room shape, invalidating the octagon and SAT memos.
     ///
     /// Every write to [`shape`](Room::shape) must come through here or
     /// [`set_shape_from_octagon`](Room::set_shape_from_octagon); that is what
-    /// makes the memo safe.
+    /// makes the memos safe.
     #[inline]
     pub fn set_shape(&mut self, shape: Simplex) {
         self.shape = shape;
         self.shape_oct.set(None);
+        self.shape_sat.take();
     }
 
     /// Replaces the room shape with an octagon, keeping the exact octagon as
@@ -225,6 +231,21 @@ impl Room {
     pub fn set_shape_from_octagon(&mut self, oct: IntOctagon) {
         self.shape = oct.to_simplex();
         self.shape_oct.set(Some(oct));
+        self.shape_sat.take();
+    }
+
+    /// Memoized SAT corners + verification verdict for `self.shape`.
+    pub(crate) fn cached_sat(
+        &self,
+    ) -> Option<&Rc<(fr_geometry::planar::SatCorners, Option<bool>)>> {
+        self.shape_sat
+            .get_or_init(|| {
+                self.shape.sat_corners().map(|corners| {
+                    let verified = self.shape.sat_verify(&corners);
+                    Rc::new((corners, verified))
+                })
+            })
+            .as_ref()
     }
 
     /// The item this obstacle room wraps.
@@ -478,6 +499,7 @@ impl RoomArena {
             leaf: None,
             alive: true,
             shape_oct: Cell::new(None),
+            shape_sat: OnceCell::new(),
         });
         self.incomplete.push(id);
         id
@@ -541,6 +563,7 @@ impl RoomArena {
             leaf: None,
             alive: true,
             shape_oct: Cell::new(None),
+            shape_sat: OnceCell::new(),
         });
         id
     }
@@ -571,6 +594,7 @@ impl RoomArena {
             leaf: None,
             alive: true,
             shape_oct: Cell::new(None),
+            shape_sat: OnceCell::new(),
         });
         id
     }

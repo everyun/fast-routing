@@ -354,8 +354,17 @@ impl IntOctagon {
         if self.is_empty() {
             return crate::planar::simplex::Simplex::EMPTY;
         }
-        let lines: Vec<Line> = (0..8).map(|no| self.border_line(no)).collect();
-        crate::planar::simplex::Simplex::new(lines).remove_redundant_lines()
+        let lines = [
+            self.border_line(0),
+            self.border_line(1),
+            self.border_line(2),
+            self.border_line(3),
+            self.border_line(4),
+            self.border_line(5),
+            self.border_line(6),
+            self.border_line(7),
+        ];
+        crate::planar::simplex::Simplex::remove_redundant_from_sorted(&lines)
     }
 }
 

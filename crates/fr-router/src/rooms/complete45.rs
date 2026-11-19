@@ -124,7 +124,7 @@ impl AutorouteEngine<'_> {
                 contained: room.contained.to_simplex(),
                 oct: Some(room.shape),
                 bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                sat: std::cell::OnceCell::new(),
             })
             .collect()
     }
@@ -417,7 +417,7 @@ impl AutorouteEngine<'_> {
                 contained: room.contained.to_simplex(),
                 oct: Some(room.shape),
                 bbox: std::cell::Cell::new(None),
-                sat: std::cell::RefCell::new(None),
+                sat: std::cell::OnceCell::new(),
             })
             .collect();
         // `:226-237`: every piece is re-octagonized, contained shape included.

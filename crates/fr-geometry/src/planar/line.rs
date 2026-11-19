@@ -242,7 +242,8 @@ impl Line {
 
     /// Perpendicular translation of the line by `dist` (positive = left).
     pub fn translate(&self, dist: f64) -> Line {
-        let v = self.direction().get_int_vector();
+        let dir = self.direction();
+        let v = dir.get_int_vector();
         let vxvx = (v.x as f64) * (v.x as f64);
         let vyvy = (v.y as f64) * (v.y as f64);
         let length = (vxvx + vyvy).sqrt();
@@ -253,7 +254,7 @@ impl Line {
             let rel_y = jround_i32((dist * length) / v.x as f64);
             IntPoint::new(self.a.x, self.a.y + rel_y)
         };
-        Line::new_from_point_and_dir(new_a, &self.direction())
+        Line::new_from_point_and_dir(new_a, &dir)
     }
 
     /// Translates this line by `vector`.
@@ -428,6 +429,51 @@ impl Line {
     /// stays below 2^105. Returns `None` when `p1` and `p2` are parallel or an
     /// intermediate leaves `i128`.
     fn side_of_intersection_exact(&self, p1: &Line, p2: &Line) -> Option<Side> {
+        let max_coord = self.a.x.unsigned_abs()
+            | self.a.y.unsigned_abs()
+            | self.b.x.unsigned_abs()
+            | self.b.y.unsigned_abs()
+            | p1.a.x.unsigned_abs()
+            | p1.a.y.unsigned_abs()
+            | p1.b.x.unsigned_abs()
+            | p1.b.y.unsigned_abs()
+            | p2.a.x.unsigned_abs()
+            | p2.a.y.unsigned_abs()
+            | p2.b.x.unsigned_abs()
+            | p2.b.y.unsigned_abs();
+        if max_coord <= Limits::CRIT_INT as u32 {
+            // Inside the coordinate envelope (|coord| <= 2^25): det/det1/det2
+            // stay within 2^53 (i64) and intermediate products stay within
+            // 2^106 (well below i128::MAX = 2^127 - 1), avoiding checked_mul
+            // library calls on every hot call.
+            let d1x = i64::from(p1.b.x) - i64::from(p1.a.x);
+            let d1y = i64::from(p1.b.y) - i64::from(p1.a.y);
+            let d2x = i64::from(p2.b.x) - i64::from(p2.a.x);
+            let d2y = i64::from(p2.b.y) - i64::from(p2.a.y);
+            let mut det = d2x * d1y - d2y * d1x;
+            if det == 0 {
+                return None;
+            }
+            let det1 =
+                i64::from(p1.a.x) * i64::from(p1.b.y) - i64::from(p1.a.y) * i64::from(p1.b.x);
+            let det2 =
+                i64::from(p2.a.x) * i64::from(p2.b.y) - i64::from(p2.a.y) * i64::from(p2.b.x);
+            let mut is_x = i128::from(det1) * i128::from(d2x) - i128::from(det2) * i128::from(d1x);
+            let mut is_y = i128::from(det1) * i128::from(d2y) - i128::from(det2) * i128::from(d1y);
+            if det < 0 {
+                det = -det;
+                is_x = -is_x;
+                is_y = -is_y;
+            }
+            let det_128 = i128::from(det);
+            let vx = i128::from(i64::from(self.b.x) - i64::from(self.a.x));
+            let vy = i128::from(i64::from(self.b.y) - i64::from(self.a.y));
+            let rel_x = is_x - i128::from(self.a.x) * det_128;
+            let rel_y = is_y - i128::from(self.a.y) * det_128;
+            let determinant = vx * rel_y - vy * rel_x;
+            return Some(side_of_exact(determinant).negate());
+        }
+
         let d1x = i128::from(p1.b.x) - i128::from(p1.a.x);
         let d1y = i128::from(p1.b.y) - i128::from(p1.a.y);
         let d2x = i128::from(p2.b.x) - i128::from(p2.a.x);

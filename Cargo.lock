@@ -65,6 +65,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "smallvec",
 ]
 
 [[package]]
@@ -139,3 +140,9 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
 ]
+
+[[package]]
+name = "smallvec"
+version = "1.16.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "149309498a5f7334b12ddae0cad8aba81ce785fe91755068867e017cf98fee46"

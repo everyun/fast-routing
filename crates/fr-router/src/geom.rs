@@ -399,7 +399,7 @@ pub fn midpoint(line: &FloatLine) -> FloatPoint {
 /// right, as a one-line simplex.
 #[inline]
 pub fn half_plane(line: &Line) -> Simplex {
-    Simplex::get_instance(&[*line])
+    Simplex::from_slice(&[*line])
 }
 
 /// True when `shape` fits inside `container` up to float tolerance —

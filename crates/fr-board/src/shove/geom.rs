@@ -116,7 +116,7 @@ pub fn point_to_float(point: &Point) -> FloatPoint {
 
 /// `TileShape.get_instance(Line)` — the half plane right of `line`.
 pub fn half_plane(line: &Line) -> Simplex {
-    Simplex::new(vec![*line])
+    Simplex::from_slice(&[*line])
 }
 
 /// `IntBox.nearest_border_projections` (`IntBox.java`), capped at two results.

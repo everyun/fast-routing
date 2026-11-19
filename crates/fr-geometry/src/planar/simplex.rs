@@ -20,20 +20,31 @@ use crate::planar::{
     vector::Vector,
 };
 
+use smallvec::{smallvec, SmallVec};
+
 /// Convex shape defined as the intersection of half-planes.
 /// Each half-plane is the positive/right side of a directed line.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Simplex {
-    pub arr: Vec<Line>,
+    pub arr: SmallVec<[Line; 10]>,
 }
 
 impl Simplex {
     /// Standard empty simplex.
-    pub const EMPTY: Simplex = Simplex { arr: Vec::new() };
+    pub const EMPTY: Simplex = Simplex {
+        arr: SmallVec::new_const(),
+    };
 
     /// Constructs a Simplex from directed lines without normalizing.
-    pub const fn new(arr: Vec<Line>) -> Self {
-        Simplex { arr }
+    pub fn new(arr: impl Into<SmallVec<[Line; 10]>>) -> Self {
+        Simplex { arr: arr.into() }
+    }
+
+    /// Constructs a Simplex from a slice of directed lines without normalizing.
+    pub fn from_slice(lines: &[Line]) -> Self {
+        Simplex {
+            arr: SmallVec::from_slice(lines),
+        }
     }
 
     /// Creates a normalized Simplex from directed lines.
@@ -41,10 +52,9 @@ impl Simplex {
         if line_arr.is_empty() {
             return Simplex::EMPTY;
         }
-        let mut curr_arr = line_arr.to_vec();
+        let mut curr_arr: SmallVec<[Line; 10]> = SmallVec::from_slice(line_arr);
         curr_arr.sort();
-        let s = Simplex::new(curr_arr);
-        s.remove_redundant_lines()
+        Self::remove_redundant_from_sorted(&curr_arr)
     }
 
     /// Upstream `TileShape.get_instance(Point[] p_convex_polygon)` (`TileShape.java:29-36`): the
@@ -72,12 +82,12 @@ impl Simplex {
         if corners.len() < 2 {
             return Simplex::EMPTY;
         }
-        let mut lines = Vec::with_capacity(corners.len());
+        let mut lines: SmallVec<[Line; 10]> = SmallVec::with_capacity(corners.len());
         for index in 0..corners.len() {
             let next = (index + 1) % corners.len();
             lines.push(Line::new(corners[index], corners[next]));
         }
-        Simplex::get_instance(&lines)
+        Self::get_instance(&lines)
     }
 
     /// Returns true if this simplex is empty.
@@ -102,8 +112,8 @@ impl Simplex {
         }
         let no = corner_index % self.arr.len();
         let prev_no = if no == 0 { self.arr.len() - 1 } else { no - 1 };
-        let prev_dir = self.arr[prev_no].direction().get_int_vector();
-        let curr_dir = self.arr[no].direction().get_int_vector();
+        let prev_dir = self.arr[prev_no].b.difference_by_int(&self.arr[prev_no].a);
+        let curr_dir = self.arr[no].b.difference_by_int(&self.arr[no].a);
         prev_dir.determinant(&curr_dir) > 0
     }
 
@@ -355,13 +365,14 @@ impl Simplex {
         if vector.is_zero() {
             return self.clone();
         }
-        let new_arr: Vec<Line> = self.arr.iter().map(|l| l.translate_by(vector)).collect();
+        let new_arr: SmallVec<[Line; 10]> =
+            self.arr.iter().map(|l| l.translate_by(vector)).collect();
         Simplex::new(new_arr)
     }
 
     /// Turns this simplex by `factor` * 90° around `pole`.
     pub fn turn_90_degree(&self, factor: i32, pole: &IntPoint) -> Simplex {
-        let new_arr: Vec<Line> = self
+        let new_arr: SmallVec<[Line; 10]> = self
             .arr
             .iter()
             .map(|l| l.turn_90_degree(factor, pole))
@@ -371,13 +382,15 @@ impl Simplex {
 
     /// Mirrors this simplex at the vertical line through `pole`.
     pub fn mirror_vertical(&self, pole: &IntPoint) -> Simplex {
-        let new_arr: Vec<Line> = self.arr.iter().map(|l| l.mirror_vertical(pole)).collect();
+        let new_arr: SmallVec<[Line; 10]> =
+            self.arr.iter().map(|l| l.mirror_vertical(pole)).collect();
         Simplex::get_instance(&new_arr)
     }
 
     /// Mirrors this simplex at the horizontal line through `pole`.
     pub fn mirror_horizontal(&self, pole: &IntPoint) -> Simplex {
-        let new_arr: Vec<Line> = self.arr.iter().map(|l| l.mirror_horizontal(pole)).collect();
+        let new_arr: SmallVec<[Line; 10]> =
+            self.arr.iter().map(|l| l.mirror_horizontal(pole)).collect();
         Simplex::get_instance(&new_arr)
     }
 
@@ -450,12 +463,12 @@ impl Simplex {
         if width == 0.0 {
             return self.clone();
         }
-        let new_arr: Vec<Line> = self.arr.iter().map(|l| l.translate(-width)).collect();
-        let offset_simplex = Simplex::new(new_arr);
+        let new_arr: SmallVec<[Line; 10]> =
+            self.arr.iter().map(|l| l.translate(-width)).collect();
         if width < 0.0 {
-            offset_simplex.remove_redundant_lines()
+            Self::remove_redundant_from_sorted(&new_arr)
         } else {
-            offset_simplex
+            Simplex::new(new_arr)
         }
     }
 
@@ -489,16 +502,51 @@ impl Simplex {
         if self.is_empty() || other.is_empty() {
             return Simplex::EMPTY;
         }
-        let mut new_arr = Vec::with_capacity(self.arr.len() + other.arr.len());
+        let mut new_arr: SmallVec<[Line; 16]> =
+            SmallVec::with_capacity(self.arr.len() + other.arr.len());
         new_arr.extend_from_slice(&self.arr);
         new_arr.extend_from_slice(&other.arr);
         new_arr.sort();
-        let result = Simplex::new(new_arr);
-        result.remove_redundant_lines()
+        Self::remove_redundant_from_sorted(&new_arr)
+    }
+
+    /// Intersects `self` with a single half-plane `line` without allocating a
+    /// temporary one-line `Simplex` or re-sorting when `self.arr` is sorted.
+    pub fn intersection_with_line(&self, line: &Line) -> Simplex {
+        if self.is_empty() {
+            return Simplex::EMPTY;
+        }
+        let mut new_arr: SmallVec<[Line; 12]> = SmallVec::with_capacity(self.arr.len() + 1);
+        if self.arr.windows(2).any(|w| w[0] > w[1]) {
+            new_arr.extend_from_slice(&self.arr);
+            new_arr.push(*line);
+            new_arr.sort();
+        } else {
+            let pos = self.arr.partition_point(|l| l <= line);
+            new_arr.extend_from_slice(&self.arr[..pos]);
+            new_arr.push(*line);
+            new_arr.extend_from_slice(&self.arr[pos..]);
+        }
+        Self::remove_redundant_from_sorted(&new_arr)
     }
 
     /// Checks if this simplex intersects `other`.
     pub fn intersects(&self, other: &Simplex) -> bool {
+        if self.arr.is_empty() || other.arr.is_empty() {
+            return false;
+        }
+        if let (Some(ba), Some(bb)) = (self.bounded_bounding_box(), other.bounded_bounding_box()) {
+            if !ba.intersects(&bb) {
+                return false;
+            }
+            if let (Some(ca), Some(cb)) = (self.sat_corners(), other.sat_corners()) {
+                if sat_strictly_separates(&self.arr, &cb) == Some(true)
+                    || sat_strictly_separates(&other.arr, &ca) == Some(true)
+                {
+                    return false;
+                }
+            }
+        }
         !self.intersection(other).is_empty()
     }
 
@@ -666,7 +714,7 @@ impl Simplex {
     /// [`Simplex::corner_is_bounded`] goes through: normalizing divides both
     /// components of a delta by a *positive* gcd, which cannot change the sign
     /// of the determinant the test reads.
-    fn bounded_bounding_box(&self) -> Option<IntBox> {
+    pub fn bounded_bounding_box(&self) -> Option<IntBox> {
         if self.arr.len() < 3 {
             // Fewer than three half-planes never bound a region — the empty
             // simplex included, which `intersects_box` has already answered.
@@ -737,19 +785,24 @@ impl Simplex {
 
     /// Removes redundant border lines. Assumes `self.arr` is sorted.
     pub fn remove_redundant_lines(&self) -> Simplex {
-        if self.arr.is_empty() {
+        Self::remove_redundant_from_sorted(&self.arr)
+    }
+
+    /// Removes redundant border lines from an already-sorted slice of lines.
+    pub(crate) fn remove_redundant_from_sorted(lines: &[Line]) -> Simplex {
+        if lines.is_empty() {
             return Simplex::EMPTY;
         }
-        let mut line_arr: Vec<Line> = Vec::with_capacity(self.arr.len());
-        line_arr.push(self.arr[0]);
-        for line in &self.arr[1..] {
+        let mut line_arr: SmallVec<[Line; 10]> = SmallVec::with_capacity(lines.len());
+        line_arr.push(lines[0]);
+        for line in &lines[1..] {
             if !line.fast_equals(line_arr.last().unwrap()) {
                 line_arr.push(*line);
             }
         }
 
         let mut new_length = line_arr.len();
-        let mut intersection_sides: Vec<Option<Side>> = vec![None; new_length];
+        let mut intersection_sides: SmallVec<[Option<Side>; 16]> = smallvec![None; new_length];
 
         let mut try_again = new_length > 2;
         let mut index_of_last_removed_line = new_length;
@@ -765,8 +818,9 @@ impl Simplex {
                 let curr_line = line_arr[ind];
                 let next_line = line_arr[next_ind];
 
-                let prev_dir = prev_line.direction().get_int_vector();
-                let next_dir = next_line.direction().get_int_vector();
+                // Raw deltas preserve determinant sign without paying binary_gcd.
+                let prev_dir = prev_line.b.difference_by_int(&prev_line.a);
+                let next_dir = next_line.b.difference_by_int(&next_line.a);
                 let det = prev_dir.determinant(&next_dir);
 
                 let mut remove_line = false;
@@ -779,7 +833,7 @@ impl Simplex {
                     if det > 0 {
                         remove_line = side != Side::OnTheLeft;
                     } else if side == Side::OnTheLeft {
-                        let curr_dir = curr_line.direction().get_int_vector();
+                        let curr_dir = curr_line.b.difference_by_int(&curr_line.a);
                         if prev_dir.determinant(&curr_dir) > 0 {
                             new_length = 0;
                             try_again = false;
@@ -819,14 +873,31 @@ impl Simplex {
             }
         }
 
-        if new_length == 2 && line_arr[0].is_parallel(&line_arr[1]) {
-            if line_arr[0].direction() == line_arr[1].direction() {
-                if line_arr[1].side_of(&line_arr[0].a) == Side::OnTheLeft {
-                    line_arr[0] = line_arr[1];
+        if new_length == 2 {
+            let d0 = line_arr[0].b.difference_by_int(&line_arr[0].a);
+            let d1 = line_arr[1].b.difference_by_int(&line_arr[1].a);
+            let zero_delta = (d0.x == 0 && d0.y == 0) || (d1.x == 0 && d1.y == 0);
+            let (is_parallel, same_dir) = if zero_delta {
+                (
+                    line_arr[0].is_parallel(&line_arr[1]),
+                    line_arr[0].direction() == line_arr[1].direction(),
+                )
+            } else {
+                let parallel = d0.determinant(&d1) == 0;
+                let same = parallel
+                    && (i64::from(d0.x) * i64::from(d1.x) + i64::from(d0.y) * i64::from(d1.y))
+                        > 0;
+                (parallel, same)
+            };
+            if is_parallel {
+                if same_dir {
+                    if line_arr[1].side_of(&line_arr[0].a) == Side::OnTheLeft {
+                        line_arr[0] = line_arr[1];
+                    }
+                    new_length = 1;
+                } else if line_arr[1].side_of(&line_arr[0].a) == Side::OnTheLeft {
+                    new_length = 0;
                 }
-                new_length = 1;
-            } else if line_arr[1].side_of(&line_arr[0].a) == Side::OnTheLeft {
-                new_length = 0;
             }
         }
 
@@ -1580,6 +1651,39 @@ struct SatCorner {
 /// parallel or an intermediate leaves `i128` (the envelope
 /// [`Line::side_of_intersection`] already declares).
 fn sat_line_corner(l1: &Line, l2: &Line) -> Option<SatCorner> {
+    let max_coord = l1.a.x.unsigned_abs()
+        | l1.a.y.unsigned_abs()
+        | l1.b.x.unsigned_abs()
+        | l1.b.y.unsigned_abs()
+        | l2.a.x.unsigned_abs()
+        | l2.a.y.unsigned_abs()
+        | l2.b.x.unsigned_abs()
+        | l2.b.y.unsigned_abs();
+    if max_coord <= Limits::CRIT_INT as u32 {
+        let d1x = i64::from(l1.b.x) - i64::from(l1.a.x);
+        let d1y = i64::from(l1.b.y) - i64::from(l1.a.y);
+        let d2x = i64::from(l2.b.x) - i64::from(l2.a.x);
+        let d2y = i64::from(l2.b.y) - i64::from(l2.a.y);
+        let mut z = d2x * d1y - d2y * d1x;
+        if z == 0 {
+            return None;
+        }
+        let det1 = i64::from(l1.a.x) * i64::from(l1.b.y) - i64::from(l1.a.y) * i64::from(l1.b.x);
+        let det2 = i64::from(l2.a.x) * i64::from(l2.b.y) - i64::from(l2.a.y) * i64::from(l2.b.x);
+        let mut x = i128::from(det1) * i128::from(d2x) - i128::from(det2) * i128::from(d1x);
+        let mut y = i128::from(det1) * i128::from(d2y) - i128::from(det2) * i128::from(d1y);
+        if z < 0 {
+            z = -z;
+            x = -x;
+            y = -y;
+        }
+        return Some(SatCorner {
+            x,
+            y,
+            z: i128::from(z),
+        });
+    }
+
     let d1x = i128::from(l1.b.x) - i128::from(l1.a.x);
     let d1y = i128::from(l1.b.y) - i128::from(l1.a.y);
     let d2x = i128::from(l2.b.x) - i128::from(l2.a.x);
@@ -1603,6 +1707,25 @@ fn sat_line_corner(l1: &Line, l2: &Line) -> Option<SatCorner> {
 /// [`Line::side_of_point`] of a homogeneous corner, exactly; `None` on
 /// overflow.
 fn sat_side_of_corner(line: &Line, corner: &SatCorner) -> Option<Side> {
+    const ENV_Z: u128 = 1u128 << 54;
+    const ENV_XY: u128 = 1u128 << 80;
+    let line_max = line.a.x.unsigned_abs()
+        | line.a.y.unsigned_abs()
+        | line.b.x.unsigned_abs()
+        | line.b.y.unsigned_abs();
+    if line_max <= Limits::CRIT_INT as u32
+        && corner.z.unsigned_abs() <= ENV_Z
+        && corner.x.unsigned_abs() <= ENV_XY
+        && corner.y.unsigned_abs() <= ENV_XY
+    {
+        let vx = i128::from(i64::from(line.b.x) - i64::from(line.a.x));
+        let vy = i128::from(i64::from(line.b.y) - i64::from(line.a.y));
+        let rel_x = corner.x - i128::from(line.a.x) * corner.z;
+        let rel_y = corner.y - i128::from(line.a.y) * corner.z;
+        let det = vx * rel_y - vy * rel_x;
+        return Some(side_of_exact(det).negate());
+    }
+
     let vx = i128::from(line.b.x) - i128::from(line.a.x);
     let vy = i128::from(line.b.y) - i128::from(line.a.y);
     let rel_x = corner
@@ -1722,6 +1845,21 @@ fn sat_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
     'lines: for line in lines {
         for corner in &corners.buf[..corners.len] {
             if sat_side_of_corner(line, corner)? == Side::OnTheRight {
+                continue 'lines;
+            }
+        }
+        return Some(true);
+    }
+    Some(false)
+}
+
+/// Strict separation: whether some border `line` puts every corner in its open
+/// left half-plane (not even touching on the boundary), so `intersects` is
+/// `false`.
+fn sat_strictly_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
+    'lines: for line in lines {
+        for corner in &corners.buf[..corners.len] {
+            if sat_side_of_corner(line, corner)? != Side::OnTheLeft {
                 continue 'lines;
             }
         }

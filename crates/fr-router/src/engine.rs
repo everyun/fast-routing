@@ -178,6 +178,11 @@ pub struct AutorouteEngine<'b> {
     tile_simplex_base: Vec<u32>,
     /// The memo cells for [`AutorouteEngine::tile_simplex_base`].
     tile_simplex_cache: Vec<std::cell::OnceCell<std::rc::Rc<Simplex>>>,
+    /// Flat per-tile SAT vertex & verification memo, in lockstep with
+    /// `tile_simplex_cache`.
+    tile_sat_cache: Vec<
+        std::cell::OnceCell<Option<std::rc::Rc<(fr_geometry::planar::SatCorners, Option<bool>)>>>,
+    >,
     /// Same flat layout for the octagon flavor — the 45° carve octagonizes
     /// every collected obstacle, and `tile_octagon` of a Simplex tile is f64
     /// corner math per call.
@@ -387,6 +392,7 @@ impl<'b> AutorouteEngine<'b> {
             scratch_collect_own_net: None,
             tile_simplex_base: Vec::new(),
             tile_simplex_cache: Vec::new(),
+            tile_sat_cache: Vec::new(),
             tile_octagon_cache: Vec::new(),
             restrain_depth: 0,
             clock: None,
@@ -501,6 +507,7 @@ impl<'b> AutorouteEngine<'b> {
         self.item_cache = None;
         self.tile_simplex_base.clear();
         self.tile_simplex_cache.clear();
+        self.tile_sat_cache.clear();
         self.tile_octagon_cache.clear();
         self.drills.clear();
         self.pages.reset_all();
@@ -908,6 +915,8 @@ impl<'b> AutorouteEngine<'b> {
             self.tile_simplex_base[slot.index()] = self.tile_simplex_cache.len() as u32;
             self.tile_simplex_cache
                 .resize_with(self.tile_simplex_cache.len() + tile_count, Default::default);
+            self.tile_sat_cache
+                .resize_with(self.tile_sat_cache.len() + tile_count, Default::default);
             self.tile_octagon_cache
                 .resize_with(self.tile_octagon_cache.len() + tile_count, Default::default);
             let obstacle = item.is_trace_obstacle(net_no);
@@ -1241,12 +1250,41 @@ impl<'b> AutorouteEngine<'b> {
     /// the per-connection tile memo — identical shapes, one `tile_to_simplex`
     /// per tile per connection instead of one per carve hit. Rooms still
     /// clone: they churn too fast for a memo.
-    pub(crate) fn obstacle_shape_rc(&mut self, obstacle: Obstacle) -> Option<std::rc::Rc<Simplex>> {
+    /// [`obstacle_shape`](Self::obstacle_shape) paired with its memoized
+    /// SAT data `(corners, verified)`. Items cache both simplex and SAT per
+    /// connection; rooms memoize SAT on [`Room::cached_sat`].
+    pub(crate) fn obstacle_shape_and_sat(
+        &mut self,
+        obstacle: Obstacle,
+    ) -> Option<(
+        std::rc::Rc<Simplex>,
+        Option<std::rc::Rc<(fr_geometry::planar::SatCorners, Option<bool>)>>,
+    )> {
         match obstacle {
-            Obstacle::Item(item, index, slot) => self.item_tile_simplex_rc(slot, item, index),
+            Obstacle::Item(item, index, slot) => {
+                let shape = self.item_tile_simplex_rc(slot, item, index)?;
+                let base = *self.tile_simplex_base.get(slot.index())?;
+                let sat = self
+                    .tile_sat_cache
+                    .get(base as usize + index as usize)?
+                    .get_or_init(|| {
+                        shape.sat_corners().map(|corners| {
+                            let verified = shape.sat_verify(&corners);
+                            std::rc::Rc::new((corners, verified))
+                        })
+                    })
+                    .clone();
+                Some((shape, sat))
+            }
             Obstacle::Room(room) => {
                 let room = self.rooms.room(room);
-                room.alive.then(|| std::rc::Rc::new(room.shape.clone()))
+                if !room.alive {
+                    return None;
+                }
+                Some((
+                    std::rc::Rc::new(room.shape.clone()),
+                    room.cached_sat().cloned(),
+                ))
             }
         }
     }

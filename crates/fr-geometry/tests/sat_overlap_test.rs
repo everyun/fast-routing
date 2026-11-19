@@ -200,6 +200,13 @@ fn check(a: &Simplex, b: &Simplex, label: &str) {
         "{label}: has_2dim_overlap disagrees with intersection().dimension()\n  a: {:?}\n  b: {:?}",
         a.arr, b.arr
     );
+    let expected_intersects = !a.intersection(b).is_empty();
+    let got_intersects = a.intersects(b);
+    assert_eq!(
+        got_intersects, expected_intersects,
+        "{label}: intersects disagrees with !intersection().is_empty()\n  a: {:?}\n  b: {:?}",
+        a.arr, b.arr
+    );
     // The reference itself is order-sensitive once an operand's region is
     // unbounded or contradictory: `remove_redundant_lines`' empty-region
     // detection reads the *sorted* line order, and an unbounded region's
