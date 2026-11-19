@@ -412,7 +412,7 @@ fn run_maze_stage(
     observer: &mut Option<Box<dyn RouterObserver>>,
     snapshot_interval_ms: u64,
     snapshot_fn: &mut Option<SnapshotFn>,
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
     job_start: std::time::Instant,
 ) -> RouterReport {
     let settings = settings_for(design, options);
@@ -421,7 +421,9 @@ fn run_maze_stage(
 
     if options.fanout {
         let mut config = FanoutConfig::from_settings(&settings, scale);
-        config.deadline = config.deadline.with_cancel(cancel.clone());
+        if let Some(c) = &cancel {
+            config.deadline = config.deadline.with_cancel(c.clone());
+        }
         // Disjoint field borrows: the router needs `&mut board` and `&rules` at once.
         let started = std::time::Instant::now();
         let outcome = fr_router::fanout::fanout_board_with_observer(
@@ -499,16 +501,18 @@ fn run_maze_stage(
         .with_board_units_per_mm(scale)
         .with_budget(budget)
         .with_parallel_connections(options.parallel_connections())
-        .with_cancel(cancel)
         .with_job_start(job_start)
         .with_snapshot_interval_ms(snapshot_interval_ms);
+    if let Some(c) = cancel {
+        router = router.with_cancel(c);
+    }
     if let Some(obs) = observer.take() {
         router = router.with_observer(obs);
     }
     let had_snap_fn = snapshot_fn.is_some();
     if let Some(sf) = snapshot_fn.take() {
         router = router.with_snapshot_fn(sf);
-    } else {
+    } else if router.observer.is_some() {
         router = router.with_snapshot_fn(Box::new(|b, s| {
             std::sync::Arc::new(crate::snapshot::snapshot(b, s))
         }));
@@ -838,7 +842,7 @@ pub struct RoutingJob {
     observer: std::sync::Mutex<Option<Box<dyn RouterObserver>>>,
     snapshot_interval_ms: u64,
     snapshot_fn: std::sync::Mutex<Option<SnapshotFn>>,
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    cancel: Option<std::sync::Arc<std::sync::atomic::AtomicBool>>,
 }
 
 impl std::fmt::Debug for RoutingJob {
@@ -855,7 +859,10 @@ impl std::fmt::Debug for RoutingJob {
             .field("snapshot_interval_ms", &self.snapshot_interval_ms)
             .field(
                 "cancel",
-                &self.cancel.load(std::sync::atomic::Ordering::Relaxed),
+                &self
+                    .cancel
+                    .as_ref()
+                    .is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)),
             )
             .finish()
     }
@@ -879,7 +886,7 @@ impl RoutingJob {
             observer: std::sync::Mutex::new(None),
             snapshot_interval_ms: 500,
             snapshot_fn: std::sync::Mutex::new(None),
-            cancel: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            cancel: None,
         }
     }
 
@@ -960,7 +967,7 @@ impl RoutingJob {
         mut self,
         cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
     ) -> RoutingJob {
-        self.cancel = cancel;
+        self.cancel = Some(cancel);
         self
     }
 
@@ -1078,7 +1085,10 @@ impl RoutingJob {
         observe(JobPhase::Judged);
 
         if let Some(obs) = &mut observer {
-            let is_cancelled = self.cancel.load(std::sync::atomic::Ordering::Relaxed);
+            let is_cancelled = self
+                .cancel
+                .as_ref()
+                .is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed));
             let stopped_reason = if is_cancelled {
                 Some("cancelled")
             } else if let Some(r) = &router {
