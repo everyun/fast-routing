@@ -208,7 +208,12 @@ def main() -> int:
         fixtures_dir = Path(args.fixtures_dir or "/tmp/freerouting-upstream/fixtures").resolve()
         manifest = Path(args.manifest or (repo_root / "bench/fixtures-manifest.json")).resolve()
         java_ses = Path(args.java_ses or (repo_root / "bench/results/java-reference/ses")).resolve()
-        boards = sorted(p.stem for p in fixtures_dir.glob("*.dsn"))
+        manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+        boards = sorted(
+            Path(f["name"]).stem
+            for f in manifest_data["fixtures"]
+            if (fixtures_dir / f["name"]).is_file()
+        )
 
     ses_dir = out_dir / "ses"
     log_dir = out_dir / "logs"
