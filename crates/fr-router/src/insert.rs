@@ -58,6 +58,7 @@ use std::sync::OnceLock;
 use fr_board::board::Board;
 use fr_board::connectivity::connection_points;
 use fr_board::item::{ItemId, ItemKind};
+use fr_board::shape::AngleRestriction;
 use fr_geometry::planar::{FloatPoint, IntBox, IntPoint, Point, Polyline};
 use fr_rules::board_rules::BoardRules;
 use fr_rules::via_info::ViaInfo;
@@ -788,7 +789,7 @@ impl<'b> ConnectionInserter<'b> {
                 angle_restriction,
             )
             .round();
-            if self.forced.insert_forced_trace_segment(
+            if self.insert_angle_compliant_neckdown_segment(
                 from_corner,
                 add_corner,
                 full_half_width,
@@ -797,7 +798,7 @@ impl<'b> ConnectionInserter<'b> {
             {
                 return Some(from_corner);
             }
-            if self.forced.insert_forced_trace_segment(
+            if self.insert_angle_compliant_neckdown_segment(
                 add_corner,
                 neck_down_end_point,
                 full_half_width,
@@ -814,7 +815,7 @@ impl<'b> ConnectionInserter<'b> {
             )
             .round();
             if add_corner != to_corner {
-                if self.forced.insert_forced_trace_segment(
+                if self.insert_angle_compliant_neckdown_segment(
                     neck_down_end_point,
                     add_corner,
                     full_half_width,
@@ -828,9 +829,13 @@ impl<'b> ConnectionInserter<'b> {
         }
 
         // `:415-417`: the reduced-width stub into the pin.
-        self.forced
-            .insert_forced_trace_segment(neck_down_end_point, to_corner, neck_down_halfwidth, layer)
-            .and_then(|point| as_int(&point))
+        self.insert_angle_compliant_neckdown_segment(
+            neck_down_end_point,
+            to_corner,
+            neck_down_halfwidth,
+            layer,
+        )
+        .and_then(|point| as_int(&point))
     }
 
     /// `insert_fanout_micro_neckdown` (`:289-333`, v2 delta §10.2).
@@ -870,15 +875,67 @@ impl<'b> ConnectionInserter<'b> {
             if candidate <= 0 || candidate >= base_half_width {
                 continue;
             }
-            if self
-                .forced
-                .insert_forced_trace_segment(from_point, target_point, candidate, layer)
-                == Some(Point::Int(target_point))
+            if self.insert_angle_compliant_neckdown_segment(
+                from_point,
+                target_point,
+                candidate,
+                layer,
+            ) == Some(Point::Int(target_point))
             {
                 return true;
             }
         }
         false
+    }
+
+    /// Inserts `from -> to` at `half_width`, preserving exact `insert_forced_trace_segment`
+    /// semantics when `from -> to` already conforms to the board's `AngleRestriction`, and
+    /// bridging with an angle-compliant knee (`from -> knee -> to`) inside a nested board
+    /// transaction when `spring_over` / `pull_tight` deflected `from` off-axis.
+    fn insert_angle_compliant_neckdown_segment(
+        &mut self,
+        from: IntPoint,
+        to: IntPoint,
+        half_width: i32,
+        layer: i32,
+    ) -> Option<Point> {
+        if from == to {
+            return Some(Point::Int(to));
+        }
+        let restriction = self.forced.board.angle_restriction();
+        if is_angle_aligned(from, to, restriction) {
+            return self
+                .forced
+                .insert_forced_trace_segment(from, to, half_width, layer);
+        }
+        let f_from = from.to_float();
+        let f_to = to.to_float();
+        let primary_h = (f_from.x - f_to.x).abs() >= (f_from.y - f_to.y).abs();
+        for horiz in [primary_h, !primary_h] {
+            let knee = calculate_additional_corner(f_from, f_to, horiz, restriction).round();
+            if !is_angle_aligned(from, knee, restriction)
+                || !is_angle_aligned(knee, to, restriction)
+            {
+                continue;
+            }
+            let poly = if knee == from || knee == to {
+                Polyline::from_int_points(&[from, to])
+            } else {
+                Polyline::from_int_points(&[from, knee, to])
+            };
+            let saved_changed = self.forced.changed_area.clone();
+            let mark = self.forced.board.begin();
+            let ok = self
+                .forced
+                .insert_forced_trace_polyline(&poly, half_width, layer, i32::MAX);
+            if ok == Some(Point::Int(to)) {
+                self.forced.board.commit(mark);
+                return Some(Point::Int(to));
+            }
+            self.forced.board.rollback_to(mark);
+            self.forced.changed_area = saved_changed;
+        }
+        None
     }
 
     /// `(center, clearance class, max pad width, neckdown half width)` of a pin
@@ -1055,6 +1112,17 @@ fn is_fanout_via(board: &Board, via: ItemId, collected: &BTreeSet<ItemId>) -> bo
     saw_pin
 }
 
+#[inline]
+fn is_angle_aligned(from: IntPoint, to: IntPoint, restriction: AngleRestriction) -> bool {
+    let dx = i64::from(to.x) - i64::from(from.x);
+    let dy = i64::from(to.y) - i64::from(from.y);
+    match restriction {
+        AngleRestriction::None => true,
+        AngleRestriction::Ninety => dx == 0 || dy == 0,
+        AngleRestriction::FortyFive => dx == 0 || dy == 0 || dx.abs() == dy.abs(),
+    }
+}
+
 fn as_int(point: &Point) -> Option<IntPoint> {
     match point {
         Point::Int(p) => Some(*p),
@@ -1116,5 +1184,76 @@ mod tests {
         // Incomplete count 3 exceeds default K=2, so does not activate.
         assert!(!fail_rips_for(8, 3));
         assert!(!fail_rips_for(14, 3));
+    }
+
+    #[test]
+    fn angle_aligned_predicate_and_off_axis_micro_neckdown_conform_to_45_deg() {
+        assert!(is_angle_aligned(
+            IntPoint::new(0, 0),
+            IntPoint::new(100, 100),
+            AngleRestriction::FortyFive
+        ));
+        assert!(is_angle_aligned(
+            IntPoint::new(0, 0),
+            IntPoint::new(0, 250),
+            AngleRestriction::Ninety
+        ));
+        assert!(!is_angle_aligned(
+            IntPoint::new(0, 0),
+            IntPoint::new(129, 790),
+            AngleRestriction::FortyFive
+        ));
+        assert!(!is_angle_aligned(
+            IntPoint::new(0, 0),
+            IntPoint::new(100, 100),
+            AngleRestriction::Ninety
+        ));
+
+        let mut fixture = TestFixture::two_layer_with_pads();
+        fixture
+            .board
+            .set_angle_restriction(AngleRestriction::FortyFive);
+        let ctrl = fixture.control();
+        let bounds = IntBox::new(-4000, -2500, 4000, 2500);
+        let from = IntPoint::new(0, 0);
+        let to = IntPoint::new(129, 790);
+
+        let inserted = {
+            let mut inserter =
+                ConnectionInserter::new(&mut fixture.board, &fixture.rules, &ctrl, bounds);
+            inserter.insert_fanout_micro_neckdown(Some(from), to, 0, None, None)
+        };
+        assert!(
+            inserted,
+            "off-axis micro-neckdown should bridge via 45-deg knee"
+        );
+
+        let mut trace_segments = 0usize;
+        for (_, item) in fixture.board.store().iter() {
+            let ItemKind::Trace(trace) = &item.kind else {
+                continue;
+            };
+            let corners: Vec<FloatPoint> = (0..trace.polyline.corner_count())
+                .map(|i| trace.polyline.corner_approx(i))
+                .collect();
+            for pair in corners.windows(2) {
+                let dx = (pair[1].x - pair[0].x).abs();
+                let dy = (pair[1].y - pair[0].y).abs();
+                if dx == 0.0 && dy == 0.0 {
+                    continue;
+                }
+                trace_segments += 1;
+                let ok_45 = dx < 1e-6 || dy < 1e-6 || (dx - dy).abs() <= 1.0;
+                assert!(
+                    ok_45,
+                    "expected 45-degree aligned segment, got {:?} -> {:?}",
+                    pair[0], pair[1]
+                );
+            }
+        }
+        assert!(
+            trace_segments >= 2,
+            "expected knee-bridged 2+ trace segments"
+        );
     }
 }
