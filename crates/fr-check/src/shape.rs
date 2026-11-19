@@ -87,6 +87,37 @@ impl TileShape {
         }
     }
 
+    /// Enclosing bounding box when `self` is bounded and non-empty; `None`
+    /// for empty or unbounded shapes.
+    pub fn bounded_bounding_box(&self) -> Option<IntBox> {
+        match self {
+            TileShape::Box(b) => (!b.is_empty()).then_some(*b),
+            TileShape::Octagon(o) => (!o.is_empty()).then(|| o.bounding_box()),
+            TileShape::Simplex(s) => s.bounded_bounding_box(),
+        }
+    }
+
+    /// `true` iff `self ∩ other` is 2-dimensional — identical to
+    /// `self.intersection(other).dimension() == 2` without materializing the
+    /// mixed/simplex intersection.
+    pub fn has_2dim_overlap(&self, other: &TileShape) -> bool {
+        match (self, other) {
+            (TileShape::Box(a), TileShape::Box(b)) => {
+                !a.is_empty() && !b.is_empty() && a.overlaps(b)
+            }
+            (TileShape::Box(a), TileShape::Octagon(b)) => {
+                a.to_int_octagon().intersection(b).normalize().dimension() == 2
+            }
+            (TileShape::Octagon(a), TileShape::Box(b)) => {
+                a.intersection(&b.to_int_octagon()).normalize().dimension() == 2
+            }
+            (TileShape::Octagon(a), TileShape::Octagon(b)) => {
+                a.intersection(b).normalize().dimension() == 2
+            }
+            (a, b) => a.to_simplex().has_2dim_overlap(&b.to_simplex()),
+        }
+    }
+
     /// True when `point` is inside the shape or on its border.
     pub fn contains_point(&self, point: &Point) -> bool {
         match self {

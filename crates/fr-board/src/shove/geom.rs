@@ -326,36 +326,40 @@ pub fn overlapping_items_with_clearance_tile(
     }
 
     let tree = board.default_tree();
+    let shape_bbox = shape.bounded_bounding_box();
     let mut curr_half_clearance = -1i32;
     let mut curr_offset_tile = shape.clone();
     out.retain(|id| {
-        let Some(item) = board.store().get(*id) else {
+        let Some(slot) = board.store().slot_of(*id) else {
+            return false;
+        };
+        let Some(item) = board.store().item_at_slot(slot) else {
             return false;
         };
         let clearance = board
             .clearances()
             .value(cl_class, item.clearance_class, layer);
         let half_clearance = clearance / 2;
-        if half_clearance != curr_half_clearance {
-            curr_half_clearance = half_clearance;
-            curr_offset_tile = shape.enlarge(half_clearance);
-        }
-        let Some(slot) = board.store().slot_of(*id) else {
-            return false;
-        };
-        tree.item_shapes(slot, *id)
-            .iter()
-            .filter(|tile| tile.layer == layer)
-            .any(|tile| {
-                tile.shape
-                    .as_ref()
-                    .map(|item_shape| {
-                        item_shape
-                            .enlarge(half_clearance)
-                            .intersects(&curr_offset_tile)
-                    })
-                    .unwrap_or(false)
-            })
+        tree.item_shapes(slot, *id).iter().any(|tile| {
+            if tile.layer != layer {
+                return false;
+            }
+            let Some(item_shape) = tile.shape.as_ref() else {
+                return false;
+            };
+            if let (Some(sb), Some(tb)) = (shape_bbox, item_shape.bounded_bounding_box()) {
+                if !within_padded_bounds(sb, tb, clearance) {
+                    return false;
+                }
+            }
+            if half_clearance != curr_half_clearance {
+                curr_half_clearance = half_clearance;
+                curr_offset_tile = shape.enlarge(half_clearance);
+            }
+            item_shape
+                .enlarge(half_clearance)
+                .intersects(&curr_offset_tile)
+        })
     });
 }
 
@@ -388,32 +392,29 @@ pub fn overlapping_items_with_clearance(
     }
 
     let tree = board.default_tree();
+    let shape_bbox = shape.bounded_bounding_box();
     let mut curr_half_clearance = -1i32;
     // Held as a `TileShape` rather than a bare `Simplex` so that the exact test
     // below can dispatch on the *stored* shape's flavor: a pad's enlarged shape
     // is a box or an octagon, and `TileShape::intersects` answers those against
     // a simplex without converting them to one and running the general
     // half-plane intersection. `-1` is not a legal half clearance, so the first
-    // item always rebuilds it.
+    // surviving tile always builds it.
     let mut curr_offset_tile = TileShape::Simplex(shape.clone());
     // Upstream sorts by clearance so the offset shape is rebuilt once per
     // distinct clearance; the same trick, without the sort, is to cache the
     // last one — clearance classes repeat heavily in a single query.
     out.retain(|id| {
-        let Some(item) = board.store().get(*id) else {
+        let Some(slot) = board.store().slot_of(*id) else {
+            return false;
+        };
+        let Some(item) = board.store().item_at_slot(slot) else {
             return false;
         };
         let clearance = board
             .clearances()
             .value(cl_class, item.clearance_class, layer);
         let half_clearance = clearance / 2;
-        if half_clearance != curr_half_clearance {
-            curr_half_clearance = half_clearance;
-            curr_offset_tile = TileShape::Simplex(shape.enlarge(half_clearance as f64));
-        }
-        let Some(slot) = board.store().slot_of(*id) else {
-            return false;
-        };
         tree.item_shapes(slot, *id).iter().any(|tile| {
             if tile.layer != layer {
                 return false;
@@ -421,11 +422,29 @@ pub fn overlapping_items_with_clearance(
             let Some(tile_shape) = tile.shape.as_ref() else {
                 return false;
             };
+            if let (Some(sb), Some(tb)) = (shape_bbox, tile_shape.bounded_bounding_box()) {
+                if !within_padded_bounds(sb, tb, clearance) {
+                    return false;
+                }
+            }
+            if half_clearance != curr_half_clearance {
+                curr_half_clearance = half_clearance;
+                curr_offset_tile = TileShape::Simplex(shape.enlarge(half_clearance as f64));
+            }
             tile_shape
                 .enlarge(half_clearance)
                 .intersects(&curr_offset_tile)
         })
     });
+}
+
+#[inline]
+fn within_padded_bounds(a: IntBox, b: IntBox, clearance: i32) -> bool {
+    let pad = i64::from(clearance.max(0)) + 4;
+    i64::from(a.ur.x) + pad >= i64::from(b.ll.x)
+        && i64::from(b.ur.x) + pad >= i64::from(a.ll.x)
+        && i64::from(a.ur.y) + pad >= i64::from(b.ll.y)
+        && i64::from(b.ur.y) + pad >= i64::from(a.ll.y)
 }
 
 /// The largest clearance `cl_class` requires of any class on `layer`, upstream's

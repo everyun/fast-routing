@@ -146,7 +146,7 @@ pub fn check_clearance_with<V: BoardView + ?Sized>(
             active.retain(|&a| entries.entries[a as usize].inflated.ur.x >= e.inflated.ll.x);
             for &ai in &active {
                 let other = &entries.entries[ai as usize];
-                if !other.inflated.intersects(&e.inflated) {
+                if other.item == e.item || !other.inflated.intersects(&e.inflated) {
                     continue;
                 }
                 test_pair(view, anchors, other, e, &mut seen, &mut out);
@@ -327,7 +327,7 @@ fn scan_chunk<V: BoardView + ?Sized>(
         });
         for &active_pos in active.iter() {
             let other = &entries.entries[entries.order[active_pos as usize] as usize];
-            if !other.inflated.intersects(&e.inflated) {
+            if other.item == e.item || !other.inflated.intersects(&e.inflated) {
                 continue;
             }
             if let Some(violation) = violation_for_pair(view, anchors, other, e) {
@@ -613,9 +613,23 @@ fn violation_for_pair<V: BoardView + ?Sized>(
     } else {
         (y, x)
     };
-    [(lo, hi), (hi, lo)]
-        .into_iter()
-        .find_map(|(this, other)| evaluate(view, anchors, this, other, layer))
+    match evaluate(view, anchors, lo, hi, layer) {
+        EvalVerdict::Hit(v) => Some(v),
+        EvalVerdict::SymmetricGeomDisjoint => None,
+        EvalVerdict::None => match evaluate(view, anchors, hi, lo, layer) {
+            EvalVerdict::Hit(v) => Some(v),
+            EvalVerdict::SymmetricGeomDisjoint | EvalVerdict::None => None,
+        },
+    }
+}
+
+enum EvalVerdict {
+    Hit(Violation),
+    /// `(lo, hi)` proved geometrically disjoint with `cl_fwd == cl_rev`, even
+    /// `cl_fwd` (`c1 == c2`), and both shapes bounded — so `(hi, lo)` cannot
+    /// produce a violation regardless of exemptions or obstacle asymmetry.
+    SymmetricGeomDisjoint,
+    None,
 }
 
 /// One ordered direction: is `other` an obstacle to `this`, and if so do their
@@ -626,26 +640,42 @@ fn evaluate<V: BoardView + ?Sized>(
     this: &Entry,
     other: &Entry,
     layer: i32,
-) -> Option<Violation> {
+) -> EvalVerdict {
     let ids = view.item_ids();
     let (this_id, other_id) = (ids[this.item as usize], ids[other.item as usize]);
     let this_item = view.item(this_id);
     let other_item = view.item(other_id);
 
     if !other_item.is_obstacle(this_item) {
-        return None;
+        return EvalVerdict::None;
     }
     if is_tie_pin_exempt(view, anchors, this_item, other_item) {
-        return None;
+        return EvalVerdict::None;
     }
     if is_escape_via_exempt(this_item, other_item, layer) {
-        return None;
+        return EvalVerdict::None;
     }
 
     let s1 = &view.shapes(this_id)[this.shape as usize].shape;
     let s2 = &view.shapes(other_id)[other.shape as usize].shape;
 
     let cl = view.clearance(other_item.clearance_class, this_item.clearance_class, layer);
+    let symmetric_disjoint = || {
+        if cl % 2 == 0
+            && view.clearance(this_item.clearance_class, other_item.clearance_class, layer) == cl
+            && s1.bounded_bounding_box().is_some()
+            && s2.bounded_bounding_box().is_some()
+        {
+            EvalVerdict::SymmetricGeomDisjoint
+        } else {
+            EvalVerdict::None
+        }
+    };
+    if let (Some(b1), Some(b2)) = (s1.bounded_bounding_box(), s2.bounded_bounding_box()) {
+        if !inflate(&b1, cl.saturating_add(4)).intersects(&b2) {
+            return symmetric_disjoint();
+        }
+    }
     let c1 = half(cl);
     let c2 = cl - c1;
     // Upstream's `c > 0 ? shape.enlarge(c) : shape` — the zero case must not
@@ -663,8 +693,8 @@ fn evaluate<V: BoardView + ?Sized>(
     } else {
         s2
     };
-    if e1.intersection(e2).dimension() != 2 {
-        return None;
+    if !e1.has_2dim_overlap(e2) {
+        return symmetric_disjoint();
     }
 
     let actual_dim2 = s1.intersection(s2).dimension() == 2;
@@ -673,7 +703,7 @@ fn evaluate<V: BoardView + ?Sized>(
     } else {
         clearance_between_shapes(s1, s2, cl, c1, c2)
     };
-    Some(Violation {
+    EvalVerdict::Hit(Violation {
         a: this_id,
         b: other_id,
         layer,

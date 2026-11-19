@@ -76,6 +76,17 @@ impl TileShape {
         }
     }
 
+    /// Outward bounding box when the shape is non-empty and bounded; `None`
+    /// for empty or unbounded shapes where a bounding-box reject would not be
+    /// sound.
+    pub fn bounded_bounding_box(&self) -> Option<IntBox> {
+        match self {
+            TileShape::Box(b) => (!b.is_empty()).then_some(*b),
+            TileShape::Oct(o) => (!o.is_empty()).then(|| o.bounding_box()),
+            TileShape::Simplex(s) => s.bounded_bounding_box(),
+        }
+    }
+
     /// The regular bounding shape stored at the leaf
     /// (`search-tree-obstacles.md` §1.1: `Leaf.bounding_shape =
     /// object_shape.bounding_shape(bounding_directions)`).
