@@ -11,6 +11,7 @@ members = [
     "crates/fr-router",
     "crates/fr-core",
     "crates/fr-cli",
+    "crates/fr-gui",
     # The G2.1 referee (`bench/README.md`, "Judging a session"). Bench tooling rather than
     # product, but it is what the quality gate is measured with, so it is a workspace member and
     # `cargo clippy --workspace` covers it. It may never depend on `fr-router`: the referee has

@@ -102,6 +102,9 @@ pub enum RoomKind {
     Obstacle,
 }
 
+/// Cached SAT corners and feasibility verification verdict for a shape.
+pub(crate) type CachedSat = Rc<(fr_geometry::planar::SatCorners, Option<bool>)>;
+
 /// A room.
 #[derive(Debug, Clone)]
 pub struct Room {
@@ -156,7 +159,7 @@ pub struct Room {
     /// SAT vertex list and verification verdict for `shape`, memoized per room
     /// shape so the carve loop does not re-verify the same obstacle room across
     /// subsequent completions. Cleared whenever `set_shape*` updates `shape`.
-    shape_sat: OnceCell<Option<Rc<(fr_geometry::planar::SatCorners, Option<bool>)>>>,
+    shape_sat: OnceCell<Option<CachedSat>>,
 }
 
 /// The coordinate envelope, standing in for the bounding octagon of an
@@ -235,9 +238,7 @@ impl Room {
     }
 
     /// Memoized SAT corners + verification verdict for `self.shape`.
-    pub(crate) fn cached_sat(
-        &self,
-    ) -> Option<&Rc<(fr_geometry::planar::SatCorners, Option<bool>)>> {
+    pub(crate) fn cached_sat(&self) -> Option<&CachedSat> {
         self.shape_sat
             .get_or_init(|| {
                 self.shape.sat_corners().map(|corners| {

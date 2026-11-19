@@ -730,8 +730,7 @@ impl AutorouteEngine<'_> {
             own_net,
         };
 
-        for idx in 0..obstacles.len() {
-            let obstacle = obstacles[idx];
+        for &obstacle in &obstacles {
             if obstacle == Obstacle::Room(room_id) {
                 continue;
             }

@@ -192,9 +192,7 @@ pub struct AutorouteEngine<'b> {
     tile_simplex_cache: Vec<std::cell::OnceCell<std::rc::Rc<Simplex>>>,
     /// Flat per-tile SAT vertex & verification memo, in lockstep with
     /// `tile_simplex_cache`.
-    tile_sat_cache: Vec<
-        std::cell::OnceCell<Option<std::rc::Rc<(fr_geometry::planar::SatCorners, Option<bool>)>>>,
-    >,
+    tile_sat_cache: Vec<std::cell::OnceCell<Option<crate::rooms::CachedSat>>>,
     /// Same flat layout for the octagon flavor — the 45° carve octagonizes
     /// every collected obstacle, and `tile_octagon` of a Simplex tile is f64
     /// corner math per call.
@@ -1445,10 +1443,7 @@ impl<'b> AutorouteEngine<'b> {
     pub(crate) fn obstacle_shape_and_sat(
         &mut self,
         obstacle: Obstacle,
-    ) -> Option<(
-        std::rc::Rc<Simplex>,
-        Option<std::rc::Rc<(fr_geometry::planar::SatCorners, Option<bool>)>>,
-    )> {
+    ) -> Option<(std::rc::Rc<Simplex>, Option<crate::rooms::CachedSat>)> {
         match obstacle {
             Obstacle::Item(item, index, slot) => {
                 let shape = self.item_tile_simplex_rc(slot, item, index)?;

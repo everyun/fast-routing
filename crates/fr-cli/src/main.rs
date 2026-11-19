@@ -202,6 +202,7 @@ COMPATIBILITY & HEADLESS OPTIONS
 
 DIAGNOSTICS
     --settle-trace <FILE>       Write one `FRMETRIC settle` line per settled maze element
+    --observer-trace <FILE>     Write engine RouterEvents as JSON lines (Snapshot writes stats only)
 
 PARALLELISM (see also `docs/ARCHITECTURE.md`, "Parallelism")
     -us, --threads <N>          Workers for the optimizer's candidate evaluation and the
@@ -257,6 +258,7 @@ struct Args {
     deterministic: bool,
     job_timeout: Option<std::time::Duration>,
     settle_trace: Option<String>,
+    observer_trace: Option<String>,
     ignore_net_classes: Option<String>,
     dialog_timeout: Option<usize>,
     disable_file_logging: bool,
@@ -533,6 +535,7 @@ fn main() {
             "--deterministic" => args.deterministic = true,
             "--job-timeout" => args.job_timeout = Some(parse_job_timeout(&next!("--job-timeout"))),
             "--settle-trace" => args.settle_trace = Some(next!("--settle-trace")),
+            "--observer-trace" => args.observer_trace = Some(next!("--observer-trace")),
             "--user_data_path" => {
                 let _dir = next!("--user_data_path");
             }
@@ -630,6 +633,17 @@ fn main() {
     let job = match &session_path {
         Some(path) => job.with_session_path(path),
         None => job,
+    };
+
+    let job = if let Some(trace_path) = &args.observer_trace {
+        let obs = fr_core::FileTraceObserver::new(trace_path).unwrap_or_else(|e| {
+            fail(&format!(
+                "cannot open observer-trace file {trace_path}: {e}"
+            ))
+        });
+        job.with_observer(Box::new(obs))
+    } else {
+        job
     };
 
     let started = Instant::now();
