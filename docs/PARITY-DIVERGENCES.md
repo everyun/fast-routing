@@ -178,6 +178,23 @@ ARCHITECTURE "Budgets".
   - *Evidence*: `REPORT-insert-null.md` (exact Java lab jar trace logs: `SPRING_OVER_FAIL_193 reason=try_spring_over_false id=5 type=ObstacleArea layer=5-5 bbox=[(19000,-35500)..(20500,-18500)] tree_shapes=16` followed by `FRLAB insert_fail net=193 reason=insert_null`).
   - *Status*: 有意分歧（正向能力差异：底层检查与上游严格对齐，迷宫探索能力更优避免了单层非凸禁布区拒载）。
 
+- **Angle-compliant knee on deflected neckdown segments**
+  (`fr_router::insert`, `ConnectionInserter::insert_angle_compliant_neckdown_segment`).
+  - *Upstream behaviour*: `InsertFoundConnectionAlgo.insert_fanout_micro_neckdown` (`:311`) and
+    `try_neck_down` (`:392-415`) pass `from_point -> target_point` straight to
+    `RoutingBoard.insert_forced_trace_segment`. When the preceding full-width trace insertion was
+    deflected off the original 45°/90° axis by `spring_over` + `pull_tight` (or when `float_neck`
+    rounding shifts `neck_down_end_point`), the two endpoints are no longer 45°/90°-aligned, so
+    inserting a 2-point trace creates an arbitrary-angle segment on a 45°/90° board.
+  - *Our behaviour*: when `from -> to` already satisfies `board.angle_restriction()`, we delegate
+    verbatim to `ForcedInserter::insert_forced_trace_segment` (bit-identical to upstream). When off-axis,
+    we bridge `from -> knee -> to` using `calculate_additional_corner` (trying both orientations inside
+    nested `Board::begin`/`rollback_to` transactions).
+  - *Evidence*: 8/8 deterministic SHA-256 baseline match preserved; `cla45-sensor-l6` G4 generated
+    angle violations drop from `5` (`4` at `c58cb47`) to **`0`**, yielding **`0 / 33` generated angle
+    violations** across the full G4 gate (`bench/results/g4-gate/99b2ce4/`).
+  - *Status*: 有意分歧（构造方法学修复：保持板卡 `snap_angle` 约束，对已对齐路径与上游逐位一致）。
+
 - **Ripped connections are never requeued inside a pass across all pass counts by default**
   (`fr_router::batch::schedule::RequeuePolicy`, default `Never`).
   - *Upstream behaviour*: `app/freerouting/autoroute/BatchAutorouter.java:431-694` derives the work list once per pass

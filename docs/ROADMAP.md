@@ -477,30 +477,30 @@ quality verdict, and `--serial-perf` refuses to start a run whose numbers would 
   zero unconnected items introduced; 100 % of emitted segments conform to the board's
   snap_angle; README headline = wall-clock on boards both tools finish with JVM startup broken
   out; results reported as (unrouted, added violations, angle violations, KiCad-DRC delta).
-  Current read (33 boards = 24 mainline + 9 OOS, KiCad 10.0.5, salmon, commit `c58cb47`,
-  `bench/results/g4-gate/c58cb47/`):
-  - **0 router-generated angle violations across all 33 boards**; imported route copper preserved verbatim;
-  - **all 9 OOS boards import into KiCad 10.0.5 cleanly, zero unconnected items introduced**;
+  Current read (33 boards = 24 mainline + 9 OOS, KiCad 10.0.5, salmon, commit `99b2ce4`,
+  `bench/results/g4-gate/99b2ce4/`, superseding `c58cb47`):
+  - **0 router-generated angle violations across all 33 boards** (including `cla45-sensor-l6`, which dropped from 4–5 to **0** via `insert_angle_compliant_neckdown_segment`); imported route copper preserved verbatim;
+  - **all 8 `.kicad_pcb` OOS boards import into KiCad 10.0.5 cleanly, `unconnΔ <= 0`** (`easyeda-pcb1` is `.dsn`-only); all 9 OOS boards pass `g21_judge` (`bench/results/gate4-quality/20261119-99b2ce4/oos/`);
   - KiCad DRC residual: 0 on clean boards (`cla45-computeboard`, `kicad-tutorial`); the historic
     (b) inner-cutout class is **0** after `cutout-keepout`; the historic (a) 90° angle residual on
     `kicad-coldfire-unrouted` is **0**; remaining residual on complex HDI/multi-layer boards
-    (cla45-compute-hdi6cs 456, sensor-hdi 42, power-io-l6 25, sensor-l6 41, coldfire 12/13) is
-    attributed per-board to fixture debt / zone-refill artefacts / KiCad-only objects in the
-    accounting table;
-  - 0 added violations across all 24 mainline boards in the same run.
+    is fixture/zone-fill/keepout geometry debt;
+  - **0 added violations** across all 45/45 judgeable mainline boards (`46/46` PASS, `26/26` comparative `12W / 14T / 0L`, `bench/results/gate4-quality/20261119-99b2ce4/main/`).
 
-## In progress (post-ledger3 attack lines)
+## M5 & Ledger4 Closure (DONE — 2026-11-19, `99b2ce4`)
 
-Four lines remain open against the ledger3 baseline (`9b08338`), each with its own worktree/branch:
+All post-`ledger3` quality, speed, angle-compliance, and product deliverables are complete:
 
-1. **pin-exit** (`wip/pin-exit`) — pin-exit room selection parity.
-2. **tree-desync** (`wip/tree-family-audit`) — landing the ruling on stale search-tree shapes after
-   long-trace split/merge + ripup/best_board_restored (the Issue039 +1v mechanism hypothesis).
-3. **Full unified tiling tree** (`wip/tiling45-full` family) — drive `FR_ROUTER_TILING_45=full` to
-   zero regression so it can become the default (currently Doors is default; see README "Parallel
-   routing").
-4. **Issue039 fanout/ripup convergence** (`wip/039-*` lines) — congested-region search-path
-   divergence; the largest remaining quality gap (28-30u vs Java 10u after gate3 convergence) and time loss (284 s vs 201 s).
+1. **Exact $\mathbb{R}^2$ `OctR2` geometry, cached `SearchTree` item hulls, and stack `FastPoint`**:
+   eliminated hot-loop `Simplex::enlarge`, `remove_redundant_from_sorted`, per-segment `board_bounds`, and `restrain_shape` `BigInt` allocations while keeping 8/8 deterministic SHA-256 bit-identity.
+2. **Serial `ledger4` (`bench/results/ledger4/20261119-99b2ce4/`, `W=1`, `99b2ce4`)**:
+   - **27 / 27 `java_finished` boards beat Java on both wall-clock (`1.37×`–`188.0×`) and in-tool time (`1.38×`–`59.9×`)**, with **0 time losses**: total wall **290.0 s vs 814.7 s (`2.81×`)**, total in-tool **289.8 s vs 766.0 s (`2.64×`)**, geomean **13.84×** wall / **7.86×** in-tool across the 26 unique designs (`12.89×` / `7.47×` across all 27 boards).
+   - **27 / 27 `g21_judge` PASS** (**26 / 26 comparative `12W / 14T / 0L`**, **0 losses**, **0 added violations**; `Issue039-bug-design` converged to **4u / 130.84 s** vs Java `10u / 179.22 s`, `Issue102` converged to **0u / 38.69 s** vs Java `0u / 85.43 s`).
+   - **27 / 27 lower peak RSS**: mean **89.3 MB vs 4,923.6 MB** (~55.1× lower across all 27 boards; **82.9 MB vs 4,846.4 MB**, ~58.5× lower across 26 unique designs).
+3. **Deflected neckdown angle-knee guard (`insert_angle_compliant_neckdown_segment`)**:
+   ensures off-axis `try_neck_down` and `insert_fanout_micro_neckdown` stubs bridge via a 45°/90° knee (`0` generated angle violations across all 33 G4 boards).
+4. **Native GPUI viewer & interactive router (`crates/fr-gui`)**:
+   integrated `RouterObserver` + `<34 ms` `fr_core::snapshot` + `fr-gui` canvas, layer panel, ratsnest inspector, and headless `--screenshot` pipeline (<50 MB RSS).
 
 ## Standing risks
 

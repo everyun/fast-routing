@@ -1,0 +1,3453 @@
+{
+  "kicad_version": "10.0.5",
+  "base_commit": "99b2ce460fbf3bcd1726b159b666f753067e0fe3",
+  "command": "quality.sh 99b2ce4 --host salmon --suite oos & 46 + g4_kicad.py",
+  "summary": {
+    "total_boards": 33,
+    "total_angle_violations_generated": 0,
+    "oos_boards": 9,
+    "main_24_boards": 24
+  },
+  "oos": [
+    {
+      "fixture": "cla45-compute-hdi6cs.dsn",
+      "tuple": [
+        604,
+        0,
+        0,
+        252
+      ],
+      "unrouted": 604,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": 252,
+      "kicad_drc_raw": -158,
+      "kicad_drc_fixture_debt": 777,
+      "kicad_drc_noise": 2,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": 0,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1764,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "unconnected_before": 499,
+        "unconnected_after": 499,
+        "unconnected_delta": 0,
+        "violations_before": 1194,
+        "violations_after": 1036,
+        "drc_delta": -158,
+        "zone_refill": {
+          "filled_polygons_before": 19,
+          "filled_polygons_after": 74,
+          "changed": true,
+          "changed_polygons": 93
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": -158,
+        "drc_noise": 2,
+        "drc_fixture_debt": 777,
+        "drc_kicad_only": 0,
+        "drc_residual": 252,
+        "residual_violations": [
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "走线 [POR_SEL] (B.Cu), 长度: 0.7703 mm",
+              "B.Cu 上 R276 的焊盘 1 [1V8_SOC]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1295 mm)",
+            "items": [
+              "走线 [$38N2600] (F.Cu), 长度: 1.7645 mm",
+              "F.Cu 上 C455 的焊盘 2 [GND]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "B.Cu 上 C324 的焊盘 2 [GND]",
+              "走线 [DVDD_MEDIA] (B.Cu), 长度: 1.3236 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0473 mm)",
+            "items": [
+              "F.Cu 上 U24 的焊盘 2 [+5V_PROTECTED]",
+              "走线 [$36N2758] (F.Cu), 长度: 3.0023 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1947 mm)",
+            "items": [
+              "走线 [DVDD_GPU] (F.Cu), 长度: 1.2077 mm",
+              "F.Cu 上 R72 的焊盘 1 [DVDD_GPU_COM]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "B.Cu 上 R264 的焊盘 2 [1V1_SOC]",
+              "走线 [$41N4060] (B.Cu), 长度: 2.7810 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.2473 mm)",
+            "items": [
+              "过孔 [SLVS_D1_N] (F.Cu - B.Cu)",
+              "F.Cu 上 R71 的焊盘 2 [1V1_SOC]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1555 mm)",
+            "items": [
+              "走线 [$37N3004] (F.Cu), 长度: 1.9663 mm",
+              "F.Cu 上 C179 的焊盘 1 [1V1_COM]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.6179 mm)",
+            "items": [
+              "过孔 [$54N2466] (F.Cu - B.Cu)",
+              "F.Cu 上 R64 的焊盘 2 [DVDD]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1555 mm)",
+            "items": [
+              "F.Cu 上 C179 的焊盘 1 [1V1_COM]",
+              "走线 [$37N3004] (F.Cu), 长度: 1.1147 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "走线 [$6N5505] (B.Cu), 长度: 0.4803 mm",
+              "B.Cu 上 R254 的焊盘 2 [1V1_SOC]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0292 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "走线 [3V3_SOC] (F.Cu), 长度: 0.3564 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0293 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "走线 [3V3_SOC] (F.Cu), 长度: 0.4971 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0293 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "走线 [3V3_SOC] (F.Cu), 长度: 0.4971 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0292 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "走线 [3V3_SOC] (F.Cu), 长度: 0.0001 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.3788 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "过孔 [3V3_SOC] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0292 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "走线 [3V3_SOC] (F.Cu), 长度: 0.0081 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1210 mm)",
+            "items": [
+              "走线 [$38N2600] (F.Cu), 长度: 0.2700 mm",
+              "F.Cu 上 U11 的焊盘 10 [GND]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1179 mm)",
+            "items": [
+              "F.Cu 上 L7 的焊盘 2 [DVDD_GPU_COM]",
+              "过孔 [DVDD_COM] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0080 mm)",
+            "items": [
+              "走线 [3V3_SOC] (F.Cu), 长度: 0.4972 mm",
+              "F.Cu 上 R72 的焊盘 2 [DVDD_GPU]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.3585 mm)",
+            "items": [
+              "过孔 [$54N2471] (F.Cu - B.Cu)",
+              "F.Cu 上 R72 的焊盘 2 [DVDD_GPU]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.6972 mm)",
+            "items": [
+              "过孔 [DVDD] (F.Cu - B.Cu)",
+              "F.Cu 上 R64 的焊盘 1 [DVDD_COM]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "B.Cu 上 LB53 的焊盘 1 [AVDD08_UFSCOMB]",
+              "走线 [GND] (B.Cu), 长度: 0.3313 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0409 mm)",
+            "items": [
+              "走线 [DVDD] (F.Cu), 长度: 0.4971 mm",
+              "F.Cu 上 R64 的焊盘 1 [DVDD_COM]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "走线 [XOUT_XTAL] (B.Cu), 长度: 2.6220 mm",
+              "B.Cu 上 R145 的焊盘 1 [XIN]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1959 mm)",
+            "items": [
+              "F.Cu 上 LB33 的焊盘 2 [1V8_SOC]",
+              "走线 [AVDD18_DDR1_PLL] (F.Cu), 长度: 0.4378 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1937 mm)",
+            "items": [
+              "F.Cu 上 C180 的焊盘 1 [1V1_COM]",
+              "走线 [+5V_PROTECTED] (F.Cu), 长度: 1.7075 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0250 mm)",
+            "items": [
+              "走线 [$38N2600] (F.Cu), 长度: 0.5321 mm",
+              "F.Cu 上 U11 的焊盘 10 [GND]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1979 mm)",
+            "items": [
+              "F.Cu 上 C259 的焊盘 2 [GND]",
+              "过孔 [$36N3235] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0357 mm)",
+            "items": [
+              "F.Cu 上 C259 的焊盘 2 [GND]",
+              "走线 [$36N3235] (F.Cu), 长度: 0.4827 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1068 mm)",
+            "items": [
+              "F.Cu 上 C259 的焊盘 1 [AVDD18_DDR1_PLL]",
+              "走线 [$36N3235] (F.Cu), 长度: 1.4991 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.4956 mm)",
+            "items": [
+              "过孔 [SENSOR_HS2/PCIE_USB3_MODE1] (F.Cu - B.Cu)",
+              "F.Cu 上 R71 的焊盘 1 [1V1_COM]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1413 mm)",
+            "items": [
+              "F.Cu 上 D4 的焊盘 1 [AVDDDRV_HDMITX]",
+              "走线 [3V3_SOC] (F.Cu), 长度: 2.8168 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.2473 mm)",
+            "items": [
+              "F.Cu 上 R71 的焊盘 2 [1V1_SOC]",
+              "过孔 [+5V_PROTECTED] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1604 mm)",
+            "items": [
+              "F.Cu 上 C360 的焊盘 2 [GND]",
+              "走线 [1V8_PER] (F.Cu), 长度: 0.8118 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0345 mm)",
+            "items": [
+              "F.Cu 上 U10 的焊盘 7 [$36N3234]",
+              "走线 [DVDD_GPU_COM] (F.Cu), 长度: 0.4436 mm"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0642 mm)",
+            "items": [
+              "走线 [$38N2600] (F.Cu), 长度: 2.0211 mm",
+              "F.Cu 上 C455 的焊盘 2 [GND]"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1034 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 1 [DVDD_COM]",
+              "过孔 [CAM_PRESENT] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.5301 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 1 [DVDD_COM]",
+              "过孔 [$36N2768] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1046 mm)",
+            "items": [
+              "F.Cu 上 U10 的焊盘 3 [$36N3237]",
+              "走线 [DVDD_GPU_COM] (F.Cu), 长度: 1.7284 mm"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R71 的焊盘 2 [1V1_SOC]",
+              "过孔 [SLVS_D1_N] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "过孔 [WIFI_HOST_WAKE_TO_SOC] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R72 的焊盘 2 [DVDD_GPU]",
+              "过孔 [RGMII0_TXD2] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 1 [DVDD_COM]",
+              "过孔 [$41N4060] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "过孔 [$54N2466] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.1443 mm)",
+            "items": [
+              "F.Cu 上 C179 的焊盘 1 [1V1_COM]",
+              "过孔 [$37N3004] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "过孔 [3V3_SOC] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R64 的焊盘 2 [DVDD]",
+              "过孔 [BT_HOST_WAKE_TO_SOC] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 C9 的焊盘 2 [GND]",
+              "过孔 [DVDD_CPU] (F.Cu - B.Cu)"
+            ]
+          },
+          {
+            "type": "hole_clearance",
+            "description": "孔间距违规 (<电路板配置> 中的 \"孔\" 约束 间距 0.2500 mm; 实际 0.0000 mm)",
+            "items": [
+              "F.Cu 上 R71 的焊盘 1 [1V1_COM]",
+              "过孔 [SENSOR_VS1/PCIE_USB3_MODE0] (F.Cu - B.Cu)"
+            ]
+          }
+        ],
+        "noise_examples": [
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1235 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1260 mm)"
+          }
+        ],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/cla45-compute-hdi6cs.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/cla45-compute-hdi6cs.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-compute-hdi6cs.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-compute-hdi6cs.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/cla45-compute-hdi6cs.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/cla45-compute-hdi6cs.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/cla45-compute-hdi6cs.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "cla45-computeboard.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": 0,
+      "kicad_drc_raw": 0,
+      "kicad_drc_fixture_debt": 0,
+      "kicad_drc_noise": 0,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": 0,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 0,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "unconnected_before": 0,
+        "unconnected_after": 0,
+        "unconnected_delta": 0,
+        "violations_before": 0,
+        "violations_after": 0,
+        "drc_delta": 0,
+        "zone_refill": {
+          "filled_polygons_before": 0,
+          "filled_polygons_after": 0,
+          "changed": false,
+          "changed_polygons": 0
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": 0,
+        "drc_noise": 0,
+        "drc_fixture_debt": 0,
+        "drc_kicad_only": 0,
+        "drc_residual": 0,
+        "residual_violations": [],
+        "noise_examples": [],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/cla45-computeboard.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/cla45-computeboard.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-computeboard.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-computeboard.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/cla45-computeboard.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/cla45-computeboard.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/cla45-computeboard.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "cla45-power-io-l6.dsn",
+      "tuple": [
+        50,
+        0,
+        0,
+        22
+      ],
+      "unrouted": 50,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": 22,
+      "kicad_drc_raw": -3,
+      "kicad_drc_fixture_debt": 423,
+      "kicad_drc_noise": 0,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": -84,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1077,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "unconnected_before": 140,
+        "unconnected_after": 56,
+        "unconnected_delta": -84,
+        "violations_before": 463,
+        "violations_after": 460,
+        "drc_delta": -3,
+        "zone_refill": {
+          "filled_polygons_before": 12,
+          "filled_polygons_after": 29,
+          "changed": true,
+          "changed_polygons": 35
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": -3,
+        "drc_noise": 0,
+        "drc_fixture_debt": 423,
+        "drc_kicad_only": 0,
+        "drc_residual": 22,
+        "residual_violations": [
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (F.Cu), 长度: 0.0068 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.0170 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.1563 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [PWR_FAIL_EFUSE_N] (F.Cu), 长度: 0.0701 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [PWR_FAIL_EFUSE_N] (F.Cu), 长度: 0.0004 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 1.0570 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 1.4053 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 1.0570 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.1563 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [RGMII0_RXD3] (F.Cu), 长度: 0.0857 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [PHY_RXDV] (F.Cu), 长度: 0.0002 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [PHY_RXDV] (F.Cu), 长度: 0.0001 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.0329 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [PHY_RXDV] (F.Cu), 长度: 0.0004 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [PHY_RXDV] (F.Cu), 长度: 0.0209 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.1563 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.1563 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [RGMII0_RXD3] (F.Cu), 长度: 0.1334 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.0170 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.4245 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 0.0618 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8_AUX] (B.Cu), 长度: 1.4173 mm"
+            ]
+          }
+        ],
+        "noise_examples": [],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/cla45-power-io-l6.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/cla45-power-io-l6.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-power-io-l6.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-power-io-l6.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/cla45-power-io-l6.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/cla45-power-io-l6.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/cla45-power-io-l6.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "cla45-sensor-hdi.dsn",
+      "tuple": [
+        4,
+        0,
+        0,
+        15
+      ],
+      "unrouted": 4,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 108,
+      "kicad_drc_residual": 15,
+      "kicad_drc_raw": -429,
+      "kicad_drc_fixture_debt": 778,
+      "kicad_drc_noise": 32,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": -91,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 943,
+        "angle_violations": 108,
+        "angle_violations_imported": 108,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              1150000.0,
+              -1082500.0
+            ],
+            "to": [
+              1148800.0,
+              -1086400.0
+            ],
+            "dx": -1200.0,
+            "dy": -3900.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1111200.0,
+              -1141400.0
+            ],
+            "to": [
+              1106000.0,
+              -1139200.0
+            ],
+            "dx": -5200.0,
+            "dy": 2200.0,
+            "imported": true
+          },
+          {
+            "from": [
+              908800.0,
+              -990300.0
+            ],
+            "to": [
+              842200.0,
+              -995600.0
+            ],
+            "dx": -66600.0,
+            "dy": -5300.0,
+            "imported": true
+          },
+          {
+            "from": [
+              860700.0,
+              -1180500.0
+            ],
+            "to": [
+              880200.0,
+              -1185500.0
+            ],
+            "dx": 19500.0,
+            "dy": -5000.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1103800.0,
+              -1003900.0
+            ],
+            "to": [
+              1097500.0,
+              -1000000.0
+            ],
+            "dx": -6300.0,
+            "dy": 3900.0,
+            "imported": true
+          },
+          {
+            "from": [
+              905200.0,
+              -1192750.0
+            ],
+            "to": [
+              925300.0,
+              -1195250.0
+            ],
+            "dx": 20100.0,
+            "dy": -2500.0,
+            "imported": true
+          },
+          {
+            "from": [
+              990500.0,
+              -857500.0
+            ],
+            "to": [
+              921100.0,
+              -853600.0
+            ],
+            "dx": -69400.0,
+            "dy": 3900.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1020300.0,
+              -1190000.0
+            ],
+            "to": [
+              1005200.0,
+              -1192750.0
+            ],
+            "dx": -15100.0,
+            "dy": -2750.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "unconnected_before": 99,
+        "unconnected_after": 8,
+        "unconnected_delta": -91,
+        "violations_before": 1328,
+        "violations_after": 899,
+        "drc_delta": -429,
+        "zone_refill": {
+          "filled_polygons_before": 3,
+          "filled_polygons_after": 12,
+          "changed": true,
+          "changed_polygons": 15
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": -429,
+        "drc_noise": 32,
+        "drc_fixture_debt": 778,
+        "drc_kicad_only": 0,
+        "drc_residual": 15,
+        "residual_violations": [
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8] (B.Cu), 长度: 0.0403 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [+2V9] (In2.Cu), 长度: 0.7702 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [Net-(U2-VEXRES2)] (In1.Cu), 长度: 0.1397 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [Net-(U1-FB)] (In1.Cu), 长度: 0.1478 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [+2V9] (In2.Cu), 长度: 0.0963 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [RST_1V8] (B.Cu), 长度: 0.7000 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [XVS] (B.Cu), 长度: 0.7000 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [+2V9] (In2.Cu), 长度: 0.0001 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [XHS] (B.Cu), 长度: 0.7000 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [Net-(U1-FB)] (In1.Cu), 长度: 0.0474 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [+1V8] (B.Cu), 长度: 0.1114 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [Net-(U2-VEXRES2)] (In1.Cu), 长度: 0.3285 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [Net-(U1-FB)] (In1.Cu), 长度: 0.0830 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [+2V9] (In2.Cu), 长度: 0.0267 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [Net-(JP1-B)] (In1.Cu), 长度: 2.1766 mm"
+            ]
+          }
+        ],
+        "noise_examples": [
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0989 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1261 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1627 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1188 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1549 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1534 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1605 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1150 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1700 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.0936 mm)"
+          }
+        ],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/cla45-sensor-hdi.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/cla45-sensor-hdi.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-sensor-hdi.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-sensor-hdi.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/cla45-sensor-hdi.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/cla45-sensor-hdi.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/cla45-sensor-hdi.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "cla45-sensor-l6.dsn",
+      "tuple": [
+        60,
+        0,
+        0,
+        68
+      ],
+      "unrouted": 60,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": 68,
+      "kicad_drc_raw": 68,
+      "kicad_drc_fixture_debt": 0,
+      "kicad_drc_noise": 0,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": -305,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 2539,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "unconnected_before": 365,
+        "unconnected_after": 60,
+        "unconnected_delta": -305,
+        "violations_before": 0,
+        "violations_after": 68,
+        "drc_delta": 68,
+        "zone_refill": {
+          "filled_polygons_before": 0,
+          "filled_polygons_after": 0,
+          "changed": false,
+          "changed_polygons": 0
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": 68,
+        "drc_noise": 0,
+        "drc_fixture_debt": 0,
+        "drc_kicad_only": 0,
+        "drc_residual": 68,
+        "residual_violations": [
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0277 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.6005 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.4859 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 0.2000 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0277 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [Net-(U4-FB)] (B.Cu), 长度: 0.9365 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.5311 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.8603 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.2828 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 0.3458 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [VDDD1_1V2] (B.Cu), 长度: 0.4913 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.8603 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 0.0629 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.2801 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [IMU_REGOUT] (B.Cu), 长度: 0.0364 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 7.7219 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.1415 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.1415 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.6005 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [VDDD2_1V8] (B.Cu), 长度: 0.0281 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 0.0318 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.3482 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (B.Cu), 长度: 0.3804 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 0.0320 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (B.Cu), 长度: 0.5387 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 7.5218 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (B.Cu), 长度: 0.4010 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (B.Cu), 长度: 0.2173 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0277 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0354 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.4859 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [Net-(U4-FB)] (B.Cu), 长度: 0.0124 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.6005 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [VDDD2_1V8] (B.Cu), 长度: 1.1451 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 0.0629 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [GND] (B.Cu), 长度: 0.0692 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [IMU_REGOUT] (B.Cu), 长度: 0.2828 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [SLVS_D1_N] (F.Cu), 长度: 2.7551 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0354 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0277 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.4859 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0354 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0277 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [IMU_REGOUT] (B.Cu), 长度: 0.8803 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.3956 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.0354 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 7.7217 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1000 mm)",
+            "items": [
+              "走线 [GND] (F.Cu), 长度: 0.4004 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [VADD_2V9] (F.Cu), 长度: 8.6576 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [Net-(C4-Pad1)] (B.Cu), 长度: 0.0257 mm"
+            ]
+          }
+        ],
+        "noise_examples": [],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/cla45-sensor-l6.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/cla45-sensor-l6.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-sensor-l6.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/cla45-sensor-l6.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/cla45-sensor-l6.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/cla45-sensor-l6.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/cla45-sensor-l6.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "easyeda-pcb1.dsn",
+      "tuple": [
+        9,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 9,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 181,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/easyeda-pcb1.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "kicad-coldfire-unrouted.dsn",
+      "tuple": [
+        9,
+        0,
+        0,
+        10
+      ],
+      "unrouted": 9,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": 10,
+      "kicad_drc_raw": 10,
+      "kicad_drc_fixture_debt": 15,
+      "kicad_drc_noise": 0,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": -444,
+      "snap_angle": "ninety_degree",
+      "angles": {
+        "snap_angle": "ninety_degree",
+        "segments": 2662,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "unconnected_before": 479,
+        "unconnected_after": 35,
+        "unconnected_delta": -444,
+        "violations_before": 15,
+        "violations_after": 25,
+        "drc_delta": 10,
+        "zone_refill": {
+          "filled_polygons_before": 21,
+          "filled_polygons_after": 49,
+          "changed": true,
+          "changed_polygons": 62
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": 10,
+        "drc_noise": 0,
+        "drc_fixture_debt": 15,
+        "drc_kicad_only": 0,
+        "drc_residual": 10,
+        "residual_violations": [
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [/AN0] (Top_layer), 长度: 0.0749 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/DSCLK] (Top_layer), 长度: 1.1005 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/CLKIN/EXTAL] (Top_layer), 长度: 0.2192 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 0.0749 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/DDAT1] (Top_layer), 长度: 0.0004 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/CLKIN/EXTAL] (Top_layer), 长度: 1.1002 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 1.1462 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/DDAT1] (Top_layer), 长度: 2.7489 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/DSCLK] (Top_layer), 长度: 0.0724 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1200 mm)",
+            "items": [
+              "走线 [/AN0] (Top_layer), 长度: 1.2152 mm"
+            ]
+          }
+        ],
+        "noise_examples": [],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/kicad-coldfire-unrouted.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/kicad-coldfire-unrouted.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/kicad-coldfire-unrouted.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/kicad-coldfire-unrouted.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/kicad-coldfire-unrouted.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/kicad-coldfire-unrouted.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/kicad-coldfire-unrouted.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "kicad-coldfire.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        12
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 278,
+      "kicad_drc_residual": 12,
+      "kicad_drc_raw": 11,
+      "kicad_drc_fixture_debt": 132,
+      "kicad_drc_noise": 9,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": 0,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 3668,
+        "angle_violations": 278,
+        "angle_violations_imported": 278,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              1235710.0,
+              -990600.0
+            ],
+            "to": [
+              1211580.0,
+              -1018540.0
+            ],
+            "dx": -24130.0,
+            "dy": -27940.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2097480.0,
+              -1120090.0
+            ],
+            "to": [
+              2092760.0,
+              -1115360.0
+            ],
+            "dx": -4720.0,
+            "dy": 4730.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1290320.0,
+              -913765.0
+            ],
+            "to": [
+              1289680.0,
+              -914400.0
+            ],
+            "dx": -640.0,
+            "dy": -635.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1343660.0,
+              -937260.0
+            ],
+            "to": [
+              1343910.0,
+              -949452.0
+            ],
+            "dx": 250.0,
+            "dy": -12192.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1293110.0,
+              -1034540.0
+            ],
+            "to": [
+              1295400.0,
+              -1036320.0
+            ],
+            "dx": 2290.0,
+            "dy": -1780.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1337310.0,
+              -912495.0
+            ],
+            "to": [
+              1335400.0,
+              -914400.0
+            ],
+            "dx": -1910.0,
+            "dy": -1905.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1403350.0,
+              -1044960.0
+            ],
+            "to": [
+              1431290.0,
+              -1044700.0
+            ],
+            "dx": 27940.0,
+            "dy": 260.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1327150.0,
+              -754380.0
+            ],
+            "to": [
+              1326520.0,
+              -755015.0
+            ],
+            "dx": -630.0,
+            "dy": -635.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "unconnected_before": 0,
+        "unconnected_after": 0,
+        "unconnected_delta": 0,
+        "violations_before": 151,
+        "violations_after": 162,
+        "drc_delta": 11,
+        "zone_refill": {
+          "filled_polygons_before": 21,
+          "filled_polygons_after": 21,
+          "changed": true,
+          "changed_polygons": 26
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": 11,
+        "drc_noise": 9,
+        "drc_fixture_debt": 132,
+        "drc_kicad_only": 0,
+        "drc_residual": 12,
+        "residual_violations": [
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 0.0002 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 0.0013 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 0.0011 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 0.0013 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 0.0010 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/IRQ-3] (Top_layer), 长度: 0.0014 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 0.0002 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 0.0002 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D21] (Top_layer), 长度: 0.0001 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 0.0002 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/xilinx/XIL_D2] (Top_layer), 长度: 0.0001 mm"
+            ]
+          },
+          {
+            "type": "track_width",
+            "description": "走线宽度 (电路板配置约束 最小宽度 0.2000 mm; 实际 0.1500 mm)",
+            "items": [
+              "走线 [/VDDPLL] (Top_layer), 长度: 0.0087 mm"
+            ]
+          }
+        ],
+        "noise_examples": [
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1535 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1951 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1954 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1841 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1500 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)"
+          },
+          {
+            "type": "clearance",
+            "description": "间距违规 ( 间距 0.2000 mm; 实际 0.1905 mm)"
+          }
+        ],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/kicad-coldfire.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/kicad-coldfire.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/kicad-coldfire.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/kicad-coldfire.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/kicad-coldfire.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/kicad-coldfire.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/kicad-coldfire.kicad_pcb",
+      "gate": "pass"
+    },
+    {
+      "fixture": "kicad-tutorial.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": 0,
+      "kicad_drc_raw": 0,
+      "kicad_drc_fixture_debt": 0,
+      "kicad_drc_noise": 0,
+      "kicad_drc_kicad_only": 0,
+      "unconnected_delta": 0,
+      "snap_angle": "none",
+      "angles": {
+        "snap_angle": "none",
+        "segments": 0,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "unconnected_before": 0,
+        "unconnected_after": 0,
+        "unconnected_delta": 0,
+        "violations_before": 0,
+        "violations_after": 0,
+        "drc_delta": 0,
+        "zone_refill": {
+          "filled_polygons_before": 0,
+          "filled_polygons_after": 418,
+          "changed": true,
+          "changed_polygons": 418
+        },
+        "drc_runs": 3,
+        "drc_delta_raw": 0,
+        "drc_noise": 0,
+        "drc_fixture_debt": 0,
+        "drc_kicad_only": 0,
+        "drc_residual": 0,
+        "residual_violations": [],
+        "noise_examples": [],
+        "drc_before_path": "/tmp/g4-work-99b2ce4-oos/kicad-tutorial.dsn/drc-before.json",
+        "drc_after_paths": [
+          "/tmp/g4-work-99b2ce4-oos/kicad-tutorial.dsn/drc-after-r1.json",
+          "/tmp/g4-work-99b2ce4-oos/kicad-tutorial.dsn/drc-after-r2.json",
+          "/tmp/g4-work-99b2ce4-oos/kicad-tutorial.dsn/drc-after-r3.json"
+        ],
+        "imported_pcb": "/tmp/g4-work-99b2ce4-oos/kicad-tutorial.dsn/after.kicad_pcb"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-160857/ses/kicad-tutorial.rust.ses",
+      "pcb": "/Users/chiqingzhen/oss-projects/fast-routing/bench/fixtures-oos/pcb/kicad-tutorial.kicad_pcb",
+      "gate": "pass"
+    }
+  ],
+  "main_24": [
+    {
+      "fixture": "Issue026-J2_reference.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 165,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue026-J2_reference.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue034-Green14SegLED.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1543,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue034-Green14SegLED.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue035-ReadPlaceScope.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1289,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue035-ReadPlaceScope.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue039-bug-design.dsn",
+      "tuple": [
+        5,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 5,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 3459,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue039-bug-design.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue054-tairakb.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1130,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue054-tairakb.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue093-interf_u.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 14,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 795,
+        "angle_violations": 14,
+        "angle_violations_imported": 14,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              1803400.0,
+              -833120.0
+            ],
+            "to": [
+              1822450.0,
+              -834390.0
+            ],
+            "dx": 19050.0,
+            "dy": -1270.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1449700.0,
+              -1036320.0
+            ],
+            "to": [
+              1441450.0,
+              -1044580.0
+            ],
+            "dx": -8250.0,
+            "dy": -8260.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1517650.0,
+              -854075.0
+            ],
+            "to": [
+              1514480.0,
+              -850900.0
+            ],
+            "dx": -3170.0,
+            "dy": 3175.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1581150.0,
+              -1238500.0
+            ],
+            "to": [
+              1577340.0,
+              -1234700.0
+            ],
+            "dx": -3810.0,
+            "dy": 3800.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1581150.0,
+              -1162300.0
+            ],
+            "to": [
+              1577340.0,
+              -1158500.0
+            ],
+            "dx": -3810.0,
+            "dy": 3800.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1577340.0,
+              -1178300.0
+            ],
+            "to": [
+              1581150.0,
+              -1174500.0
+            ],
+            "dx": 3810.0,
+            "dy": 3800.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1577340.0,
+              -1254500.0
+            ],
+            "to": [
+              1581150.0,
+              -1250700.0
+            ],
+            "dx": 3810.0,
+            "dy": 3800.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1390650.0,
+              -1139820.0
+            ],
+            "to": [
+              1393570.0,
+              -1142750.0
+            ],
+            "dx": 2920.0,
+            "dy": -2930.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue093-interf_u.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue102-Mars-64-revE-rot00.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 2446,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue102-Mars-64-revE-rot00.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue103-Board-Routed.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 7442,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue103-Board-Routed.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue107-freq_teiler_200kHz_kicad.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 442,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue107-freq_teiler_200kHz_kicad.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue110-Pajalnaja_stancija.dsn",
+      "tuple": [
+        6,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 6,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 463,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue110-Pajalnaja_stancija.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue110-RelayModule.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 616,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue110-RelayModule.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue110-testPCBSpecctraFile.dsn",
+      "tuple": [
+        3,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 3,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 92,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 303,
+        "angle_violations": 92,
+        "angle_violations_imported": 92,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              2165100.0,
+              -1232600.0
+            ],
+            "to": [
+              2171700.0,
+              -1257300.0
+            ],
+            "dx": 6600.0,
+            "dy": -24700.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2165100.0,
+              -1226600.0
+            ],
+            "to": [
+              2203450.0,
+              -1202750.0
+            ],
+            "dx": 38350.0,
+            "dy": 23850.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2165100.0,
+              -1328200.0
+            ],
+            "to": [
+              2173000.0,
+              -1282700.0
+            ],
+            "dx": 7900.0,
+            "dy": 45500.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2165100.0,
+              -1334200.0
+            ],
+            "to": [
+              2123590.0,
+              -1363610.0
+            ],
+            "dx": -41510.0,
+            "dy": -29410.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2123590.0,
+              -1363610.0
+            ],
+            "to": [
+              2078190.0,
+              -1381590.0
+            ],
+            "dx": -45400.0,
+            "dy": -17980.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2272500.0,
+              -1410500.0
+            ],
+            "to": [
+              2348300.0,
+              -1411100.0
+            ],
+            "dx": 75800.0,
+            "dy": -600.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2272500.0,
+              -1410500.0
+            ],
+            "to": [
+              2247100.0,
+              -1371600.0
+            ],
+            "dx": -25400.0,
+            "dy": 38900.0,
+            "imported": true
+          },
+          {
+            "from": [
+              2247100.0,
+              -1371600.0
+            ],
+            "to": [
+              2222500.0,
+              -1410500.0
+            ],
+            "dx": -24600.0,
+            "dy": -38900.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue110-testPCBSpecctraFile.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue110-testProjectFromFreeroutingBugTest.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 25,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue110-testProjectFromFreeroutingBugTest.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue143-rpi_splitter.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 26,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue143-rpi_splitter.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue153-wavefolder.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 7,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 265,
+        "angle_violations": 7,
+        "angle_violations_imported": 7,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              1367500.0,
+              -796723.0
+            ],
+            "to": [
+              1353280.0,
+              -782500.0
+            ],
+            "dx": -14220.0,
+            "dy": 14223.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1362500.0,
+              -846897.0
+            ],
+            "to": [
+              1365200.0,
+              -849600.0
+            ],
+            "dx": 2700.0,
+            "dy": -2703.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1344750.0,
+              -796723.0
+            ],
+            "to": [
+              1362500.0,
+              -814476.0
+            ],
+            "dx": 17750.0,
+            "dy": -17753.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1292390.0,
+              -770000.0
+            ],
+            "to": [
+              1270000.0,
+              -747614.0
+            ],
+            "dx": -22390.0,
+            "dy": 22386.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1396900.0,
+              -720600.0
+            ],
+            "to": [
+              1382920.0,
+              -734583.0
+            ],
+            "dx": -13980.0,
+            "dy": -13983.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1370120.0,
+              -734583.0
+            ],
+            "to": [
+              1365000.0,
+              -739706.0
+            ],
+            "dx": -5120.0,
+            "dy": -5123.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1290000.0,
+              -772386.0
+            ],
+            "to": [
+              1292390.0,
+              -770000.0
+            ],
+            "dx": 2390.0,
+            "dy": 2386.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue153-wavefolder.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue155-CH376_MCP795_Module.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 279,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue155-CH376_MCP795_Module.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue157-TeamAdapt-LinePCB.dsn",
+      "tuple": [
+        2,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 2,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 14,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 835,
+        "angle_violations": 14,
+        "angle_violations_imported": 14,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              1539140.0,
+              -685908.0
+            ],
+            "to": [
+              1592330.0,
+              -739090.0
+            ],
+            "dx": 53190.0,
+            "dy": -53182.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1313430.0,
+              -726682.0
+            ],
+            "to": [
+              1272660.0,
+              -685908.0
+            ],
+            "dx": -40770.0,
+            "dy": 40774.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1430530.0,
+              -657506.0
+            ],
+            "to": [
+              1432050.0,
+              -655982.0
+            ],
+            "dx": 1520.0,
+            "dy": 1524.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1064430.0,
+              -635908.0
+            ],
+            "to": [
+              1184710.0,
+              -756182.0
+            ],
+            "dx": 120280.0,
+            "dy": -120274.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1059180.0,
+              -605802.0
+            ],
+            "to": [
+              1038100.0,
+              -626889.0
+            ],
+            "dx": -21080.0,
+            "dy": -21087.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1038100.0,
+              -726458.0
+            ],
+            "to": [
+              1117480.0,
+              -805844.0
+            ],
+            "dx": 79380.0,
+            "dy": -79386.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1094620.0,
+              -828708.0
+            ],
+            "to": [
+              1117480.0,
+              -805844.0
+            ],
+            "dx": 22860.0,
+            "dy": 22864.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1357370.0,
+              -564388.0
+            ],
+            "to": [
+              1383020.0,
+              -590042.0
+            ],
+            "dx": 25650.0,
+            "dy": -25654.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue157-TeamAdapt-LinePCB.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue159-setonix_2hp-pcb.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 84,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue159-setonix_2hp-pcb.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue163-pic_programmer.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 10,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 399,
+        "angle_violations": 10,
+        "angle_violations_imported": 10,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              786286.0,
+              -1160450.0
+            ],
+            "to": [
+              774700.0,
+              -1172040.0
+            ],
+            "dx": -11586.0,
+            "dy": -11590.0,
+            "imported": true
+          },
+          {
+            "from": [
+              877570.0,
+              -1254760.0
+            ],
+            "to": [
+              876300.0,
+              -1219200.0
+            ],
+            "dx": -1270.0,
+            "dy": 35560.0,
+            "imported": true
+          },
+          {
+            "from": [
+              863600.0,
+              -1244600.0
+            ],
+            "to": [
+              877570.0,
+              -1254760.0
+            ],
+            "dx": 13970.0,
+            "dy": -10160.0,
+            "imported": true
+          },
+          {
+            "from": [
+              876300.0,
+              -1181100.0
+            ],
+            "to": [
+              875030.0,
+              -1145540.0
+            ],
+            "dx": -1270.0,
+            "dy": 35560.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1308100.0,
+              -1096260.0
+            ],
+            "to": [
+              1326900.0,
+              -1077470.0
+            ],
+            "dx": 18800.0,
+            "dy": 18790.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1003300.0,
+              -1117600.0
+            ],
+            "to": [
+              977900.0,
+              -1111250.0
+            ],
+            "dx": -25400.0,
+            "dy": 6350.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1079500.0,
+              -1087120.0
+            ],
+            "to": [
+              1111250.0,
+              -1092200.0
+            ],
+            "dx": 31750.0,
+            "dy": -5080.0,
+            "imported": true
+          },
+          {
+            "from": [
+              946150.0,
+              -1244600.0
+            ],
+            "to": [
+              971550.0,
+              -1272540.0
+            ],
+            "dx": 25400.0,
+            "dy": -27940.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue163-pic_programmer.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue187-processor.Z80.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 6683,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue187-processor.Z80.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue209-split10.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1001,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue209-split10.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue217-8088sbc.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 1255,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue217-8088sbc.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue230-CNH_Functional_Tester_1.dsn",
+      "tuple": [
+        0,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 0,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 0,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 659,
+        "angle_violations": 0,
+        "angle_violations_imported": 0,
+        "angle_violations_generated": 0,
+        "examples": []
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue230-CNH_Functional_Tester_1.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    },
+    {
+      "fixture": "Issue269-caniot-tiny-arm.dsn",
+      "tuple": [
+        81,
+        0,
+        0,
+        null
+      ],
+      "unrouted": 81,
+      "added_violations": 0,
+      "angle_violations": 0,
+      "angle_violations_imported": 53,
+      "kicad_drc_residual": null,
+      "kicad_drc_raw": null,
+      "kicad_drc_fixture_debt": null,
+      "kicad_drc_noise": null,
+      "kicad_drc_kicad_only": null,
+      "unconnected_delta": null,
+      "snap_angle": "fortyfive_degree",
+      "angles": {
+        "snap_angle": "fortyfive_degree",
+        "segments": 470,
+        "angle_violations": 53,
+        "angle_violations_imported": 53,
+        "angle_violations_generated": 0,
+        "examples": [
+          {
+            "from": [
+              1208540.0,
+              -609829.0
+            ],
+            "to": [
+              1209160.0,
+              -610444.0
+            ],
+            "dx": 620.0,
+            "dy": -615.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1228440.0,
+              -610444.0
+            ],
+            "to": [
+              1239320.0,
+              -599570.0
+            ],
+            "dx": 10880.0,
+            "dy": 10874.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1188010.0,
+              -517707.0
+            ],
+            "to": [
+              1140800.0,
+              -470500.0
+            ],
+            "dx": -47210.0,
+            "dy": 47207.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1247400.0,
+              -535350.0
+            ],
+            "to": [
+              1229760.0,
+              -517707.0
+            ],
+            "dx": -17640.0,
+            "dy": 17643.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1355470.0,
+              -876735.0
+            ],
+            "to": [
+              1354000.0,
+              -875269.0
+            ],
+            "dx": -1470.0,
+            "dy": 1466.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1543980.0,
+              -777265.0
+            ],
+            "to": [
+              1566190.0,
+              -799471.0
+            ],
+            "dx": 22210.0,
+            "dy": -22206.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1088850.0,
+              -597453.0
+            ],
+            "to": [
+              1101640.0,
+              -610240.0
+            ],
+            "dx": 12790.0,
+            "dy": -12787.0,
+            "imported": true
+          },
+          {
+            "from": [
+              1249000.0,
+              -673495.0
+            ],
+            "to": [
+              1233000.0,
+              -657500.0
+            ],
+            "dx": -16000.0,
+            "dy": 15995.0,
+            "imported": true
+          }
+        ]
+      },
+      "kicad": {
+        "skipped": true,
+        "reason": "no kicad_pcb source"
+      },
+      "ses": "/Users/chiqingzhen/fr-work/logs/remote/salmon-rev-99b2ce4-99b2ce4-20261119-161501/ses/Issue269-caniot-tiny-arm.rust.ses",
+      "pcb": null,
+      "gate": "pass"
+    }
+  ]
+}
