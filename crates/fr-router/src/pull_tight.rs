@@ -1297,9 +1297,11 @@ impl<'b> PullTightAlgo<'b> {
     /// conservative — it can only make a move be rejected, never accepted.
     pub fn check_trace_shape(&mut self, shape: &Simplex) -> bool {
         fr_metrics::counters::bump::oracle_checks(1);
-        let check_start = Instant::now();
+        let check_start = crate::rooms::attr::is_enabled().then(Instant::now);
         let result = self.check_trace_shape_timed(shape);
-        fr_metrics::counters::bump::oracle_check_nanos(check_start.elapsed().as_nanos() as u64);
+        if let Some(started) = check_start {
+            fr_metrics::counters::bump::oracle_check_nanos(started.elapsed().as_nanos() as u64);
+        }
         result
     }
 
@@ -1355,6 +1357,8 @@ impl<'b> PullTightAlgo<'b> {
             scratch_entries,
         );
         fr_metrics::counters::bump::oracle_candidates(scratch_entries.len() as u64);
+        let timing = crate::rooms::attr::is_enabled();
+        let shape_bbox = shape.bounded_bounding_box();
         // The query shape enlarged by half the pairwise clearance, rebuilt only
         // when the clearance bucket changes — upstream's sorted sweep
         // (`:465-484`) without the sort, because clearance classes repeat
@@ -1362,7 +1366,36 @@ impl<'b> PullTightAlgo<'b> {
         // along for the per-candidate pre-filter.
         let mut cached: Option<(i32, TileShape, IntBox)> = None;
         for entry in scratch_entries.iter() {
-            let Some(item) = board.store().get(entry.item) else {
+            let Some(item) = board.store().item_at_slot(entry.slot) else {
+                continue;
+            };
+            if item.id != entry.item {
+                continue;
+            }
+            // Filter contact pins and non-obstacle (own-net) items before
+            // materializing enlarged geometry (`query_tile` / `tile.enlarge`),
+            // since own-net items never cause a return `false` here.
+            let is_non_contact_pin = if let Some(pins) = contact_pins.as_ref() {
+                if pins.binary_search(&entry.item).is_ok() {
+                    continue;
+                }
+                matches!(item.kind, ItemKind::Pin(_))
+            } else {
+                false
+            };
+            if !is_non_contact_pin {
+                let mut is_obstacle = true;
+                for &net_no in curr_net_no_arr.as_slice() {
+                    if !item.is_trace_obstacle(net_no) {
+                        is_obstacle = false;
+                        break;
+                    }
+                }
+                if !is_obstacle {
+                    continue;
+                }
+            }
+            let Some(tile) = tree.tile_shape(entry.slot, entry.item, entry.shape_index) else {
                 continue;
             };
             // The exact test (`:476-490`): both shapes enlarged by half the
@@ -1376,6 +1409,17 @@ impl<'b> PullTightAlgo<'b> {
                 .clearances()
                 .value_with_margin(cl_type, item.clearance_class, layer)
                 / 2;
+            if let (Some(sb), Some(tb)) = (shape_bbox, tile.bounded_bounding_box()) {
+                let pad = 2 * i64::from(half.max(0)) + 8;
+                if i64::from(sb.ur.x) + pad < i64::from(tb.ll.x)
+                    || i64::from(tb.ur.x) + pad < i64::from(sb.ll.x)
+                    || i64::from(sb.ur.y) + pad < i64::from(tb.ll.y)
+                    || i64::from(tb.ur.y) + pad < i64::from(sb.ll.y)
+                {
+                    fr_metrics::counters::bump::oracle_bbox_pruned(1);
+                    continue;
+                }
+            }
             let (query_tile, query_box) = match &cached {
                 Some((cached_half, tile, query_box)) if *cached_half == half => (tile, query_box),
                 _ => {
@@ -1388,12 +1432,6 @@ impl<'b> PullTightAlgo<'b> {
                     (tile, query_box)
                 }
             };
-            let Some(slot) = board.store().slot_of(entry.item) else {
-                continue;
-            };
-            let Some(tile) = tree.tile_shape(slot, entry.item, entry.shape_index) else {
-                continue;
-            };
             // Bounding-box pre-filter: `enlarge` clips against the bounding
             // octagon offset by the same distance (`Simplex::enlarge`), so an
             // enlarged tile never leaves `bounding_box().offset(half)`, and the
@@ -1404,46 +1442,23 @@ impl<'b> PullTightAlgo<'b> {
                 continue;
             }
             fr_metrics::counters::bump::oracle_symmetric_tests(1);
-            let exact_start = Instant::now();
+            let exact_start = timing.then(Instant::now);
             let hits = query_tile.intersects(&tile.enlarge(half));
-            fr_metrics::counters::bump::oracle_exact_nanos(exact_start.elapsed().as_nanos() as u64);
+            if let Some(started) = exact_start {
+                fr_metrics::counters::bump::oracle_exact_nanos(started.elapsed().as_nanos() as u64);
+            }
             if !hits {
                 continue;
             }
-            if let Some(pins) = contact_pins.as_ref() {
-                if pins.binary_search(&entry.item).is_ok() {
-                    continue;
-                }
-                if matches!(item.kind, ItemKind::Pin(_)) {
-                    *binding =
-                        board
-                            .store()
-                            .revision_of(entry.item)
-                            .map(|revision| BindingObstacle {
-                                item: entry.item,
-                                shape_index: entry.shape_index,
-                                revision,
-                            });
-                    return false;
-                }
-            }
-            let mut is_obstacle = true;
-            for &net_no in curr_net_no_arr.as_slice() {
-                if !item.is_trace_obstacle(net_no) {
-                    is_obstacle = false;
-                }
-            }
-            if is_obstacle {
-                *binding = board
-                    .store()
-                    .revision_of(entry.item)
-                    .map(|revision| BindingObstacle {
-                        item: entry.item,
-                        shape_index: entry.shape_index,
-                        revision,
-                    });
-                return false;
-            }
+            *binding = board
+                .store()
+                .revision_of(entry.item)
+                .map(|revision| BindingObstacle {
+                    item: entry.item,
+                    shape_index: entry.shape_index,
+                    revision,
+                });
+            return false;
         }
         true
     }

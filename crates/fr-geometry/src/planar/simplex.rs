@@ -463,8 +463,7 @@ impl Simplex {
         if width == 0.0 {
             return self.clone();
         }
-        let new_arr: SmallVec<[Line; 10]> =
-            self.arr.iter().map(|l| l.translate(-width)).collect();
+        let new_arr: SmallVec<[Line; 10]> = self.arr.iter().map(|l| l.translate(-width)).collect();
         if width < 0.0 {
             Self::remove_redundant_from_sorted(&new_arr)
         } else {
@@ -504,9 +503,32 @@ impl Simplex {
         }
         let mut new_arr: SmallVec<[Line; 16]> =
             SmallVec::with_capacity(self.arr.len() + other.arr.len());
-        new_arr.extend_from_slice(&self.arr);
-        new_arr.extend_from_slice(&other.arr);
-        new_arr.sort();
+        let self_sorted = self.arr.windows(2).all(|w| w[0] <= w[1]);
+        let other_sorted = other.arr.windows(2).all(|w| w[0] <= w[1]);
+        if self_sorted && other_sorted {
+            let a = self.arr.as_slice();
+            let b = other.arr.as_slice();
+            let (mut i, mut j) = (0usize, 0usize);
+            while i < a.len() && j < b.len() {
+                if a[i] <= b[j] {
+                    new_arr.push(a[i]);
+                    i += 1;
+                } else {
+                    new_arr.push(b[j]);
+                    j += 1;
+                }
+            }
+            if i < a.len() {
+                new_arr.extend_from_slice(&a[i..]);
+            }
+            if j < b.len() {
+                new_arr.extend_from_slice(&b[j..]);
+            }
+        } else {
+            new_arr.extend_from_slice(&self.arr);
+            new_arr.extend_from_slice(&other.arr);
+            new_arr.sort();
+        }
         Self::remove_redundant_from_sorted(&new_arr)
     }
 
@@ -540,10 +562,20 @@ impl Simplex {
                 return false;
             }
             if let (Some(ca), Some(cb)) = (self.sat_corners(), other.sat_corners()) {
-                if sat_strictly_separates(&self.arr, &cb) == Some(true)
-                    || sat_strictly_separates(&other.arr, &ca) == Some(true)
-                {
+                let sep_ab = sat_strictly_separates(&self.arr, &cb);
+                if sep_ab == Some(true) {
                     return false;
+                }
+                let sep_ba = sat_strictly_separates(&other.arr, &ca);
+                if sep_ba == Some(true) {
+                    return false;
+                }
+                if sep_ab == Some(false)
+                    && sep_ba == Some(false)
+                    && sat_verify_feasible(self, &ca) == Some(true)
+                    && sat_verify_feasible(other, &cb) == Some(true)
+                {
+                    return true;
                 }
             }
         }
@@ -795,14 +827,38 @@ impl Simplex {
         }
         let mut line_arr: SmallVec<[Line; 10]> = SmallVec::with_capacity(lines.len());
         line_arr.push(lines[0]);
+        let collapse_parallel = lines.len() >= 4;
         for line in &lines[1..] {
-            if !line.fast_equals(line_arr.last().unwrap()) {
-                line_arr.push(*line);
+            let last = line_arr.last_mut().unwrap();
+            if line.fast_equals(last) {
+                continue;
             }
+            if collapse_parallel {
+                let d_last = last.b.difference_by_int(&last.a);
+                let d_curr = line.b.difference_by_int(&line.a);
+                if (d_last.x != 0 || d_last.y != 0)
+                    && (d_curr.x != 0 || d_curr.y != 0)
+                    && d_last.determinant(&d_curr) == 0
+                    && (i64::from(d_last.x) * i64::from(d_curr.x)
+                        + i64::from(d_last.y) * i64::from(d_curr.y))
+                        > 0
+                {
+                    match line.side_of(&last.a) {
+                        Side::OnTheLeft => {
+                            *last = *line;
+                            continue;
+                        }
+                        Side::OnTheRight => continue,
+                        Side::Collinear => {}
+                    }
+                }
+            }
+            line_arr.push(*line);
         }
 
         let mut new_length = line_arr.len();
-        let mut intersection_sides: SmallVec<[Option<Side>; 16]> = smallvec![None; new_length];
+        // 0 = unknown, 1 = OnTheLeft, 2 = not OnTheLeft
+        let mut intersection_sides: SmallVec<[u8; 16]> = smallvec![0u8; new_length];
 
         let mut try_again = new_length > 2;
         let mut index_of_last_removed_line = new_length;
@@ -825,14 +881,20 @@ impl Simplex {
 
                 let mut remove_line = false;
                 if det != 0 {
-                    if intersection_sides[ind].is_none() {
-                        intersection_sides[ind] =
-                            Some(curr_line.side_of_intersection(&prev_line, &next_line));
+                    let mut side_code = intersection_sides[ind];
+                    if side_code == 0 {
+                        side_code = if curr_line.side_of_intersection(&prev_line, &next_line)
+                            == Side::OnTheLeft
+                        {
+                            1
+                        } else {
+                            2
+                        };
+                        intersection_sides[ind] = side_code;
                     }
-                    let side = intersection_sides[ind].unwrap();
                     if det > 0 {
-                        remove_line = side != Side::OnTheLeft;
-                    } else if side == Side::OnTheLeft {
+                        remove_line = side_code != 1;
+                    } else if side_code == 1 {
                         let curr_dir = curr_line.b.difference_by_int(&curr_line.a);
                         if prev_dir.determinant(&curr_dir) > 0 {
                             new_length = 0;
@@ -857,9 +919,9 @@ impl Simplex {
                         break;
                     }
                     let p_ind = if ind == 0 { new_length - 1 } else { ind - 1 };
-                    intersection_sides[p_ind] = None;
+                    intersection_sides[p_ind] = 0;
                     let n_ind = if ind >= new_length { 0 } else { ind };
-                    intersection_sides[n_ind] = None;
+                    intersection_sides[n_ind] = 0;
 
                     ind = ind.saturating_sub(1);
                     index_of_last_removed_line = ind;
@@ -885,8 +947,7 @@ impl Simplex {
             } else {
                 let parallel = d0.determinant(&d1) == 0;
                 let same = parallel
-                    && (i64::from(d0.x) * i64::from(d1.x) + i64::from(d0.y) * i64::from(d1.y))
-                        > 0;
+                    && (i64::from(d0.x) * i64::from(d1.x) + i64::from(d0.y) * i64::from(d1.y)) > 0;
                 (parallel, same)
             };
             if is_parallel {
@@ -1026,6 +1087,12 @@ impl Simplex {
         if inner_simplex.dimension() < 2 {
             return vec![outer_simplex.clone()];
         }
+        Self::cutout_intersection(&inner_simplex, outer_simplex)
+    }
+
+    /// Cuts an already-computed 2-dimensional `inner_simplex` (strictly
+    /// `self ∩ outer_simplex`) out of `outer_simplex`, returning convex pieces.
+    pub fn cutout_intersection(inner_simplex: &Simplex, outer_simplex: &Simplex) -> Vec<Simplex> {
         let inner_corner_count = inner_simplex.arr.len();
         let mut division_line_arr = Vec::with_capacity(inner_corner_count);
         for inner_corner_no in 0..inner_corner_count {
@@ -1797,6 +1864,41 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
     Some(SatCorners { buf })
 }
 
+/// Checks whether every border line of `shape` sits within `CRIT_INT` so
+/// adjacent-pair `sat_line_corner` intersections never approximate or overflow.
+#[inline]
+fn sat_shape_in_envelope(shape: &Simplex) -> bool {
+    let mut max_coord = 0u32;
+    for line in &shape.arr {
+        max_coord |= line.a.x.unsigned_abs()
+            | line.a.y.unsigned_abs()
+            | line.b.x.unsigned_abs()
+            | line.b.y.unsigned_abs();
+    }
+    max_coord <= Limits::CRIT_INT as u32
+}
+
+/// Verifies that every corner is feasible (on the right of, or on, every border
+/// line) without requiring distinctness (empty intersection only needs
+/// non-empty compact convex polygon feasible, even a point or segment).
+fn sat_verify_feasible(shape: &Simplex, corners: &SatCorners) -> Option<bool> {
+    let n = shape.arr.len();
+    let in_envelope = sat_shape_in_envelope(shape);
+    for i in 0..corners.buf.len() {
+        let corner = &corners.buf[i];
+        let prev_i = if i == 0 { n - 1 } else { i - 1 };
+        for (j, line) in shape.arr.iter().enumerate() {
+            if in_envelope && (j == i || j == prev_i) {
+                continue;
+            }
+            if sat_side_of_corner(line, corner)? == Side::OnTheLeft {
+                return None;
+            }
+        }
+    }
+    Some(!corners.buf.is_empty())
+}
+
 /// Verifies that every corner is feasible (on the right of, or on, every
 /// border line) and returns the number of *distinct* corners.
 ///
@@ -1810,10 +1912,16 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
 /// `None` on any infeasible corner or `i128` overflow: the exact
 /// construction decides.
 fn sat_verify_corners(shape: &Simplex, corners: &SatCorners) -> Option<usize> {
+    let n = shape.arr.len();
+    let in_envelope = sat_shape_in_envelope(shape);
     let mut distinct = 0usize;
     for i in 0..corners.buf.len() {
         let corner = &corners.buf[i];
-        for line in &shape.arr {
+        let prev_i = if i == 0 { n - 1 } else { i - 1 };
+        for (j, line) in shape.arr.iter().enumerate() {
+            if in_envelope && (j == i || j == prev_i) {
+                continue;
+            }
             if sat_side_of_corner(line, corner)? == Side::OnTheLeft {
                 return None;
             }

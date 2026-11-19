@@ -136,6 +136,18 @@ pub struct AutorouteEngine<'b> {
     /// (Issue039: the shared tree handed ~330 leaves per box query, half of
     /// them on the wrong layer).
     room_trees: Vec<ArenaShapeTree<RoomId>>,
+    /// Completed free rooms per layer ordered ascending by `(id_no, Reverse(RoomId))`
+    /// so `.iter().rev()` yields exact completion order (`(-id_no, RoomId)`)
+    /// without tree walks on small layers or when splitting into recent prefix
+    /// + shrunk-bound tree query.
+    complete_rooms_by_layer: Vec<
+        Vec<(
+            RoomId,
+            i64,
+            fr_datastructures::arena_shape_tree::OctBounds,
+            IntBox,
+        )>,
+    >,
     /// Reusable DFS stack for the item tree.
     item_stack: QueryStack,
     /// Reusable DFS stack for the room tree.
@@ -374,6 +386,7 @@ impl<'b> AutorouteEngine<'b> {
             room_trees: (0..ctrl.layer_count.max(1))
                 .map(|_| ArenaShapeTree::new())
                 .collect(),
+            complete_rooms_by_layer: (0..ctrl.layer_count.max(1)).map(|_| Vec::new()).collect(),
             ctrl,
             rooms,
             nodes: NodeArena::new(),
@@ -502,6 +515,9 @@ impl<'b> AutorouteEngine<'b> {
         self.rooms.clear();
         for tree in &mut self.room_trees {
             tree.clear();
+        }
+        for list in &mut self.complete_rooms_by_layer {
+            list.clear();
         }
         self.obstacle_rooms.clear();
         self.item_cache = None;
@@ -788,11 +804,112 @@ impl<'b> AutorouteEngine<'b> {
         self.scratch_hit_bounds.clear();
 
         let rooms_started = crate::rooms::attr::start();
+        if layer >= 0 {
+            if let Some(list) = self.complete_rooms_by_layer.get(layer as usize) {
+                if list.len() <= 96 {
+                    let query_bounds = fr_board::shape::TileShape::Box(query_box).bounds();
+                    for &(room_id, _, ref bounds, bbox) in list.iter().rev() {
+                        let room = self.rooms.room(room_id);
+                        if room.alive
+                            && room.kind == RoomKind::CompleteFree
+                            && bounds.intersects(&query_bounds)
+                            && query_box.intersects(&bbox)
+                        {
+                            obstacles.push(Obstacle::Room(room_id));
+                            self.scratch_hit_bounds.push(bbox);
+                        }
+                    }
+                    crate::rooms::attr::add_room_walk(rooms_started, list.len() as u64);
+                    crate::rooms::attr::add_collect_rooms(rooms_started);
+                    crate::rooms::attr::add_room_survivors(obstacles.len() as u64);
+                    return;
+                }
+            }
+        }
+
+        self.collect_room_obstacles_tree(query_box, layer, None, obstacles, rooms_started);
+    }
+
+    /// Number of indexed complete free rooms on `layer`.
+    #[inline]
+    pub(crate) fn complete_room_count_on_layer(&self, layer: i32) -> usize {
+        if layer < 0 {
+            return 0;
+        }
+        self.complete_rooms_by_layer
+            .get(layer as usize)
+            .map_or(0, Vec::len)
+    }
+
+    /// Stage 1A of room completion gather: emits the newest `recent_count`
+    /// complete rooms on `layer` whose cached bounds intersect `query_box`, in
+    /// exact descending completion order, returning the exclusive `(id_no, Reverse(RoomId))`
+    /// cutoff key above everything still remaining on `layer`.
+    pub(crate) fn collect_recent_room_obstacles_box(
+        &mut self,
+        query_box: IntBox,
+        layer: i32,
+        recent_count: usize,
+        obstacles: &mut Vec<Obstacle>,
+    ) -> Option<(i64, std::cmp::Reverse<RoomId>)> {
+        self.ensure_item_cache();
+        obstacles.clear();
+        self.scratch_hit_bounds.clear();
+        let list = self.complete_rooms_by_layer.get(layer.max(0) as usize)?;
+        let start = list.len().saturating_sub(recent_count);
+        let tail = &list[start..];
+        let &(first_room, first_id_no, _, _) = tail.first()?;
+        let rooms_started = crate::rooms::attr::start();
+        let query_bounds = fr_board::shape::TileShape::Box(query_box).bounds();
+        for &(room_id, _, ref bounds, bbox) in tail.iter().rev() {
+            let room = self.rooms.room(room_id);
+            if room.alive
+                && room.kind == RoomKind::CompleteFree
+                && bounds.intersects(&query_bounds)
+                && query_box.intersects(&bbox)
+            {
+                obstacles.push(Obstacle::Room(room_id));
+                self.scratch_hit_bounds.push(bbox);
+            }
+        }
+        crate::rooms::attr::add_collect_rooms(rooms_started);
+        crate::rooms::attr::add_room_survivors(obstacles.len() as u64);
+        Some((first_id_no, std::cmp::Reverse(first_room)))
+    }
+
+    /// Stage 1B of room completion gather: queries `room_trees[layer]` on the
+    /// (typically shrunk) `query_box`, keeping only rooms strictly older than
+    /// `cutoff_key`.
+    pub(crate) fn collect_older_room_obstacles_box(
+        &mut self,
+        query_box: IntBox,
+        layer: i32,
+        cutoff_key: (i64, std::cmp::Reverse<RoomId>),
+        obstacles: &mut Vec<Obstacle>,
+    ) {
+        obstacles.clear();
+        self.scratch_hit_bounds.clear();
+        let rooms_started = crate::rooms::attr::start();
+        self.collect_room_obstacles_tree(
+            query_box,
+            layer,
+            Some(cutoff_key),
+            obstacles,
+            rooms_started,
+        );
+    }
+
+    fn collect_room_obstacles_tree(
+        &mut self,
+        query_box: IntBox,
+        layer: i32,
+        cutoff_key: Option<(i64, std::cmp::Reverse<RoomId>)>,
+        obstacles: &mut Vec<Obstacle>,
+        rooms_started: Option<std::time::Instant>,
+    ) {
         // Rooms first: the completion key sorts every room ahead of every
         // item, so an ordered rooms run followed by an ordered items run is
-        // the sorted list. The walk + filter runs against the room tree as
-        // before, then sorts by (-id_no, RoomId) only to dedup without extra
-        // allocations.
+        // the sorted list.
         self.scratch_rooms.clear();
         let walk_started = crate::rooms::attr::start();
         // The room's layer is fixed at insertion, so the walk only touches the
@@ -806,11 +923,12 @@ impl<'b> AutorouteEngine<'b> {
         }
         crate::rooms::attr::add_room_walk(walk_started, self.scratch_rooms.len() as u64);
         let mut rooms = std::mem::take(&mut self.scratch_rooms);
-        rooms.retain(|(_, room)| {
-            let room = self.rooms.room(*room);
+        rooms.retain(|&(_, room_id)| {
+            let room = self.rooms.room(room_id);
             room.alive
                 && room.kind == RoomKind::CompleteFree
                 && room.layer == layer
+                && cutoff_key.is_none_or(|cutoff| (room.id_no, std::cmp::Reverse(room_id)) < cutoff)
                 && query_box.intersects(&room.octagon().bounding_box())
         });
         if rooms.len() > 1 {
@@ -1520,14 +1638,31 @@ impl<'b> AutorouteEngine<'b> {
 
     /// Inserts a completed room into the engine-local tree of its layer.
     pub(crate) fn insert_room_in_tree(&mut self, room_id: RoomId) {
-        let bounds =
-            fr_board::shape::TileShape::Simplex(self.rooms.room(room_id).shape.clone()).bounds();
-        let layer = self.rooms.room(room_id).layer.max(0) as usize;
+        let (oct, layer, id_no) = {
+            let room = self.rooms.room(room_id);
+            (room.octagon(), room.layer.max(0) as usize, room.id_no)
+        };
+        let bounds = fr_board::shape::TileShape::Oct(oct).bounds();
         if layer >= self.room_trees.len() {
             self.room_trees.resize(layer + 1, ArenaShapeTree::new());
         }
+        if layer >= self.complete_rooms_by_layer.len() {
+            self.complete_rooms_by_layer.resize(layer + 1, Vec::new());
+        }
         let leaf = self.room_trees[layer].insert(bounds, room_id);
         self.rooms.room_mut(room_id).leaf = Some(leaf);
+        let bbox = oct.bounding_box();
+        let list = &mut self.complete_rooms_by_layer[layer];
+        let new_key = (id_no, std::cmp::Reverse(room_id));
+        if list
+            .last()
+            .is_none_or(|&(last_r, last_id, _, _)| (last_id, std::cmp::Reverse(last_r)) <= new_key)
+        {
+            list.push((room_id, id_no, bounds, bbox));
+        } else {
+            let pos = list.partition_point(|&(r, id, _, _)| (id, std::cmp::Reverse(r)) < new_key);
+            list.insert(pos, (room_id, id_no, bounds, bbox));
+        }
     }
 
     /// Removes a completed room from the engine-local tree of its layer.
@@ -1535,6 +1670,11 @@ impl<'b> AutorouteEngine<'b> {
         if let Some(leaf) = self.rooms.room_mut(room_id).leaf.take() {
             let layer = self.rooms.room(room_id).layer.max(0) as usize;
             self.room_trees[layer].remove(leaf);
+            if let Some(list) = self.complete_rooms_by_layer.get_mut(layer) {
+                if let Some(pos) = list.iter().rposition(|&(r, _, _, _)| r == room_id) {
+                    list.remove(pos);
+                }
+            }
         }
     }
 

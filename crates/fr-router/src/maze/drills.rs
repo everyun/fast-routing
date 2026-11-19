@@ -253,7 +253,7 @@ impl DrillPageArray {
             while (i as f64) < max_i && i < self.column_count {
                 let id = PageId((j * self.column_count + i) as u32);
                 let page_shape = self.pages[id.0 as usize].shape.to_simplex();
-                if shape.intersection(&page_shape).dimension() > 1 {
+                if shape.has_2dim_overlap(&page_shape) {
                     out.push(id);
                 }
                 i += 1;
@@ -403,25 +403,41 @@ impl AutorouteEngine<'_> {
         // `Simplex::simplify` do not exist yet — and it is not a box-only
         // shortcut: the holes on Issue110-RelayModule measure 2,808 `Box`,
         // 22,351 `Oct`, 24,841 `Simplex`. See `docs/PARITY-DIVERGENCES.md`.
-        let mut pieces = vec![page_shape.clone()];
+        let mut pieces: Vec<(Simplex, IntBox)> = vec![(page_shape.clone(), page_box)];
+        let mut next: Vec<(Simplex, IntBox)> = Vec::new();
         for hole in &cutouts {
             let hole_bbox = hole.bounding_box();
-            let mut next = Vec::with_capacity(pieces.len());
-            for piece in &pieces {
-                if !piece.bounding_box().intersects(&hole_bbox)
-                    || piece.intersection(hole).dimension() < 2
+            let hole_sat = hole.sat_corners().map(|corners| {
+                let verified = hole.sat_verify(&corners);
+                (corners, verified)
+            });
+            next.clear();
+            for (piece, piece_bbox) in pieces.drain(..) {
+                if piece_bbox.ur.x <= hole_bbox.ll.x
+                    || hole_bbox.ur.x <= piece_bbox.ll.x
+                    || piece_bbox.ur.y <= hole_bbox.ll.y
+                    || hole_bbox.ur.y <= piece_bbox.ll.y
+                    || drill_piece_disjoint_sat(&piece, hole, hole_sat.as_ref())
                 {
-                    next.push(piece.clone());
+                    next.push((piece, piece_bbox));
+                    continue;
+                }
+                let inner = hole.intersection(&piece);
+                if inner.dimension() < 2 {
+                    next.push((piece, piece_bbox));
                     continue;
                 }
                 next.extend(
-                    piece
-                        .cutout(hole)
+                    Simplex::cutout_intersection(&inner, &piece)
                         .into_iter()
-                        .filter(|part| part.dimension() == 2),
+                        .filter(|part| part.dimension() == 2)
+                        .map(|part| {
+                            let bb = part.bounding_box();
+                            (part, bb)
+                        }),
                 );
             }
-            pieces = next;
+            std::mem::swap(&mut pieces, &mut next);
             if pieces.is_empty() {
                 break;
             }
@@ -431,7 +447,7 @@ impl AutorouteEngine<'_> {
         let drill_first_layer = 0i32;
         let drill_last_layer = self.ctrl.layer_count as i32 - 1;
         let mut result = Vec::new();
-        for piece in pieces {
+        for (piece, _) in pieces {
             let mut location = None;
             if attach_smd {
                 location = self.pin_center_in_drill(&piece, drill_first_layer);
@@ -564,6 +580,29 @@ impl AutorouteEngine<'_> {
         out.sort_unstable();
         out.dedup();
     }
+}
+
+#[inline]
+fn drill_piece_disjoint_sat(
+    piece: &Simplex,
+    hole: &Simplex,
+    hole_sat: Option<&(fr_geometry::planar::SatCorners, Option<bool>)>,
+) -> bool {
+    let Some((hole_corners, hole_verified)) = hole_sat else {
+        return false;
+    };
+    let Some(piece_corners) = piece.sat_corners() else {
+        return false;
+    };
+    if piece.sat_separates(hole_corners) == Some(true)
+        || hole.sat_separates(&piece_corners) == Some(true)
+    {
+        return true;
+    }
+    if piece.sat_verify(&piece_corners) == Some(false) || *hole_verified == Some(false) {
+        return true;
+    }
+    false
 }
 
 #[cfg(test)]

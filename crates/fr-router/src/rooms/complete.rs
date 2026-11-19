@@ -179,9 +179,6 @@ impl AutorouteEngine<'_> {
         // grid cells while preserving the exact obstacle carve sequence.
         fr_metrics::counters::bump::tree_queries(1);
         let (mut obstacles, mut own_net) = self.take_collect_vecs();
-        let collect_rooms_started = crate::rooms::attr::start();
-        self.collect_room_obstacles_box(bounding, layer, &mut obstacles);
-        crate::rooms::attr::add_collect(collect_rooms_started, obstacles.len());
 
         let carve_started = crate::rooms::attr::start();
         let mut carve_hits = 0u64;
@@ -192,20 +189,80 @@ impl AutorouteEngine<'_> {
         // One buffer for every restrain of the call: the appending
         // `restrain_shape` allocates nothing itself.
         let mut restrained: Vec<CompletedShape> = Vec::new();
-        if !self.carve_obstacle_slice(
-            &obstacles,
-            layer,
-            ignore_room,
-            ignore_shape,
-            &mut result,
-            &mut new_result,
-            &mut restrained,
-            &mut bounding,
-            &mut carve_hits,
-        ) {
-            crate::rooms::attr::add_carve(carve_started, carve_hits);
-            self.give_back_collect_vecs(obstacles, own_net);
-            return Vec::new();
+        if self.complete_room_count_on_layer(layer) > 96 {
+            let initial_bounding = bounding;
+            let collect_rooms_started = crate::rooms::attr::start();
+            let cutoff =
+                self.collect_recent_room_obstacles_box(initial_bounding, layer, 32, &mut obstacles);
+            let mut room_hits = obstacles.len();
+            if !self.carve_obstacle_slice(
+                &obstacles,
+                layer,
+                ignore_room,
+                ignore_shape,
+                &mut result,
+                &mut new_result,
+                &mut restrained,
+                &mut bounding,
+                &mut carve_hits,
+            ) {
+                crate::rooms::attr::add_collect(collect_rooms_started, room_hits);
+                crate::rooms::attr::add_carve(carve_started, carve_hits);
+                self.give_back_collect_vecs(obstacles, own_net);
+                return Vec::new();
+            }
+            if let Some(cutoff_key) = cutoff {
+                let shrunk_room_box = IntBox::new(
+                    bounding.ll.x.saturating_sub(4),
+                    bounding.ll.y.saturating_sub(4),
+                    bounding.ur.x.saturating_add(4),
+                    bounding.ur.y.saturating_add(4),
+                );
+                self.collect_older_room_obstacles_box(
+                    shrunk_room_box,
+                    layer,
+                    cutoff_key,
+                    &mut obstacles,
+                );
+                room_hits += obstacles.len();
+                crate::rooms::attr::add_collect(collect_rooms_started, room_hits);
+                if !self.carve_obstacle_slice(
+                    &obstacles,
+                    layer,
+                    ignore_room,
+                    ignore_shape,
+                    &mut result,
+                    &mut new_result,
+                    &mut restrained,
+                    &mut bounding,
+                    &mut carve_hits,
+                ) {
+                    crate::rooms::attr::add_carve(carve_started, carve_hits);
+                    self.give_back_collect_vecs(obstacles, own_net);
+                    return Vec::new();
+                }
+            } else {
+                crate::rooms::attr::add_collect(collect_rooms_started, room_hits);
+            }
+        } else {
+            let collect_rooms_started = crate::rooms::attr::start();
+            self.collect_room_obstacles_box(bounding, layer, &mut obstacles);
+            crate::rooms::attr::add_collect(collect_rooms_started, obstacles.len());
+            if !self.carve_obstacle_slice(
+                &obstacles,
+                layer,
+                ignore_room,
+                ignore_shape,
+                &mut result,
+                &mut new_result,
+                &mut restrained,
+                &mut bounding,
+                &mut carve_hits,
+            ) {
+                crate::rooms::attr::add_carve(carve_started, carve_hits);
+                self.give_back_collect_vecs(obstacles, own_net);
+                return Vec::new();
+            }
         }
 
         // Phase 2: gather items against the room-carved `bounding` (padded by ±4
