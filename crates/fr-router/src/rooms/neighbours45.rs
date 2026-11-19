@@ -701,8 +701,7 @@ impl AutorouteEngine<'_> {
             (room.octagon(), room.layer, room.kind == RoomKind::Obstacle)
         };
 
-        let mut obstacles = Vec::new();
-        let mut own_net = Vec::new();
+        let (mut obstacles, mut own_net) = self.take_collect_vecs();
         self.overlapping_obstacles_tile(
             &fr_board::shape::TileShape::Oct(room_shape),
             Some(layer),
@@ -713,20 +712,15 @@ impl AutorouteEngine<'_> {
         if is_obstacle_room {
             // `:109` defers own-net objects only for a free room; for an
             // obstacle room they are ordinary neighbours.
-            let mut promoted: Vec<Obstacle> = own_net
-                .drain(..)
-                .map(|(item, index)| {
-                    let slot = self
-                        .board
-                        .store()
-                        .slot_of(item)
-                        .unwrap_or(fr_board::store::SlotIndex::from_raw(0));
-                    Obstacle::Item(item, index, slot)
-                })
-                .collect();
-            promoted.append(&mut obstacles);
-            promoted.sort_unstable();
-            obstacles = promoted;
+            let store = self.board.store();
+            obstacles.reserve(own_net.len());
+            obstacles.extend(own_net.drain(..).map(|(item, index)| {
+                let slot = store
+                    .slot_of(item)
+                    .unwrap_or(fr_board::store::SlotIndex::from_raw(0));
+                Obstacle::Item(item, index, slot)
+            }));
+            obstacles.sort_unstable();
         }
 
         let mut found = Neighbours45 {
@@ -736,7 +730,8 @@ impl AutorouteEngine<'_> {
             own_net,
         };
 
-        for obstacle in obstacles {
+        for idx in 0..obstacles.len() {
+            let obstacle = obstacles[idx];
             if obstacle == Obstacle::Room(room_id) {
                 continue;
             }
@@ -787,13 +782,12 @@ impl AutorouteEngine<'_> {
                 // `:133-152`: make sure there is a door to the neighbour room.
                 let neighbour_room = match obstacle {
                     Obstacle::Room(other) => Some(other),
-                    Obstacle::Item(item, index, _) => {
+                    Obstacle::Item(item, index, slot) => {
                         let routable = self
                             .board
                             .store()
-                            .get(item)
-                            .map(|item| item.is_routable())
-                            .unwrap_or(false);
+                            .item_at_slot(slot)
+                            .is_some_and(|board_item| board_item.id == item && board_item.is_routable());
                         if routable {
                             self.obstacle_room(item, index)
                         } else {
@@ -802,8 +796,9 @@ impl AutorouteEngine<'_> {
                     }
                 };
                 if let Some(neighbour_room) = neighbour_room {
-                    let door_shape = intersection.to_simplex();
-                    if self.insert_door_ok(room_id, neighbour_room, &door_shape) {
+                    if self.insert_door_ok_lazy(room_id, neighbour_room, || {
+                        intersection.to_simplex()
+                    }) {
                         // `ExpansionDoor`'s 2-argument constructor derives the
                         // dimension from the shared shape.
                         self.rooms.add_room_door(room_id, neighbour_room, dimension);
@@ -811,6 +806,7 @@ impl AutorouteEngine<'_> {
                 }
             }
         }
+        self.give_back_collect_vecs(obstacles, Vec::new());
 
         // `sorted_neighbours` is a `TreeSet` (`:22`, `:36`, `:221`), so equal
         // elements collapse *there*. This is a plain stable sort and nothing is

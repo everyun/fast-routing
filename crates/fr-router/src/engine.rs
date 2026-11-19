@@ -732,6 +732,48 @@ impl<'b> AutorouteEngine<'b> {
         self.collect_item_obstacles_box(query_box, layer, net_no, obstacles, own_net);
     }
 
+    /// Octagon-query collect: reuses [`collect_obstacles_box`] (the `ItemCache`
+    /// and per-layer [`LayerGrid`]) on `query_oct.bounding_box()`, then keeps
+    /// only hits that intersect `query_oct` itself.
+    fn collect_obstacles_oct(
+        &mut self,
+        query_oct: IntOctagon,
+        layer: i32,
+        net_no: i32,
+        obstacles: &mut Vec<Obstacle>,
+        own_net: &mut Vec<(ItemId, u16)>,
+    ) {
+        self.collect_obstacles_box(query_oct.bounding_box(), layer, net_no, obstacles, own_net);
+        let family = self.angle_family();
+        let tree = self
+            .board
+            .trees()
+            .compensated_tree_with_family(self.tree_class, family)
+            .or_else(|| self.board.trees().compensated_tree(self.tree_class))
+            .unwrap_or_else(|| self.board.default_tree());
+        let rooms = &self.rooms;
+        let store = self.board.store();
+        let query_tile = fr_board::shape::TileShape::Oct(query_oct);
+        obstacles.retain(|&obs| match obs {
+            Obstacle::Room(r) => rooms.room(r).shape.intersects_octagon(&query_oct),
+            Obstacle::Item(item, index, slot) => tree
+                .item_shapes(slot, item)
+                .get(index as usize)
+                .and_then(|tile| tile.shape.as_ref())
+                .is_some_and(|shape| shape.intersects(&query_tile)),
+        });
+        own_net.retain(|&(item, index)| {
+            let Some(slot) = store.slot_of(item) else {
+                return false;
+            };
+            tree.item_shapes(slot, item)
+                .get(index as usize)
+                .and_then(|tile| tile.shape.as_ref())
+                .is_some_and(|shape| shape.intersects(&query_tile))
+        });
+        self.scratch_hit_bounds.clear();
+    }
+
     /// Room-only half of `collect_obstacles_box`. Resets `obstacles` and
     /// `self.scratch_hit_bounds` and emits matching [`Obstacle::Room`]s in
     /// completion order (descending `id_no`).
@@ -1029,6 +1071,10 @@ impl<'b> AutorouteEngine<'b> {
             self.collect_obstacles_box(*query_box, layer, net_no, obstacles, own_net);
             return true;
         }
+        if let (fr_board::shape::TileShape::Oct(query_oct), Some(layer)) = (query_tile, layer) {
+            self.collect_obstacles_oct(*query_oct, layer, net_no, obstacles, own_net);
+            return false;
+        }
 
         let family = self.angle_family();
         let tree = self
@@ -1224,14 +1270,21 @@ impl<'b> AutorouteEngine<'b> {
     /// is not a `SearchTreeObject` (`autoroute/ObstacleExpansionRoom.java:19`)
     /// — so their `(item << 10) | index` ids play no part in this order.
     pub(crate) fn sort_obstacles_for_neighbours(&self, obstacles: &mut [Obstacle]) {
-        obstacles.sort_by_cached_key(|obstacle| match *obstacle {
+        obstacles.sort_unstable_by(|&a, &b| {
             // The room arm sorts first on an exact id tie: upstream's sort is
             // stable over a tree walk we do not reproduce, so the tie needs
             // *some* rule, and the rooms are the objects this connection just
             // built — visiting them before the board items keeps a freshly
             // completed neighbour from being re-cut by an item of the same id.
-            Obstacle::Room(room) => (self.rooms.room(room).id_no, 0u8, 0u16),
-            Obstacle::Item(item, index, _) => (i64::from(item.raw()), 1u8, index),
+            let ka = match a {
+                Obstacle::Room(room) => (self.rooms.room(room).id_no, 0u8, 0u16),
+                Obstacle::Item(item, index, _) => (i64::from(item.raw()), 1u8, index),
+            };
+            let kb = match b {
+                Obstacle::Room(room) => (self.rooms.room(room).id_no, 0u8, 0u16),
+                Obstacle::Item(item, index, _) => (i64::from(item.raw()), 1u8, index),
+            };
+            ka.cmp(&kb)
         });
     }
 

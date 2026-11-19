@@ -1748,12 +1748,11 @@ fn sat_corner_eq(a: &SatCorner, b: &SatCorner) -> Option<bool> {
 
 /// The vertex list the SAT fast path works on; see [`Simplex::sat_corners`].
 /// Opaque — the only operations are the `sat_*` methods on [`Simplex`].
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SatCorners {
-    /// The distinct feasible corners; `len` entries are valid.
-    buf: [SatCorner; SAT_MAX_LINES],
-    /// How many of `buf` are valid.
-    len: usize,
+    /// Inline up to 10 corners (spills to heap for 11..=32); avoids
+    /// zero-initializing and copying 1.5 KiB per call.
+    buf: SmallVec<[SatCorner; 10]>,
 }
 
 /// The largest border-line count the SAT fast path handles; bigger simplexes
@@ -1780,11 +1779,7 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
     if !(3..=SAT_MAX_LINES).contains(&n) {
         return None;
     }
-    let zero = SatCorner { x: 0, y: 0, z: 1 };
-    let mut out = SatCorners {
-        buf: [zero; SAT_MAX_LINES],
-        len: n,
-    };
+    let mut buf = SmallVec::with_capacity(n);
     for i in 0..n {
         let prev = lines[if i == 0 { n - 1 } else { i - 1 }];
         let curr = lines[i];
@@ -1797,9 +1792,9 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
         if prev_delta.determinant(&curr_delta) <= 0 {
             return None;
         }
-        out.buf[i] = sat_line_corner(&prev, &curr)?;
+        buf.push(sat_line_corner(&prev, &curr)?);
     }
-    Some(out)
+    Some(SatCorners { buf })
 }
 
 /// Verifies that every corner is feasible (on the right of, or on, every
@@ -1816,7 +1811,7 @@ fn sat_raw_corners(shape: &Simplex) -> Option<SatCorners> {
 /// construction decides.
 fn sat_verify_corners(shape: &Simplex, corners: &SatCorners) -> Option<usize> {
     let mut distinct = 0usize;
-    for i in 0..corners.len {
+    for i in 0..corners.buf.len() {
         let corner = &corners.buf[i];
         for line in &shape.arr {
             if sat_side_of_corner(line, corner)? == Side::OnTheLeft {
@@ -1843,7 +1838,7 @@ fn sat_verify_corners(shape: &Simplex, corners: &SatCorners) -> Option<usize> {
 /// itself (an empty, point or segment intersection, never 2-dimensional).
 fn sat_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
     'lines: for line in lines {
-        for corner in &corners.buf[..corners.len] {
+        for corner in &corners.buf {
             if sat_side_of_corner(line, corner)? == Side::OnTheRight {
                 continue 'lines;
             }
@@ -1858,7 +1853,7 @@ fn sat_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
 /// `false`.
 fn sat_strictly_separates(lines: &[Line], corners: &SatCorners) -> Option<bool> {
     'lines: for line in lines {
-        for corner in &corners.buf[..corners.len] {
+        for corner in &corners.buf {
             if sat_side_of_corner(line, corner)? != Side::OnTheLeft {
                 continue 'lines;
             }

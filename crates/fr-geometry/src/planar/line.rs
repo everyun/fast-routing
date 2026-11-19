@@ -442,18 +442,43 @@ impl Line {
             | p2.b.x.unsigned_abs()
             | p2.b.y.unsigned_abs();
         if max_coord <= Limits::CRIT_INT as u32 {
-            // Inside the coordinate envelope (|coord| <= 2^25): det/det1/det2
-            // stay within 2^53 (i64) and intermediate products stay within
-            // 2^106 (well below i128::MAX = 2^127 - 1), avoiding checked_mul
-            // library calls on every hot call.
             let d1x = i64::from(p1.b.x) - i64::from(p1.a.x);
             let d1y = i64::from(p1.b.y) - i64::from(p1.a.y);
             let d2x = i64::from(p2.b.x) - i64::from(p2.a.x);
             let d2y = i64::from(p2.b.y) - i64::from(p2.a.y);
+            let vx = i64::from(self.b.x) - i64::from(self.a.x);
+            let vy = i64::from(self.b.y) - i64::from(self.a.y);
             let mut det = d2x * d1y - d2y * d1x;
             if det == 0 {
                 return None;
             }
+            let max_delta = d1x.unsigned_abs()
+                | d1y.unsigned_abs()
+                | d2x.unsigned_abs()
+                | d2y.unsigned_abs()
+                | vx.unsigned_abs()
+                | vy.unsigned_abs();
+            if max_delta <= 1024 {
+                // Normalized 0°/45°/90° lines have |delta| <= 1, keeping the
+                // entire determinant within |value| <= 2^59 (well inside i64).
+                let det1 = i64::from(p1.a.x) * d1y - i64::from(p1.a.y) * d1x;
+                let det2 = i64::from(p2.a.x) * d2y - i64::from(p2.a.y) * d2x;
+                let mut is_x = det1 * d2x - det2 * d1x;
+                let mut is_y = det1 * d2y - det2 * d1y;
+                if det < 0 {
+                    det = -det;
+                    is_x = -is_x;
+                    is_y = -is_y;
+                }
+                let rel_x = is_x - i64::from(self.a.x) * det;
+                let rel_y = is_y - i64::from(self.a.y) * det;
+                let determinant = vx * rel_y - vy * rel_x;
+                return Some(side_of_exact(i128::from(determinant)).negate());
+            }
+            // Inside the coordinate envelope (|coord| <= 2^25): det/det1/det2
+            // stay within 2^53 (i64) and intermediate products stay within
+            // 2^106 (well below i128::MAX = 2^127 - 1), avoiding checked_mul
+            // library calls on every hot call.
             let det1 =
                 i64::from(p1.a.x) * i64::from(p1.b.y) - i64::from(p1.a.y) * i64::from(p1.b.x);
             let det2 =
@@ -466,11 +491,9 @@ impl Line {
                 is_y = -is_y;
             }
             let det_128 = i128::from(det);
-            let vx = i128::from(i64::from(self.b.x) - i64::from(self.a.x));
-            let vy = i128::from(i64::from(self.b.y) - i64::from(self.a.y));
             let rel_x = is_x - i128::from(self.a.x) * det_128;
             let rel_y = is_y - i128::from(self.a.y) * det_128;
-            let determinant = vx * rel_y - vy * rel_x;
+            let determinant = i128::from(vx) * rel_y - i128::from(vy) * rel_x;
             return Some(side_of_exact(determinant).negate());
         }
 

@@ -415,6 +415,27 @@ impl AutorouteEngine<'_> {
         second: RoomId,
         door_shape: &Simplex,
     ) -> bool {
+        self.insert_door_ok_with(first, second, || first_distinct_door_line(door_shape))
+    }
+
+    /// [`insert_door_ok`](Self::insert_door_ok) with lazy door-shape
+    /// construction, avoiding `IntOctagon::to_simplex` whenever the room-pair
+    /// checks decide the answer already.
+    pub(super) fn insert_door_ok_lazy(
+        &self,
+        first: RoomId,
+        second: RoomId,
+        make_door_shape: impl FnOnce() -> Simplex,
+    ) -> bool {
+        self.insert_door_ok_with(first, second, || first_distinct_door_line(&make_door_shape()))
+    }
+
+    fn insert_door_ok_with(
+        &self,
+        first: RoomId,
+        second: RoomId,
+        door_line_fn: impl FnOnce() -> Option<Line>,
+    ) -> bool {
         if first == second || self.rooms.door_exists(first, second) {
             return false;
         }
@@ -440,20 +461,7 @@ impl AutorouteEngine<'_> {
         // A 1-dimensional door onto the first or last tile of a trace must be
         // parallel to the trace's end line, "otherwise there may be check ripup
         // problems with entering at the wrong side at a fork" (`:259-260`).
-        let mut door_line = None;
-        let corner_count = door_shape.border_line_count();
-        if corner_count > 1 {
-            let mut prev_corner = door_shape.corner(0);
-            for i in 1..corner_count {
-                let curr_corner = door_shape.corner(i);
-                if curr_corner != prev_corner {
-                    door_line = Some(door_shape.border_line(i - 1));
-                    break;
-                }
-                prev_corner = curr_corner;
-            }
-        }
-        let Some(door_line) = door_line else {
+        let Some(door_line) = door_line_fn() else {
             return false;
         };
         if first_is_obstacle && !self.trace_end_door_ok(first, &door_line) {
@@ -783,6 +791,23 @@ impl AutorouteEngine<'_> {
             prev_index = next_index;
         }
     }
+}
+
+/// First border line joining two distinct corners of `door_shape`.
+fn first_distinct_door_line(door_shape: &Simplex) -> Option<Line> {
+    let corner_count = door_shape.border_line_count();
+    if corner_count <= 1 {
+        return None;
+    }
+    let mut prev_corner = door_shape.corner(0);
+    for i in 1..corner_count {
+        let curr_corner = door_shape.corner(i);
+        if curr_corner != prev_corner {
+            return Some(door_shape.border_line(i - 1));
+        }
+        prev_corner = curr_corner;
+    }
+    None
 }
 
 /// `SortedRoomNeighbours.sorted_neighbours` (`:35`, `:307`), ordered by

@@ -6,7 +6,7 @@ use crate::planar::{
     limits::{determinant_exact, scalar_product_exact, side_of_exact, signum_of_exact, Limits},
     side::Side,
 };
-use fr_datastructures::{BigIntAux, Signum};
+use fr_datastructures::Signum;
 
 /// Implementation of a vector via a tuple of integers.
 ///
@@ -177,15 +177,9 @@ impl IntVector {
     }
 
     /// Returns the normalized direction of this vector.
+    #[inline]
     pub fn to_normalized_direction(&self) -> Direction {
-        let mut dx = self.x;
-        let mut dy = self.y;
-        let gcd = BigIntAux::binary_gcd(dx.abs(), dy.abs());
-        if gcd > 1 {
-            dx /= gcd;
-            dy /= gcd;
-        }
-        Direction::new(dx, dy)
+        Direction::new(self.x, self.y)
     }
 }
 
