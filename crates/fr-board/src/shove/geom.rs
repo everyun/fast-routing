@@ -8,7 +8,9 @@
 //! reached from a shove, and because `overlapping_items_with_clearance` needs
 //! the board's clearance matrix, which the geometry crate does not know about.
 
-use fr_geometry::planar::{FloatPoint, IntBox, IntOctagon, IntPoint, Line, Point, Side, Simplex};
+use fr_geometry::planar::{
+    FloatPoint, IntBox, IntOctagon, IntPoint, Line, OctR2, Point, Side, Simplex,
+};
 use fr_geometry::Area;
 
 use crate::board::Board;
@@ -406,13 +408,8 @@ pub fn overlapping_items_with_clearance(
     let tree = board.default_tree();
     let shape_bbox = shape.bounded_bounding_box();
     let mut curr_half_clearance = -1i32;
-    // Held as a `TileShape` rather than a bare `Simplex` so that the exact test
-    // below can dispatch on the *stored* shape's flavor: a pad's enlarged shape
-    // is a box or an octagon, and `TileShape::intersects` answers those against
-    // a simplex without converting them to one and running the general
-    // half-plane intersection. `-1` is not a legal half clearance, so the first
-    // surviving tile always builds it.
-    let mut curr_offset_tile = TileShape::Simplex(shape.clone());
+    let mut curr_offset_oct: Option<OctR2> = None;
+    let mut curr_offset_tile: Option<(i32, TileShape)> = None;
     // Upstream sorts by clearance so the offset shape is rebuilt once per
     // distinct clearance; the same trick, without the sort, is to cache the
     // last one — clearance classes repeat heavily in a single query.
@@ -427,26 +424,48 @@ pub fn overlapping_items_with_clearance(
             .clearances()
             .value(cl_class, item.clearance_class, layer);
         let half_clearance = clearance / 2;
-        tree.item_shapes(slot, *id).iter().any(|tile| {
-            if tile.layer != layer {
-                return false;
-            }
-            let Some(tile_shape) = tile.shape.as_ref() else {
-                return false;
-            };
-            if let (Some(sb), Some(tb)) = (shape_bbox, tile_shape.bounded_bounding_box()) {
-                if !within_padded_bounds(sb, tb, clearance) {
+        let hulls = tree.item_hulls(slot, *id);
+        tree.item_shapes(slot, *id)
+            .iter()
+            .enumerate()
+            .any(|(idx, tile)| {
+                if tile.layer != layer {
                     return false;
                 }
-            }
-            if half_clearance != curr_half_clearance {
-                curr_half_clearance = half_clearance;
-                curr_offset_tile = TileShape::Simplex(shape.enlarge(half_clearance as f64));
-            }
-            tile_shape
-                .enlarge(half_clearance)
-                .intersects(&curr_offset_tile)
-        })
+                let Some(tile_shape) = tile.shape.as_ref() else {
+                    return false;
+                };
+                let tb = hulls
+                    .get(idx)
+                    .copied()
+                    .flatten()
+                    .or_else(|| tile_shape.bounded_bounding_box());
+                if let (Some(sb), Some(tb)) = (shape_bbox, tb) {
+                    if !within_padded_bounds(sb, tb, clearance) {
+                        return false;
+                    }
+                }
+                if half_clearance != curr_half_clearance {
+                    curr_half_clearance = half_clearance;
+                    curr_offset_oct = shape.enlarge_oct_r2(f64::from(half_clearance));
+                }
+                if let (Some(qa), Some(qb)) =
+                    (curr_offset_oct, tile_shape.enlarge_oct_r2(half_clearance))
+                {
+                    return qa.intersects_r2(&qb);
+                }
+                let offset_tile = match &curr_offset_tile {
+                    Some((cached_half, tile)) if *cached_half == half_clearance => tile,
+                    _ => {
+                        curr_offset_tile = Some((
+                            half_clearance,
+                            TileShape::Simplex(shape.enlarge(half_clearance as f64)),
+                        ));
+                        &curr_offset_tile.as_ref().expect("just stored").1
+                    }
+                };
+                tile_shape.enlarge(half_clearance).intersects(offset_tile)
+            })
     });
 }
 

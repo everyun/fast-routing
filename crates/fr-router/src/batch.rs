@@ -922,7 +922,7 @@ pub fn route_with_control(
             // and skipping pull-tight avoids redundant work.
             if insert.board_changed || !insert.ripped_connections.is_empty() {
                 let mut changed_area = insert.changed_area;
-                let mut algo = PullTightAlgo::new(
+                let mut algo = PullTightAlgo::new_with_bounds(
                     board,
                     rules,
                     &[],
@@ -931,6 +931,7 @@ pub fn route_with_control(
                     None,
                     None,
                     0,
+                    bounds,
                 )
                 .with_stall_guard(StallGuard::for_mode(
                     budget_mode,
@@ -1681,7 +1682,7 @@ impl<'r> BatchRouter<'r> {
                                     board, self.rules, ctrl, located, c.bounds,
                                 ) {
                                     let mut changed_area = insert.changed_area;
-                                    let mut algo = PullTightAlgo::new(
+                                    let mut algo = PullTightAlgo::new_with_bounds(
                                         board,
                                         self.rules,
                                         &[],
@@ -1690,6 +1691,7 @@ impl<'r> BatchRouter<'r> {
                                         None,
                                         None,
                                         0,
+                                        c.bounds,
                                     )
                                     .with_stall_guard(StallGuard::for_mode(
                                         budget_mode,

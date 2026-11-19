@@ -22,6 +22,144 @@ use crate::planar::{
 
 use smallvec::{smallvec, SmallVec};
 
+/// Normalized half-plane bounds of a 45°-aligned [`Simplex`] over R².
+///
+/// Any simplex whose border lines all point along cardinal or 45° directions
+/// is the exact intersection of at most 8 half-planes:
+/// `lx <= x <= rx`, `ly <= y <= uy`, `ulx <= x - y <= lrx`, `llx <= x + y <= urx`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OctR2 {
+    pub lx: i64,
+    pub ly: i64,
+    pub rx: i64,
+    pub uy: i64,
+    pub ulx: i64,
+    pub lrx: i64,
+    pub llx: i64,
+    pub urx: i64,
+}
+
+impl OctR2 {
+    /// Sentinel infinity bound well clear of any 32-bit coordinate and safe under `2 * (a - b)`.
+    pub const INF: i64 = 1i64 << 58;
+
+    /// Empty 45° half-plane intersection.
+    pub const EMPTY: OctR2 = OctR2 {
+        lx: 1,
+        ly: 1,
+        rx: -1,
+        uy: -1,
+        ulx: 1,
+        lrx: -1,
+        llx: 1,
+        urx: -1,
+    };
+
+    /// Converts an [`IntBox`] to an exact `OctR2`.
+    #[inline]
+    pub fn from_box(b: &IntBox) -> OctR2 {
+        if b.is_empty() {
+            return Self::EMPTY;
+        }
+        OctR2 {
+            lx: i64::from(b.ll.x),
+            ly: i64::from(b.ll.y),
+            rx: i64::from(b.ur.x),
+            uy: i64::from(b.ur.y),
+            ulx: -Self::INF,
+            lrx: Self::INF,
+            llx: -Self::INF,
+            urx: Self::INF,
+        }
+    }
+
+    /// Converts an [`IntOctagon`] to an exact `OctR2`.
+    #[inline]
+    pub fn from_octagon(o: &IntOctagon) -> OctR2 {
+        if o.is_empty() {
+            return Self::EMPTY;
+        }
+        OctR2 {
+            lx: i64::from(o.left_x),
+            ly: i64::from(o.bottom_y),
+            rx: i64::from(o.right_x),
+            uy: i64::from(o.top_y),
+            ulx: i64::from(o.upper_left_diagonal_x),
+            lrx: i64::from(o.lower_right_diagonal_x),
+            llx: i64::from(o.lower_left_diagonal_x),
+            urx: i64::from(o.upper_right_diagonal_x),
+        }
+    }
+
+    /// Exact Fourier-Motzkin non-emptiness test for `self ∩ other` in R².
+    #[inline]
+    pub fn intersects_r2(&self, other: &OctR2) -> bool {
+        let lx = self.lx.max(other.lx);
+        let rx = self.rx.min(other.rx);
+        if lx > rx {
+            return false;
+        }
+        let ly = self.ly.max(other.ly);
+        let uy = self.uy.min(other.uy);
+        if ly > uy {
+            return false;
+        }
+        let ulx = self.ulx.max(other.ulx);
+        let lrx = self.lrx.min(other.lrx);
+        if ulx > lrx {
+            return false;
+        }
+        let llx = self.llx.max(other.llx);
+        let urx = self.urx.min(other.urx);
+        if llx > urx {
+            return false;
+        }
+        let y2_lo = (2 * ly)
+            .max(2 * (lx - lrx))
+            .max(2 * (llx - rx))
+            .max(llx - lrx);
+        let y2_hi = (2 * uy)
+            .min(2 * (rx - ulx))
+            .min(2 * (urx - lx))
+            .min(urx - ulx);
+        y2_lo <= y2_hi
+    }
+
+    /// Exact Fourier-Motzkin 2-dimensional interior overlap test for `self ∩ other` in R².
+    #[inline]
+    pub fn intersects_2d_r2(&self, other: &OctR2) -> bool {
+        let lx = self.lx.max(other.lx);
+        let rx = self.rx.min(other.rx);
+        if lx >= rx {
+            return false;
+        }
+        let ly = self.ly.max(other.ly);
+        let uy = self.uy.min(other.uy);
+        if ly >= uy {
+            return false;
+        }
+        let ulx = self.ulx.max(other.ulx);
+        let lrx = self.lrx.min(other.lrx);
+        if ulx >= lrx {
+            return false;
+        }
+        let llx = self.llx.max(other.llx);
+        let urx = self.urx.min(other.urx);
+        if llx >= urx {
+            return false;
+        }
+        let y2_lo = (2 * ly)
+            .max(2 * (lx - lrx))
+            .max(2 * (llx - rx))
+            .max(llx - lrx);
+        let y2_hi = (2 * uy)
+            .min(2 * (rx - ulx))
+            .min(2 * (urx - lx))
+            .min(urx - ulx);
+        y2_lo < y2_hi
+    }
+}
+
 /// Convex shape defined as the intersection of half-planes.
 /// Each half-plane is the positive/right side of a directed line.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -552,10 +690,232 @@ impl Simplex {
         Self::remove_redundant_from_sorted(&new_arr)
     }
 
+    /// Represents this bounded simplex as an exact [`OctR2`] when every border line is
+    /// orthogonal or 45°-diagonal and all corners turn strictly convexly.
+    /// Returns `None` for non-45°, unbounded, or zero-length-line simplices.
+    pub fn to_oct_r2(&self) -> Option<OctR2> {
+        if self.arr.is_empty() {
+            return Some(OctR2::EMPTY);
+        }
+        if self.arr.len() < 3 || self.arr.len() > 8 {
+            return None;
+        }
+        let mut lx = -OctR2::INF;
+        let mut ly = -OctR2::INF;
+        let mut ulx = -OctR2::INF;
+        let mut llx = -OctR2::INF;
+        let mut rx = OctR2::INF;
+        let mut uy = OctR2::INF;
+        let mut lrx = OctR2::INF;
+        let mut urx = OctR2::INF;
+        let prev0 = self.arr[self.arr.len() - 1];
+        let mut pdx = i64::from(prev0.b.x) - i64::from(prev0.a.x);
+        let mut pdy = i64::from(prev0.b.y) - i64::from(prev0.a.y);
+        let mut prev_line = prev0;
+        for (i, &line) in self.arr.iter().enumerate() {
+            if i > 0 && prev_line > line {
+                return None;
+            }
+            prev_line = line;
+            let ax = i64::from(line.a.x);
+            let ay = i64::from(line.a.y);
+            let dx = i64::from(line.b.x) - ax;
+            let dy = i64::from(line.b.y) - ay;
+            if dx == 0 && dy == 0 {
+                return None;
+            }
+            if i128::from(pdx) * i128::from(dy) - i128::from(pdy) * i128::from(dx) <= 0 {
+                return None;
+            }
+            pdx = dx;
+            pdy = dy;
+            if dy == 0 {
+                if dx > 0 {
+                    ly = ly.max(ay);
+                } else {
+                    uy = uy.min(ay);
+                }
+            } else if dx == 0 {
+                if dy > 0 {
+                    rx = rx.min(ax);
+                } else {
+                    lx = lx.max(ax);
+                }
+            } else if dx == dy {
+                if dx > 0 {
+                    lrx = lrx.min(ax - ay);
+                } else {
+                    ulx = ulx.max(ax - ay);
+                }
+            } else if dx == -dy {
+                if dy > 0 {
+                    urx = urx.min(ax + ay);
+                } else {
+                    llx = llx.max(ax + ay);
+                }
+            } else {
+                return None;
+            }
+        }
+        Some(OctR2 {
+            lx,
+            ly,
+            rx,
+            uy,
+            ulx,
+            lrx,
+            llx,
+            urx,
+        })
+    }
+
+    /// Computes the exact [`OctR2`] of `self.enlarge(offset)` without building lines,
+    /// sorting, or running `remove_redundant_from_sorted`, when `self` is a bounded 45°
+    /// simplex with `offset >= 0`.
+    pub fn enlarge_oct_r2(&self, offset: f64) -> Option<OctR2> {
+        if !offset.is_finite() || offset < 0.0 || offset > f64::from(Limits::CRIT_INT) {
+            return None;
+        }
+        if self.arr.is_empty() {
+            return Some(OctR2::EMPTY);
+        }
+        if offset == 0.0 {
+            return self.to_oct_r2();
+        }
+        if self.arr.len() < 3 || self.arr.len() > 8 {
+            return None;
+        }
+
+        let orth_neg = i64::from(crate::util::jround_i32(-offset));
+        let orth_pos = i64::from(crate::util::jround_i32(offset));
+        let diag_neg = i64::from(crate::util::jround_i32(-offset * Limits::SQRT2));
+        let diag_pos = i64::from(crate::util::jround_i32(offset * Limits::SQRT2));
+
+        let mut lx = -OctR2::INF;
+        let mut ly = -OctR2::INF;
+        let mut ulx = -OctR2::INF;
+        let mut llx = -OctR2::INF;
+        let mut rx = OctR2::INF;
+        let mut uy = OctR2::INF;
+        let mut lrx = OctR2::INF;
+        let mut urx = OctR2::INF;
+
+        let mut bo_lx = f64::MAX;
+        let mut bo_ly = f64::MAX;
+        let mut bo_rx = f64::MIN;
+        let mut bo_uy = f64::MIN;
+        let mut bo_ulx = f64::MAX;
+        let mut bo_lrx = f64::MIN;
+        let mut bo_llx = f64::MAX;
+        let mut bo_urx = f64::MIN;
+
+        let mut prev = self.arr[self.arr.len() - 1];
+        for (i, &curr) in self.arr.iter().enumerate() {
+            if i > 0 && prev > curr {
+                return None;
+            }
+            let max_c = curr.a.x.unsigned_abs()
+                | curr.a.y.unsigned_abs()
+                | curr.b.x.unsigned_abs()
+                | curr.b.y.unsigned_abs();
+            if max_c > Limits::CRIT_INT as u32 {
+                return None;
+            }
+            let prev_delta = prev.b.difference_by_int(&prev.a);
+            let curr_delta = curr.b.difference_by_int(&curr.a);
+            if prev_delta.determinant(&curr_delta) <= 0 {
+                return None;
+            }
+            let corner = curr.intersection_approx(&prev);
+            if !corner.x.is_finite()
+                || !corner.y.is_finite()
+                || corner.x.abs() > 1e9
+                || corner.y.abs() > 1e9
+            {
+                return None;
+            }
+            bo_lx = bo_lx.min(corner.x);
+            bo_ly = bo_ly.min(corner.y);
+            bo_rx = bo_rx.max(corner.x);
+            bo_uy = bo_uy.max(corner.y);
+            let diff = corner.x - corner.y;
+            bo_ulx = bo_ulx.min(diff);
+            bo_lrx = bo_lrx.max(diff);
+            let sum = corner.x + corner.y;
+            bo_llx = bo_llx.min(sum);
+            bo_urx = bo_urx.max(sum);
+
+            let ax = i64::from(curr.a.x);
+            let ay = i64::from(curr.a.y);
+            let dx = i64::from(curr.b.x) - ax;
+            let dy = i64::from(curr.b.y) - ay;
+            if dx == 0 && dy == 0 {
+                return None;
+            }
+            if dy == 0 {
+                if dx > 0 {
+                    ly = ly.max(ay + orth_neg);
+                } else {
+                    uy = uy.min(ay + orth_pos);
+                }
+            } else if dx == 0 {
+                if dy > 0 {
+                    rx = rx.min(ax - orth_neg);
+                } else {
+                    lx = lx.max(ax - orth_pos);
+                }
+            } else if dx == dy {
+                if dx > 0 {
+                    lrx = lrx.min((ax - ay) - diag_neg);
+                } else {
+                    ulx = ulx.max((ax - ay) - diag_pos);
+                }
+            } else if dx == -dy {
+                if dy > 0 {
+                    urx = urx.min((ax + ay) - diag_neg);
+                } else {
+                    llx = llx.max((ax + ay) - diag_pos);
+                }
+            } else {
+                return None;
+            }
+
+            prev = curr;
+        }
+
+        let bounding_oct = IntOctagon::new(
+            bo_lx.floor() as i32,
+            bo_ly.floor() as i32,
+            bo_rx.ceil() as i32,
+            bo_uy.ceil() as i32,
+            bo_ulx.floor() as i32,
+            bo_lrx.ceil() as i32,
+            bo_llx.floor() as i32,
+            bo_urx.ceil() as i32,
+        );
+        let offset_oct = bounding_oct.offset(offset);
+        if offset_oct.is_empty() {
+            return Some(OctR2::EMPTY);
+        }
+        Some(OctR2 {
+            lx: lx.max(i64::from(offset_oct.left_x)),
+            ly: ly.max(i64::from(offset_oct.bottom_y)),
+            rx: rx.min(i64::from(offset_oct.right_x)),
+            uy: uy.min(i64::from(offset_oct.top_y)),
+            ulx: ulx.max(i64::from(offset_oct.upper_left_diagonal_x)),
+            lrx: lrx.min(i64::from(offset_oct.lower_right_diagonal_x)),
+            llx: llx.max(i64::from(offset_oct.lower_left_diagonal_x)),
+            urx: urx.min(i64::from(offset_oct.upper_right_diagonal_x)),
+        })
+    }
+
     /// Checks if this simplex intersects `other`.
     pub fn intersects(&self, other: &Simplex) -> bool {
         if self.arr.is_empty() || other.arr.is_empty() {
             return false;
+        }
+        if let (Some(oa), Some(ob)) = (self.to_oct_r2(), other.to_oct_r2()) {
+            return oa.intersects_r2(&ob);
         }
         if let (Some(ba), Some(bb)) = (self.bounded_bounding_box(), other.bounded_bounding_box()) {
             if !ba.intersects(&bb) {
@@ -621,6 +981,9 @@ impl Simplex {
     /// means "cannot prove it cheaply — fall back to the exact construction".
     /// Public so hot callers can count how often the fallback fires.
     pub fn has_2dim_overlap_fast(&self, other: &Simplex) -> Option<bool> {
+        if let (Some(oa), Some(ob)) = (self.to_oct_r2(), other.to_oct_r2()) {
+            return Some(oa.intersects_2d_r2(&ob));
+        }
         // `bounded_bounding_box` is also the boundedness and strict-turn gate:
         // it answers `None` for unbounded or degenerate simplexes, which take
         // the fallback.
@@ -643,6 +1006,9 @@ impl Simplex {
     /// callers that already hold both bounding boxes and have applied the
     /// strict interior test themselves. `None` under the same conditions.
     pub fn has_2dim_overlap_sat(&self, other: &Simplex) -> Option<bool> {
+        if let (Some(oa), Some(ob)) = (self.to_oct_r2(), other.to_oct_r2()) {
+            return Some(oa.intersects_2d_r2(&ob));
+        }
         let raw_a = self.sat_corners()?;
         let raw_b = other.sat_corners()?;
         if self.sat_separates(&raw_b)? || other.sat_separates(&raw_a)? {
@@ -723,8 +1089,14 @@ impl Simplex {
     /// [`Line::intersection_approx`] — so both gates would be unsound, and the
     /// exact test is the only answer.
     pub fn intersects_box(&self, box_: &IntBox) -> bool {
-        if self.arr.is_empty() {
+        if self.arr.is_empty() || box_.is_empty() {
             return false;
+        }
+        if box_.ll == box_.ur {
+            return self.contains(&Point::Int(box_.ll));
+        }
+        if let Some(oct) = self.to_oct_r2() {
+            return oct.intersects_r2(&OctR2::from_box(box_));
         }
         if let Some(bounds) = self.bounded_bounding_box() {
             if !bounds.intersects(box_) {
@@ -786,8 +1158,23 @@ impl Simplex {
     /// and it is contained in its own bounding box. On top of the exact test
     /// this also saves the `to_simplex` conversion, which builds eight `Line`s.
     pub fn intersects_octagon(&self, oct: &IntOctagon) -> bool {
-        if self.arr.is_empty() {
+        if self.arr.is_empty() || oct.is_empty() {
             return false;
+        }
+        if oct.left_x == oct.right_x && oct.bottom_y == oct.top_y {
+            let x = i64::from(oct.left_x);
+            let y = i64::from(oct.bottom_y);
+            if x - y < i64::from(oct.upper_left_diagonal_x)
+                || x - y > i64::from(oct.lower_right_diagonal_x)
+                || x + y < i64::from(oct.lower_left_diagonal_x)
+                || x + y > i64::from(oct.upper_right_diagonal_x)
+            {
+                return false;
+            }
+            return self.contains(&Point::Int(IntPoint::new(oct.left_x, oct.bottom_y)));
+        }
+        if let Some(self_oct) = self.to_oct_r2() {
+            return self_oct.intersects_r2(&OctR2::from_octagon(oct));
         }
         if let Some(bounds) = self.bounded_bounding_box() {
             if !bounds.intersects(&oct.bounding_box()) {
@@ -822,30 +1209,56 @@ impl Simplex {
 
     /// Removes redundant border lines from an already-sorted slice of lines.
     pub(crate) fn remove_redundant_from_sorted(lines: &[Line]) -> Simplex {
+        #[inline]
+        fn det2_sign(dx1: i64, dy1: i64, dx2: i64, dy2: i64) -> i8 {
+            if (dx1.unsigned_abs() | dy1.unsigned_abs() | dx2.unsigned_abs() | dy2.unsigned_abs())
+                < (1u64 << 31)
+            {
+                (dx1 * dy2 - dy1 * dx2).signum() as i8
+            } else {
+                (i128::from(dx1) * i128::from(dy2) - i128::from(dy1) * i128::from(dx2)).signum()
+                    as i8
+            }
+        }
+        #[inline]
+        fn dot_pos(dx1: i64, dy1: i64, dx2: i64, dy2: i64) -> bool {
+            if (dx1.unsigned_abs() | dy1.unsigned_abs() | dx2.unsigned_abs() | dy2.unsigned_abs())
+                < (1u64 << 31)
+            {
+                dx1 * dx2 + dy1 * dy2 > 0
+            } else {
+                i128::from(dx1) * i128::from(dx2) + i128::from(dy1) * i128::from(dy2) > 0
+            }
+        }
+        #[inline]
+        fn line_delta(line: &Line) -> (i64, i64) {
+            (
+                i64::from(line.b.x) - i64::from(line.a.x),
+                i64::from(line.b.y) - i64::from(line.a.y),
+            )
+        }
         if lines.is_empty() {
             return Simplex::EMPTY;
         }
-        let mut line_arr: SmallVec<[Line; 10]> = SmallVec::with_capacity(lines.len());
+        let mut line_arr: SmallVec<[Line; 16]> = SmallVec::with_capacity(lines.len());
         line_arr.push(lines[0]);
         let collapse_parallel = lines.len() >= 4;
         for line in &lines[1..] {
-            let last = line_arr.last_mut().unwrap();
-            if line.fast_equals(last) {
+            let last_idx = line_arr.len() - 1;
+            if line.fast_equals(&line_arr[last_idx]) {
                 continue;
             }
             if collapse_parallel {
-                let d_last = last.b.difference_by_int(&last.a);
-                let d_curr = line.b.difference_by_int(&line.a);
-                if (d_last.x != 0 || d_last.y != 0)
-                    && (d_curr.x != 0 || d_curr.y != 0)
-                    && d_last.determinant(&d_curr) == 0
-                    && (i64::from(d_last.x) * i64::from(d_curr.x)
-                        + i64::from(d_last.y) * i64::from(d_curr.y))
-                        > 0
+                let d_last = line_delta(&line_arr[last_idx]);
+                let d_curr = line_delta(line);
+                if (d_last.0 != 0 || d_last.1 != 0)
+                    && (d_curr.0 != 0 || d_curr.1 != 0)
+                    && det2_sign(d_last.0, d_last.1, d_curr.0, d_curr.1) == 0
+                    && dot_pos(d_last.0, d_last.1, d_curr.0, d_curr.1)
                 {
-                    match line.side_of(&last.a) {
+                    match line.side_of(&line_arr[last_idx].a) {
                         Side::OnTheLeft => {
-                            *last = *line;
+                            line_arr[last_idx] = *line;
                             continue;
                         }
                         Side::OnTheRight => continue,
@@ -874,13 +1287,12 @@ impl Simplex {
                 let curr_line = line_arr[ind];
                 let next_line = line_arr[next_ind];
 
-                // Raw deltas preserve determinant sign without paying binary_gcd.
-                let prev_dir = prev_line.b.difference_by_int(&prev_line.a);
-                let next_dir = next_line.b.difference_by_int(&next_line.a);
-                let det = prev_dir.determinant(&next_dir);
+                let prev_dir = line_delta(&prev_line);
+                let next_dir = line_delta(&next_line);
+                let det_sign = det2_sign(prev_dir.0, prev_dir.1, next_dir.0, next_dir.1);
 
                 let mut remove_line = false;
-                if det != 0 {
+                if det_sign != 0 {
                     let mut side_code = intersection_sides[ind];
                     if side_code == 0 {
                         side_code = if curr_line.side_of_intersection(&prev_line, &next_line)
@@ -892,11 +1304,11 @@ impl Simplex {
                         };
                         intersection_sides[ind] = side_code;
                     }
-                    if det > 0 {
+                    if det_sign > 0 {
                         remove_line = side_code != 1;
                     } else if side_code == 1 {
-                        let curr_dir = curr_line.b.difference_by_int(&curr_line.a);
-                        if prev_dir.determinant(&curr_dir) > 0 {
+                        let curr_dir = line_delta(&curr_line);
+                        if det2_sign(prev_dir.0, prev_dir.1, curr_dir.0, curr_dir.1) > 0 {
                             new_length = 0;
                             try_again = false;
                             break;
@@ -936,18 +1348,17 @@ impl Simplex {
         }
 
         if new_length == 2 {
-            let d0 = line_arr[0].b.difference_by_int(&line_arr[0].a);
-            let d1 = line_arr[1].b.difference_by_int(&line_arr[1].a);
-            let zero_delta = (d0.x == 0 && d0.y == 0) || (d1.x == 0 && d1.y == 0);
+            let d0 = line_delta(&line_arr[0]);
+            let d1 = line_delta(&line_arr[1]);
+            let zero_delta = (d0.0 == 0 && d0.1 == 0) || (d1.0 == 0 && d1.1 == 0);
             let (is_parallel, same_dir) = if zero_delta {
                 (
                     line_arr[0].is_parallel(&line_arr[1]),
                     line_arr[0].direction() == line_arr[1].direction(),
                 )
             } else {
-                let parallel = d0.determinant(&d1) == 0;
-                let same = parallel
-                    && (i64::from(d0.x) * i64::from(d1.x) + i64::from(d0.y) * i64::from(d1.y)) > 0;
+                let parallel = det2_sign(d0.0, d0.1, d1.0, d1.1) == 0;
+                let same = parallel && dot_pos(d0.0, d0.1, d1.0, d1.1);
                 (parallel, same)
             };
             if is_parallel {
@@ -965,8 +1376,7 @@ impl Simplex {
         if new_length == 0 {
             Simplex::EMPTY
         } else {
-            line_arr.truncate(new_length);
-            Simplex::new(line_arr)
+            Simplex::from_slice(&line_arr[..new_length])
         }
     }
 
@@ -2395,5 +2805,99 @@ mod tests {
         assert!(!bounds.intersects(&query));
         assert!(!shape.intersects_box(&query));
         assert!(!intersects_box_exact(&shape, &query));
+    }
+
+    #[test]
+    fn oct_r2_enlarge_and_overlap_match_exact_simplex() {
+        let mut seed: u64 = 0x5EED_CAFE_1234_5678;
+        let next_u64 = |state: &mut u64| -> u64 {
+            *state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1);
+            *state
+        };
+        let next_i32 = |state: &mut u64, lo: i32, hi: i32| -> i32 {
+            let span = (i64::from(hi) - i64::from(lo) + 1) as u64;
+            lo + (next_u64(state) % span) as i32
+        };
+        let offsets = [0.0f64, 0.5, 1.0, 125.0, 500.0];
+
+        let make_shape = |kind_pick: u64, state: &mut u64| -> Simplex {
+            let cx = next_i32(state, -50_000, 50_000);
+            let cy = next_i32(state, -50_000, 50_000);
+            match kind_pick % 3 {
+                0 => {
+                    let dx = next_i32(state, 0, 4_000);
+                    let dy = next_i32(state, 0, 4_000);
+                    IntBox::new(cx - dx, cy - dy, cx + dx, cy + dy).to_simplex()
+                }
+                1 => {
+                    let rx = next_i32(state, 0, 4_000);
+                    let ry = next_i32(state, 0, 4_000);
+                    let d1 = next_i32(state, 0, 4_000);
+                    let d2 = next_i32(state, 0, 4_000);
+                    IntOctagon::new(
+                        cx - rx,
+                        cy - ry,
+                        cx + rx,
+                        cy + ry,
+                        (cx - cy) - d1,
+                        (cx - cy) + d1,
+                        (cx + cy) - d2,
+                        (cx + cy) + d2,
+                    )
+                    .normalize()
+                    .to_simplex()
+                }
+                _ => {
+                    let len = next_i32(state, 50, 4_000);
+                    let dirs = [
+                        (1, 0),
+                        (1, 1),
+                        (0, 1),
+                        (-1, 1),
+                        (-1, 0),
+                        (-1, -1),
+                        (0, -1),
+                        (1, -1),
+                    ];
+                    let idx = (len as usize) % dirs.len();
+                    let (dx, dy) = dirs[idx];
+                    let p0 = IntPoint::new(cx, cy);
+                    let p1 = IntPoint::new(cx + dx * len, cy + dy * len);
+                    let hw = next_i32(state, 50, 600);
+                    Polyline::new_from_two_points(&Point::Int(p0), &Point::Int(p1))
+                        .offset_shape(hw, 0)
+                        .unwrap_or(Simplex::EMPTY)
+                }
+            }
+        };
+
+        for case in 0..5_000u64 {
+            let k1 = next_u64(&mut seed);
+            let s1 = make_shape(k1, &mut seed);
+            let k2 = next_u64(&mut seed);
+            let s2 = make_shape(k2, &mut seed);
+            let off1 = offsets[(case as usize) % offsets.len()];
+            let off2 = offsets[((case / 5) as usize) % offsets.len()];
+
+            let e1_exact = s1.enlarge(off1);
+            let e2_exact = s2.enlarge(off2);
+            let inter_exact = e1_exact.intersection(&e2_exact);
+
+            let o1 = s1.enlarge_oct_r2(off1).expect("45deg shape has oct_r2");
+            let o2 = s2.enlarge_oct_r2(off2).expect("45deg shape has oct_r2");
+
+            assert_eq!(
+                o1.intersects_r2(&o2),
+                !inter_exact.is_empty(),
+                "intersects_r2 mismatch at case {case}: s1={s1:?} off1={off1} s2={s2:?} off2={off2}"
+            );
+            assert_eq!(
+                o1.intersects_2d_r2(&o2),
+                inter_exact.dimension() == 2,
+                "intersects_2d_r2 mismatch at case {case}: s1={s1:?} off1={off1} s2={s2:?} off2={off2}"
+            );
+        }
     }
 }

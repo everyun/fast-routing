@@ -354,6 +354,56 @@ impl IntOctagon {
         if self.is_empty() {
             return crate::planar::simplex::Simplex::EMPTY;
         }
+        let max_bound = self.left_x.unsigned_abs()
+            | self.right_x.unsigned_abs()
+            | self.bottom_y.unsigned_abs()
+            | self.top_y.unsigned_abs()
+            | self.upper_left_diagonal_x.unsigned_abs()
+            | self.lower_right_diagonal_x.unsigned_abs()
+            | self.lower_left_diagonal_x.unsigned_abs()
+            | self.upper_right_diagonal_x.unsigned_abs();
+        if max_bound < (Limits::CRIT_INT as u32)
+            && self.left_x < self.right_x
+            && self.bottom_y < self.top_y
+            && self.upper_left_diagonal_x < self.lower_right_diagonal_x
+            && self.lower_left_diagonal_x < self.upper_right_diagonal_x
+        {
+            let lx = i64::from(self.left_x);
+            let rx = i64::from(self.right_x);
+            let ly = i64::from(self.bottom_y);
+            let uy = i64::from(self.top_y);
+            let ulx = i64::from(self.upper_left_diagonal_x);
+            let lrx = i64::from(self.lower_right_diagonal_x);
+            let llx = i64::from(self.lower_left_diagonal_x);
+            let urx = i64::from(self.upper_right_diagonal_x);
+            // Exact 1D open-interval facet length on each border line inside R^2
+            // (diagonal bounds multiply y by 2 so half-integer intersections stay exact).
+            let active = [
+                lx.max(ly + ulx).max(llx - ly) < rx.min(ly + lrx).min(urx - ly),
+                (2 * ly).max(2 * (lx - lrx)).max(llx - lrx)
+                    < (2 * uy).min(2 * (rx - lrx)).min(urx - lrx),
+                ly.max(rx - lrx).max(llx - rx) < uy.min(rx - ulx).min(urx - rx),
+                (2 * ly).max(2 * (urx - rx)).max(urx - lrx)
+                    < (2 * uy).min(2 * (urx - lx)).min(urx - ulx),
+                lx.max(uy + ulx).max(llx - uy) < rx.min(uy + lrx).min(urx - uy),
+                (2 * ly).max(2 * (lx - ulx)).max(llx - ulx)
+                    < (2 * uy).min(2 * (rx - ulx)).min(urx - ulx),
+                ly.max(lx - lrx).max(llx - lx) < uy.min(lx - ulx).min(urx - lx),
+                (2 * ly).max(2 * (llx - rx)).max(llx - lrx)
+                    < (2 * uy).min(2 * (llx - lx)).min(llx - ulx),
+            ];
+            let active_count = active.iter().filter(|&&b| b).count();
+            if active_count >= 3 {
+                let mut arr: smallvec::SmallVec<[Line; 10]> =
+                    smallvec::SmallVec::with_capacity(active_count);
+                for (i, &keep) in active.iter().enumerate() {
+                    if keep {
+                        arr.push(self.border_line(i));
+                    }
+                }
+                return crate::planar::simplex::Simplex::new(arr);
+            }
+        }
         let lines = [
             self.border_line(0),
             self.border_line(1),
@@ -619,5 +669,68 @@ mod tests {
     #[test]
     fn to_simplex_of_empty_octagon_is_empty() {
         assert!(IntOctagon::EMPTY.to_simplex().is_empty());
+    }
+
+    #[test]
+    fn to_simplex_matches_remove_redundant_over_random_octagons() {
+        let mut seed: u64 = 0x5EED_9E37_79B9_7F4A;
+        let mut next_i32 = |lo: i32, hi: i32| -> i32 {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            let span = (i64::from(hi) - i64::from(lo) + 1) as u64;
+            lo + ((seed >> 16) % span) as i32
+        };
+        for case in 0..5000 {
+            let oct = if case % 10 == 0 {
+                // Singleton / 1D / unnormalized degenerate cases
+                let x = next_i32(-1000, 1000);
+                let y = next_i32(-1000, 1000);
+                let dx = next_i32(0, 3);
+                let dy = next_i32(0, 3);
+                IntOctagon::new(
+                    x,
+                    y,
+                    x + dx,
+                    y + dy,
+                    next_i32(-200, 200),
+                    next_i32(-200, 200),
+                    next_i32(-200, 200),
+                    next_i32(-200, 200),
+                )
+            } else {
+                let lx = next_i32(-10_000, 10_000);
+                let rx = lx + next_i32(1, 5000);
+                let ly = next_i32(-10_000, 10_000);
+                let uy = ly + next_i32(1, 5000);
+                let ulx = next_i32(-15_000, 15_000);
+                let lrx = ulx + next_i32(1, 15_000);
+                let llx = next_i32(-15_000, 15_000);
+                let urx = llx + next_i32(1, 15_000);
+                let raw = IntOctagon::new(lx, ly, rx, uy, ulx, lrx, llx, urx);
+                if case % 3 == 0 {
+                    raw
+                } else {
+                    raw.normalize()
+                }
+            };
+            let fast = oct.to_simplex();
+            let lines = [
+                oct.border_line(0),
+                oct.border_line(1),
+                oct.border_line(2),
+                oct.border_line(3),
+                oct.border_line(4),
+                oct.border_line(5),
+                oct.border_line(6),
+                oct.border_line(7),
+            ];
+            let ref_simplex = crate::planar::simplex::Simplex::remove_redundant_from_sorted(&lines);
+            assert_eq!(
+                fast.arr.as_slice(),
+                ref_simplex.arr.as_slice(),
+                "mismatch at case {case}: {oct:?}"
+            );
+        }
     }
 }

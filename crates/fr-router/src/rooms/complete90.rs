@@ -125,6 +125,7 @@ impl AutorouteEngine<'_> {
                 shape: r.shape.to_simplex(),
                 contained: r.contained.to_simplex(),
                 oct: Some(r.shape.to_int_octagon()),
+                oct_r2: std::cell::Cell::new(None),
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::OnceCell::new(),
             })

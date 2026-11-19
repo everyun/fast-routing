@@ -566,6 +566,15 @@ impl SearchTree {
         }
     }
 
+    /// Cached bounding hulls parallel to [`Self::item_shapes`] for the item in `slot`.
+    #[inline]
+    pub fn item_hulls(&self, slot: SlotIndex, id: ItemId) -> &[Option<IntBox>] {
+        match self.slots.get(slot.index()) {
+            Some(entry) if entry.id == id => &entry.hulls,
+            _ => &[],
+        }
+    }
+
     /// One tile shape by (slot, index); `None` for an unoccupied index.
     pub fn tile_shape(&self, slot: SlotIndex, id: ItemId, index: u16) -> Option<&TileShape> {
         self.item_shapes(slot, id)

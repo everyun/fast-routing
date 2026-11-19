@@ -1741,6 +1741,7 @@ fn tile_octagon(tile: &fr_board::shape::TileShape) -> Option<IntOctagon> {
 /// outline, and a usable one for the synthetic boards the tests build.
 fn board_bounds(board: &Board) -> IntBox {
     let mut bounds: Option<IntBox> = None;
+    let tree = board.default_tree();
     for (id, item) in board.store().iter() {
         if matches!(item.kind, ItemKind::ComponentOutline(_)) {
             continue;
@@ -1748,11 +1749,16 @@ fn board_bounds(board: &Board) -> IntBox {
         let Some(slot) = board.store().slot_of(id) else {
             continue;
         };
-        for tile in board.default_tree().item_shapes(slot, id) {
+        let hulls = tree.item_hulls(slot, id);
+        for (idx, tile) in tree.item_shapes(slot, id).iter().enumerate() {
             let Some(shape) = tile.shape.as_ref() else {
                 continue;
             };
-            let bb = shape.bounding_box();
+            let bb = hulls
+                .get(idx)
+                .copied()
+                .flatten()
+                .unwrap_or_else(|| shape.bounding_box());
             bounds = Some(match bounds {
                 Some(existing) => existing.union(&bb),
                 None => bb,

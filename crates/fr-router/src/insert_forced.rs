@@ -922,7 +922,7 @@ impl<'b> ForcedInserter<'b> {
             // reads the clock never. The job deadline is still polled
             // underneath it, which is what makes a `SIGTERM` mid-insertion
             // unwind instead of hang.
-            let mut algo = crate::pull_tight::PullTightAlgo::new(
+            let mut algo = crate::pull_tight::PullTightAlgo::new_with_bounds(
                 self.board,
                 self.rules,
                 &opt_nets,
@@ -931,6 +931,7 @@ impl<'b> ForcedInserter<'b> {
                 None,
                 Some(new_corner.clone()),
                 layer,
+                self.bounds,
             )
             .with_stall_guard(crate::pull_tight::StallGuard::for_mode(
                 BudgetMode::Deterministic,

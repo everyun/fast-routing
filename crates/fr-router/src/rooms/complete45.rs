@@ -123,6 +123,7 @@ impl AutorouteEngine<'_> {
                 shape: room.shape.to_simplex(),
                 contained: room.contained.to_simplex(),
                 oct: Some(room.shape),
+                oct_r2: std::cell::Cell::new(None),
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::OnceCell::new(),
             })
@@ -416,6 +417,7 @@ impl AutorouteEngine<'_> {
                 shape: room.shape.to_simplex(),
                 contained: room.contained.to_simplex(),
                 oct: Some(room.shape),
+                oct_r2: std::cell::Cell::new(None),
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::OnceCell::new(),
             })

@@ -33,6 +33,9 @@ pub struct CompletedShape {
     /// seeded with the value the completion actually computed, instead of
     /// re-deriving it from the simplex it was just turned into.
     pub oct: Option<fr_geometry::planar::IntOctagon>,
+    /// Memo of [`CompletedShape::cached_oct_r2`]: outer `Some` = computed,
+    /// inner `None` = the shape is not a bounded 45° octagon.
+    pub oct_r2: std::cell::Cell<Option<Option<fr_geometry::planar::OctR2>>>,
     /// Memo of [`CompletedShape::cached_bbox`]: outer `Some` = computed,
     /// inner `None` = the shape is unbounded.
     pub bbox: std::cell::Cell<Option<Option<IntBox>>>,
@@ -54,6 +57,19 @@ pub struct SatMemo {
 }
 
 impl CompletedShape {
+    /// Exact $\mathbb{R}^2$ octagon representation of `shape`, computed once per candidate.
+    pub fn cached_oct_r2(&self) -> Option<fr_geometry::planar::OctR2> {
+        if let Some(memo) = self.oct_r2.get() {
+            return memo;
+        }
+        let computed = match self.oct {
+            Some(ref o) => Some(fr_geometry::planar::OctR2::from_octagon(o)),
+            None => self.shape.to_oct_r2(),
+        };
+        self.oct_r2.set(Some(computed));
+        computed
+    }
+
     /// `shape.bounding_box()`, computed once per candidate. `None` for an
     /// unbounded shape — the same case split the old `union_into` made on
     /// `is_bounded`.
@@ -134,6 +150,7 @@ impl AutorouteEngine<'_> {
                 shape: start_shape,
                 contained: contained.clone(),
                 oct: None,
+                oct_r2: std::cell::Cell::new(None),
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::OnceCell::new(),
             });
@@ -492,6 +509,7 @@ impl AutorouteEngine<'_> {
                     shape: piece,
                     contained: shape_to_be_contained.clone(),
                     oct: None,
+                    oct_r2: std::cell::Cell::new(None),
                     bbox: std::cell::Cell::new(None),
                     sat: std::cell::OnceCell::new(),
                 });
@@ -536,6 +554,7 @@ impl AutorouteEngine<'_> {
                 shape: piece,
                 contained: new_contained,
                 oct: None,
+                oct_r2: std::cell::Cell::new(None),
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::OnceCell::new(),
             });
@@ -548,6 +567,7 @@ impl AutorouteEngine<'_> {
                 shape: rest_piece,
                 contained: rest_contained,
                 oct: None,
+                oct_r2: std::cell::Cell::new(None),
                 bbox: std::cell::Cell::new(None),
                 sat: std::cell::OnceCell::new(),
             };
@@ -610,6 +630,7 @@ impl AutorouteEngine<'_> {
                     shape: section,
                     contained,
                     oct: None,
+                    oct_r2: std::cell::Cell::new(None),
                     bbox: std::cell::Cell::new(None),
                     sat: std::cell::OnceCell::new(),
                 }
@@ -877,6 +898,9 @@ fn sat_overlap(
         {
             return Some(false);
         }
+    }
+    if let (Some(oa), Some(ob)) = (candidate.cached_oct_r2(), obstacle_shape.to_oct_r2()) {
+        return Some(oa.intersects_2d_r2(&ob));
     }
     let memo_a = candidate.cached_sat()?;
     if memo_a.verified == Some(false) {

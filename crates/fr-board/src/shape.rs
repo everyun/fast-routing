@@ -137,7 +137,9 @@ impl TileShape {
                 Point::Int(p) => p.is_contained_in(b),
                 Point::Rational(_) => point.is_contained_in(b),
             },
-            TileShape::Oct(o) => o.to_simplex().contains(point),
+            TileShape::Oct(o) => {
+                !o.is_empty() && fr_geometry::planar::Area::contains_point(o, point)
+            }
             TileShape::Simplex(s) => s.contains(point),
         }
     }
@@ -157,6 +159,24 @@ impl TileShape {
             TileShape::Box(b) => TileShape::Box(b.offset(distance)),
             TileShape::Oct(o) => TileShape::Oct(o.offset(distance)),
             TileShape::Simplex(s) => TileShape::Simplex(s.enlarge(distance)),
+        }
+    }
+
+    /// Computes the exact [`OctR2`](fr_geometry::planar::OctR2) of `self.enlarge(distance)`
+    /// when `self` is a box, octagon, or bounded 45° simplex and `distance >= 0`.
+    #[inline]
+    pub fn enlarge_oct_r2(&self, distance: i32) -> Option<fr_geometry::planar::OctR2> {
+        if distance < 0 {
+            return None;
+        }
+        match self {
+            TileShape::Box(b) => Some(fr_geometry::planar::OctR2::from_box(
+                &b.offset(f64::from(distance)),
+            )),
+            TileShape::Oct(o) => Some(fr_geometry::planar::OctR2::from_octagon(
+                &o.offset(f64::from(distance)),
+            )),
+            TileShape::Simplex(s) => s.enlarge_oct_r2(f64::from(distance)),
         }
     }
 

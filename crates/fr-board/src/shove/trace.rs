@@ -378,13 +378,21 @@ pub fn check_trace_segment(
                 trace_half_width as f64 + clearance_value as f64,
             )
         };
-        for tile in tree.item_shapes(slot, id) {
+        let offset_bbox = curr_offset_shape.bounded_bounding_box();
+        let hulls = tree.item_hulls(slot, id);
+        for (idx, tile) in tree.item_shapes(slot, id).iter().enumerate() {
             if tile.layer != layer {
                 continue;
             }
-            let Some(obstacle_shape) = tile.shape.as_ref().map(geom::tile_to_simplex) else {
+            let Some(tile_shape) = tile.shape.as_ref() else {
                 continue;
             };
+            if let (Some(cb), Some(hb)) = (offset_bbox, hulls.get(idx).copied().flatten()) {
+                if !cb.intersects(&hb) {
+                    continue;
+                }
+            }
+            let obstacle_shape = geom::tile_to_simplex(tile_shape);
             let intersection = obstacle_shape.intersection(&curr_offset_shape);
             if intersection.is_empty() {
                 continue;

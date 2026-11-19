@@ -354,6 +354,33 @@ impl<'b> PullTightAlgo<'b> {
         keep_point_layer: i32,
     ) -> PullTightAlgo<'b> {
         let bounds = board_bounds(board);
+        Self::new_with_bounds(
+            board,
+            rules,
+            only_net_no_arr,
+            clip_shape,
+            min_translate_dist,
+            time_limit,
+            keep_point,
+            keep_point_layer,
+            bounds,
+        )
+    }
+
+    /// Like [`PullTightAlgo::new`], using a caller-supplied board bounding box
+    /// instead of rescanning every item on the board.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_bounds(
+        board: &'b mut Board,
+        rules: &'b BoardRules,
+        only_net_no_arr: &[i32],
+        clip_shape: Option<IntOctagon>,
+        min_translate_dist: i32,
+        time_limit: Option<Duration>,
+        keep_point: Option<Point>,
+        keep_point_layer: i32,
+        bounds: IntBox,
+    ) -> PullTightAlgo<'b> {
         let mut nets = only_net_no_arr.to_vec();
         nets.sort_unstable();
         nets.dedup();
@@ -773,9 +800,9 @@ impl<'b> PullTightAlgo<'b> {
                 ..
             } = self;
             fr_metrics::counters::bump::tree_queries(1);
-            board.default_tree().overlapping_items(
+            board.default_tree().overlapping_items_bounds_only(
                 board.store(),
-                &broad,
+                &broad.bounds(),
                 Some(layer),
                 &[],
                 scratch_stack,
@@ -1333,7 +1360,8 @@ impl<'b> PullTightAlgo<'b> {
         // can be missed; an unbounded simplex falls back to the offset query.
         let reach = (1.2 * f64::from(self.max_clearance_on(cl_type, layer))) as i32
             + CLEARANCE_SAFETY_MARGIN;
-        let broad = match shape.bounding_octagon() {
+        let shape_oct = shape.bounding_octagon();
+        let broad = match shape_oct {
             Some(octagon) => TileShape::Oct(octagon.offset(f64::from(reach))),
             None => TileShape::Simplex(shape.offset(f64::from(reach))),
         };
@@ -1362,8 +1390,8 @@ impl<'b> PullTightAlgo<'b> {
         // The query shape enlarged by half the pairwise clearance, rebuilt only
         // when the clearance bucket changes — upstream's sorted sweep
         // (`:465-484`) without the sort, because clearance classes repeat
-        // heavily inside one query. The enlarged shape's bounding box rides
-        // along for the per-candidate pre-filter.
+        // heavily inside one query.
+        let mut cached_oct: Option<(i32, Option<fr_geometry::planar::OctR2>)> = None;
         let mut cached: Option<(i32, TileShape, IntBox)> = None;
         for entry in scratch_entries.iter() {
             let Some(item) = board.store().item_at_slot(entry.slot) else {
@@ -1409,7 +1437,13 @@ impl<'b> PullTightAlgo<'b> {
                 .clearances()
                 .value_with_margin(cl_type, item.clearance_class, layer)
                 / 2;
-            if let (Some(sb), Some(tb)) = (shape_bbox, tile.bounded_bounding_box()) {
+            let cand_bbox = tree
+                .item_hulls(entry.slot, entry.item)
+                .get(entry.shape_index as usize)
+                .copied()
+                .flatten()
+                .or_else(|| tile.bounded_bounding_box());
+            if let (Some(sb), Some(tb)) = (shape_bbox, cand_bbox) {
                 let pad = 2 * i64::from(half.max(0)) + 8;
                 if i64::from(sb.ur.x) + pad < i64::from(tb.ll.x)
                     || i64::from(tb.ur.x) + pad < i64::from(sb.ll.x)
@@ -1420,6 +1454,50 @@ impl<'b> PullTightAlgo<'b> {
                     continue;
                 }
             }
+            let half_f = f64::from(half);
+            let query_oct = match cached_oct {
+                Some((cached_half, oct)) if cached_half == half => oct,
+                _ => {
+                    let oct = shape.enlarge_oct_r2(half_f);
+                    cached_oct = Some((half, oct));
+                    oct
+                }
+            };
+            if let (Some(qa), Some(qb)) = (query_oct, tile.enlarge_oct_r2(half)) {
+                if qa.lx > qb.rx || qb.lx > qa.rx || qa.ly > qb.uy || qb.ly > qa.uy {
+                    fr_metrics::counters::bump::oracle_bbox_pruned(1);
+                    continue;
+                }
+                fr_metrics::counters::bump::oracle_symmetric_tests(1);
+                let exact_start = timing.then(Instant::now);
+                let hits = qa.intersects_r2(&qb);
+                if let Some(started) = exact_start {
+                    fr_metrics::counters::bump::oracle_exact_nanos(
+                        started.elapsed().as_nanos() as u64
+                    );
+                }
+                if !hits {
+                    continue;
+                }
+                *binding = board
+                    .store()
+                    .revision_of(entry.item)
+                    .map(|revision| BindingObstacle {
+                        item: entry.item,
+                        shape_index: entry.shape_index,
+                        revision,
+                    });
+                return false;
+            }
+            let pre_enlarged_tile: Option<TileShape> = if half == 0 {
+                None
+            } else {
+                match tile {
+                    TileShape::Box(b) => Some(TileShape::Box(b.offset(half_f))),
+                    TileShape::Oct(o) => Some(TileShape::Oct(o.offset(half_f))),
+                    TileShape::Simplex(_) => None,
+                }
+            };
             let (query_tile, query_box) = match &cached {
                 Some((cached_half, tile, query_box)) if *cached_half == half => (tile, query_box),
                 _ => {
@@ -1437,13 +1515,17 @@ impl<'b> PullTightAlgo<'b> {
             // enlarged tile never leaves `bounding_box().offset(half)`, and the
             // boxes are integer-exact — the filter can only drop candidates
             // the symmetric test would reject anyway.
-            if !query_box.intersects(&tile.bounding_box().offset(f64::from(half))) {
+            if !query_box.intersects(&tile.bounding_box().offset(half_f)) {
                 fr_metrics::counters::bump::oracle_bbox_pruned(1);
                 continue;
             }
             fr_metrics::counters::bump::oracle_symmetric_tests(1);
             let exact_start = timing.then(Instant::now);
-            let hits = query_tile.intersects(&tile.enlarge(half));
+            let hits = match &pre_enlarged_tile {
+                Some(enlarged) => query_tile.intersects(enlarged),
+                None if half == 0 => query_tile.intersects(tile),
+                None => query_tile.intersects(&tile.enlarge(half)),
+            };
             if let Some(started) = exact_start {
                 fr_metrics::counters::bump::oracle_exact_nanos(started.elapsed().as_nanos() as u64);
             }
@@ -1498,6 +1580,15 @@ impl<'b> PullTightAlgo<'b> {
             item.clearance_class,
             self.curr_layer,
         ) / 2;
+        if let (Some(qa), Some(qb)) = (
+            shape.enlarge_oct_r2(f64::from(half)),
+            tile.enlarge_oct_r2(half),
+        ) {
+            if qa.lx > qb.rx || qb.lx > qa.rx || qa.ly > qb.uy || qb.ly > qa.uy {
+                return false;
+            }
+            return qa.intersects_r2(&qb);
+        }
         // Same bounding-box pre-filter as the traversal: integer-exact, so a
         // miss here means the symmetric test below would miss too.
         if !shape
@@ -1928,6 +2019,7 @@ const BOUNDS_MARGIN: i32 = 1000;
 /// engine considered on-board is never rejected here as off-board.
 fn board_bounds(board: &Board) -> IntBox {
     let mut bounds: Option<IntBox> = None;
+    let tree = board.default_tree();
     for (id, item) in board.store().iter() {
         if matches!(item.kind, ItemKind::ComponentOutline(_)) {
             continue;
@@ -1935,11 +2027,16 @@ fn board_bounds(board: &Board) -> IntBox {
         let Some(slot) = board.store().slot_of(id) else {
             continue;
         };
-        for tile in board.default_tree().item_shapes(slot, id) {
+        let hulls = tree.item_hulls(slot, id);
+        for (idx, tile) in tree.item_shapes(slot, id).iter().enumerate() {
             let Some(shape) = tile.shape.as_ref() else {
                 continue;
             };
-            let bb = shape.bounding_box();
+            let bb = hulls
+                .get(idx)
+                .copied()
+                .flatten()
+                .unwrap_or_else(|| shape.bounding_box());
             bounds = Some(match bounds {
                 Some(existing) => existing.union(&bb),
                 None => bb,

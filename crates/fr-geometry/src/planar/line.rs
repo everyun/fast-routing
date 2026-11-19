@@ -375,6 +375,7 @@ impl Line {
     /// `i64` (their `i32` subtraction can overflow) and the determinant runs
     /// the `i64`/`i128` tier instead of an `f64` product that loses its sign
     /// above the double mantissa.
+    #[inline]
     pub fn cmp_line(&self, other: &Line) -> i32 {
         let dx1 = self.b.x as i64 - self.a.x as i64;
         let dy1 = self.b.y as i64 - self.a.y as i64;
@@ -411,6 +412,16 @@ impl Line {
                 return -1;
             }
             return 0;
+        }
+
+        if (dx1.unsigned_abs() | dy1.unsigned_abs() | dx2.unsigned_abs() | dy2.unsigned_abs())
+            < (1u64 << 31)
+        {
+            return match (dx2 * dy1).cmp(&(dy2 * dx1)) {
+                std::cmp::Ordering::Greater => 1,
+                std::cmp::Ordering::Less => -1,
+                std::cmp::Ordering::Equal => 0,
+            };
         }
 
         determinant_exact(dx2, dy2, dx1, dy1).signum() as i32
@@ -478,6 +489,7 @@ impl Line {
     /// cannot express: parallel `p1`/`p2` (upstream substitutes the pseudo
     /// point `(i32::MAX, i32::MAX)`) and coordinates so far outside the
     /// envelope that even `i128` overflows.
+    #[inline]
     pub fn side_of_intersection(&self, p1: &Line, p2: &Line) -> Side {
         if let Some(side) = self.side_of_intersection_exact(p1, p2) {
             return side;
@@ -500,6 +512,7 @@ impl Line {
     /// negated to match `Line::side_of`. Inside the envelope every intermediate
     /// stays below 2^105. Returns `None` when `p1` and `p2` are parallel or an
     /// intermediate leaves `i128`.
+    #[inline]
     fn side_of_intersection_exact(&self, p1: &Line, p2: &Line) -> Option<Side> {
         let max_coord = self.a.x.unsigned_abs()
             | self.a.y.unsigned_abs()
@@ -520,53 +533,37 @@ impl Line {
             let d2y = i64::from(p2.b.y) - i64::from(p2.a.y);
             let vx = i64::from(self.b.x) - i64::from(self.a.x);
             let vy = i64::from(self.b.y) - i64::from(self.a.y);
-            let mut det = d2x * d1y - d2y * d1x;
+            let det = d2x * d1y - d2y * d1x;
             if det == 0 {
                 return None;
             }
-            let max_delta = d1x.unsigned_abs()
-                | d1y.unsigned_abs()
-                | d2x.unsigned_abs()
-                | d2y.unsigned_abs()
-                | vx.unsigned_abs()
-                | vy.unsigned_abs();
-            if max_delta <= 1024 {
-                // Normalized 0°/45°/90° lines have |delta| <= 1, keeping the
-                // entire determinant within |value| <= 2^59 (well inside i64).
-                let det1 = i64::from(p1.a.x) * d1y - i64::from(p1.a.y) * d1x;
-                let det2 = i64::from(p2.a.x) * d2y - i64::from(p2.a.y) * d2x;
-                let mut is_x = det1 * d2x - det2 * d1x;
-                let mut is_y = det1 * d2y - det2 * d1y;
+            // Shift origin to self.a so c1/c2/k1/k2 stay small and eliminate 4 multiplications.
+            let x1 = i64::from(p1.a.x) - i64::from(self.a.x);
+            let y1 = i64::from(p1.a.y) - i64::from(self.a.y);
+            let x2 = i64::from(p2.a.x) - i64::from(self.a.x);
+            let y2 = i64::from(p2.a.y) - i64::from(self.a.y);
+            let c1 = x1 * d1y - y1 * d1x;
+            let c2 = x2 * d2y - y2 * d2x;
+            let k1 = vx * d1y - vy * d1x;
+            let k2 = vx * d2y - vy * d2x;
+            if (c1.unsigned_abs() | c2.unsigned_abs() | k1.unsigned_abs() | k2.unsigned_abs())
+                < (1u64 << 31)
+            {
+                let mut num = c1 * k2 - c2 * k1;
                 if det < 0 {
-                    det = -det;
-                    is_x = -is_x;
-                    is_y = -is_y;
+                    num = -num;
                 }
-                let rel_x = is_x - i64::from(self.a.x) * det;
-                let rel_y = is_y - i64::from(self.a.y) * det;
-                let determinant = vx * rel_y - vy * rel_x;
-                return Some(side_of_exact(i128::from(determinant)).negate());
+                return Some(match num.cmp(&0) {
+                    std::cmp::Ordering::Greater => Side::OnTheRight,
+                    std::cmp::Ordering::Less => Side::OnTheLeft,
+                    std::cmp::Ordering::Equal => Side::Collinear,
+                });
             }
-            // Inside the coordinate envelope (|coord| <= 2^25): det/det1/det2
-            // stay within 2^53 (i64) and intermediate products stay within
-            // 2^106 (well below i128::MAX = 2^127 - 1), avoiding checked_mul
-            // library calls on every hot call.
-            let det1 =
-                i64::from(p1.a.x) * i64::from(p1.b.y) - i64::from(p1.a.y) * i64::from(p1.b.x);
-            let det2 =
-                i64::from(p2.a.x) * i64::from(p2.b.y) - i64::from(p2.a.y) * i64::from(p2.b.x);
-            let mut is_x = i128::from(det1) * i128::from(d2x) - i128::from(det2) * i128::from(d1x);
-            let mut is_y = i128::from(det1) * i128::from(d2y) - i128::from(det2) * i128::from(d1y);
+            let mut num = i128::from(c1) * i128::from(k2) - i128::from(c2) * i128::from(k1);
             if det < 0 {
-                det = -det;
-                is_x = -is_x;
-                is_y = -is_y;
+                num = -num;
             }
-            let det_128 = i128::from(det);
-            let rel_x = is_x - i128::from(self.a.x) * det_128;
-            let rel_y = is_y - i128::from(self.a.y) * det_128;
-            let determinant = i128::from(vx) * rel_y - i128::from(vy) * rel_x;
-            return Some(side_of_exact(determinant).negate());
+            return Some(side_of_exact(num).negate());
         }
 
         let d1x = i128::from(p1.b.x) - i128::from(p1.a.x);
